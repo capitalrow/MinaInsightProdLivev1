@@ -46,11 +46,11 @@ class LearningProfile:
     user_id: int
     total_suggestions: int = 0
     acceptance_rate: float = 0.0
-    common_corrections: Dict[str, int] = None
-    priority_preferences: Dict[str, float] = None
-    category_mapping: Dict[str, str] = None
+    common_corrections: Optional[Dict[str, int]] = None
+    priority_preferences: Optional[Dict[str, float]] = None
+    category_mapping: Optional[Dict[str, str]] = None
     confidence_adjustment: float = 0.0
-    last_updated: datetime = None
+    last_updated: Optional[datetime] = None
     
     def __post_init__(self):
         if self.common_corrections is None:

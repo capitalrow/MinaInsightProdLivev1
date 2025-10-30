@@ -133,10 +133,17 @@ class TaskExtractionService:
         Extract all actionable tasks from this meeting transcript."""
         
         try:
+            # Check if client is available
+            if not self.client:
+                logger.warning("OpenAI client not available for AI extraction")
+                return []
+            
             # Use unified AI model manager with GPT-4.1 fallback
             from services.ai_model_manager import AIModelManager
             
             def make_api_call(model: str):
+                if not self.client:
+                    return None
                 return self.client.chat.completions.create(
                     model=model,
                     messages=[
@@ -152,12 +159,13 @@ class TaskExtractionService:
                 operation_name="task extraction"
             )
             
-            if not result_obj.success:
-                raise Exception(f"All AI models failed")
+            if not result_obj.success or not result_obj.response:
+                logger.warning("All AI models failed for task extraction")
+                return []
             
             response = result_obj.response
             
-            content = response.choices[0].message.content
+            content = response.choices[0].message.content if response.choices else None
             if not content:
                 return []
             result = json.loads(content)

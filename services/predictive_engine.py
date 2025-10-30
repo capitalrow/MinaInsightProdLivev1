@@ -174,7 +174,7 @@ class PredictiveEngine:
             # Default to medium if no keywords found
             return 'medium', 0.3
         
-        predicted_priority = max(priority_scores, key=priority_scores.get)
+        predicted_priority = max(priority_scores.items(), key=lambda x: x[1])[0]
         max_score = priority_scores[predicted_priority]
         
         # Calculate confidence based on keyword count
@@ -210,7 +210,7 @@ class PredictiveEngine:
             return None, 0.0
         
         # Get highest scoring category
-        predicted_category = max(category_scores, key=category_scores.get)
+        predicted_category = max(category_scores.items(), key=lambda x: x[1])[0]
         max_score = category_scores[predicted_category]
         
         # Calculate confidence
