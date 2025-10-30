@@ -178,6 +178,7 @@ def register_tasks_namespace(socketio):
             # Query events for this workspace since last_sequence_num
             # CRITICAL: Fetch ALL events in batches to guarantee zero-data-loss (CROWN⁴.5)
             from models.event_ledger import EventType
+            from sqlalchemy import cast, String
             
             # Fetch workspace events in batches for memory efficiency
             batch_size = 500
@@ -185,16 +186,22 @@ def register_tasks_namespace(socketio):
             current_offset = 0
             
             while True:
-                batch = db.session.scalars(
+                # Build query - filter by workspace_id if provided
+                query = (
                     select(EventLedger)
                     .where(EventLedger.status == EventStatus.COMPLETED)
                     .where(EventLedger.sequence_num > last_sequence_num)
-                    .where(EventLedger.event_type.in_([EventType.TASK_UPDATE, EventType.TASK_CREATED]))
-                    .where(EventLedger.payload['workspace_id'].astext == str(workspace_id))
+                    .where(EventLedger.event_type.in_([EventType.TASK_UPDATE, EventType.TASK_COMPLETE]))
                     .order_by(EventLedger.sequence_num.asc())
                     .offset(current_offset)
                     .limit(batch_size)
-                ).all()
+                )
+                
+                # Add workspace filter if workspace_id is provided
+                if workspace_id is not None:
+                    query = query.where(cast(EventLedger.payload['workspace_id'], String) == str(workspace_id))
+                
+                batch = db.session.scalars(query).all()
                 
                 if not batch:
                     break
