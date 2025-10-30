@@ -438,6 +438,7 @@ class CROWN45EventAnimations {
 
 // Initialize global instance
 window.CROWN45EventAnimations = CROWN45EventAnimations;
+window.EmotionalAnimations = CROWN45EventAnimations; // Alias for master init
 
 if (typeof window !== 'undefined') {
     window.addEventListener('DOMContentLoaded', () => {
