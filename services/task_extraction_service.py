@@ -28,8 +28,9 @@ class ExtractedTask:
 class TaskExtractionService:
     """Service for AI-powered task extraction from meeting content."""
     
-    def __init__(self):
+    def __init__(self, cognitive_sync=None):
         self.client = get_openai_client()
+        self.cognitive_sync = cognitive_sync  # CROWN⁴.5: Learning integration
         self.task_patterns = [
             r"(?:action item|task|todo|follow up|next step)s?[:\-\s]+(.+)",
             r"(.+)\s+(?:needs to|should|must|will)\s+(.+)",
@@ -55,7 +56,7 @@ class TaskExtractionService:
             r"(\w+)\s+can you\s+(.+)"
         ]
 
-    async def extract_tasks_from_meeting(self, meeting_id: int) -> List[ExtractedTask]:
+    async def extract_tasks_from_meeting(self, meeting_id: int, user_id: Optional[int] = None) -> List[ExtractedTask]:
         """Extract tasks from a complete meeting using AI and pattern matching."""
         from sqlalchemy import select
         meeting = db.session.get(Meeting, meeting_id)
@@ -74,8 +75,8 @@ class TaskExtractionService:
         
         transcript = self._build_transcript(segments)
         
-        # Extract tasks using AI
-        ai_tasks = await self._extract_tasks_with_ai(transcript, meeting)
+        # Extract tasks using AI (with cognitive learning)
+        ai_tasks = await self._extract_tasks_with_ai(transcript, meeting, user_id)
         
         # Extract tasks using pattern matching (backup/supplement)
         pattern_tasks = self._extract_tasks_with_patterns(transcript)
@@ -85,7 +86,7 @@ class TaskExtractionService:
         
         return all_tasks
 
-    async def _extract_tasks_with_ai(self, transcript: str, meeting: Meeting) -> List[ExtractedTask]:
+    async def _extract_tasks_with_ai(self, transcript: str, meeting: Meeting, user_id: Optional[int] = None) -> List[ExtractedTask]:
         """Use OpenAI to extract tasks from meeting transcript."""
         if not self.client:
             return []
@@ -118,6 +119,10 @@ class TaskExtractionService:
             }
           ]
         }"""
+        
+        # CROWN⁴.5: Apply cognitive learning to refine prompt
+        if self.cognitive_sync and user_id:
+            system_prompt = self.cognitive_sync.refine_extraction_prompt(user_id, system_prompt)
         
         user_prompt = f"""Meeting: {meeting.title}
         Date: {meeting.created_at.strftime('%Y-%m-%d')}

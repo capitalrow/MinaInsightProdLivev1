@@ -24,6 +24,7 @@ from .participant import Participant
 from .task import Task
 from .task_view_state import TaskViewState
 from .task_counters import TaskCounters
+from .session_context import SessionContext
 from .id_reconciliation import IDReconciliation, ReconciliationStatus
 from .offline_queue import OfflineQueue
 from .calendar_event import CalendarEvent
@@ -48,6 +49,6 @@ from .core_models import FeatureFlag, FlagAuditLog
 __all__ = [
     'db', 'Base', 'Session', 'Segment', 'Summary', 'SharedLink', 'TeamShare', 'ShareAnalytic',
     'ChunkMetric', 'SessionMetric', 'User', 'Workspace', 'Meeting', 
-    'Participant', 'Task', 'TaskViewState', 'TaskCounters', 'IDReconciliation', 'ReconciliationStatus', 'OfflineQueue', 'CalendarEvent', 'Analytics', 'Marker', 'Comment', 'CopilotTemplate',
+    'Participant', 'Task', 'TaskViewState', 'TaskCounters', 'SessionContext', 'IDReconciliation', 'ReconciliationStatus', 'OfflineQueue', 'CalendarEvent', 'Analytics', 'Marker', 'Comment', 'CopilotTemplate',
     'CopilotConversation', 'EventLedger', 'EventType', 'EventStatus', 'CompactionSummary', 'FeatureFlag', 'FlagAuditLog'
 ]
