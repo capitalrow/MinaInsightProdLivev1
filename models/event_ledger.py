@@ -71,6 +71,13 @@ class EventType(enum.Enum):
     PARTICIPANT_UPDATE = "participant_update"  # Participant joined/left
     WORKSPACE_SWITCH = "workspace_switch"  # User switched workspace
     CACHE_INVALIDATE = "cache_invalidate"  # Force cache refresh
+    
+    # CROWN⁴.5 Task Management Events
+    ID_RECONCILED = "id_reconciled"  # Temp ID reconciled to real ID
+    TASK_CREATED = "task_created"  # New task created
+    TASK_UPDATED = "task_updated"  # Task updated (status, assignee, etc.)
+    TASK_DELETED = "task_deleted"  # Task deleted
+    TASK_SYNCED = "task_synced"  # Task synced from cache to server
 
 
 class EventLedger(Base):

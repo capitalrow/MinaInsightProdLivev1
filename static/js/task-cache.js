@@ -148,6 +148,10 @@ class TaskCache {
                 this.db = request.result;
                 this.ready = true;
                 console.log('✅ TaskCache IndexedDB initialized');
+                
+                // Schedule cache hygiene routine on idle (CROWN⁴.5)
+                this._scheduleHygieneRoutine();
+                
                 resolve(this.db);
             };
 
@@ -251,6 +255,17 @@ class TaskCache {
                     if (op.data && op.data.temp_id) queuedTempIds.add(op.data.temp_id);
                 });
                 
+                // CRITICAL FIX: Also protect in-flight operations (dequeued but not yet confirmed)
+                // These are tracked in OptimisticUI.pendingOperations
+                if (window.optimisticUI && window.optimisticUI.pendingOperations) {
+                    for (const [opId, operation] of window.optimisticUI.pendingOperations.entries()) {
+                        if (operation.tempId && typeof operation.tempId === 'string') {
+                            queuedTempIds.add(operation.tempId);
+                            console.log(`✅ Protecting in-flight temp task: ${operation.tempId} (operation ${opId})`);
+                        }
+                    }
+                }
+                
                 // Find orphaned temp tasks (NOT in queue, older than 10 minutes)
                 const now = Date.now();
                 const SAFE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
@@ -326,6 +341,54 @@ class TaskCache {
                 reject(error);
             }
         });
+    }
+
+    /**
+     * Schedule cache hygiene routine to run on idle (CROWN⁴.5)
+     * Automatically cleans orphaned temp IDs every hour when browser is idle
+     */
+    _scheduleHygieneRoutine() {
+        // Run initial cleanup after 30 seconds (let app settle)
+        setTimeout(() => {
+            this.cleanOrphanedTempTasks().catch(err => 
+                console.error('Initial hygiene failed:', err)
+            );
+        }, 30000);
+        
+        // Schedule recurring cleanup every hour on idle
+        const runHygiene = () => {
+            if (typeof requestIdleCallback !== 'undefined') {
+                requestIdleCallback(async (deadline) => {
+                    if (deadline.timeRemaining() > 50) {
+                        try {
+                            const removed = await this.cleanOrphanedTempTasks();
+                            if (removed > 0) {
+                                console.log(`🧹 [Hygiene] Removed ${removed} orphaned temp tasks`);
+                            }
+                        } catch (error) {
+                            console.error('Hygiene routine failed:', error);
+                        }
+                    }
+                    // Schedule next run in 1 hour
+                    setTimeout(runHygiene, 60 * 60 * 1000);
+                }, { timeout: 10000 });
+            } else {
+                // Fallback for browsers without requestIdleCallback
+                setTimeout(async () => {
+                    try {
+                        await this.cleanOrphanedTempTasks();
+                    } catch (error) {
+                        console.error('Hygiene routine failed:', error);
+                    }
+                    // Schedule next run in 1 hour
+                    setTimeout(runHygiene, 60 * 60 * 1000);
+                }, 5000);
+            }
+        };
+        
+        // Start the hygiene cycle
+        runHygiene();
+        console.log('🧹 Cache hygiene routine scheduled (runs hourly on idle)');
     }
 
     /**
@@ -581,6 +644,98 @@ class TaskCache {
 
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Reconcile temporary ID to real ID (CROWN⁴.5 ID Reconciliation)
+     * Used when offline-created tasks get confirmed by the server
+     * @param {string} temp_id - Temporary ID (e.g., temp_1234567890_abc123_f8e9)
+     * @param {number} real_id - Real database ID from server
+     * @returns {Promise<boolean>} True if reconciliation succeeded
+     */
+    async reconcileTempID(temp_id, real_id) {
+        await this.init();
+        
+        console.log(`🔄 Reconciling temp ID: ${temp_id} → ${real_id}`);
+        
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['tasks', 'metadata', 'offline_queue'], 'readwrite');
+            const taskStore = transaction.objectStore('tasks');
+            const metaStore = transaction.objectStore('metadata');
+            const queueStore = transaction.objectStore('offline_queue');
+            
+            // 1. Get task with temp ID
+            const getRequest = taskStore.get(temp_id);
+            
+            getRequest.onsuccess = () => {
+                const task = getRequest.result;
+                
+                if (!task) {
+                    console.warn(`⚠️ No task found with temp ID: ${temp_id}`);
+                    resolve(false);
+                    return;
+                }
+                
+                // 2. Update task with real ID
+                task.id = real_id;
+                task._reconciled_from = temp_id;
+                task._reconciled_at = new Date().toISOString();
+                
+                // 3. Save with real ID
+                const putRequest = taskStore.put(task);
+                
+                putRequest.onsuccess = () => {
+                    // 4. Delete temp ID entry
+                    taskStore.delete(temp_id);
+                    
+                    // 5. Update metadata checksum key
+                    const oldChecksumKey = `task_checksum_${temp_id}`;
+                    const newChecksumKey = `task_checksum_${real_id}`;
+                    
+                    const getMetaRequest = metaStore.get(oldChecksumKey);
+                    getMetaRequest.onsuccess = () => {
+                        const checksumMeta = getMetaRequest.result;
+                        if (checksumMeta) {
+                            // Update checksum metadata with new key
+                            checksumMeta.key = newChecksumKey;
+                            checksumMeta.task_id = real_id;
+                            metaStore.put(checksumMeta);
+                            metaStore.delete(oldChecksumKey);
+                        }
+                    };
+                    
+                    // 6. Update offline queue entries that reference temp ID
+                    const queueIndex = queueStore.index('task_id');
+                    const queueRequest = queueIndex.getAll(temp_id);
+                    
+                    queueRequest.onsuccess = () => {
+                        const queueEntries = queueRequest.result;
+                        queueEntries.forEach(entry => {
+                            entry.task_id = real_id;
+                            entry.reconciled = true;
+                            entry.reconciled_at = new Date().toISOString();
+                            queueStore.put(entry);
+                        });
+                    };
+                    
+                    console.log(`✅ Reconciliation complete: ${temp_id} → ${real_id}`);
+                };
+                
+                putRequest.onerror = () => {
+                    console.error(`❌ Failed to save reconciled task ${real_id}`);
+                };
+            };
+            
+            getRequest.onerror = () => {
+                console.error(`❌ Failed to get task with temp ID: ${temp_id}`);
+            };
+            
+            transaction.oncomplete = () => resolve(true);
+            transaction.onerror = () => {
+                console.error(`❌ Reconciliation transaction failed:`, transaction.error);
+                reject(transaction.error);
+            };
         });
     }
 
