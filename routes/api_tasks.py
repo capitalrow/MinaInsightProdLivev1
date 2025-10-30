@@ -69,8 +69,8 @@ def list_tasks():
         due_date_filter = request.args.get('due_date', None)  # today, overdue, this_week
         
         # CROWN⁴.5: Use shared query builder for cache consistency with template
-        from services.task_query_builder import TaskQueryBuilder
-        stmt = TaskQueryBuilder.get_workspace_tasks_query(current_user.workspace_id)
+        from services.task_query_builder import get_workspace_tasks_query
+        stmt = get_workspace_tasks_query(current_user.workspace_id)
         
         # Apply filters
         if status:

@@ -285,7 +285,7 @@ def meetings():
 @login_required
 def tasks():
     """Tasks overview page with kanban board."""
-    from services.task_query_builder import TaskQueryBuilder
+    from services.task_query_builder import get_workspace_tasks_query
     
     # Ensure user has workspace
     if not current_user.workspace_id:
@@ -296,7 +296,12 @@ def tasks():
                              completed_tasks=[])
     
     # CROWN⁴.5: Use shared query builder for cache consistency with API
-    query = TaskQueryBuilder.get_ordered_tasks_query(current_user.workspace_id, order_by='due_date')
+    query = get_workspace_tasks_query(current_user.workspace_id)
+    query = query.order_by(
+        Task.due_date.asc().nullslast(),
+        Task.priority.desc(),
+        Task.created_at.desc()
+    )
     all_tasks = db.session.execute(query).scalars().all()
     
     # Get tasks by status
