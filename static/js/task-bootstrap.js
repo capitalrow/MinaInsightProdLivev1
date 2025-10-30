@@ -251,21 +251,35 @@ class TaskBootstrap {
         const isCompleted = status === 'completed';
         const isSnoozed = task.snoozed_until && new Date(task.snoozed_until) > new Date();
         const isSyncing = task._is_syncing || (task.id && typeof task.id === 'string' && task.id.startsWith('temp_'));
+        
+        // CROWN⁴.5 Event #3: AI Proposal Detection
+        const isAIProposal = task.emotional_state === 'pending_suggest';
+        const confidence = task.confidence_score || 0;
+        const confidenceClass = this.getConfidenceClass(confidence);
 
         return `
-            <div class="task-card ${isSyncing ? 'task-syncing' : ''}" 
+            <div class="task-card ${isSyncing ? 'task-syncing' : ''} ${isAIProposal ? `ai-proposal ${confidenceClass}` : ''}" 
                  data-task-id="${task.id}"
                  data-status="${status}"
                  data-priority="${priority}"
                  style="animation-delay: ${index * 0.05}s;">
                 <div class="task-card-header">
-                    <div class="task-checkbox-wrapper">
-                        <input type="checkbox" 
-                               class="task-checkbox" 
-                               ${isCompleted ? 'checked' : ''}
-                               ${isSyncing ? 'disabled title="Task is syncing with server..."' : ''}
-                               data-task-id="${task.id}">
-                    </div>
+                    ${isAIProposal ? `
+                        <div class="ai-proposal-badge">
+                            <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                            </svg>
+                            AI Suggested (${Math.round(confidence * 100)}%)
+                        </div>
+                    ` : `
+                        <div class="task-checkbox-wrapper">
+                            <input type="checkbox" 
+                                   class="task-checkbox" 
+                                   ${isCompleted ? 'checked' : ''}
+                                   ${isSyncing ? 'disabled title="Task is syncing with server..."' : ''}
+                                   data-task-id="${task.id}">
+                        </div>
+                    `}
                     <div class="task-content">
                         <h3 class="task-title ${isCompleted ? 'completed' : ''}">
                             ${this.escapeHtml(task.title || 'Untitled Task')}
@@ -335,8 +349,36 @@ class TaskBootstrap {
                         </div>
                     </div>
                 </div>
+                ${isAIProposal ? `
+                    <div class="ai-proposal-actions">
+                        <button class="btn-accept-proposal" data-task-id="${task.id}">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Accept
+                        </button>
+                        <button class="btn-reject-proposal" data-task-id="${task.id}">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                            Reject
+                        </button>
+                    </div>
+                ` : ''}
             </div>
         `;
+    }
+
+    /**
+     * Get CSS class based on confidence score (CROWN⁴.5 Event #3)
+     * @param {number} confidence - Confidence score (0-1)
+     * @returns {string} CSS class name
+     */
+    getConfidenceClass(confidence) {
+        if (confidence >= 0.8) return 'confidence-high';
+        if (confidence >= 0.6) return 'confidence-medium';
+        if (confidence >= 0.4) return 'confidence-low';
+        return 'confidence-very-low';
     }
 
     /**
