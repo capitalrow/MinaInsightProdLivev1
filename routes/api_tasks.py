@@ -69,11 +69,14 @@ def list_tasks():
         due_date_filter = request.args.get('due_date', None)  # today, overdue, this_week
         
         # CROWN⁴.5 FIX: Use LEFT OUTER JOIN to include tasks without meetings
-        # Many tasks have NULL meeting_id from manual creation in UI
-        stmt = select(Task).outerjoin(Meeting).where(
+        # Tasks belong to workspace through either:
+        # 1. Meeting's workspace (for AI-extracted tasks)
+        # 2. Creator's workspace (for manually created tasks)
+        from models.user import User as TaskCreator
+        stmt = select(Task).outerjoin(Meeting).outerjoin(TaskCreator, Task.created_by_id == TaskCreator.id).where(
             or_(
                 Meeting.workspace_id == current_user.workspace_id,
-                and_(Task.meeting_id.is_(None), Task.created_by_id == current_user.id)
+                and_(Task.meeting_id.is_(None), TaskCreator.workspace_id == current_user.workspace_id)
             )
         )
         
