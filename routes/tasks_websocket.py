@@ -35,6 +35,7 @@ from flask_login import current_user
 from services.event_broadcaster import event_broadcaster
 from services.task_event_handler import task_event_handler
 from services.temp_id_reconciler import get_reconciler
+from services.event_sequencer import event_sequencer
 
 
 def run_async(coro):
