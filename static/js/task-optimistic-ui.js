@@ -982,6 +982,20 @@ class OptimisticUI {
             if (card) {
                 card.dataset.taskId = realTask.id;
                 card.classList.remove('optimistic-create');
+                card.classList.remove('task-syncing');
+                
+                // Remove "Syncing..." badge
+                const syncingBadge = card.querySelector('.syncing-badge');
+                if (syncingBadge) {
+                    syncingBadge.remove();
+                }
+                
+                // Re-enable checkbox
+                const checkbox = card.querySelector('.task-checkbox');
+                if (checkbox) {
+                    checkbox.disabled = false;
+                    checkbox.removeAttribute('title');
+                }
             }
 
             // Update cache
