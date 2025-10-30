@@ -13,9 +13,11 @@ import logging
 from app import db
 from models.summary import Summary
 from services.event_broadcaster import EventBroadcaster
+from services.temp_id_reconciler import get_reconciler
 
 logger = logging.getLogger(__name__)
 event_broadcaster = EventBroadcaster()
+reconciler = get_reconciler()
 
 api_tasks_bp = Blueprint('api_tasks', __name__, url_prefix='/api/tasks')
 
@@ -192,10 +194,27 @@ def create_task():
         db.session.add(task)
         db.session.commit()
         
+        # CROWN⁴.5: Reconcile temp ID if provided (offline task creation)
+        temp_id = data.get('temp_id')
+        if temp_id and reconciler.is_temp_id(temp_id):
+            try:
+                reconciler.reconcile_temp_id(
+                    temp_id=temp_id,
+                    real_id=task.id,
+                    user_id=current_user.id,
+                    workspace_id=current_user.workspace_id,
+                    broadcast=True  # Broadcast ID_RECONCILED event to all tabs
+                )
+                logger.info(f"✅ Reconciled temp ID {temp_id} → {task.id}")
+            except Exception as e:
+                logger.error(f"Failed to reconcile temp ID {temp_id}: {e}")
+                # Don't fail task creation if reconciliation fails
+        
         # Broadcast task_update event
         task_dict = task.to_dict()
         task_dict['action'] = 'created'
         task_dict['meeting_title'] = meeting.title
+        task_dict['temp_id'] = temp_id  # Include temp_id for client-side mapping
         event_broadcaster.broadcast_task_update(
             task_id=task.id,
             task_data=task_dict,
@@ -204,10 +223,14 @@ def create_task():
             user_id=current_user.id
         )
         
+        response_task = task.to_dict()
+        if temp_id:
+            response_task['temp_id'] = temp_id  # Echo back temp_id for client verification
+        
         return jsonify({
             'success': True,
             'message': 'Task created successfully',
-            'task': task.to_dict()
+            'task': response_task
         })
         
     except Exception as e:

@@ -77,6 +77,9 @@ class TaskWebSocketHandlers {
         // 2. Task Create
         this.on('task_created', this._handleTaskCreated.bind(this));
         
+        // 2b. ID Reconciliation (temp→real ID mapping for offline task creation)
+        this.on('id_reconciled', this._handleIDReconciled.bind(this));
+        
         // 3-9. Task Update (7 variants)
         this.on('task_updated', this._handleTaskUpdated.bind(this));
         this.on('task_title_updated', this._handleTaskUpdated.bind(this));
@@ -181,6 +184,43 @@ class TaskWebSocketHandlers {
         if (data.counters) {
             this._updateCountersFromServer(data.counters);
         }
+        
+        // CROWN⁴.5: Request pending reconciliations to catch up on missed broadcasts
+        this._requestPendingReconciliations();
+    }
+    
+    /**
+     * Request pending reconciliations for bootstrap recovery (CROWN⁴.5)
+     * Catches up on temp→real ID mappings that may have been missed
+     */
+    _requestPendingReconciliations() {
+        if (!this.socket || !this.socket.connected) {
+            console.warn('⚠️ Cannot request reconciliations - WebSocket not connected');
+            return;
+        }
+        
+        const workspace_id = window.WORKSPACE_ID || null;
+        
+        // Request pending reconciliations from server
+        this.socket.emit('reconciliations:get_pending', { workspace_id }, (response) => {
+            if (response && response.success && response.reconciliations) {
+                console.log(`🔄 Received ${response.count} pending reconciliations for bootstrap recovery`);
+                
+                // Process each reconciliation like a live broadcast
+                response.reconciliations.forEach(async (recon) => {
+                    if (recon.real_id && recon.temp_id) {
+                        // Trigger the same handler as live broadcasts
+                        await this._handleIDReconciled({
+                            temp_id: recon.temp_id,
+                            real_id: recon.real_id,
+                            user_id: recon.user_id,
+                            workspace_id: recon.workspace_id,
+                            timestamp: recon.reconciled_at || recon.created_at
+                        });
+                    }
+                });
+            }
+        });
     }
 
     /**
@@ -199,6 +239,75 @@ class TaskWebSocketHandlers {
         
         if (window.multiTabSync) {
             window.multiTabSync.broadcastTaskCreated(task);
+        }
+    }
+
+    /**
+     * Handle ID reconciliation - temp→real ID mapping for offline task creation
+     * @param {Object} data - Contains temp_id, real_id, user_id, workspace_id
+     */
+    async _handleIDReconciled(data) {
+        const { temp_id, real_id, user_id, workspace_id, timestamp } = data;
+        console.log(`🔄 ID Reconciled: ${temp_id} → ${real_id}`);
+        
+        if (!temp_id || !real_id) {
+            console.error('⚠️ Invalid reconciliation data:', data);
+            return;
+        }
+        
+        try {
+            // 1. Update IndexedDB cache - reconcile temp ID to real ID
+            if (window.taskCache && window.taskCache.reconcileTempID) {
+                await window.taskCache.reconcileTempID(temp_id, real_id);
+                console.log(`✅ Cache reconciled: ${temp_id} → ${real_id}`);
+            }
+            
+            // 2. Update DOM elements that reference the temp ID
+            const tempCard = document.querySelector(`[data-task-id="${temp_id}"]`);
+            if (tempCard) {
+                // Update data attribute
+                tempCard.setAttribute('data-task-id', real_id);
+                
+                // Update checkbox ID
+                const checkbox = tempCard.querySelector(`#task-${temp_id}`);
+                if (checkbox) {
+                    checkbox.id = `task-${real_id}`;
+                    checkbox.setAttribute('data-task-id', real_id);
+                }
+                
+                // Remove syncing indicator
+                const syncBadge = tempCard.querySelector('.temp-id-badge');
+                if (syncBadge) {
+                    syncBadge.remove();
+                }
+                
+                // Remove shimmer animation
+                tempCard.classList.remove('syncing');
+                
+                // Add reconciled animation
+                tempCard.classList.add('reconciled');
+                setTimeout(() => tempCard.classList.remove('reconciled'), 500);
+                
+                console.log(`✅ DOM updated: ${temp_id} → ${real_id}`);
+            }
+            
+            // 3. Broadcast to other tabs
+            if (window.multiTabSync && window.multiTabSync.broadcastIDReconciled) {
+                window.multiTabSync.broadcastIDReconciled(temp_id, real_id);
+            }
+            
+            // 4. Update optimistic UI mapping
+            if (window.optimisticUI && window.optimisticUI.reconcileTempID) {
+                window.optimisticUI.reconcileTempID(temp_id, real_id);
+            }
+            
+            // 5. Show success toast (subtle, not intrusive)
+            if (window.showToast) {
+                window.showToast(`Task synced successfully`, 'success', 2000);
+            }
+            
+        } catch (error) {
+            console.error(`❌ Failed to reconcile ${temp_id} → ${real_id}:`, error);
         }
     }
 

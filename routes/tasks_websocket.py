@@ -34,6 +34,7 @@ from flask_socketio import emit, join_room, leave_room
 from flask_login import current_user
 from services.event_broadcaster import event_broadcaster
 from services.task_event_handler import task_event_handler
+from services.temp_id_reconciler import get_reconciler
 
 
 def run_async(coro):
@@ -46,6 +47,7 @@ def run_async(coro):
     return loop.run_until_complete(coro)
 
 logger = logging.getLogger(__name__)
+reconciler = get_reconciler()  # CROWN⁴.5: TempIDReconciler for bootstrap recovery
 
 
 def register_tasks_namespace(socketio):
@@ -296,6 +298,42 @@ def register_tasks_namespace(socketio):
             db.session.rollback()
             emit('error', {
                 'message': 'Failed to save offline queue',
+                'error': str(e)
+            })
+    
+    @socketio.on('reconciliations:get_pending', namespace='/tasks')
+    def handle_get_pending_reconciliations(data):
+        """
+        Get pending reconciliations for bootstrap recovery.
+        Returns temp→real ID mappings that client may have missed.
+        """
+        try:
+            if not current_user.is_authenticated:
+                emit('error', {'message': 'Authentication required'})
+                return
+            
+            user_id = current_user.id
+            workspace_id = data.get('workspace_id') or current_user.workspace_id
+            
+            # Get reconciliations for bootstrap (pending + recently reconciled)
+            reconciliations = reconciler.get_reconciliations_for_bootstrap(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                limit=100
+            )
+            
+            emit('reconciliations:pending', {
+                'success': True,
+                'reconciliations': reconciliations,
+                'count': len(reconciliations)
+            })
+            
+            logger.info(f"Sent {len(reconciliations)} pending reconciliations to user {user_id}")
+            
+        except Exception as e:
+            logger.error(f"Get pending reconciliations failed: {e}", exc_info=True)
+            emit('error', {
+                'message': 'Failed to get pending reconciliations',
                 'error': str(e)
             })
     

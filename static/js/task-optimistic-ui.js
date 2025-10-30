@@ -133,7 +133,8 @@ class OptimisticUI {
      */
     async createTask(taskData) {
         const opId = this._generateOperationId();
-        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // CROWN⁴.5: Enhanced temp ID with UUID component for collision resistance
+        const tempId = this._generateTempId();
         
         const optimisticTask = {
             id: tempId,
@@ -572,6 +573,50 @@ class OptimisticUI {
      */
     _generateOperationId() {
         return `op_${Date.now()}_${++this.operationCounter}`;
+    }
+
+    /**
+     * Generate collision-resistant temporary ID (CROWN⁴.5)
+     * Format: temp_{timestamp}_{random}_{uuid}
+     * @returns {string}
+     */
+    _generateTempId() {
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substr(2, 9);
+        // Add UUID component for collision resistance under high load
+        const uuid = this._generateUUID();
+        return `temp_${timestamp}_${random}_${uuid}`;
+    }
+
+    /**
+     * Generate simple UUID v4 component (4 chars)
+     * @returns {string}
+     */
+    _generateUUID() {
+        return 'xxxx'.replace(/x/g, () => 
+            (Math.random() * 16 | 0).toString(16)
+        );
+    }
+
+    /**
+     * Reconcile temp ID to real ID (CROWN⁴.5 ID Reconciliation)
+     * Called when server confirms task creation and broadcasts real ID
+     * @param {string} temp_id - Temporary ID being reconciled
+     * @param {number} real_id - Real database ID from server
+     */
+    reconcileTempID(temp_id, real_id) {
+        console.log(`🔄 [OptimisticUI] Reconciling temp ID: ${temp_id} → ${real_id}`);
+        
+        // Update pending operations mapping
+        for (const [opId, operation] of this.pendingOperations.entries()) {
+            if (operation.tempId === temp_id) {
+                console.log(`✅ [OptimisticUI] Updated pending operation ${opId} mapping`);
+                operation.tempId = real_id;  // Update to real ID
+                operation.reconciled = true;
+                operation.reconciled_at = Date.now();
+                break;
+            }
+        }
     }
 
     /**
