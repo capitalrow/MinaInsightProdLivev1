@@ -1259,6 +1259,80 @@ def parse_natural_due_date(due_date_text):
         # If all parsing fails, default to one week from now
         return date.today() + timedelta(days=7)
 
+@api_tasks_bp.route('/suggest', methods=['POST'])
+@login_required
+def suggest_task_metadata():
+    """
+    CROWN⁴.5: Predictive suggestions for task metadata.
+    
+    Request body:
+        {
+            'title': str (required),
+            'description': str (optional),
+            'context': dict (optional)
+        }
+    
+    Response:
+        {
+            'success': True,
+            'suggestions': {
+                'due_date': str (ISO format),
+                'priority': str,
+                'category': str,
+                'confidence': float,
+                'reasoning': str
+            }
+        }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'title' not in data:
+            return jsonify({
+                'success': False,
+                'message': 'title required'
+            }), 400
+        
+        title = data['title']
+        description = data.get('description')
+        context = data.get('context', {})
+        
+        # Use PredictiveEngine to generate suggestions
+        from services.predictive_engine import predictive_engine
+        suggestions = predictive_engine.generate_suggestions(
+            title=title,
+            description=description,
+            context=context
+        )
+        
+        # Convert to JSON-serializable format
+        result = {
+            'success': True,
+            'suggestions': {
+                'due_date': suggestions.due_date.isoformat() if suggestions.due_date else None,
+                'priority': suggestions.priority,
+                'category': suggestions.category,
+                'assignee_id': suggestions.assignee_id,
+                'confidence': round(suggestions.confidence, 3),
+                'reasoning': suggestions.reasoning
+            }
+        }
+        
+        logger.info(f"Predictive suggestions for '{title[:50]}': "
+                   f"due={suggestions.due_date}, priority={suggestions.priority}, "
+                   f"confidence={suggestions.confidence:.2f}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Prediction error: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': 'Failed to generate suggestions',
+            'error': str(e)
+        }), 500
+
+
 @api_tasks_bp.route('', methods=['GET'])
 def get_all_tasks():
     """
