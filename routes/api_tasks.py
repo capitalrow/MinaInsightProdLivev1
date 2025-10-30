@@ -68,9 +68,13 @@ def list_tasks():
         search = request.args.get('search', None)
         due_date_filter = request.args.get('due_date', None)  # today, overdue, this_week
         
-        # Base query - tasks from meetings in user's workspace
-        stmt = select(Task).join(Meeting).where(
-            Meeting.workspace_id == current_user.workspace_id
+        # CROWN⁴.5 FIX: Use LEFT OUTER JOIN to include tasks without meetings
+        # Many tasks have NULL meeting_id from manual creation in UI
+        stmt = select(Task).outerjoin(Meeting).where(
+            or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                and_(Task.meeting_id.is_(None), Task.created_by_id == current_user.id)
+            )
         )
         
         # Apply filters
