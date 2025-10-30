@@ -132,6 +132,15 @@ class OptimisticUI {
      * @returns {Promise<Object>} Created task
      */
     async createTask(taskData) {
+        // CROWN⁴.5: Check for content-based duplicate (rapid double-clicks)
+        if (window.idempotencyManager) {
+            const duplicate = window.idempotencyManager.checkContentDuplicate('task_create', taskData, 2000);
+            if (duplicate) {
+                console.warn('🔒 Duplicate create operation blocked (idempotency)');
+                return duplicate.result || null;
+            }
+        }
+        
         const opId = this._generateOperationId();
         // CROWN⁴.5: Enhanced temp ID with UUID component for collision resistance
         const tempId = this._generateTempId();
@@ -184,6 +193,11 @@ class OptimisticUI {
                 queueId  // Store queue ID to remove on success
             });
             this._syncToServer(opId, 'create', taskData, tempId);
+            
+            // CROWN⁴.5: Mark content as processed for idempotency
+            if (window.idempotencyManager) {
+                window.idempotencyManager.markContentProcessed('task_create', taskData, optimisticTask);
+            }
 
             return optimisticTask;
         } catch (error) {
@@ -200,7 +214,21 @@ class OptimisticUI {
      * @returns {Promise<Object>} Updated task
      */
     async updateTask(taskId, updates) {
+        // CROWN⁴.5: Check for content-based duplicate within 1 second
+        if (window.idempotencyManager) {
+            const duplicate = window.idempotencyManager.checkContentDuplicate(
+                'task_update', 
+                { task_id: taskId, ...updates }, 
+                1000
+            );
+            if (duplicate) {
+                console.warn('🔒 Duplicate update operation blocked (idempotency)');
+                return duplicate.result || null;
+            }
+        }
+        
         const opId = this._generateOperationId();
+        const optimisticTimestamp = performance.now();  // CROWN⁴.5: Track optimistic start time
         
         try {
             // Get current task
@@ -245,16 +273,27 @@ class OptimisticUI {
             }
 
             // Step 4: Sync to server
-            // Store clean updates data for retry
+            // Store clean updates data for retry + reconciliation tracking
             this.pendingOperations.set(opId, { 
                 type: 'update', 
                 taskId, 
                 previous: currentTask,  // Keep for rollback
                 updates,  // Clean updates data for retry
                 data: updates,  // Explicit clean data reference
-                queueId  // Store queue ID to remove on success
+                queueId,  // Store queue ID to remove on success
+                optimisticTimestamp,  // CROWN⁴.5: Track for reconciliation latency
+                isStatusToggle: !!updates.status  // Flag to identify checkbox toggles
             });
             this._syncToServer(opId, 'update', updates, taskId);
+            
+            // CROWN⁴.5: Mark content as processed for idempotency
+            if (window.idempotencyManager) {
+                window.idempotencyManager.markContentProcessed(
+                    'task_update', 
+                    { task_id: taskId, ...updates }, 
+                    optimisticTask
+                );
+            }
 
             return optimisticTask;
         } catch (error) {
@@ -269,6 +308,19 @@ class OptimisticUI {
      * @returns {Promise<void>}
      */
     async deleteTask(taskId) {
+        // CROWN⁴.5: Check for duplicate delete within 2 seconds
+        if (window.idempotencyManager) {
+            const duplicate = window.idempotencyManager.checkContentDuplicate(
+                'task_delete', 
+                { task_id: taskId }, 
+                2000
+            );
+            if (duplicate) {
+                console.warn('🔒 Duplicate delete operation blocked (idempotency)');
+                return;
+            }
+        }
+        
         const opId = this._generateOperationId();
         
         try {
@@ -310,6 +362,11 @@ class OptimisticUI {
                 queueId  // Store queue ID to remove on success
             });
             this._syncToServer(opId, 'delete', null, taskId);
+            
+            // CROWN⁴.5: Mark as processed for idempotency
+            if (window.idempotencyManager) {
+                window.idempotencyManager.markContentProcessed('task_delete', { task_id: taskId });
+            }
 
         } catch (error) {
             console.error('❌ Optimistic delete failed:', error);
@@ -1006,6 +1063,44 @@ class OptimisticUI {
     async _reconcileSuccess(opId, type, serverData, taskId) {
         const operation = this.pendingOperations.get(opId);
         if (!operation) return;
+
+        // CROWN⁴.5: Track optimistic→truth reconciliation latency
+        const reconciliationTimestamp = performance.now();
+        const reconciliationLatency = operation.optimisticTimestamp 
+            ? Math.round(reconciliationTimestamp - operation.optimisticTimestamp)
+            : null;
+
+        // Track latency for status toggles (target: <150ms)
+        if (operation.isStatusToggle && reconciliationLatency !== null) {
+            const exceededTarget = reconciliationLatency > 150;
+            
+            console.log(`⚡ Status toggle reconciliation: ${reconciliationLatency}ms ${exceededTarget ? '⚠️ (exceeded 150ms target)' : '✅'}`);
+            
+            // Emit telemetry
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordEvent('task_toggle_reconciliation', {
+                    latency_ms: reconciliationLatency,
+                    exceeded_target: exceededTarget,
+                    task_id: taskId,
+                    operation_id: opId
+                });
+            }
+            
+            // Visual feedback for slow reconciliation (debugging)
+            if (exceededTarget && reconciliationLatency > 300) {
+                console.warn(`⚠️ Slow reconciliation detected: ${reconciliationLatency}ms`);
+            }
+        } else if (reconciliationLatency !== null) {
+            // Track all reconciliation latencies
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordEvent('task_update_reconciliation', {
+                    latency_ms: reconciliationLatency,
+                    type,
+                    task_id: taskId,
+                    operation_id: opId
+                });
+            }
+        }
 
         // Remove from OfflineQueue since WebSocket sync succeeded
         if (operation.queueId && this.cache) {

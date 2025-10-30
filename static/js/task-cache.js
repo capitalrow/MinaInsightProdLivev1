@@ -144,10 +144,22 @@ class TaskCache {
                 reject(request.error);
             };
 
-            request.onsuccess = () => {
+            request.onsuccess = async () => {
                 this.db = request.result;
                 this.ready = true;
                 console.log('✅ TaskCache IndexedDB initialized');
+                
+                // CROWN⁴.5: Run migrations for backward compatibility
+                if (window.cacheMigration) {
+                    try {
+                        const migrationResult = await window.cacheMigration.runMigrations(this.db);
+                        if (migrationResult.migrated) {
+                            console.log(`🔄 Cache migrated from v${migrationResult.from_version} to v${migrationResult.to_version}`);
+                        }
+                    } catch (error) {
+                        console.error('❌ Migration failed:', error);
+                    }
+                }
                 
                 // Schedule cache hygiene routine on idle (CROWN⁴.5)
                 this._scheduleHygieneRoutine();
@@ -737,6 +749,131 @@ class TaskCache {
                 reject(transaction.error);
             };
         });
+    }
+
+    /**
+     * Validate cache against server data and auto-reconcile if drift detected
+     * CROWN⁴.5: Checksum-based validation with field-level delta comparison
+     * @param {Array} serverTasks - Tasks from server (source of truth)
+     * @param {Object} options - Validation options
+     * @returns {Promise<Object>} Validation result with reconciliation details
+     */
+    async validateAndReconcile(serverTasks, options = {}) {
+        const startTime = performance.now();
+        const {
+            autoReconcile = true,
+            compareFields = ['id', 'title', 'status', 'updated_at', 'due_date'],
+            verbose = false
+        } = options;
+        
+        console.log(`🔍 Starting cache validation (auto-reconcile: ${autoReconcile})`);
+        
+        try {
+            // 1. Load cached tasks
+            const cachedTasks = await this.getAllTasks();
+            
+            // 2. Use CacheValidator to check for drift
+            if (!window.cacheValidator) {
+                console.warn('⚠️ CacheValidator not available, skipping validation');
+                return { validated: false, reason: 'validator_unavailable' };
+            }
+            
+            const validator = window.cacheValidator;
+            
+            // 3. Generate checksums for comparison
+            const validation = await validator.validate({
+                cachedData: cachedTasks,
+                serverData: serverTasks,
+                key: 'tasks_collection',
+                persistChecksum: true
+            });
+            
+            // 4. If drift detected, calculate delta and reconcile
+            if (validation.drift && autoReconcile) {
+                console.warn(`⚠️ Cache drift detected - calculating delta for auto-reconciliation`);
+                
+                const delta = validator.calculateDelta(
+                    cachedTasks,
+                    serverTasks,
+                    'id',
+                    compareFields
+                );
+                
+                if (verbose) {
+                    console.log(`📊 Delta summary: ${validator.getDeltaSummary(delta)}`);
+                    console.log('   Added:', delta.added.length);
+                    console.log('   Modified:', delta.modified.length);
+                    console.log('   Removed:', delta.removed.length);
+                    console.log('   Unchanged:', delta.unchanged.length);
+                }
+                
+                // 5. Apply delta (merge server changes into cache)
+                const reconciledTasks = validator.mergeDelta(cachedTasks, delta, 'id');
+                
+                // 6. Save reconciled data back to cache
+                await this.saveTasks(reconciledTasks);
+                
+                const reconciliationTime = Math.round(performance.now() - startTime);
+                
+                console.log(`✅ Auto-reconciliation complete in ${reconciliationTime}ms`);
+                
+                return {
+                    validated: true,
+                    hadDrift: true,
+                    reconciled: true,
+                    delta,
+                    validation,
+                    reconciliationTime,
+                    tasksCount: reconciledTasks.length
+                };
+            }
+            
+            // 7. No drift - cache is valid
+            const validationTime = Math.round(performance.now() - startTime);
+            console.log(`✅ Cache validated successfully in ${validationTime}ms (no drift)`);
+            
+            return {
+                validated: true,
+                hadDrift: false,
+                reconciled: false,
+                validation,
+                validationTime,
+                tasksCount: cachedTasks.length
+            };
+            
+        } catch (error) {
+            console.error('❌ Cache validation failed:', error);
+            return {
+                validated: false,
+                error: error.message,
+                validationTime: Math.round(performance.now() - startTime)
+            };
+        }
+    }
+    
+    /**
+     * Quick checksum validation without full reconciliation
+     * Used for fast drift detection during idle sync
+     * @param {Array} serverTasks - Tasks from server
+     * @returns {Promise<boolean>} True if cache is valid (no drift)
+     */
+    async quickValidate(serverTasks) {
+        if (!window.cacheValidator) return true; // Assume valid if validator unavailable
+        
+        try {
+            const cachedTasks = await this.getAllTasks();
+            const validation = await window.cacheValidator.validate({
+                cachedData: cachedTasks,
+                serverData: serverTasks,
+                key: 'tasks_quick_check',
+                persistChecksum: false
+            });
+            
+            return validation.isValid;
+        } catch (error) {
+            console.warn('⚠️ Quick validation failed:', error);
+            return true; // Assume valid on error to avoid unnecessary reconciliation
+        }
     }
 
     /**

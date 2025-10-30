@@ -173,7 +173,32 @@ class TaskWebSocketHandlers {
     async _handleBootstrap(data) {
         console.log('📦 Bootstrap data received:', data);
         
-        if (data.tasks) {
+        // CROWN⁴.5: Validate cache against server data with auto-reconciliation
+        if (data.tasks && window.taskCache) {
+            const validationResult = await window.taskCache.validateAndReconcile(data.tasks, {
+                autoReconcile: true,
+                compareFields: ['id', 'title', 'status', 'updated_at', 'due_date', 'priority'],
+                verbose: true
+            });
+            
+            if (validationResult.validated && validationResult.hadDrift) {
+                console.log(`🔄 Cache reconciled: ${validationResult.delta.added.length} added, ${validationResult.delta.modified.length} modified, ${validationResult.delta.removed.length} removed`);
+                
+                // Emit telemetry event for cache reconciliation
+                if (window.crownTelemetry) {
+                    window.crownTelemetry.recordEvent('cache_reconciliation', {
+                        had_drift: true,
+                        added: validationResult.delta.added.length,
+                        modified: validationResult.delta.modified.length,
+                        removed: validationResult.delta.removed.length,
+                        reconciliation_time_ms: validationResult.reconciliationTime
+                    });
+                }
+            } else if (validationResult.validated && !validationResult.hadDrift) {
+                console.log(`✅ Cache valid (no reconciliation needed)`);
+            }
+        } else if (data.tasks) {
+            // Fallback: Save tasks directly if cache not available
             await window.taskCache.saveTasks(data.tasks);
         }
         
