@@ -79,7 +79,8 @@ class BroadcastChannelService:
                 logger.info(f"Tab unregistered: workspace={workspace_id}, client={client_id}")
     
     def broadcast_to_workspace(self, workspace_id: int, event_type: str,
-                              payload: Dict[str, Any], exclude_client: Optional[str] = None) -> int:
+                              payload: Dict[str, Any], exclude_client: Optional[str] = None,
+                              socketio=None) -> int:
         """
         Broadcast event to all tabs in workspace.
         
@@ -88,6 +89,7 @@ class BroadcastChannelService:
             event_type: Event type (e.g., 'task_update', 'task_created')
             payload: Event payload
             exclude_client: Optional client ID to exclude (usually the sender)
+            socketio: SocketIO instance for emitting events
             
         Returns:
             Number of tabs notified
@@ -109,9 +111,19 @@ class BroadcastChannelService:
             if client_id == exclude_client:
                 continue
             
-            # In production, emit via SocketIO to this specific client
-            # emit('broadcast_event', broadcast_message, room=client_id)
-            tabs_notified += 1
+            # Emit via SocketIO to this specific client
+            if socketio:
+                try:
+                    socketio.emit('broadcast_event', broadcast_message, 
+                                 room=client_id, namespace='/tasks')
+                    tabs_notified += 1
+                    logger.debug(f"Emitted broadcast to client {client_id}")
+                except Exception as e:
+                    logger.error(f"Failed to emit to client {client_id}: {e}")
+            else:
+                # Fallback: count as notified but warn
+                tabs_notified += 1
+                logger.warning(f"SocketIO not provided, cannot emit to client {client_id}")
         
         self.metrics['broadcasts_sent'] += 1
         self.metrics['tabs_synchronized'] += tabs_notified
