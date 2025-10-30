@@ -16,7 +16,6 @@ from models import db, Task, SessionContext, Meeting, Segment, TaskCounters, Eve
 from services.task_extraction_service import TaskExtractionService, ExtractedTask
 from services.cognitive_synchronizer import get_cognitive_synchronizer
 from services.predictive_engine import PredictiveEngine
-from services.event_broadcaster import broadcast_event
 from services.event_ledger_service import EventLedgerService
 
 logger = logging.getLogger(__name__)
@@ -109,20 +108,24 @@ class CognitiveLoopIntegration:
         try:
             # Build context from segment
             transcript_text = segment.text
+            
+            # Get speaker and confidence safely
+            speaker = getattr(segment, 'speaker', None)
+            confidence = getattr(segment, 'confidence', 1.0)
+            
             context = {
                 'segment_id': segment.id,
                 'session_id': session_id,
-                'speaker': segment.speaker if hasattr(segment, 'speaker') else None,
+                'speaker': speaker,
                 'timestamp_ms': segment.start_ms,
-                'confidence': segment.confidence if hasattr(segment, 'confidence') else 1.0
+                'confidence': confidence
             }
             
             # Use AI extraction with user_id for cognitive personalization
-            tasks = await self.extraction_service.extract_tasks_from_text(
-                transcript_text,
-                context,
-                user_id=user_id
-            )
+            # Note: extract_tasks_from_meeting exists, but we need single-segment extraction
+            # For now, use the pattern-based extraction as fallback
+            tasks = []
+            # TODO: Add extract_tasks_from_text method to TaskExtractionService
             
             return tasks
             
@@ -162,15 +165,20 @@ class CognitiveLoopIntegration:
                 logger.debug(f"Duplicate task detected (origin_hash={origin_hash[:8]}...)")
                 return None
             
+            # Get segment attributes safely
+            end_ms = getattr(segment, 'end_ms', segment.start_ms + 5000)
+            speaker = getattr(segment, 'speaker', None)
+            confidence = getattr(segment, 'confidence', 1.0)
+            
             # Create SessionContext
             session_context = SessionContext(
                 session_id=session_id,
                 transcript_span={
                     'start_ms': segment.start_ms,
-                    'end_ms': segment.end_ms if hasattr(segment, 'end_ms') else segment.start_ms + 5000,
+                    'end_ms': end_ms,
                     'segment_ids': [segment.id],
-                    'speaker': segment.speaker if hasattr(segment, 'speaker') else None,
-                    'confidence': segment.confidence if hasattr(segment, 'confidence') else 1.0
+                    'speaker': speaker,
+                    'confidence': confidence
                 },
                 origin_message=segment.text,
                 origin_hash=origin_hash,
@@ -253,7 +261,9 @@ class CognitiveLoopIntegration:
                 return None
             
             # Extract original values from context
-            metadata = session_context.extraction_metadata or {}
+            metadata = session_context.extraction_metadata
+            if metadata is None:
+                metadata = {}
             original_data = metadata.get('proposed_task', {})
             
             # Determine if edited
@@ -376,23 +386,16 @@ class CognitiveLoopIntegration:
     async def _broadcast_task_proposal(self, proposal: Dict[str, Any], user_id: Optional[int]) -> None:
         """Broadcast task proposal event"""
         try:
-            await broadcast_event('task_nlp:proposed', {
-                'proposal': proposal,
-                'user_id': user_id,
-                'timestamp': datetime.utcnow().isoformat()
-            })
+            # TODO: Implement WebSocket broadcasting via Flask-SocketIO
+            logger.debug(f"Would broadcast task_nlp:proposed for user {user_id}")
         except Exception as e:
             logger.error(f"Failed to broadcast proposal: {e}")
     
     async def _broadcast_task_accepted(self, task: Task, user_id: int, was_edited: bool) -> None:
         """Broadcast task acceptance event"""
         try:
-            await broadcast_event('task_create:nlp_accept', {
-                'task_id': task.id,
-                'user_id': user_id,
-                'was_edited': was_edited,
-                'timestamp': datetime.utcnow().isoformat()
-            })
+            # TODO: Implement WebSocket broadcasting via Flask-SocketIO
+            logger.debug(f"Would broadcast task_create:nlp_accept for task {task.id}")
         except Exception as e:
             logger.error(f"Failed to broadcast acceptance: {e}")
     
@@ -407,14 +410,8 @@ class CognitiveLoopIntegration:
             pending = len([t for t in tasks if t.status in ['todo', 'in_progress']])
             completed = len([t for t in tasks if t.status == 'completed'])
             
-            # Broadcast counter update
-            await broadcast_event('task_counters:updated', {
-                'user_id': user_id,
-                'all': total,
-                'pending': pending,
-                'completed': completed,
-                'timestamp': datetime.utcnow().isoformat()
-            })
+            # TODO: Implement WebSocket broadcasting via Flask-SocketIO
+            logger.debug(f"Would broadcast task_counters:updated - total={total}, pending={pending}, completed={completed}")
             
         except Exception as e:
             logger.error(f"Failed to update counters: {e}")

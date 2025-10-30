@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from .session import Session
     from .participant import Participant
     from .task import Task
+    from .session_context import SessionContext
     from .calendar_event import CalendarEvent
     from .analytics import Analytics
 
