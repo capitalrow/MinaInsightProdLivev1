@@ -64,7 +64,8 @@ def register_tasks_namespace(socketio):
     def handle_tasks_connect():
         """Handle client connection to tasks namespace."""
         try:
-            client_id = request.sid
+            from flask_socketio import request as socketio_request
+            client_id = socketio_request.sid
             logger.info(f"Tasks client connected: {client_id}")
             
             emit('connected', {
@@ -80,7 +81,8 @@ def register_tasks_namespace(socketio):
     def handle_tasks_disconnect():
         """Handle client disconnection from tasks namespace."""
         try:
-            client_id = request.sid
+            from flask_socketio import request as socketio_request
+            client_id = socketio_request.sid
             logger.info(f"Tasks client disconnected: {client_id}")
             
         except Exception as e:
@@ -103,7 +105,8 @@ def register_tasks_namespace(socketio):
             room = f"workspace_{workspace_id}"
             join_room(room)
             
-            logger.info(f"Client {request.sid} joined tasks room: {room}")
+            from flask_socketio import request as socketio_request
+            logger.info(f"Client {socketio_request.sid} joined tasks room: {room}")
             
             emit('joined_workspace', {
                 'workspace_id': workspace_id,
@@ -131,7 +134,8 @@ def register_tasks_namespace(socketio):
             room = f"meeting_{meeting_id}"
             join_room(room)
             
-            logger.info(f"Client {request.sid} subscribed to meeting {meeting_id} tasks")
+            from flask_socketio import request as socketio_request
+            logger.info(f"Client {socketio_request.sid} subscribed to meeting {meeting_id} tasks")
             
             emit('subscribed_meeting', {
                 'meeting_id': meeting_id,
@@ -201,7 +205,7 @@ def register_tasks_namespace(socketio):
                     emit('task_updated', {
                         'event_type': event_type,
                         'data': result
-                    }, room=f"workspace_{workspace_id}")
+                    }, to=f"workspace_{workspace_id}")
             
             # Return result for Socket.IO acknowledgment callback
             return result
