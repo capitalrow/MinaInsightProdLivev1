@@ -214,6 +214,8 @@ class OptimisticUI {
      * @returns {Promise<Object>} Updated task
      */
     async updateTask(taskId, updates) {
+        console.log(`🔍 [DEBUG] updateTask called for task ${taskId}`, updates);
+        
         // CROWN⁴.5: Check for content-based duplicate within 1 second
         if (window.idempotencyManager) {
             const duplicate = window.idempotencyManager.checkContentDuplicate(
@@ -229,13 +231,16 @@ class OptimisticUI {
         
         const opId = this._generateOperationId();
         const optimisticTimestamp = performance.now();  // CROWN⁴.5: Track optimistic start time
+        console.log(`🔍 [DEBUG] Generated operation ID: ${opId}, timestamp: ${optimisticTimestamp}`);
         
         try {
             // Get current task
             const currentTask = await this.cache.getTask(taskId);
             if (!currentTask) {
+                console.error(`❌ [DEBUG] Task ${taskId} not found in cache`);
                 throw new Error('Task not found');
             }
+            console.log(`🔍 [DEBUG] Current task retrieved:`, currentTask);
 
             // Create optimistic version
             const optimisticTask = {
@@ -380,15 +385,21 @@ class OptimisticUI {
      * @returns {Promise<Object>}
      */
     async toggleTaskStatus(taskId) {
+        console.log(`🔍 [DEBUG] toggleTaskStatus called for task ${taskId}`);
         const task = await this.cache.getTask(taskId);
-        if (!task) return;
+        if (!task) {
+            console.warn(`⚠️ [DEBUG] Task ${taskId} not found in cache`);
+            return;
+        }
 
         const newStatus = task.status === 'completed' ? 'todo' : 'completed';
+        console.log(`🔍 [DEBUG] Toggling task ${taskId} from '${task.status}' to '${newStatus}'`);
         const updates = {
             status: newStatus,
             completed_at: newStatus === 'completed' ? new Date().toISOString() : null
         };
 
+        console.log(`🔍 [DEBUG] Calling updateTask with updates:`, updates);
         const result = await this.updateTask(taskId, updates);
 
         if (newStatus === 'completed' && window.emotionalAnimations) {
@@ -877,12 +888,20 @@ class OptimisticUI {
      */
     async _syncToServer(opId, type, data, taskId) {
         const startTime = performance.now();
+        console.log(`🔍 [DEBUG] _syncToServer called:`, { opId, type, taskId, data });
 
         try {
             // Check WebSocket connection (wsManager.sockets.tasks is the socket object)
+            console.log(`🔍 [DEBUG] Checking WebSocket connection...`);
+            console.log(`🔍 [DEBUG] window.wsManager exists:`, !!window.wsManager);
+            console.log(`🔍 [DEBUG] window.wsManager.sockets exists:`, !!(window.wsManager && window.wsManager.sockets));
+            console.log(`🔍 [DEBUG] window.wsManager.sockets.tasks exists:`, !!(window.wsManager && window.wsManager.sockets && window.wsManager.sockets.tasks));
+            
             const isConnected = window.wsManager && 
                                window.wsManager.sockets.tasks && 
                                window.wsManager.sockets.tasks.connected;
+            
+            console.log(`🔍 [DEBUG] WebSocket isConnected:`, isConnected);
             
             if (!isConnected) {
                 // Socket is disconnected or reconnecting - defer to OfflineQueueManager
@@ -975,9 +994,12 @@ class OptimisticUI {
             }
 
             console.log(`📤 Sending ${eventName} event:`, payload);
+            console.log(`🔍 [DEBUG] About to call wsManager.emitWithAck('${eventName}', payload, '/tasks')`);
+            console.log(`🔍 [DEBUG] wsManager.emitWithAck exists:`, !!(window.wsManager && window.wsManager.emitWithAck));
 
             // Emit via WebSocket and wait for server acknowledgment
             const result = await window.wsManager.emitWithAck(eventName, payload, '/tasks');
+            console.log(`🔍 [DEBUG] wsManager.emitWithAck returned:`, result);
 
             const reconcileTime = performance.now() - startTime;
             console.log(`✅ Server acknowledged ${type} in ${reconcileTime.toFixed(2)}ms, response:`, result);
