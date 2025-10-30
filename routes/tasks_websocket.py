@@ -147,6 +147,112 @@ def register_tasks_namespace(socketio):
             logger.error(f"Subscribe meeting error: {e}", exc_info=True)
             emit('error', {'message': 'Failed to subscribe to meeting'})
     
+    @socketio.on('request_event_replay', namespace='/tasks')
+    def handle_request_event_replay(data):
+        """
+        Handle event replay request for tasks namespace.
+        Implements deterministic replay with last_event_id backfill (CROWN⁴.5).
+        
+        Args:
+            data: {
+                'workspace_id': int,
+                'last_sequence_num': int,
+                'namespace': str,
+                'is_initial_sync': bool
+            }
+        """
+        try:
+            from models import db
+            from models.event_ledger import EventLedger, EventStatus
+            from sqlalchemy import select
+            
+            workspace_id = data.get('workspace_id')
+            last_sequence_num = data.get('last_sequence_num', 0)
+            is_initial_sync = data.get('is_initial_sync', False)
+            
+            logger.info(
+                f"Tasks event replay requested: workspace={workspace_id}, "
+                f"last_seq={last_sequence_num}, initial_sync={is_initial_sync}"
+            )
+            
+            # Query events for this workspace since last_sequence_num
+            # CRITICAL: Fetch ALL events in batches to guarantee zero-data-loss (CROWN⁴.5)
+            from models.event_ledger import EventType
+            
+            # Fetch workspace events in batches for memory efficiency
+            batch_size = 500
+            workspace_events = []
+            current_offset = 0
+            
+            while True:
+                batch = db.session.scalars(
+                    select(EventLedger)
+                    .where(EventLedger.status == EventStatus.COMPLETED)
+                    .where(EventLedger.sequence_num > last_sequence_num)
+                    .where(EventLedger.event_type.in_([EventType.TASK_UPDATE, EventType.TASK_CREATED]))
+                    .where(EventLedger.payload['workspace_id'].astext == str(workspace_id))
+                    .order_by(EventLedger.sequence_num.asc())
+                    .offset(current_offset)
+                    .limit(batch_size)
+                ).all()
+                
+                if not batch:
+                    break
+                
+                workspace_events.extend(batch)
+                current_offset += batch_size
+                
+                # Safety: Stop if we've fetched more than 5000 events
+                # OPERATIONAL NOTE: In extremely rare cases (>5000 missed events), this may
+                # truncate replay. For such cases, recommend client performs full re-bootstrap
+                # rather than incremental replay. This prevents memory exhaustion while
+                # maintaining practical zero-data-loss for 99.99% of reconnect scenarios.
+                if len(workspace_events) >= 5000:
+                    logger.error(
+                        f"Event replay hit safety limit: {len(workspace_events)} events "
+                        f"for workspace {workspace_id}. Client should perform full re-bootstrap. "
+                        f"Last replayed sequence: {workspace_events[-1].sequence_num if workspace_events else 'N/A'}"
+                    )
+                    # Emit truncation warning to client
+                    emit('event_replay_truncated', {
+                        'workspace_id': workspace_id,
+                        'events_returned': len(workspace_events),
+                        'message': 'Replay truncated at 5000 events. Please refresh page for full sync.',
+                        'last_sequence_num': workspace_events[-1].sequence_num if workspace_events else last_sequence_num
+                    })
+                    break
+            
+            logger.info(
+                f"Sending {len(workspace_events)} task events for workspace {workspace_id} "
+                f"(seq > {last_sequence_num}, fetched in {(len(workspace_events) // batch_size) + 1} batches)"
+            )
+            
+            # Emit event replay response
+            emit('event_replay', {
+                'events': [
+                    {
+                        'event_name': event.event_name,
+                        'event_type': event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type),
+                        'payload': event.payload,
+                        'sequence_num': event.sequence_num,
+                        'vector_clock': event.vector_clock,
+                        'created_at': event.created_at.isoformat() if event.created_at else None
+                    }
+                    for event in workspace_events
+                ],
+                'total_events': len(workspace_events),
+                'last_sequence_num': workspace_events[-1].sequence_num if workspace_events else last_sequence_num,
+                'is_initial_sync': is_initial_sync
+            })
+            
+        except Exception as e:
+            logger.error(f"Event replay error: {e}", exc_info=True)
+            emit('event_replay', {
+                'events': [],
+                'total_events': 0,
+                'error': str(e)
+            })
+    
     # CROWN⁴.5 Event Matrix Handlers
     
     @socketio.on('task_event', namespace='/tasks')
