@@ -5,6 +5,7 @@ AI-powered service for extracting actionable tasks from meeting transcripts and 
 
 import json
 import re
+import hashlib
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta, date
 from dataclasses import dataclass
@@ -295,6 +296,10 @@ class TaskExtractionService:
                 # Find assignee if mentioned
                 assigned_to_id = self._find_user_by_name(extracted_task.assigned_to)
                 
+                # Generate origin_hash for deduplication (CROWN⁴.5 Event #3)
+                hash_input = f"{extracted_task.title}:{extracted_task.description or ''}:{meeting_id}"
+                origin_hash = hashlib.sha256(hash_input.encode()).hexdigest()
+                
                 task = Task(
                     meeting_id=meeting_id,
                     title=extracted_task.title,
@@ -305,7 +310,11 @@ class TaskExtractionService:
                     assigned_to_id=assigned_to_id,
                     extracted_by_ai=True,
                     confidence_score=extracted_task.confidence,
-                    extraction_context=extracted_task.context
+                    extraction_context=extracted_task.context,
+                    emotional_state='pending_suggest',
+                    status='todo',
+                    source='ai_extraction',
+                    origin_hash=origin_hash
                 )
                 
                 db.session.add(task)

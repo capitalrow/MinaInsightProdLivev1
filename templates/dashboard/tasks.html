@@ -320,6 +320,47 @@
 .ai-proposal {
     border: 2px solid var(--color-primary);
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+    position: relative;
+}
+
+.ai-proposal::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+    border-radius: var(--radius-xl);
+    z-index: -1;
+    opacity: 0.3;
+    filter: blur(8px);
+    animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+}
+
+.ai-proposal.confidence-high::after {
+    opacity: 0.6;
+    filter: blur(12px);
+}
+
+.ai-proposal.confidence-medium::after {
+    opacity: 0.4;
+    filter: blur(10px);
+}
+
+.ai-proposal.confidence-low::after {
+    opacity: 0.25;
+    filter: blur(8px);
+}
+
+.ai-proposal.confidence-very-low::after {
+    opacity: 0.15;
+    filter: blur(6px);
 }
 
 .ai-proposal-badge {
