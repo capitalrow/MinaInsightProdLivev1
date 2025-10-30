@@ -69,6 +69,17 @@ def register_tasks_namespace(socketio):
             client_id = request.sid
             logger.info(f"Tasks client connected: {client_id}")
             
+            # CROWN⁴.5: Register with BroadcastChannel service
+            if current_user.is_authenticated and current_user.workspace_id:
+                from services.broadcast_channel_service import broadcast_channel_service
+                tab_id = request.args.get('tab_id', f'tab_{client_id[:8]}')
+                broadcast_channel_service.register_client(
+                    workspace_id=current_user.workspace_id,
+                    client_id=client_id,
+                    tab_id=tab_id
+                )
+                logger.info(f"BroadcastChannel registered: workspace={current_user.workspace_id}, tab={tab_id}")
+            
             emit('connected', {
                 'message': 'Connected to tasks namespace',
                 'client_id': client_id,
@@ -84,6 +95,15 @@ def register_tasks_namespace(socketio):
         try:
             client_id = request.sid
             logger.info(f"Tasks client disconnected: {client_id}")
+            
+            # CROWN⁴.5: Unregister from BroadcastChannel service
+            if current_user.is_authenticated and current_user.workspace_id:
+                from services.broadcast_channel_service import broadcast_channel_service
+                broadcast_channel_service.unregister_client(
+                    workspace_id=current_user.workspace_id,
+                    client_id=client_id
+                )
+                logger.info(f"BroadcastChannel unregistered: workspace={current_user.workspace_id}, client={client_id}")
             
         except Exception as e:
             logger.error(f"Tasks disconnect error: {e}", exc_info=True)
@@ -271,7 +291,8 @@ def register_tasks_namespace(socketio):
                     workspace_id=workspace_id,
                     event_type=event_type,
                     payload=result,
-                    exclude_client=request.sid
+                    exclude_client=request.sid,
+                    socketio=socketio
                 )
             
             # Return result for Socket.IO acknowledgment callback
