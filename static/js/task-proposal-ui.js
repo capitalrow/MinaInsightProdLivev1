@@ -19,26 +19,44 @@ class TaskProposalUI {
 
     async acceptProposal(taskId, button) {
         const card = button.closest('.task-card');
-        if (!card) return;
+        if (!card) {
+            console.error('❌ No task card found for button');
+            return;
+        }
 
         button.disabled = true;
         const originalText = button.textContent;
         button.textContent = 'Accepting...';
 
+        console.log(`🚀 Accepting task ${taskId}...`);
+
         try {
-            const response = await fetch(`/api/tasks/${taskId}/accept`, {
+            const url = `/api/tasks/${taskId}/accept`;
+            console.log('📡 Fetching:', url);
+            
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
-                }
+                },
+                credentials: 'same-origin'
+            });
+
+            console.log('📥 Response received:', {
+                status: response.status,
+                ok: response.ok,
+                statusText: response.statusText,
+                headers: Array.from(response.headers.entries())
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
+                console.error('❌ Response not OK:', errorText);
                 throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
 
             const result = await response.json();
+            console.log('📦 Result parsed:', result);
 
             if (!result || !result.success) {
                 throw new Error(result?.message || 'Failed to accept proposal');
