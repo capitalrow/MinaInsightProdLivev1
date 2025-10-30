@@ -1792,6 +1792,9 @@
 })();
 </script>
 
+<!-- CSRF Protection (must load first) -->
+<script src="{{ url_for('static', filename='js/csrf.js') }}" nonce="{{ g.csp_nonce }}"></script>
+
 <!-- CROWN⁴.5 Frontend Modules (crown-telemetry loaded in base.html) -->
 <script src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
