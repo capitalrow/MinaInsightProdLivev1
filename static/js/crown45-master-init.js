@@ -196,13 +196,6 @@
             }
         }));
 
-        // Auto-show telemetry dashboard in 2 seconds (if enabled)
-        if (CROWN45.config.telemetryEnabled && window.crownTelemetry) {
-            setTimeout(() => {
-                window.crownTelemetry.show();
-            }, 2000);
-        }
-
         // Start health check
         startHealthCheck();
     }
