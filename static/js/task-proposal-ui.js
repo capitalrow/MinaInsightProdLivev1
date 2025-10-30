@@ -33,43 +33,50 @@ class TaskProposalUI {
                 }
             });
 
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
             const result = await response.json();
 
-            if (result.success) {
-                if (window.EmotionalAnimations) {
-                    window.EmotionalAnimations.playAnimation(card, 'burst', 'positive');
-                }
-
-                if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordMetric('task_proposal_accepted', 1);
-                }
-
-                setTimeout(() => {
-                    card.classList.remove('ai-proposal');
-                    card.dataset.emotionalState = 'accepted';
-                    
-                    const badge = card.querySelector('.ai-proposal-badge');
-                    if (badge) {
-                        const checkboxWrapper = document.createElement('div');
-                        checkboxWrapper.className = 'task-checkbox-wrapper';
-                        checkboxWrapper.innerHTML = `
-                            <input type="checkbox" 
-                                   class="task-checkbox" 
-                                   data-task-id="${taskId}">
-                        `;
-                        badge.replaceWith(checkboxWrapper);
-                    }
-
-                    const actions = card.querySelector('.ai-proposal-actions');
-                    if (actions) {
-                        actions.remove();
-                    }
-                }, 500);
-            } else {
-                throw new Error(result.message || 'Failed to accept proposal');
+            if (!result || !result.success) {
+                throw new Error(result?.message || 'Failed to accept proposal');
             }
+
+            console.log('✅ Task proposal accepted:', result);
+
+            if (window.EmotionalAnimations) {
+                window.EmotionalAnimations.playAnimation(card, 'burst', 'positive');
+            }
+
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('task_proposal_accepted', 1);
+            }
+
+            setTimeout(() => {
+                card.classList.remove('ai-proposal');
+                card.dataset.emotionalState = 'accepted';
+                
+                const badge = card.querySelector('.ai-proposal-badge');
+                if (badge) {
+                    const checkboxWrapper = document.createElement('div');
+                    checkboxWrapper.className = 'task-checkbox-wrapper';
+                    checkboxWrapper.innerHTML = `
+                        <input type="checkbox" 
+                               class="task-checkbox" 
+                               data-task-id="${taskId}">
+                    `;
+                    badge.replaceWith(checkboxWrapper);
+                }
+
+                const actions = card.querySelector('.ai-proposal-actions');
+                if (actions) {
+                    actions.remove();
+                }
+            }, 500);
         } catch (error) {
-            console.error('Failed to accept proposal:', error);
+            console.error('❌ Failed to accept proposal:', error);
             button.textContent = originalText;
             button.disabled = false;
 
@@ -97,28 +104,35 @@ class TaskProposalUI {
                 }
             });
 
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
             const result = await response.json();
 
-            if (result.success) {
-                if (window.EmotionalAnimations) {
-                    window.EmotionalAnimations.playAnimation(card, 'slide', 'neutral');
-                }
-
-                if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordMetric('task_proposal_rejected', 1);
-                }
-
-                setTimeout(() => {
-                    card.style.opacity = '0';
-                    setTimeout(() => {
-                        card.remove();
-                    }, 300);
-                }, 500);
-            } else {
-                throw new Error(result.message || 'Failed to reject proposal');
+            if (!result || !result.success) {
+                throw new Error(result?.message || 'Failed to reject proposal');
             }
+
+            console.log('✅ Task proposal rejected:', result);
+
+            if (window.EmotionalAnimations) {
+                window.EmotionalAnimations.playAnimation(card, 'slide', 'neutral');
+            }
+
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('task_proposal_rejected', 1);
+            }
+
+            setTimeout(() => {
+                card.style.opacity = '0';
+                setTimeout(() => {
+                    card.remove();
+                }, 300);
+            }, 500);
         } catch (error) {
-            console.error('Failed to reject proposal:', error);
+            console.error('❌ Failed to reject proposal:', error);
             button.textContent = originalText;
             button.disabled = false;
 
