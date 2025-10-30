@@ -29,7 +29,6 @@ Supported Events (Full Matrix):
 
 import logging
 import asyncio
-from flask import request
 from flask_socketio import emit, join_room, leave_room
 from flask_login import current_user
 from services.event_broadcaster import event_broadcaster
@@ -64,8 +63,8 @@ def register_tasks_namespace(socketio):
     def handle_tasks_connect():
         """Handle client connection to tasks namespace."""
         try:
-            from flask_socketio import request as socketio_request
-            client_id = socketio_request.sid
+            from flask import request
+            client_id = request.sid if hasattr(request, 'sid') else 'unknown'
             logger.info(f"Tasks client connected: {client_id}")
             
             emit('connected', {
@@ -81,8 +80,8 @@ def register_tasks_namespace(socketio):
     def handle_tasks_disconnect():
         """Handle client disconnection from tasks namespace."""
         try:
-            from flask_socketio import request as socketio_request
-            client_id = socketio_request.sid
+            from flask import request
+            client_id = request.sid if hasattr(request, 'sid') else 'unknown'
             logger.info(f"Tasks client disconnected: {client_id}")
             
         except Exception as e:
@@ -105,8 +104,9 @@ def register_tasks_namespace(socketio):
             room = f"workspace_{workspace_id}"
             join_room(room)
             
-            from flask_socketio import request as socketio_request
-            logger.info(f"Client {socketio_request.sid} joined tasks room: {room}")
+            from flask import request
+            client_id = request.sid if hasattr(request, 'sid') else 'unknown'
+            logger.info(f"Client {client_id} joined tasks room: {room}")
             
             emit('joined_workspace', {
                 'workspace_id': workspace_id,
@@ -134,8 +134,9 @@ def register_tasks_namespace(socketio):
             room = f"meeting_{meeting_id}"
             join_room(room)
             
-            from flask_socketio import request as socketio_request
-            logger.info(f"Client {socketio_request.sid} subscribed to meeting {meeting_id} tasks")
+            from flask import request
+            client_id = request.sid if hasattr(request, 'sid') else 'unknown'
+            logger.info(f"Client {client_id} subscribed to meeting {meeting_id} tasks")
             
             emit('subscribed_meeting', {
                 'meeting_id': meeting_id,
