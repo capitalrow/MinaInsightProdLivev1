@@ -151,17 +151,27 @@ def register_tasks_namespace(socketio):
         """
         Universal handler for all 20 CROWN⁴.5 task events.
         
+        CROWN⁴.5 Enhancements:
+        - Vector clock validation for deterministic ordering
+        - EventSequencer integration for conflict detection
+        - Temporal recovery for out-of-order events
+        - BroadcastChannel sync to all workspace tabs
+        
         Args:
             data: {
                 'event_type': str,  # e.g., 'task_create:manual'
                 'payload': dict,    # Event-specific data
                 'vector_clock': dict (optional),  # Vector clock for offline support
+                'event_id': str (optional),  # Event sequence ID
                 'trace_id': str (optional)  # Trace ID for telemetry
             }
         """
         try:
             event_type = data.get('event_type')
             payload = data.get('payload', {})
+            vector_clock = data.get('vector_clock')
+            event_id = data.get('event_id')
+            trace_id = data.get('trace_id')
             
             if not event_type:
                 error_response = {'success': False, 'message': 'event_type required'}
@@ -171,15 +181,58 @@ def register_tasks_namespace(socketio):
             # Get user ID (from authenticated session)
             user_id = payload.get('user_id') or (current_user.is_authenticated and current_user.id)
             session_id = payload.get('session_id')
+            workspace_id = payload.get('workspace_id') or (current_user.is_authenticated and current_user.workspace_id)
             
             if not user_id:
                 error_response = {'success': False, 'message': 'user_id required'}
                 emit('error', error_response)
                 return error_response
             
-            # Add vector clock to payload if provided
-            if 'vector_clock' in data:
-                payload['vector_clock'] = data['vector_clock']
+            # CROWN⁴.5: Validate vector clock for deterministic ordering
+            if vector_clock:
+                try:
+                    validation = event_sequencer.validate_vector_clock(
+                        vector_clock=vector_clock,
+                        user_id=user_id,
+                        workspace_id=workspace_id
+                    )
+                    
+                    if not validation.get('valid'):
+                        logger.warning(f"Vector clock validation failed: {validation.get('reason')}")
+                        
+                        # Attempt temporal recovery
+                        if temporal_recovery_engine:
+                            recovery_result = temporal_recovery_engine.recover_event(
+                                event_type=event_type,
+                                payload=payload,
+                                vector_clock=vector_clock
+                            )
+                            
+                            if not recovery_result.get('recovered'):
+                                error_response = {
+                                    'success': False,
+                                    'message': 'Event ordering conflict',
+                                    'needs_sync': True,
+                                    'reason': validation.get('reason')
+                                }
+                                emit('error', error_response)
+                                return error_response
+                except Exception as e:
+                    logger.error(f"Vector clock validation error: {e}")
+                    # Continue processing (degraded mode)
+            
+            # CROWN⁴.5: Get next sequence number for event ordering
+            sequence_num = event_sequencer.get_next_sequence_num() if event_sequencer else None
+            
+            # Add CROWN⁴.5 metadata to payload
+            if vector_clock:
+                payload['vector_clock'] = vector_clock
+            if sequence_num:
+                payload['sequence_num'] = sequence_num
+            if event_id:
+                payload['event_id'] = event_id
+            if trace_id:
+                payload['trace_id'] = trace_id
             
             # Process event (run async handler in sync context)
             result = run_async(task_event_handler.handle_event(
@@ -189,21 +242,37 @@ def register_tasks_namespace(socketio):
                 session_id=session_id
             ))
             
+            # Add sequence metadata to result
+            if sequence_num:
+                result['sequence_num'] = sequence_num
+            if trace_id:
+                result['trace_id'] = trace_id
+            
             # Emit result back to client
             emit('task_event_result', {
                 'event_type': event_type,
                 'result': result,
-                'trace_id': data.get('trace_id')
+                'trace_id': trace_id,
+                'sequence_num': sequence_num
             })
             
-            # Broadcast to workspace room if successful
-            if result.get('success'):
-                workspace_id = payload.get('workspace_id')
-                if workspace_id:
-                    emit('task_updated', {
-                        'event_type': event_type,
-                        'data': result
-                    }, room=f"workspace_{workspace_id}")
+            # CROWN⁴.5: Broadcast to workspace room via BroadcastChannel service
+            if result.get('success') and workspace_id:
+                # Emit to SocketIO room
+                emit('task_updated', {
+                    'event_type': event_type,
+                    'data': result,
+                    'sequence_num': sequence_num
+                }, room=f"workspace_{workspace_id}")
+                
+                # Notify BroadcastChannel service for multi-tab sync
+                from services.broadcast_channel_service import broadcast_channel_service
+                broadcast_channel_service.broadcast_to_workspace(
+                    workspace_id=workspace_id,
+                    event_type=event_type,
+                    payload=result,
+                    exclude_client=request.sid
+                )
             
             # Return result for Socket.IO acknowledgment callback
             return result
