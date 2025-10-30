@@ -5,7 +5,7 @@ REST API endpoints for task management, CRUD operations, and status updates.
 
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from models import db, Task, Meeting, User, Session, Workspace
+from models import db, Task, Meeting, User, Session, Workspace, SessionContext
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_, select
 # server/routes/api_tasks.py
@@ -14,10 +14,12 @@ from app import db
 from models.summary import Summary
 from services.event_broadcaster import EventBroadcaster
 from services.temp_id_reconciler import get_reconciler
+from services.cognitive_loop_integration import get_cognitive_loop
 
 logger = logging.getLogger(__name__)
 event_broadcaster = EventBroadcaster()
 reconciler = get_reconciler()
+cognitive_loop = get_cognitive_loop()
 
 api_tasks_bp = Blueprint('api_tasks', __name__, url_prefix='/api/tasks')
 
@@ -1398,4 +1400,183 @@ def update_summary_task(session_id, task_index):
         logger.error(f"Error updating task {task_index} in session {session_id}: {e}")
         db.session.rollback()
         return jsonify({"success": False, "error": "Failed to update task"}), 500
+
+
+# CROWN⁴.5: Cognitive Loop API Endpoints
+@api_tasks_bp.route('/proposals', methods=['GET'])
+@login_required
+def list_proposals():
+    """List pending AI task proposals (SessionContext records)."""
+    try:
+        # Get pending proposals for user's workspace
+        # Proposals are task_extraction contexts that haven't been accepted yet
+        stmt = select(SessionContext).join(
+            Session, SessionContext.session_id == Session.id
+        ).join(
+            Meeting, Session.meeting_id == Meeting.id
+        ).where(
+            Meeting.workspace_id == current_user.workspace_id,
+            SessionContext.context_type == 'task_extraction',
+            SessionContext.status == 'active'
+        ).order_by(SessionContext.created_at.desc())
         
+        all_contexts = db.session.execute(stmt).scalars().all()
+        
+        # Filter to only pending proposals (no task entity created yet)
+        proposals = []
+        for ctx in all_contexts:
+            # Check if a task has already been created from this context
+            has_task = any(
+                entity.get('type') == 'task' and entity.get('status') in ['accepted', 'created']
+                for entity in (ctx.derived_entities or [])
+            )
+            if not has_task:
+                proposals.append(ctx)
+        
+        # Format proposals for frontend
+        proposal_list = []
+        for proposal in proposals:
+            metadata = proposal.extraction_metadata or {}
+            proposed_task = metadata.get('proposed_task', {})
+            
+            proposal_list.append({
+                'id': proposal.id,
+                'session_id': proposal.session_id,
+                'created_at': proposal.created_at.isoformat(),
+                'confidence': proposal.context_confidence,
+                'task': {
+                    'title': proposed_task.get('title', ''),
+                    'description': proposed_task.get('description'),
+                    'priority': proposed_task.get('priority', 'medium'),
+                    'category': proposed_task.get('category'),
+                    'assigned_to': proposed_task.get('assigned_to'),
+                    'due_date_text': proposed_task.get('due_date_text')
+                },
+                'transcript_span': proposal.transcript_span,
+                'origin_message': proposal.origin_message
+            })
+        
+        return jsonify({
+            'success': True,
+            'proposals': proposal_list,
+            'count': len(proposal_list)
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to list proposals: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_tasks_bp.route('/proposals/<int:session_context_id>/accept', methods=['POST'])
+@login_required
+def accept_proposal(session_context_id):
+    """
+    Accept an AI task proposal from the cognitive loop.
+    Optionally provide edits to refine the task before creating it.
+    """
+    try:
+        import asyncio
+        
+        # SECURITY: Verify proposal belongs to user's workspace before accepting
+        session_context = db.session.query(SessionContext).join(
+            Session, SessionContext.session_id == Session.id
+        ).join(
+            Meeting, Session.meeting_id == Meeting.id
+        ).filter(
+            SessionContext.id == session_context_id,
+            Meeting.workspace_id == current_user.workspace_id
+        ).first()
+        
+        if not session_context:
+            return jsonify({
+                'success': False,
+                'message': 'Proposal not found or access denied'
+            }), 404
+        
+        # Get request data
+        data = request.get_json() or {}
+        edits = data.get('edits')  # Optional edits dict: {title, description, priority, etc.}
+        
+        # Accept proposal via cognitive loop
+        task = asyncio.run(cognitive_loop.accept_task_proposal(
+            session_context_id=session_context_id,
+            user_id=current_user.id,
+            edits=edits
+        ))
+        
+        if not task:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to accept proposal'
+            }), 400
+        
+        # Get meeting info for response
+        meeting = task.meeting if hasattr(task, 'meeting') else None
+        task_dict = task.to_dict()
+        task_dict['meeting_title'] = meeting.title if meeting else 'Unknown'
+        
+        return jsonify({
+            'success': True,
+            'message': 'Proposal accepted successfully',
+            'task': task_dict,
+            'was_edited': edits is not None and len(edits) > 0
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to accept proposal {session_context_id}: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_tasks_bp.route('/proposals/<int:session_context_id>/reject', methods=['POST'])
+@login_required
+def reject_proposal(session_context_id):
+    """
+    Reject an AI task proposal from the cognitive loop.
+    Optionally provide rejection reason for learning.
+    """
+    try:
+        import asyncio
+        
+        # SECURITY: Verify proposal belongs to user's workspace before rejecting
+        session_context = db.session.query(SessionContext).join(
+            Session, SessionContext.session_id == Session.id
+        ).join(
+            Meeting, Session.meeting_id == Meeting.id
+        ).filter(
+            SessionContext.id == session_context_id,
+            Meeting.workspace_id == current_user.workspace_id
+        ).first()
+        
+        if not session_context:
+            return jsonify({
+                'success': False,
+                'message': 'Proposal not found or access denied'
+            }), 404
+        
+        # Get request data
+        data = request.get_json() or {}
+        reason = data.get('reason')  # Optional rejection reason
+        
+        # Reject proposal via cognitive loop
+        success = asyncio.run(cognitive_loop.reject_task_proposal(
+            session_context_id=session_context_id,
+            user_id=current_user.id,
+            reason=reason
+        ))
+        
+        if not success:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to reject proposal'
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'message': 'Proposal rejected successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to reject proposal {session_context_id}: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
