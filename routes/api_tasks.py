@@ -27,6 +27,38 @@ api_tasks_bp = Blueprint('api_tasks', __name__, url_prefix='/api/tasks')
 def list_tasks():
     """Get tasks for current user's workspace with filtering and pagination."""
     try:
+        # CROWN⁴.5: Ensure user has a workspace (handle multi-workspace migration)
+        if not current_user.workspace_id:
+            from models import Workspace
+            try:
+                workspace_name = f"{current_user.first_name}'s Workspace" if current_user.first_name else f"{current_user.username}'s Workspace"
+                workspace = Workspace(
+                    name=workspace_name,
+                    slug=Workspace.generate_slug(workspace_name),
+                    owner_id=current_user.id
+                )
+                db.session.add(workspace)
+                db.session.flush()
+                current_user.workspace_id = workspace.id
+                db.session.commit()
+                logger.info(f"Created workspace {workspace.id} for user {current_user.id}")
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Failed to create workspace for user {current_user.id}: {e}")
+                # Return empty task list if workspace creation fails
+                return jsonify({
+                    'success': True,
+                    'tasks': [],
+                    'pagination': {
+                        'page': 1,
+                        'pages': 0,
+                        'per_page': 50,
+                        'total': 0,
+                        'has_next': False,
+                        'has_prev': False
+                    }
+                })
+        
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
         status = request.args.get('status', None)
