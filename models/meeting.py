@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from .session import Session
     from .participant import Participant
     from .task import Task
-    from .session_context import SessionContext
     from .calendar_event import CalendarEvent
     from .analytics import Analytics
 
@@ -66,9 +65,6 @@ class Meeting(Base):
     
     # Action items and tasks
     tasks: Mapped[list["Task"]] = relationship(back_populates="meeting", cascade="all, delete-orphan")
-    
-    # Session contexts (CROWN⁴.5 - links tasks to transcript spans)
-    session_contexts: Mapped[list["SessionContext"]] = relationship(back_populates="meeting", cascade="all, delete-orphan")
     
     # Calendar integration
     calendar_events: Mapped[list["CalendarEvent"]] = relationship(back_populates="meeting", cascade="all, delete-orphan")

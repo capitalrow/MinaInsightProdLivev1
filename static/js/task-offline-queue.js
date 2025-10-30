@@ -198,19 +198,9 @@ class OfflineQueueManager {
             }
 
             if (response.status === 409) {
-                // CROWN⁴.5: Deterministic conflict resolution using vector clocks
+                // Conflict detected
                 const conflict = await response.json();
-                console.warn(`⚠️ Conflict detected for ${type} on task ${task_id}`);
-                
-                const resolution = await this._resolveConflict(item, conflict);
-                
-                if (resolution.resolved) {
-                    console.log(`✅ Conflict resolved: ${resolution.strategy}`);
-                    return { success: true, conflict: true, resolution: resolution.strategy, data: resolution.data };
-                } else {
-                    console.error(`❌ Conflict unresolved - keeping in queue for manual resolution`);
-                    return { success: false, conflict: true, data: conflict };
-                }
+                return { success: false, conflict: true, data: conflict };
             }
 
             if (!response.ok) {
@@ -219,36 +209,11 @@ class OfflineQueueManager {
 
             const result = await response.json();
 
-            // CROWN⁴.5: Update cache with server data + temp ID reconciliation
+            // Update cache with server data
             if (type === 'task_create' && temp_id) {
                 const realTask = result.task || result;
-                const realId = realTask.id;
-                
-                // 1. Reconcile temp ID to real ID
-                if (this.cache.reconcileTempID) {
-                    await this.cache.reconcileTempID(temp_id, realId);
-                    console.log(`🔄 Offline replay: Reconciled ${temp_id} → ${realId}`);
-                } else {
-                    // Fallback if reconcileTempID not available
-                    await this.cache.deleteTask(temp_id);
-                    await this.cache.saveTask(realTask);
-                }
-                
-                // 2. Broadcast reconciliation to other tabs via multi-tab sync
-                if (window.multiTabSync) {
-                    window.multiTabSync.broadcastIDReconciliation(temp_id, realId);
-                }
-                
-                // 3. Update DOM if task card exists
-                if (window.optimisticUI) {
-                    const card = document.querySelector(`[data-task-id="${temp_id}"]`);
-                    if (card) {
-                        card.dataset.taskId = realId;
-                        card.classList.remove('optimistic-create');
-                        card.classList.add('reconciled');
-                    }
-                }
-                
+                await this.cache.deleteTask(temp_id);
+                await this.cache.saveTask(realTask);
             } else if (type !== 'task_delete') {
                 const task = result.task || result;
                 await this.cache.saveTask(task);
@@ -260,126 +225,6 @@ class OfflineQueueManager {
             console.error(`Replay error for ${type}:`, error);
             return { success: false, error: error.message };
         }
-    }
-
-    /**
-     * Resolve conflicts deterministically using vector clocks (CROWN⁴.5)
-     * @param {Object} localOp - Local operation from queue
-     * @param {Object} serverConflict - Server conflict data
-     * @returns {Promise<Object>} Resolution result
-     */
-    async _resolveConflict(localOp, serverConflict) {
-        const { type, data, task_id, vector_clock } = localOp;
-        const serverData = serverConflict.server_state || serverConflict;
-        
-        // Strategy 1: Vector clock comparison (deterministic ordering)
-        if (vector_clock && serverConflict.vector_clock) {
-            const localClock = new VectorClock(
-                Array.isArray(vector_clock) 
-                    ? Object.fromEntries(vector_clock) 
-                    : vector_clock
-            );
-            const serverClock = new VectorClock(
-                Array.isArray(serverConflict.vector_clock) 
-                    ? Object.fromEntries(serverConflict.vector_clock) 
-                    : serverConflict.vector_clock
-            );
-            
-            const comparison = localClock.compare(serverClock);
-            
-            if (comparison === 1) {
-                // Local change dominates - retry with force flag
-                console.log('🔵 Local change dominates (vector clock)');
-                try {
-                    const response = await fetch(`/api/tasks/${task_id}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Force-Update': 'true',
-                            'X-Vector-Clock': JSON.stringify(localClock.toTuple())
-                        },
-                        credentials: 'same-origin',
-                        body: JSON.stringify(data)
-                    });
-                    
-                    if (response.ok) {
-                        const result = await response.json();
-                        await this.cache.saveTask(result.task || result);
-                        return { resolved: true, strategy: 'vector_clock_local_wins', data: result };
-                    }
-                } catch (error) {
-                    console.error('❌ Force update failed:', error);
-                }
-            } else if (comparison === -1) {
-                // Server change dominates - accept server version
-                console.log('🔴 Server change dominates (vector clock)');
-                await this.cache.saveTask(serverData);
-                return { resolved: true, strategy: 'vector_clock_server_wins', data: serverData };
-            } else {
-                // Concurrent changes - need merge strategy
-                console.log('🟡 Concurrent changes detected - attempting merge');
-            }
-        }
-        
-        // Strategy 2: Last-write-wins based on timestamp (fallback)
-        const localTimestamp = new Date(localOp.queued_at || 0).getTime();
-        const serverTimestamp = new Date(serverData.updated_at || 0).getTime();
-        
-        if (localTimestamp > serverTimestamp) {
-            console.log('🔵 Local change wins (timestamp)');
-            try {
-                const response = await fetch(`/api/tasks/${task_id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Conflict-Resolution': 'last-write-wins'
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify(data)
-                });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    await this.cache.saveTask(result.task || result);
-                    return { resolved: true, strategy: 'timestamp_local_wins', data: result };
-                }
-            } catch (error) {
-                console.error('❌ Timestamp resolution failed:', error);
-            }
-        } else {
-            console.log('🔴 Server change wins (timestamp)');
-            await this.cache.saveTask(serverData);
-            return { resolved: true, strategy: 'timestamp_server_wins', data: serverData };
-        }
-        
-        // Strategy 3: Field-level merge (for safe concurrent edits)
-        if (type === 'task_update') {
-            console.log('🟢 Attempting field-level merge');
-            const merged = { ...serverData, ...data };
-            
-            try {
-                const response = await fetch(`/api/tasks/${task_id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Conflict-Resolution': 'field-merge'
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify(merged)
-                });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    await this.cache.saveTask(result.task || result);
-                    return { resolved: true, strategy: 'field_merge', data: result };
-                }
-            } catch (error) {
-                console.error('❌ Field merge failed:', error);
-            }
-        }
-        
-        // Unresolved - keep in queue for manual intervention
-        return { resolved: false, strategy: 'unresolved' };
     }
 
     /**

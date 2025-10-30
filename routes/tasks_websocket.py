@@ -34,8 +34,6 @@ from flask_socketio import emit, join_room, leave_room
 from flask_login import current_user
 from services.event_broadcaster import event_broadcaster
 from services.task_event_handler import task_event_handler
-from services.temp_id_reconciler import get_reconciler
-from services.event_sequencer import event_sequencer
 
 
 def run_async(coro):
@@ -48,7 +46,6 @@ def run_async(coro):
     return loop.run_until_complete(coro)
 
 logger = logging.getLogger(__name__)
-reconciler = get_reconciler()  # CROWN⁴.5: TempIDReconciler for bootstrap recovery
 
 
 def register_tasks_namespace(socketio):
@@ -70,17 +67,6 @@ def register_tasks_namespace(socketio):
             client_id = request.sid
             logger.info(f"Tasks client connected: {client_id}")
             
-            # CROWN⁴.5: Register with BroadcastChannel service
-            if current_user.is_authenticated and current_user.workspace_id:
-                from services.broadcast_channel_service import broadcast_channel_service
-                tab_id = request.args.get('tab_id', f'tab_{client_id[:8]}')
-                broadcast_channel_service.register_client(
-                    workspace_id=current_user.workspace_id,
-                    client_id=client_id,
-                    tab_id=tab_id
-                )
-                logger.info(f"BroadcastChannel registered: workspace={current_user.workspace_id}, tab={tab_id}")
-            
             emit('connected', {
                 'message': 'Connected to tasks namespace',
                 'client_id': client_id,
@@ -96,15 +82,6 @@ def register_tasks_namespace(socketio):
         try:
             client_id = request.sid
             logger.info(f"Tasks client disconnected: {client_id}")
-            
-            # CROWN⁴.5: Unregister from BroadcastChannel service
-            if current_user.is_authenticated and current_user.workspace_id:
-                from services.broadcast_channel_service import broadcast_channel_service
-                broadcast_channel_service.unregister_client(
-                    workspace_id=current_user.workspace_id,
-                    client_id=client_id
-                )
-                logger.info(f"BroadcastChannel unregistered: workspace={current_user.workspace_id}, client={client_id}")
             
         except Exception as e:
             logger.error(f"Tasks disconnect error: {e}", exc_info=True)
@@ -172,27 +149,17 @@ def register_tasks_namespace(socketio):
         """
         Universal handler for all 20 CROWN⁴.5 task events.
         
-        CROWN⁴.5 Enhancements:
-        - Vector clock validation for deterministic ordering
-        - EventSequencer integration for conflict detection
-        - Temporal recovery for out-of-order events
-        - BroadcastChannel sync to all workspace tabs
-        
         Args:
             data: {
                 'event_type': str,  # e.g., 'task_create:manual'
                 'payload': dict,    # Event-specific data
                 'vector_clock': dict (optional),  # Vector clock for offline support
-                'event_id': str (optional),  # Event sequence ID
                 'trace_id': str (optional)  # Trace ID for telemetry
             }
         """
         try:
             event_type = data.get('event_type')
             payload = data.get('payload', {})
-            vector_clock = data.get('vector_clock')
-            event_id = data.get('event_id')
-            trace_id = data.get('trace_id')
             
             if not event_type:
                 error_response = {'success': False, 'message': 'event_type required'}
@@ -202,58 +169,15 @@ def register_tasks_namespace(socketio):
             # Get user ID (from authenticated session)
             user_id = payload.get('user_id') or (current_user.is_authenticated and current_user.id)
             session_id = payload.get('session_id')
-            workspace_id = payload.get('workspace_id') or (current_user.is_authenticated and current_user.workspace_id)
             
             if not user_id:
                 error_response = {'success': False, 'message': 'user_id required'}
                 emit('error', error_response)
                 return error_response
             
-            # CROWN⁴.5: Validate vector clock for deterministic ordering
-            if vector_clock:
-                try:
-                    validation = event_sequencer.validate_vector_clock(
-                        vector_clock=vector_clock,
-                        user_id=user_id,
-                        workspace_id=workspace_id
-                    )
-                    
-                    if not validation.get('valid'):
-                        logger.warning(f"Vector clock validation failed: {validation.get('reason')}")
-                        
-                        # Attempt temporal recovery
-                        if temporal_recovery_engine:
-                            recovery_result = temporal_recovery_engine.recover_event(
-                                event_type=event_type,
-                                payload=payload,
-                                vector_clock=vector_clock
-                            )
-                            
-                            if not recovery_result.get('recovered'):
-                                error_response = {
-                                    'success': False,
-                                    'message': 'Event ordering conflict',
-                                    'needs_sync': True,
-                                    'reason': validation.get('reason')
-                                }
-                                emit('error', error_response)
-                                return error_response
-                except Exception as e:
-                    logger.error(f"Vector clock validation error: {e}")
-                    # Continue processing (degraded mode)
-            
-            # CROWN⁴.5: Get next sequence number for event ordering
-            sequence_num = event_sequencer.get_next_sequence_num() if event_sequencer else None
-            
-            # Add CROWN⁴.5 metadata to payload
-            if vector_clock:
-                payload['vector_clock'] = vector_clock
-            if sequence_num:
-                payload['sequence_num'] = sequence_num
-            if event_id:
-                payload['event_id'] = event_id
-            if trace_id:
-                payload['trace_id'] = trace_id
+            # Add vector clock to payload if provided
+            if 'vector_clock' in data:
+                payload['vector_clock'] = data['vector_clock']
             
             # Process event (run async handler in sync context)
             result = run_async(task_event_handler.handle_event(
@@ -263,38 +187,21 @@ def register_tasks_namespace(socketio):
                 session_id=session_id
             ))
             
-            # Add sequence metadata to result
-            if sequence_num:
-                result['sequence_num'] = sequence_num
-            if trace_id:
-                result['trace_id'] = trace_id
-            
             # Emit result back to client
             emit('task_event_result', {
                 'event_type': event_type,
                 'result': result,
-                'trace_id': trace_id,
-                'sequence_num': sequence_num
+                'trace_id': data.get('trace_id')
             })
             
-            # CROWN⁴.5: Broadcast to workspace room via BroadcastChannel service
-            if result.get('success') and workspace_id:
-                # Emit to SocketIO room
-                emit('task_updated', {
-                    'event_type': event_type,
-                    'data': result,
-                    'sequence_num': sequence_num
-                }, room=f"workspace_{workspace_id}")
-                
-                # Notify BroadcastChannel service for multi-tab sync
-                from services.broadcast_channel_service import broadcast_channel_service
-                broadcast_channel_service.broadcast_to_workspace(
-                    workspace_id=workspace_id,
-                    event_type=event_type,
-                    payload=result,
-                    exclude_client=request.sid,
-                    socketio=socketio
-                )
+            # Broadcast to workspace room if successful
+            if result.get('success'):
+                workspace_id = payload.get('workspace_id')
+                if workspace_id:
+                    emit('task_updated', {
+                        'event_type': event_type,
+                        'data': result
+                    }, room=f"workspace_{workspace_id}")
             
             # Return result for Socket.IO acknowledgment callback
             return result
@@ -389,42 +296,6 @@ def register_tasks_namespace(socketio):
             db.session.rollback()
             emit('error', {
                 'message': 'Failed to save offline queue',
-                'error': str(e)
-            })
-    
-    @socketio.on('reconciliations:get_pending', namespace='/tasks')
-    def handle_get_pending_reconciliations(data):
-        """
-        Get pending reconciliations for bootstrap recovery.
-        Returns temp→real ID mappings that client may have missed.
-        """
-        try:
-            if not current_user.is_authenticated:
-                emit('error', {'message': 'Authentication required'})
-                return
-            
-            user_id = current_user.id
-            workspace_id = data.get('workspace_id') or current_user.workspace_id
-            
-            # Get reconciliations for bootstrap (pending + recently reconciled)
-            reconciliations = reconciler.get_reconciliations_for_bootstrap(
-                user_id=user_id,
-                workspace_id=workspace_id,
-                limit=100
-            )
-            
-            emit('reconciliations:pending', {
-                'success': True,
-                'reconciliations': reconciliations,
-                'count': len(reconciliations)
-            })
-            
-            logger.info(f"Sent {len(reconciliations)} pending reconciliations to user {user_id}")
-            
-        except Exception as e:
-            logger.error(f"Get pending reconciliations failed: {e}", exc_info=True)
-            emit('error', {
-                'message': 'Failed to get pending reconciliations',
                 'error': str(e)
             })
     

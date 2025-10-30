@@ -132,18 +132,8 @@ class OptimisticUI {
      * @returns {Promise<Object>} Created task
      */
     async createTask(taskData) {
-        // CROWN⁴.5: Check for content-based duplicate (rapid double-clicks)
-        if (window.idempotencyManager) {
-            const duplicate = window.idempotencyManager.checkContentDuplicate('task_create', taskData, 2000);
-            if (duplicate) {
-                console.warn('🔒 Duplicate create operation blocked (idempotency)');
-                return duplicate.result || null;
-            }
-        }
-        
         const opId = this._generateOperationId();
-        // CROWN⁴.5: Enhanced temp ID with UUID component for collision resistance
-        const tempId = this._generateTempId();
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
         const optimisticTask = {
             id: tempId,
@@ -193,11 +183,6 @@ class OptimisticUI {
                 queueId  // Store queue ID to remove on success
             });
             this._syncToServer(opId, 'create', taskData, tempId);
-            
-            // CROWN⁴.5: Mark content as processed for idempotency
-            if (window.idempotencyManager) {
-                window.idempotencyManager.markContentProcessed('task_create', taskData, optimisticTask);
-            }
 
             return optimisticTask;
         } catch (error) {
@@ -214,33 +199,14 @@ class OptimisticUI {
      * @returns {Promise<Object>} Updated task
      */
     async updateTask(taskId, updates) {
-        console.log(`🔍 [DEBUG] updateTask called for task ${taskId}`, updates);
-        
-        // CROWN⁴.5: Check for content-based duplicate within 1 second
-        if (window.idempotencyManager) {
-            const duplicate = window.idempotencyManager.checkContentDuplicate(
-                'task_update', 
-                { task_id: taskId, ...updates }, 
-                1000
-            );
-            if (duplicate) {
-                console.warn('🔒 Duplicate update operation blocked (idempotency)');
-                return duplicate.result || null;
-            }
-        }
-        
         const opId = this._generateOperationId();
-        const optimisticTimestamp = performance.now();  // CROWN⁴.5: Track optimistic start time
-        console.log(`🔍 [DEBUG] Generated operation ID: ${opId}, timestamp: ${optimisticTimestamp}`);
         
         try {
             // Get current task
             const currentTask = await this.cache.getTask(taskId);
             if (!currentTask) {
-                console.error(`❌ [DEBUG] Task ${taskId} not found in cache`);
                 throw new Error('Task not found');
             }
-            console.log(`🔍 [DEBUG] Current task retrieved:`, currentTask);
 
             // Create optimistic version
             const optimisticTask = {
@@ -278,27 +244,16 @@ class OptimisticUI {
             }
 
             // Step 4: Sync to server
-            // Store clean updates data for retry + reconciliation tracking
+            // Store clean updates data for retry
             this.pendingOperations.set(opId, { 
                 type: 'update', 
                 taskId, 
                 previous: currentTask,  // Keep for rollback
                 updates,  // Clean updates data for retry
                 data: updates,  // Explicit clean data reference
-                queueId,  // Store queue ID to remove on success
-                optimisticTimestamp,  // CROWN⁴.5: Track for reconciliation latency
-                isStatusToggle: !!updates.status  // Flag to identify checkbox toggles
+                queueId  // Store queue ID to remove on success
             });
             this._syncToServer(opId, 'update', updates, taskId);
-            
-            // CROWN⁴.5: Mark content as processed for idempotency
-            if (window.idempotencyManager) {
-                window.idempotencyManager.markContentProcessed(
-                    'task_update', 
-                    { task_id: taskId, ...updates }, 
-                    optimisticTask
-                );
-            }
 
             return optimisticTask;
         } catch (error) {
@@ -313,19 +268,6 @@ class OptimisticUI {
      * @returns {Promise<void>}
      */
     async deleteTask(taskId) {
-        // CROWN⁴.5: Check for duplicate delete within 2 seconds
-        if (window.idempotencyManager) {
-            const duplicate = window.idempotencyManager.checkContentDuplicate(
-                'task_delete', 
-                { task_id: taskId }, 
-                2000
-            );
-            if (duplicate) {
-                console.warn('🔒 Duplicate delete operation blocked (idempotency)');
-                return;
-            }
-        }
-        
         const opId = this._generateOperationId();
         
         try {
@@ -367,11 +309,6 @@ class OptimisticUI {
                 queueId  // Store queue ID to remove on success
             });
             this._syncToServer(opId, 'delete', null, taskId);
-            
-            // CROWN⁴.5: Mark as processed for idempotency
-            if (window.idempotencyManager) {
-                window.idempotencyManager.markContentProcessed('task_delete', { task_id: taskId });
-            }
 
         } catch (error) {
             console.error('❌ Optimistic delete failed:', error);
@@ -385,21 +322,15 @@ class OptimisticUI {
      * @returns {Promise<Object>}
      */
     async toggleTaskStatus(taskId) {
-        console.log(`🔍 [DEBUG] toggleTaskStatus called for task ${taskId}`);
         const task = await this.cache.getTask(taskId);
-        if (!task) {
-            console.warn(`⚠️ [DEBUG] Task ${taskId} not found in cache`);
-            return;
-        }
+        if (!task) return;
 
         const newStatus = task.status === 'completed' ? 'todo' : 'completed';
-        console.log(`🔍 [DEBUG] Toggling task ${taskId} from '${task.status}' to '${newStatus}'`);
         const updates = {
             status: newStatus,
             completed_at: newStatus === 'completed' ? new Date().toISOString() : null
         };
 
-        console.log(`🔍 [DEBUG] Calling updateTask with updates:`, updates);
         const result = await this.updateTask(taskId, updates);
 
         if (newStatus === 'completed' && window.emotionalAnimations) {
@@ -644,50 +575,6 @@ class OptimisticUI {
     }
 
     /**
-     * Generate collision-resistant temporary ID (CROWN⁴.5)
-     * Format: temp_{timestamp}_{random}_{uuid}
-     * @returns {string}
-     */
-    _generateTempId() {
-        const timestamp = Date.now();
-        const random = Math.random().toString(36).substr(2, 9);
-        // Add UUID component for collision resistance under high load
-        const uuid = this._generateUUID();
-        return `temp_${timestamp}_${random}_${uuid}`;
-    }
-
-    /**
-     * Generate simple UUID v4 component (4 chars)
-     * @returns {string}
-     */
-    _generateUUID() {
-        return 'xxxx'.replace(/x/g, () => 
-            (Math.random() * 16 | 0).toString(16)
-        );
-    }
-
-    /**
-     * Reconcile temp ID to real ID (CROWN⁴.5 ID Reconciliation)
-     * Called when server confirms task creation and broadcasts real ID
-     * @param {string} temp_id - Temporary ID being reconciled
-     * @param {number} real_id - Real database ID from server
-     */
-    reconcileTempID(temp_id, real_id) {
-        console.log(`🔄 [OptimisticUI] Reconciling temp ID: ${temp_id} → ${real_id}`);
-        
-        // Update pending operations mapping
-        for (const [opId, operation] of this.pendingOperations.entries()) {
-            if (operation.tempId === temp_id) {
-                console.log(`✅ [OptimisticUI] Updated pending operation ${opId} mapping`);
-                operation.tempId = real_id;  // Update to real ID
-                operation.reconciled = true;
-                operation.reconciled_at = Date.now();
-                break;
-            }
-        }
-    }
-
-    /**
      * Add task to DOM
      * @param {Object} task
      */
@@ -888,20 +775,12 @@ class OptimisticUI {
      */
     async _syncToServer(opId, type, data, taskId) {
         const startTime = performance.now();
-        console.log(`🔍 [DEBUG] _syncToServer called:`, { opId, type, taskId, data });
 
         try {
             // Check WebSocket connection (wsManager.sockets.tasks is the socket object)
-            console.log(`🔍 [DEBUG] Checking WebSocket connection...`);
-            console.log(`🔍 [DEBUG] window.wsManager exists:`, !!window.wsManager);
-            console.log(`🔍 [DEBUG] window.wsManager.sockets exists:`, !!(window.wsManager && window.wsManager.sockets));
-            console.log(`🔍 [DEBUG] window.wsManager.sockets.tasks exists:`, !!(window.wsManager && window.wsManager.sockets && window.wsManager.sockets.tasks));
-            
             const isConnected = window.wsManager && 
                                window.wsManager.sockets.tasks && 
                                window.wsManager.sockets.tasks.connected;
-            
-            console.log(`🔍 [DEBUG] WebSocket isConnected:`, isConnected);
             
             if (!isConnected) {
                 // Socket is disconnected or reconnecting - defer to OfflineQueueManager
@@ -994,12 +873,9 @@ class OptimisticUI {
             }
 
             console.log(`📤 Sending ${eventName} event:`, payload);
-            console.log(`🔍 [DEBUG] About to call wsManager.emitWithAck('${eventName}', payload, '/tasks')`);
-            console.log(`🔍 [DEBUG] wsManager.emitWithAck exists:`, !!(window.wsManager && window.wsManager.emitWithAck));
 
             // Emit via WebSocket and wait for server acknowledgment
             const result = await window.wsManager.emitWithAck(eventName, payload, '/tasks');
-            console.log(`🔍 [DEBUG] wsManager.emitWithAck returned:`, result);
 
             const reconcileTime = performance.now() - startTime;
             console.log(`✅ Server acknowledged ${type} in ${reconcileTime.toFixed(2)}ms, response:`, result);
@@ -1085,44 +961,6 @@ class OptimisticUI {
     async _reconcileSuccess(opId, type, serverData, taskId) {
         const operation = this.pendingOperations.get(opId);
         if (!operation) return;
-
-        // CROWN⁴.5: Track optimistic→truth reconciliation latency
-        const reconciliationTimestamp = performance.now();
-        const reconciliationLatency = operation.optimisticTimestamp 
-            ? Math.round(reconciliationTimestamp - operation.optimisticTimestamp)
-            : null;
-
-        // Track latency for status toggles (target: <150ms)
-        if (operation.isStatusToggle && reconciliationLatency !== null) {
-            const exceededTarget = reconciliationLatency > 150;
-            
-            console.log(`⚡ Status toggle reconciliation: ${reconciliationLatency}ms ${exceededTarget ? '⚠️ (exceeded 150ms target)' : '✅'}`);
-            
-            // Emit telemetry
-            if (window.crownTelemetry) {
-                window.crownTelemetry.recordEvent('task_toggle_reconciliation', {
-                    latency_ms: reconciliationLatency,
-                    exceeded_target: exceededTarget,
-                    task_id: taskId,
-                    operation_id: opId
-                });
-            }
-            
-            // Visual feedback for slow reconciliation (debugging)
-            if (exceededTarget && reconciliationLatency > 300) {
-                console.warn(`⚠️ Slow reconciliation detected: ${reconciliationLatency}ms`);
-            }
-        } else if (reconciliationLatency !== null) {
-            // Track all reconciliation latencies
-            if (window.crownTelemetry) {
-                window.crownTelemetry.recordEvent('task_update_reconciliation', {
-                    latency_ms: reconciliationLatency,
-                    type,
-                    task_id: taskId,
-                    operation_id: opId
-                });
-            }
-        }
 
         // Remove from OfflineQueue since WebSocket sync succeeded
         if (operation.queueId && this.cache) {

@@ -96,10 +96,6 @@ class MultiTabSync {
                 this._handleTaskDeleted(data.task_id);
                 break;
 
-            case 'id_reconciled':
-                this._handleIDReconciled(data.temp_id, data.real_id);
-                break;
-
             case 'filter_changed':
                 this._handleFilterChanged(data.filter);
                 break;
@@ -150,19 +146,6 @@ class MultiTabSync {
         this._broadcast({
             type: 'task_deleted',
             task_id: taskId
-        });
-    }
-
-    /**
-     * Broadcast ID reconciliation (temp→real ID mapping) - CROWN⁴.5
-     * @param {string} temp_id - Temporary ID that was reconciled
-     * @param {number} real_id - Real database ID from server
-     */
-    broadcastIDReconciled(temp_id, real_id) {
-        this._broadcast({
-            type: 'id_reconciled',
-            temp_id: temp_id,
-            real_id: real_id
         });
     }
 
@@ -230,59 +213,6 @@ class MultiTabSync {
         // Remove from DOM
         if (window.optimisticUI) {
             window.optimisticUI._removeTaskFromDOM(taskId);
-        }
-    }
-
-    /**
-     * Handle ID reconciliation from another tab - CROWN⁴.5
-     * @param {string} temp_id - Temporary ID that was reconciled
-     * @param {number} real_id - Real database ID from server
-     */
-    async _handleIDReconciled(temp_id, real_id) {
-        console.log(`🔄 [Multi-tab] ID reconciliation received: ${temp_id} → ${real_id}`);
-        
-        try {
-            // 1. Reconcile in cache
-            if (window.taskCache && window.taskCache.reconcileTempID) {
-                await window.taskCache.reconcileTempID(temp_id, real_id);
-            }
-            
-            // 2. Update DOM elements in this tab
-            const tempCard = document.querySelector(`[data-task-id="${temp_id}"]`);
-            if (tempCard) {
-                // Update data attribute
-                tempCard.setAttribute('data-task-id', real_id);
-                
-                // Update checkbox ID
-                const checkbox = tempCard.querySelector(`#task-${temp_id}`);
-                if (checkbox) {
-                    checkbox.id = `task-${real_id}`;
-                    checkbox.setAttribute('data-task-id', real_id);
-                }
-                
-                // Remove syncing indicator
-                const syncBadge = tempCard.querySelector('.temp-id-badge');
-                if (syncBadge) {
-                    syncBadge.remove();
-                }
-                
-                // Remove shimmer animation
-                tempCard.classList.remove('syncing');
-                
-                // Add reconciled animation
-                tempCard.classList.add('reconciled');
-                setTimeout(() => tempCard.classList.remove('reconciled'), 500);
-                
-                console.log(`✅ [Multi-tab] DOM updated: ${temp_id} → ${real_id}`);
-            }
-            
-            // 3. Update optimistic UI mapping
-            if (window.optimisticUI && window.optimisticUI.reconcileTempID) {
-                window.optimisticUI.reconcileTempID(temp_id, real_id);
-            }
-            
-        } catch (error) {
-            console.error(`❌ [Multi-tab] Failed to handle ID reconciliation:`, error);
         }
     }
 

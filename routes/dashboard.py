@@ -285,24 +285,10 @@ def meetings():
 @login_required
 def tasks():
     """Tasks overview page with kanban board."""
-    from services.task_query_builder import get_workspace_tasks_query
-    
-    # Ensure user has workspace
-    if not current_user.workspace_id:
-        return render_template('dashboard/tasks.html',
-                             tasks=[],
-                             todo_tasks=[],
-                             in_progress_tasks=[],
-                             completed_tasks=[])
-    
-    # CROWN⁴.5: Use shared query builder for cache consistency with API
-    query = get_workspace_tasks_query(current_user.workspace_id)
-    query = query.order_by(
-        Task.due_date.asc().nullslast(),
-        Task.priority.desc(),
-        Task.created_at.desc()
-    )
-    all_tasks = db.session.execute(query).scalars().all()
+    # Get all tasks for workspace
+    all_tasks = db.session.query(Task).join(Meeting).filter(
+        Meeting.workspace_id == current_user.workspace_id
+    ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
     
     # Get tasks by status
     todo_tasks = [t for t in all_tasks if t.status == 'todo']

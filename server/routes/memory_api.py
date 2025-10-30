@@ -7,14 +7,7 @@ from flask import Blueprint, request, jsonify
 from server.models.memory_store import MemoryStore
 
 memory_bp = Blueprint("memory", __name__)
-_memory = None  # Lazy initialization
-
-def get_memory():
-    """Get or create MemoryStore instance (lazy initialization to avoid blocking on import)."""
-    global _memory
-    if _memory is None:
-        _memory = MemoryStore()
-    return _memory
+memory = MemoryStore()
 
 
 @memory_bp.route("/memory/add", methods=["POST"])
@@ -23,7 +16,7 @@ def add_memory():
     if not data or "content" not in data:
         return jsonify({"error": "Missing content field"}), 400
 
-    ok = get_memory().add_memory(
+    ok = memory.add_memory(
         data.get("session_id", "unknown"),
         data.get("user_id", "anonymous"),
         data["content"],
@@ -48,7 +41,7 @@ def search_memory():
     if not query:
         return jsonify({"error": "Missing query parameter"}), 400
 
-    results = get_memory().search_memory(query, top_k)
+    results = memory.search_memory(query, top_k)
     return jsonify({"query": query, "results": results}), 200
 
 
@@ -61,7 +54,7 @@ def get_latest_memories():
     """
     try:
         limit = request.args.get('limit', 5, type=int)
-        rows = get_memory().latest_memories(limit)
+        rows = memory.latest_memories(limit)
         results = []
         for r in rows:  # each row: (id, user_id, content_snippet, created_at)
             results.append({
@@ -80,7 +73,7 @@ def get_latest_memories():
 def debug_memory():
     """Return a few recent rows for quick inspection."""
     try:
-        rows = get_memory().search_memory("", top_k=10)
+        rows = memory.search_memory("", top_k=10)
         return jsonify({"latest": rows}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

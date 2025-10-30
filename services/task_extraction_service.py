@@ -28,9 +28,8 @@ class ExtractedTask:
 class TaskExtractionService:
     """Service for AI-powered task extraction from meeting content."""
     
-    def __init__(self, cognitive_sync=None):
+    def __init__(self):
         self.client = get_openai_client()
-        self.cognitive_sync = cognitive_sync  # CROWN⁴.5: Learning integration
         self.task_patterns = [
             r"(?:action item|task|todo|follow up|next step)s?[:\-\s]+(.+)",
             r"(.+)\s+(?:needs to|should|must|will)\s+(.+)",
@@ -56,7 +55,7 @@ class TaskExtractionService:
             r"(\w+)\s+can you\s+(.+)"
         ]
 
-    async def extract_tasks_from_meeting(self, meeting_id: int, user_id: Optional[int] = None) -> List[ExtractedTask]:
+    async def extract_tasks_from_meeting(self, meeting_id: int) -> List[ExtractedTask]:
         """Extract tasks from a complete meeting using AI and pattern matching."""
         from sqlalchemy import select
         meeting = db.session.get(Meeting, meeting_id)
@@ -75,8 +74,8 @@ class TaskExtractionService:
         
         transcript = self._build_transcript(segments)
         
-        # Extract tasks using AI (with cognitive learning)
-        ai_tasks = await self._extract_tasks_with_ai(transcript, meeting, user_id)
+        # Extract tasks using AI
+        ai_tasks = await self._extract_tasks_with_ai(transcript, meeting)
         
         # Extract tasks using pattern matching (backup/supplement)
         pattern_tasks = self._extract_tasks_with_patterns(transcript)
@@ -86,7 +85,7 @@ class TaskExtractionService:
         
         return all_tasks
 
-    async def _extract_tasks_with_ai(self, transcript: str, meeting: Meeting, user_id: Optional[int] = None) -> List[ExtractedTask]:
+    async def _extract_tasks_with_ai(self, transcript: str, meeting: Meeting) -> List[ExtractedTask]:
         """Use OpenAI to extract tasks from meeting transcript."""
         if not self.client:
             return []
@@ -120,10 +119,6 @@ class TaskExtractionService:
           ]
         }"""
         
-        # CROWN⁴.5: Apply cognitive learning to refine prompt
-        if self.cognitive_sync and user_id:
-            system_prompt = self.cognitive_sync.refine_extraction_prompt(user_id, system_prompt)
-        
         user_prompt = f"""Meeting: {meeting.title}
         Date: {meeting.created_at.strftime('%Y-%m-%d')}
         
@@ -133,17 +128,10 @@ class TaskExtractionService:
         Extract all actionable tasks from this meeting transcript."""
         
         try:
-            # Check if client is available
-            if not self.client:
-                logger.warning("OpenAI client not available for AI extraction")
-                return []
-            
             # Use unified AI model manager with GPT-4.1 fallback
             from services.ai_model_manager import AIModelManager
             
             def make_api_call(model: str):
-                if not self.client:
-                    return None
                 return self.client.chat.completions.create(
                     model=model,
                     messages=[
@@ -159,13 +147,12 @@ class TaskExtractionService:
                 operation_name="task extraction"
             )
             
-            if not result_obj.success or not result_obj.response:
-                logger.warning("All AI models failed for task extraction")
-                return []
+            if not result_obj.success:
+                raise Exception(f"All AI models failed")
             
             response = result_obj.response
             
-            content = response.choices[0].message.content if response.choices else None
+            content = response.choices[0].message.content
             if not content:
                 return []
             result = json.loads(content)
