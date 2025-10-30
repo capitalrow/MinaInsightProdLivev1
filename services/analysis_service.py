@@ -20,7 +20,15 @@ from models.summary import Summary, SummaryLevel, SummaryStyle
 from server.models.memory_store import MemoryStore
 from services.text_matcher import TextMatcher
 
-memory = MemoryStore()
+_memory = None  # Lazy initialization to avoid blocking on import
+
+def get_memory():
+    """Get or create MemoryStore instance (lazy initialization to avoid blocking on import)."""
+    global _memory
+    if _memory is None:
+        _memory = MemoryStore()
+    return _memory
+
 import inspect
 
 logger = logging.getLogger(__name__)
@@ -368,7 +376,7 @@ class AnalysisService:
         # --- Memory-aware context (NEW) ---
         try:
             memory_context = ""
-            related_memories = memory.search_memory(f"session_{session_id}", top_k=10)
+            related_memories = get_memory().search_memory(f"session_{session_id}", top_k=10)
             if related_memories:
                 joined = "\n".join([m["content"] for m in related_memories])
                 memory_context = f"\n\nPreviously recalled notes:\n{joined}\n\n"
@@ -465,17 +473,17 @@ class AnalysisService:
 
             # store main summary
             if summary_data.get("summary_md"):
-                memory.add_memory(session_id, "summary_bot", _safe(summary_data["summary_md"]), source_type="summary")
+                get_memory().add_memory(session_id, "summary_bot", _safe(summary_data["summary_md"]), source_type="summary")
 
             # store highlights / actions / decisions for semantic recall
             for item in summary_data.get("actions", []) or []:
-                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="action_item")
+                get_memory().add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="action_item")
 
             for item in summary_data.get("decisions", []) or []:
-                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="decision")
+                get_memory().add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="decision")
 
             for item in summary_data.get("risks", []) or []:
-                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="risk")
+                get_memory().add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="risk")
 
             logger.info("Summary data stored back into MemoryStore successfully.")
         except Exception as e:
