@@ -144,6 +144,8 @@ def register_analytics_namespace(socketio):
                 'last_event_id': int (optional)
             }
         """
+        workspace_id = None
+        days = 30
         try:
             workspace_id = data.get('workspace_id')
             days = data.get('days', 30)
@@ -205,7 +207,12 @@ def register_analytics_namespace(socketio):
             
         except Exception as e:
             logger.error(f"Analytics bootstrap error: {e}", exc_info=True)
-            emit('error', {'message': 'Bootstrap failed'})
+            logger.error(f"Bootstrap data received: workspace_id={workspace_id}, days={days}")
+            emit('error', {
+                'message': 'Bootstrap failed',
+                'error': str(e),
+                'workspace_id': workspace_id
+            })
     
     @socketio.on('analytics_filter_change_request', namespace='/analytics')
     def handle_filter_change(data):
