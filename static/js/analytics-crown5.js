@@ -13,12 +13,16 @@
 
 import { analyticsCache } from './analytics-cache.js';
 import { AnalyticsLifecycle } from './analytics-lifecycle.js';
+import { AnalyticsPrefetchController } from './analytics-prefetch.js';
+import { AnalyticsExportWorker } from './analytics-export.js';
 
 export class Crown5Analytics {
     constructor(workspaceId, socketNamespace) {
         this.workspaceId = workspaceId;
         this.socket = socketNamespace;
         this.lifecycle = null;
+        this.prefetchController = null;
+        this.exportWorker = null;
         this.charts = {};
         this.emotionalState = 'calm'; // calm | pulsing | loading
         this.currentTab = 'overview';
@@ -56,6 +60,16 @@ export class Crown5Analytics {
 
         // Bootstrap analytics (cache-first)
         await this.lifecycle.bootstrap();
+
+        // Initialize prefetch controller
+        this.prefetchController = new AnalyticsPrefetchController(
+            this.lifecycle,
+            this.workspaceId,
+            this.currentTab
+        );
+
+        // Initialize export worker
+        this.exportWorker = new AnalyticsExportWorker(this.lifecycle, this.workspaceId);
 
         console.log('✨ CROWN⁵+ Analytics ready');
     }
@@ -291,6 +305,11 @@ export class Crown5Analytics {
                 // Notify lifecycle
                 this.lifecycle.switchTab(fromTab, toTab);
 
+                // Notify prefetch controller
+                if (this.prefetchController) {
+                    this.prefetchController.onTabSwitch(toTab);
+                }
+
                 this.currentTab = toTab;
             });
         });
@@ -301,16 +320,35 @@ export class Crown5Analytics {
      * @private
      */
     _setupExportButton() {
-        const exportBtn = document.querySelector('.btn-outline:has(svg[viewBox="0 0 24 24"]) + .btn-outline');
-        // TODO: Implement export worker
-        console.log('Export button setup (placeholder)');
+        // Find export button (the one with download icon)
+        const buttons = document.querySelectorAll('.analytics-header .btn-outline');
+        let exportBtn = null;
+        
+        buttons.forEach(btn => {
+            if (btn.textContent.includes('Export')) {
+                exportBtn = btn;
+            }
+        });
+        
+        if (!exportBtn) return;
+
+        exportBtn.addEventListener('click', async () => {
+            // Show export options (for now, default to CSV)
+            await this.exportWorker.exportAsCSV();
+        });
     }
 
     /**
      * Get telemetry data
      */
     getTelemetry() {
-        return this.lifecycle.getTelemetry();
+        const lifecycleTelemetry = this.lifecycle.getTelemetry();
+        const prefetchStats = this.prefetchController?.getStats() || {};
+        
+        return {
+            ...lifecycleTelemetry,
+            prefetch: prefetchStats
+        };
     }
 
     /**
@@ -319,6 +357,9 @@ export class Crown5Analytics {
     destroy() {
         if (this.lifecycle) {
             this.lifecycle.destroy();
+        }
+        if (this.prefetchController) {
+            this.prefetchController.cancel();
         }
     }
 }
