@@ -870,6 +870,17 @@ def update_task_status(task_id):
             workspace_id=current_user.workspace_id
         )
         
+        # CROWN⁵+: Broadcast analytics delta on task status change
+        if old_status != new_status:
+            from services.analytics_delta_service import analytics_delta_service
+            analytics_delta_service.broadcast_task_delta_on_status_change(
+                task_id=task.id,
+                workspace_id=current_user.workspace_id,
+                old_status=old_status,
+                new_status=new_status,
+                user_id=current_user.id
+            )
+        
         return jsonify({
             'success': True,
             'message': 'Task status updated successfully',
