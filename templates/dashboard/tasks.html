@@ -1795,7 +1795,17 @@
 <!-- CSRF Protection (must load first) -->
 <script src="{{ url_for('static', filename='js/csrf.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
-<!-- CROWN⁴.5 Frontend Modules (crown-telemetry loaded in base.html) -->
+<!-- CROWN⁴.5 Core Infrastructure (load in dependency order) -->
+<script src="{{ url_for('static', filename='js/task-event-sequencer.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-cache-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-delta-merger.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-store-crown45.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-event-matrix.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-predictive-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-session-context.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-cognitive-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
+
+<!-- CROWN⁴.5 UI & Behavior Modules -->
 <script src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -1837,9 +1847,16 @@
     const waitForModules = () => {
         return new Promise((resolve) => {
             const check = () => {
-                if (window.taskCache && window.taskBootstrap && window.optimisticUI && 
-                    window.offlineQueue && window.multiTabSync && window.tasksWS && 
-                    window.taskVirtualList && window.taskShortcuts && window.TaskInlineEditing) {
+                const coreModules = window.TaskEventSequencer && window.TaskCacheValidator && 
+                                    window.TaskDeltaMerger && window.TaskStore && 
+                                    window.TaskEventMatrix && window.TaskPredictiveEngine && 
+                                    window.TaskSessionContext && window.TaskCognitiveSync;
+                                    
+                const uiModules = window.taskCache && window.taskBootstrap && window.optimisticUI && 
+                                  window.offlineQueue && window.multiTabSync && window.tasksWS && 
+                                  window.taskVirtualList && window.taskShortcuts && window.TaskInlineEditing;
+                
+                if (coreModules && uiModules) {
                     resolve();
                 } else {
                     setTimeout(check, 50);
@@ -1852,25 +1869,46 @@
     await waitForModules();
     console.log('✅ All CROWN⁴.5 modules loaded');
     
+    // Initialize CROWN⁴.5 Core Infrastructure
+    try {
+        console.log('🏗️ Initializing CROWN⁴.5 Core Infrastructure...');
+        
+        // Initialize TaskStore (integrates EventSequencer, CacheValidator, DeltaMerger)
+        const initMetrics = await window.TaskStore.init();
+        console.log(`✅ TaskStore initialized:`, initMetrics);
+        
+        // Verify performance targets
+        if (initMetrics.firstPaint < 200) {
+            console.log(`🎯 CROWN⁴.5 First Paint Target Met: ${initMetrics.firstPaint.toFixed(2)}ms < 200ms`);
+        } else {
+            console.warn(`⚠️ First paint slower than target: ${initMetrics.firstPaint.toFixed(2)}ms > 200ms`);
+        }
+        
+        if (initMetrics.cacheLoad < 50) {
+            console.log(`🎯 CROWN⁴.5 Cache Load Target Met: ${initMetrics.cacheLoad.toFixed(2)}ms < 50ms`);
+        }
+        
+        // Start cache auto-validation
+        window.TaskCacheValidator.startAutoValidation(30000);  // 30s interval
+        console.log('✅ Cache auto-validation started');
+        
+    } catch (error) {
+        console.error('❌ CROWN⁴.5 Core initialization failed:', error);
+    }
+    
+    // Initialize UI modules
     window.taskInlineEditing = new window.TaskInlineEditing(window.optimisticUI);
     console.log('✏️ Inline editing initialized');
     
     window.taskProposalUI = new window.TaskProposalUI(window.optimisticUI);
     console.log('✨ AI proposal UI initialized');
     
-    // Initialize cache-first bootstrap
+    // Initialize cache-first bootstrap (legacy compatibility)
     try {
         const startTime = performance.now();
         await window.taskBootstrap.bootstrap();
         const bootstrapTime = performance.now() - startTime;
-        console.log(`⚡ Bootstrap completed in ${bootstrapTime.toFixed(2)}ms`);
-        
-        // Log performance metrics
-        if (bootstrapTime < 200) {
-            console.log('🎯 CROWN⁴.5 Target Met: <200ms first paint');
-        } else {
-            console.warn(`⚠️ Bootstrap slower than target: ${bootstrapTime.toFixed(2)}ms > 200ms`);
-        }
+        console.log(`⚡ Legacy bootstrap completed in ${bootstrapTime.toFixed(2)}ms`);
     } catch (error) {
         console.error('❌ Bootstrap failed:', error);
     }
