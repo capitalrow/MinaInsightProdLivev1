@@ -659,7 +659,11 @@
     
     // Initialize when DOM ready
     window.addEventListener('DOMContentLoaded', () => {
-        const workspaceId = {{ current_workspace.id if current_workspace else 1 }};
+        const workspaceId = {{ current_user.workspace_id }};
+        const userId = {{ current_user.id }};
+        
+        // Store for use by Crown5Analytics
+        window.currentUserId = userId;
         
         // Connect to analytics namespace
         const analyticsSocket = io('/analytics');
