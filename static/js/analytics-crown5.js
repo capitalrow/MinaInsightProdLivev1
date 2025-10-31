@@ -364,25 +364,5 @@ export class Crown5Analytics {
     }
 }
 
-// Auto-initialize if on analytics page
-if (document.querySelector('.analytics-workspace')) {
-    // Wait for socket connection
-    window.addEventListener('DOMContentLoaded', async () => {
-        // Get workspace ID from context
-        const workspaceId = window.currentWorkspaceId || 1;
-
-        // Connect to analytics namespace
-        const analyticsSocket = io('/analytics');
-
-        analyticsSocket.on('connect', () => {
-            console.log('✅ Analytics WebSocket connected');
-            
-            // Initialize CROWN⁵+ analytics
-            window.crown5Analytics = new Crown5Analytics(workspaceId, analyticsSocket);
-        });
-
-        analyticsSocket.on('disconnect', () => {
-            console.warn('⚠️ Analytics WebSocket disconnected');
-        });
-    });
-}
+// Note: Initialization is handled by the analytics.html template
+// This ensures workspace_id comes from server context, not client-side fallback
