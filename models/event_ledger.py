@@ -71,6 +71,18 @@ class EventType(enum.Enum):
     PARTICIPANT_UPDATE = "participant_update"  # Participant joined/left
     WORKSPACE_SWITCH = "workspace_switch"  # User switched workspace
     CACHE_INVALIDATE = "cache_invalidate"  # Force cache refresh
+    
+    # CROWN⁵+ Analytics Intelligence Events
+    ANALYTICS_BOOTSTRAP = "analytics_bootstrap"  # Page load / re-entry with cache paint
+    ANALYTICS_WS_SUBSCRIBE = "analytics_ws_subscribe"  # Socket handshake with checkpoint
+    ANALYTICS_HEADER_RECONCILE = "analytics_header_reconcile"  # ETag + checksum validation
+    ANALYTICS_OVERVIEW_HYDRATE = "analytics_overview_hydrate"  # Default tab mount
+    ANALYTICS_PREFETCH_TABS = "analytics_prefetch_tabs"  # Idle/scroll triggered prefetch
+    ANALYTICS_DELTA_APPLY = "analytics_delta_apply"  # WS broadcast or API diff merge
+    ANALYTICS_FILTER_CHANGE = "analytics_filter_change"  # Date range or segment change
+    ANALYTICS_TAB_SWITCH = "analytics_tab_switch"  # Tab navigation (Overview → Engagement → etc)
+    ANALYTICS_EXPORT_INITIATED = "analytics_export_initiated"  # Export requested
+    ANALYTICS_IDLE_SYNC = "analytics_idle_sync"  # Background validation (30s or visibility)
 
 
 class EventLedger(Base):
