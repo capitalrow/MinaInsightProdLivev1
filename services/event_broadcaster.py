@@ -551,6 +551,168 @@ class EventBroadcaster:
         except Exception as e:
             logger.error(f"Failed to process pending events: {e}", exc_info=True)
     
+    def broadcast_analytics_delta(
+        self,
+        workspace_id: int,
+        delta_data: Dict[str, Any],
+        event_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        previous_clock: Optional[Dict[str, int]] = None
+    ) -> Optional[EventLedger]:
+        """
+        Broadcast analytics_delta_apply event for real-time KPI updates (CROWN⁵+).
+        
+        Args:
+            workspace_id: Workspace ID
+            delta_data: Delta payload (new sessions, updated tasks, etc.)
+            event_id: Optional triggering event ID
+            user_id: User ID for vector clock
+            previous_clock: Previous vector clock from client
+            
+        Returns:
+            Created EventLedger instance or None
+        """
+        try:
+            event = event_sequencer.create_event(
+                event_type=EventType.ANALYTICS_DELTA_APPLY,
+                event_name="Analytics Delta Update",
+                payload={
+                    'workspace_id': workspace_id,
+                    'delta': delta_data,
+                    'triggering_event_id': event_id,
+                    'timestamp': datetime.utcnow().isoformat()
+                },
+                trace_id=f"analytics_delta_{workspace_id}_{int(datetime.utcnow().timestamp())}",
+                client_id=f"user_{user_id}" if user_id else f"server_{workspace_id}",
+                previous_clock=previous_clock
+            )
+            
+            # Broadcast to analytics namespace
+            self.emit_event(event, namespace="/analytics", room=f"workspace_{workspace_id}")
+            
+            return event
+            
+        except Exception as e:
+            logger.error(f"Failed to broadcast analytics_delta: {e}")
+            return None
+    
+    def broadcast_analytics_filter_change(
+        self,
+        workspace_id: int,
+        filter_params: Dict[str, Any],
+        user_id: Optional[int] = None
+    ) -> Optional[EventLedger]:
+        """
+        Broadcast analytics_filter_change event when user changes date range or filters (CROWN⁵+).
+        
+        Args:
+            workspace_id: Workspace ID
+            filter_params: New filter parameters (days, date_range, segments, etc.)
+            user_id: User ID
+            
+        Returns:
+            Created EventLedger instance or None
+        """
+        try:
+            event = event_sequencer.create_event(
+                event_type=EventType.ANALYTICS_FILTER_CHANGE,
+                event_name="Analytics Filter Changed",
+                payload={
+                    'workspace_id': workspace_id,
+                    'filters': filter_params,
+                    'user_id': user_id,
+                    'timestamp': datetime.utcnow().isoformat()
+                },
+                trace_id=f"analytics_filter_{workspace_id}_{user_id}"
+            )
+            
+            # Broadcast to analytics namespace
+            self.emit_event(event, namespace="/analytics", room=f"workspace_{workspace_id}")
+            
+            return event
+            
+        except Exception as e:
+            logger.error(f"Failed to broadcast analytics_filter_change: {e}")
+            return None
+    
+    def broadcast_analytics_tab_switch(
+        self,
+        workspace_id: int,
+        from_tab: str,
+        to_tab: str,
+        user_id: Optional[int] = None
+    ) -> Optional[EventLedger]:
+        """
+        Broadcast analytics_tab_switch event when user navigates tabs (CROWN⁵+).
+        
+        Args:
+            workspace_id: Workspace ID
+            from_tab: Source tab name
+            to_tab: Destination tab name
+            user_id: User ID
+            
+        Returns:
+            Created EventLedger instance or None
+        """
+        try:
+            event = event_sequencer.create_event(
+                event_type=EventType.ANALYTICS_TAB_SWITCH,
+                event_name="Analytics Tab Switched",
+                payload={
+                    'workspace_id': workspace_id,
+                    'from_tab': from_tab,
+                    'to_tab': to_tab,
+                    'user_id': user_id,
+                    'timestamp': datetime.utcnow().isoformat()
+                },
+                trace_id=f"analytics_tab_{workspace_id}_{user_id}_{to_tab}"
+            )
+            
+            # Broadcast to analytics namespace
+            self.emit_event(event, namespace="/analytics", room=f"workspace_{workspace_id}")
+            
+            return event
+            
+        except Exception as e:
+            logger.error(f"Failed to broadcast analytics_tab_switch: {e}")
+            return None
+    
+    def broadcast_analytics_idle_sync(
+        self,
+        workspace_id: int,
+        checksum_data: Dict[str, str]
+    ) -> Optional[EventLedger]:
+        """
+        Broadcast analytics_idle_sync for background validation (CROWN⁵+).
+        
+        Args:
+            workspace_id: Workspace ID
+            checksum_data: Checksums for validation
+            
+        Returns:
+            Created EventLedger instance or None
+        """
+        try:
+            event = event_sequencer.create_event(
+                event_type=EventType.ANALYTICS_IDLE_SYNC,
+                event_name="Analytics Background Sync",
+                payload={
+                    'workspace_id': workspace_id,
+                    'checksums': checksum_data,
+                    'timestamp': datetime.utcnow().isoformat()
+                },
+                trace_id=f"analytics_sync_{workspace_id}_{int(datetime.utcnow().timestamp())}"
+            )
+            
+            # Broadcast to analytics namespace
+            self.emit_event(event, namespace="/analytics", room=f"workspace_{workspace_id}")
+            
+            return event
+            
+        except Exception as e:
+            logger.error(f"Failed to broadcast analytics_idle_sync: {e}")
+            return None
+    
     def _get_namespace_for_event(self, event_type: EventType) -> str:
         """
         Determine WebSocket namespace for event type.
@@ -575,6 +737,17 @@ class EventBroadcaster:
             EventType.ARCHIVE_REVEAL: "/dashboard",
             EventType.WORKSPACE_SWITCH: "/dashboard",
             EventType.CACHE_INVALIDATE: "/dashboard",
+            # CROWN⁵+ Analytics Events
+            EventType.ANALYTICS_BOOTSTRAP: "/analytics",
+            EventType.ANALYTICS_WS_SUBSCRIBE: "/analytics",
+            EventType.ANALYTICS_HEADER_RECONCILE: "/analytics",
+            EventType.ANALYTICS_OVERVIEW_HYDRATE: "/analytics",
+            EventType.ANALYTICS_PREFETCH_TABS: "/analytics",
+            EventType.ANALYTICS_DELTA_APPLY: "/analytics",
+            EventType.ANALYTICS_FILTER_CHANGE: "/analytics",
+            EventType.ANALYTICS_TAB_SWITCH: "/analytics",
+            EventType.ANALYTICS_EXPORT_INITIATED: "/analytics",
+            EventType.ANALYTICS_IDLE_SYNC: "/analytics",
         }
         
         return namespace_map.get(event_type, "/dashboard")
