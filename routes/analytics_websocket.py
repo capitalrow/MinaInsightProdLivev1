@@ -147,12 +147,18 @@ def register_analytics_namespace(socketio):
         workspace_id = None
         days = 30
         try:
+            logger.info(f"📨 Analytics bootstrap request received from client {request.sid}")
+            logger.info(f"   Request data: {data}")
+            
             workspace_id = data.get('workspace_id')
             days = data.get('days', 30)
             cached_checksums = data.get('cached_checksums', {})
             last_event_id = data.get('last_event_id')
             
+            logger.info(f"   workspace_id={workspace_id}, days={days}, has_cache={bool(cached_checksums)}")
+            
             if not workspace_id:
+                logger.error("❌ Bootstrap rejected: missing workspace_id")
                 emit('error', {'message': 'workspace_id required'})
                 return
             
@@ -180,22 +186,25 @@ def register_analytics_namespace(socketio):
             
             if cache_valid:
                 # Cache is valid, send confirmation
+                logger.info(f"✅ Cache valid - sending confirmation to client {request.sid}")
                 emit('analytics_bootstrap_response', {
                     'status': 'valid',
                     'checksums': server_checksums,
                     'last_event_id': event.id,
                     'timestamp': datetime.utcnow().isoformat()
                 })
-                logger.info(f"Analytics cache valid for workspace {workspace_id}")
+                logger.info(f"   Response emitted: status=valid")
             else:
                 # Cache is stale, send full snapshot
+                logger.info(f"📦 Generating snapshot for workspace {workspace_id}")
+                logger.info(f"   Snapshot contains: {len(snapshot.get('kpis', {}))} KPIs, {len(snapshot.get('charts', {}))} charts")
                 emit('analytics_bootstrap_response', {
                     'status': 'snapshot',
                     'snapshot': snapshot,
                     'last_event_id': event.id,
                     'timestamp': datetime.utcnow().isoformat()
                 })
-                logger.info(f"Analytics snapshot sent for workspace {workspace_id}")
+                logger.info(f"   Response emitted: status=snapshot, size={len(str(snapshot))} bytes")
             
             # Mark event completed
             event_sequencer.mark_event_completed(
