@@ -1805,6 +1805,9 @@
 <script src="{{ url_for('static', filename='js/task-session-context.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-cognitive-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
+<!-- CROWN⁴.5 Certification & Testing -->
+<script src="{{ url_for('static', filename='js/crown45-certification-test.js') }}" nonce="{{ g.csp_nonce }}"></script>
+
 <!-- CROWN⁴.5 UI & Behavior Modules -->
 <script src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -1911,6 +1914,26 @@
         console.log(`⚡ Legacy bootstrap completed in ${bootstrapTime.toFixed(2)}ms`);
     } catch (error) {
         console.error('❌ Bootstrap failed:', error);
+    }
+    
+    // Run CROWN⁴.5 Certification Tests (after all modules initialized)
+    if (window.CROWN45CertificationTest) {
+        console.log('\n🏆 Starting CROWN⁴.5 Certification...');
+        setTimeout(async () => {
+            const tester = new window.CROWN45CertificationTest();
+            const certificationResult = await tester.runAllTests();
+            
+            // Store certification result globally
+            window.CROWN45CertificationResult = certificationResult;
+            
+            // Display certification badge
+            if (certificationResult.certified) {
+                console.log('%c🎖️ CROWN⁴.5 CERTIFIED', 'color: #22c55e; font-size: 16px; font-weight: bold;');
+            } else {
+                console.warn('%c⚠️ CROWN⁴.5 CERTIFICATION FAILED', 'color: #f97316; font-size: 16px; font-weight: bold;');
+                console.log('💡 Run window.CROWN45CertificationResult for details');
+            }
+        }, 1500);  // Wait for all systems to settle
     }
     
     // Modal elements
