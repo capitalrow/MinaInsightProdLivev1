@@ -466,6 +466,21 @@ def create_app() -> Flask:
                 return models_db.session.query(User).get(int(user_id))
             except Exception:
                 return None
+        
+        @login_manager.unauthorized_handler
+        def unauthorized():
+            """Handle unauthorized access - return JSON for API routes, redirect for pages."""
+            from flask import request, jsonify
+            # Check if this is an API request (starts with /api/)
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    'success': False,
+                    'error': 'Authentication required',
+                    'code': 'UNAUTHORIZED'
+                }), 401
+            # For regular pages, redirect to login
+            from flask import redirect, url_for
+            return redirect(url_for('auth.login', next=request.url))
     else:
         app.logger.info("No DATABASE_URL found, running without database persistence")
 
