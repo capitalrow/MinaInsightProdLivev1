@@ -1547,6 +1547,7 @@
                  data-task-id="${task.id}"
                  style="animation: slideInFromTop 0.5s ease-out;">
                 <div class="flex items-start gap-4">
+                    <input type="checkbox" class="bulk-select-checkbox" data-task-id="${task.id}">
                     <input type="checkbox" ${completed ? 'checked' : ''} class="task-checkbox">
                     <div class="flex-1">
                         <h3 class="task-title">${escapeHtml(task.description || 'Untitled Task')}</h3>
