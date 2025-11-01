@@ -480,7 +480,22 @@ class TaskCache {
             const store = transaction.objectStore('tasks');
             const request = store.get(taskId);
 
-            request.onsuccess = () => resolve(request.result || null);
+            request.onsuccess = () => {
+                const result = request.result || null;
+                
+                // Emit cache hit/miss event for performance tracking
+                if (result) {
+                    window.dispatchEvent(new CustomEvent('cache:hit', {
+                        detail: { taskId, cached: true }
+                    }));
+                } else {
+                    window.dispatchEvent(new CustomEvent('cache:miss', {
+                        detail: { taskId, cached: false }
+                    }));
+                }
+                
+                resolve(result);
+            };
             request.onerror = () => reject(request.error);
         });
     }

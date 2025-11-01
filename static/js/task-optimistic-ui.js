@@ -915,6 +915,11 @@ class OptimisticUI {
                 window.CROWNTelemetry.recordMetric('optimistic_reconcile_ms', reconcileTime);
             }
 
+            // Emit event for performance validator
+            window.dispatchEvent(new CustomEvent('reconcile:complete', {
+                detail: { type, reconcileTime, taskId }
+            }));
+
         } catch (error) {
             const syncTime = performance.now() - startTime;
             console.error(`❌ Server sync failed for ${type} after ${syncTime.toFixed(2)}ms:`, {
