@@ -1,6 +1,7 @@
 /**
  * Integration Tests for AI Prediction Banner UI
  * Tests banner rendering, Apply button functionality, and telemetry
+ * @jest-environment jsdom
  */
 
 describe('AI Prediction Banner Integration', () => {
@@ -46,11 +47,10 @@ describe('AI Prediction Banner Integration', () => {
             predict: jest.fn()
         };
         
-        global.window = {
-            predictiveEngine: mockPredictiveEngine,
-            CROWNTelemetry: {
-                recordMetric: jest.fn()
-            }
+        // Set on window (jsdom creates window automatically)
+        window.predictiveEngine = mockPredictiveEngine;
+        window.CROWNTelemetry = {
+            recordMetric: jest.fn()
         };
     });
 

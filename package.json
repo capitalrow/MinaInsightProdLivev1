@@ -24,6 +24,7 @@
     "@axe-core/playwright": "^4.10.2",
     "axios": "^1.12.2",
     "gsap": "^3.13.0",
+    "jest-environment-jsdom": "^30.2.0",
     "lighthouse": "^12.8.2",
     "lottie-web": "^5.13.0"
   }
