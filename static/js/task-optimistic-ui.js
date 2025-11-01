@@ -153,6 +153,11 @@ class OptimisticUI {
             // Step 2: Save to IndexedDB
             await this.cache.saveTask(optimisticTask);
             
+            // Dispatch creation event for haptics/animations
+            window.dispatchEvent(new CustomEvent('task:created', {
+                detail: { taskId: tempId, task: optimisticTask }
+            }));
+            
             // Step 3: Queue event and offline operation via OfflineQueueManager
             await this.cache.addEvent({
                 event_type: 'task_create',
@@ -223,6 +228,11 @@ class OptimisticUI {
             // Step 2: Update IndexedDB
             await this.cache.saveTask(optimisticTask);
             
+            // Dispatch update event for haptics/animations
+            window.dispatchEvent(new CustomEvent('task:updated', {
+                detail: { taskId, updates, task: optimisticTask }
+            }));
+            
             // Step 3: Queue event via OfflineQueueManager
             await this.cache.addEvent({
                 event_type: 'task_update',
@@ -283,6 +293,11 @@ class OptimisticUI {
             // Step 2: Delete from IndexedDB
             await this.cache.deleteTask(taskId);
             
+            // Dispatch deletion event for haptics/animations
+            window.dispatchEvent(new CustomEvent('task:deleted', {
+                detail: { taskId, task }
+            }));
+            
             // Step 3: Queue event via OfflineQueueManager
             await this.cache.addEvent({
                 event_type: 'task_delete',
@@ -333,11 +348,17 @@ class OptimisticUI {
 
         const result = await this.updateTask(taskId, updates);
 
-        if (newStatus === 'completed' && window.emotionalAnimations) {
-            const card = document.querySelector(`[data-task-id="${taskId}"]`);
-            if (card) {
-                window.emotionalAnimations.celebrate(card, ['burst', 'shimmer']);
+        if (newStatus === 'completed') {
+            if (window.emotionalAnimations) {
+                const card = document.querySelector(`[data-task-id="${taskId}"]`);
+                if (card) {
+                    window.emotionalAnimations.celebrate(card, ['burst', 'shimmer']);
+                }
             }
+            
+            window.dispatchEvent(new CustomEvent('task:completed', {
+                detail: { taskId, task }
+            }));
         }
 
         return result;
