@@ -242,6 +242,10 @@ class CROWNTelemetry {
             this.sessionMetrics.calmScore = Math.min(100, Math.max(0, 
                 (timeSinceLastEmotion / this.targets.quietWindow) * 100
             ));
+            
+            window.dispatchEvent(new CustomEvent('crown:telemetry:update', {
+                detail: { calmScore: this.sessionMetrics.calmScore }
+            }));
         }
         
         this.lastEmotionTime = now;
