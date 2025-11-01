@@ -4,7 +4,7 @@ API endpoints for task clustering
 
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
-from models import db, Task, Meeting
+from models import db, Task, Meeting, Session
 from services.task_clustering_service import task_clustering_service
 import logging
 
@@ -32,13 +32,17 @@ def get_task_clusters():
         logger.info(f"   Filters: status={status_filter}, num_clusters={num_clusters}")
         
         # Query tasks for current user's workspace
-        # Tasks don't have workspace_id directly - they're linked via meetings OR assigned to user
-        query = db.session.query(Task).outerjoin(Meeting).filter(
-            db.or_(
-                Meeting.workspace_id == current_user.workspace_id,
-                Task.assigned_to_id == current_user.id
+        # SECURITY: Tasks MUST belong to current workspace via meeting OR session
+        # Support all task types: meeting-based, session-based, and manual
+        query = db.session.query(Task)\
+            .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
+            .outerjoin(Session, Task.session_id == Session.id)\
+            .filter(
+                db.or_(
+                    Meeting.workspace_id == current_user.workspace_id,
+                    Session.workspace_id == current_user.workspace_id
+                )
             )
-        )
         
         # Apply status filter if provided
         if status_filter:
@@ -110,14 +114,18 @@ def preview_clustering():
                 'error': 'task_ids required'
             }), 400
         
-        # Query specified tasks (join with meetings for workspace filtering)
-        tasks = db.session.query(Task).outerjoin(Meeting).filter(
-            Task.id.in_(task_ids),
-            db.or_(
-                Meeting.workspace_id == current_user.workspace_id,
-                Task.assigned_to_id == current_user.id
-            )
-        ).all()
+        # Query specified tasks with workspace security
+        # SECURITY: Include both meeting-based and session-based tasks
+        tasks = db.session.query(Task)\
+            .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
+            .outerjoin(Session, Task.session_id == Session.id)\
+            .filter(
+                Task.id.in_(task_ids),
+                db.or_(
+                    Meeting.workspace_id == current_user.workspace_id,
+                    Session.workspace_id == current_user.workspace_id
+                )
+            ).all()
         
         # Convert to dict format
         tasks_data = []
