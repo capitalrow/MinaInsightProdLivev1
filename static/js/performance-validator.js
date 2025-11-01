@@ -32,6 +32,33 @@ class PerformanceValidator {
         this.monitorScrollPerformance();
         
         console.log('📊 CROWN⁴.5 Performance Validator initialized');
+        
+        // Auto-print performance report every 30 seconds
+        this.startAutoReporting();
+        
+        // Expose to window for manual inspection
+        window.performanceValidator = this;
+        
+        // Add keyboard shortcut (Ctrl+Shift+P) to show dashboard
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'P') {
+                e.preventDefault();
+                this.printReport();
+            }
+        });
+    }
+
+    startAutoReporting() {
+        // Print initial report after 5 seconds (allow metrics to collect)
+        setTimeout(() => {
+            console.log('📊 Initial CROWN⁴.5 Performance Report:');
+            this.printReport();
+        }, 5000);
+        
+        // Then print every 30 seconds
+        setInterval(() => {
+            this.printReport();
+        }, 30000);
     }
 
     setupPerformanceObservers() {
