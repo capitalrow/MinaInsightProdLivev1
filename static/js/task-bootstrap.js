@@ -358,16 +358,24 @@ class TaskBootstrap {
             overdue: allTasks.filter(t => this.isDueDateOverdue(t.due_date) && t.status !== 'completed').length
         };
 
-        // Update counter badges
+        // Update counter badges with emotional pulse animation
         Object.entries(counters).forEach(([key, count]) => {
             const badge = document.querySelector(`[data-counter="${key}"]`);
             if (badge) {
+                const oldCount = parseInt(badge.textContent, 10) || 0;
                 badge.textContent = count;
                 
-                // Add pulse animation on counter change
-                badge.classList.remove('counter-pulse');
-                void badge.offsetWidth; // Trigger reflow
-                badge.classList.add('counter-pulse');
+                // Add CROWN⁴.5 emotional pulse animation on counter change
+                if (oldCount !== count && window.emotionalAnimations) {
+                    window.emotionalAnimations.pulse(badge, {
+                        emotion_cue: 'counter_update'
+                    });
+                } else {
+                    // Fallback: simple CSS animation
+                    badge.classList.remove('counter-pulse');
+                    void badge.offsetWidth; // Trigger reflow
+                    badge.classList.add('counter-pulse');
+                }
             }
         });
     }

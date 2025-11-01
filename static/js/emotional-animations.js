@@ -70,8 +70,69 @@ class EmotionalAnimations {
                 }
             }
 
+            @keyframes pulse {
+                0%, 100% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+                50% {
+                    transform: scale(1.15);
+                    opacity: 0.9;
+                }
+            }
+
+            @keyframes glow {
+                0%, 100% {
+                    box-shadow: 0 0 5px rgba(99, 102, 241, 0.3);
+                }
+                50% {
+                    box-shadow: 0 0 20px rgba(99, 102, 241, 0.6);
+                }
+            }
+
+            @keyframes gradientPulse {
+                0%, 100% {
+                    background-position: 0% 50%;
+                }
+                50% {
+                    background-position: 100% 50%;
+                }
+            }
+
+            @keyframes popIn {
+                0% {
+                    transform: scale(0.8);
+                    opacity: 0;
+                }
+                50% {
+                    transform: scale(1.05);
+                }
+                100% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+
             .emotion-burst {
                 animation: burst 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+
+            .emotion-pulse {
+                animation: pulse 0.4s ease-in-out;
+            }
+
+            .emotion-glow {
+                animation: glow 1.5s ease-in-out infinite;
+            }
+
+            .emotion-gradient-pulse {
+                background: linear-gradient(270deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+                background-size: 200% 200%;
+                animation: gradientPulse 3s ease infinite;
+            }
+
+            .emotion-pop-in {
+                animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
             }
 
             .emotion-shimmer {
@@ -252,6 +313,142 @@ class EmotionalAnimations {
                 window.CROWNTelemetry.recordEmotionCue(emotion_cue);
             }
         }, { duration, priority: 7, metadata: { type: 'emotion_slide', emotion_cue } });
+    }
+
+    pulse(element, options = {}) {
+        const {
+            duration = 400,
+            onComplete = null,
+            emotion_cue = 'pulse'
+        } = options;
+
+        if (!element || !window.quietStateManager) {
+            if (element) {
+                element.classList.add('emotion-pulse');
+                setTimeout(() => element.classList.remove('emotion-pulse'), duration);
+            }
+            return;
+        }
+
+        return window.quietStateManager.queueAnimation((setCancelHandler) => {
+            element.classList.add('emotion-pulse');
+
+            const timeoutId = setTimeout(() => {
+                element.classList.remove('emotion-pulse');
+                if (onComplete) onComplete();
+            }, duration);
+
+            setCancelHandler(() => {
+                clearTimeout(timeoutId);
+                element.classList.remove('emotion-pulse');
+            });
+
+            if (window.CROWNTelemetry && window.CROWNTelemetry.recordEmotionCue) {
+                window.CROWNTelemetry.recordEmotionCue(emotion_cue);
+            }
+        }, { duration, priority: 5, metadata: { type: 'emotion_pulse', emotion_cue } });
+    }
+
+    glow(element, options = {}) {
+        const {
+            duration = 1500,
+            onComplete = null,
+            emotion_cue = 'glow'
+        } = options;
+
+        if (!element || !window.quietStateManager) {
+            if (element) {
+                element.classList.add('emotion-glow');
+                setTimeout(() => element.classList.remove('emotion-glow'), duration);
+            }
+            return;
+        }
+
+        return window.quietStateManager.queueAnimation((setCancelHandler) => {
+            element.classList.add('emotion-glow');
+
+            const timeoutId = setTimeout(() => {
+                element.classList.remove('emotion-glow');
+                if (onComplete) onComplete();
+            }, duration);
+
+            setCancelHandler(() => {
+                clearTimeout(timeoutId);
+                element.classList.remove('emotion-glow');
+            });
+
+            if (window.CROWNTelemetry && window.CROWNTelemetry.recordEmotionCue) {
+                window.CROWNTelemetry.recordEmotionCue(emotion_cue);
+            }
+        }, { duration, priority: 4, metadata: { type: 'emotion_glow', emotion_cue } });
+    }
+
+    gradientPulse(element, options = {}) {
+        const {
+            duration = 3000,
+            onComplete = null,
+            emotion_cue = 'gradient_pulse'
+        } = options;
+
+        if (!element || !window.quietStateManager) {
+            if (element) {
+                element.classList.add('emotion-gradient-pulse');
+                setTimeout(() => element.classList.remove('emotion-gradient-pulse'), duration);
+            }
+            return;
+        }
+
+        return window.quietStateManager.queueAnimation((setCancelHandler) => {
+            element.classList.add('emotion-gradient-pulse');
+
+            const timeoutId = setTimeout(() => {
+                element.classList.remove('emotion-gradient-pulse');
+                if (onComplete) onComplete();
+            }, duration);
+
+            setCancelHandler(() => {
+                clearTimeout(timeoutId);
+                element.classList.remove('emotion-gradient-pulse');
+            });
+
+            if (window.CROWNTelemetry && window.CROWNTelemetry.recordEmotionCue) {
+                window.CROWNTelemetry.recordEmotionCue(emotion_cue);
+            }
+        }, { duration, priority: 3, metadata: { type: 'emotion_gradient_pulse', emotion_cue } });
+    }
+
+    popIn(element, options = {}) {
+        const {
+            duration = 400,
+            onComplete = null,
+            emotion_cue = 'pop_in'
+        } = options;
+
+        if (!element || !window.quietStateManager) {
+            if (element) {
+                element.classList.add('emotion-pop-in');
+                setTimeout(() => element.classList.remove('emotion-pop-in'), duration);
+            }
+            return;
+        }
+
+        return window.quietStateManager.queueAnimation((setCancelHandler) => {
+            element.classList.add('emotion-pop-in');
+
+            const timeoutId = setTimeout(() => {
+                element.classList.remove('emotion-pop-in');
+                if (onComplete) onComplete();
+            }, duration);
+
+            setCancelHandler(() => {
+                clearTimeout(timeoutId);
+                element.classList.remove('emotion-pop-in');
+            });
+
+            if (window.CROWNTelemetry && window.CROWNTelemetry.recordEmotionCue) {
+                window.CROWNTelemetry.recordEmotionCue(emotion_cue);
+            }
+        }, { duration, priority: 7, metadata: { type: 'emotion_pop_in', emotion_cue } });
     }
 
     celebrate(element, sequence = ['burst', 'shimmer']) {
