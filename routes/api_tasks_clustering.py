@@ -4,7 +4,7 @@ API endpoints for task clustering
 
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
-from models import db, Task
+from models import db, Task, Meeting
 from services.task_clustering_service import task_clustering_service
 import logging
 
@@ -31,9 +31,13 @@ def get_task_clusters():
         
         logger.info(f"   Filters: status={status_filter}, num_clusters={num_clusters}")
         
-        # Query tasks for current user
-        query = db.session.query(Task).filter_by(
-            workspace_id=current_user.workspace_id
+        # Query tasks for current user's workspace
+        # Tasks don't have workspace_id directly - they're linked via meetings OR assigned to user
+        query = db.session.query(Task).outerjoin(Meeting).filter(
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                Task.assigned_to_id == current_user.id
+            )
         )
         
         # Apply status filter if provided
@@ -106,10 +110,13 @@ def preview_clustering():
                 'error': 'task_ids required'
             }), 400
         
-        # Query specified tasks
-        tasks = db.session.query(Task).filter(
+        # Query specified tasks (join with meetings for workspace filtering)
+        tasks = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id.in_(task_ids),
-            Task.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                Task.assigned_to_id == current_user.id
+            )
         ).all()
         
         # Convert to dict format
