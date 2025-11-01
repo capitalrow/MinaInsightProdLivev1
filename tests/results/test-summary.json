@@ -1,7 +1,7 @@
 {
-  "testRunId": "test_1759348069287_09t3ig",
-  "startTime": "2025-10-01T19:47:49.287Z",
-  "endTime": "2025-10-01T19:47:50.895Z",
+  "testRunId": "test_1762035676602_dp6u9o",
+  "startTime": "2025-11-01T22:21:16.600Z",
+  "endTime": "2025-11-01T22:22:28.820Z",
   "baseURL": "http://localhost:5000",
   "summary": "E2E test run completed"
 }
