@@ -23,9 +23,13 @@ def get_task_clusters():
         - num_clusters: Number of clusters (optional, auto-detected if not provided)
     """
     try:
+        logger.info(f"🔗 GET /api/tasks/clusters - User: {current_user.username}, Workspace: {current_user.workspace_id}")
+        
         # Get query parameters
         status_filter = request.args.get('status')
         num_clusters = request.args.get('num_clusters', type=int)
+        
+        logger.info(f"   Filters: status={status_filter}, num_clusters={num_clusters}")
         
         # Query tasks for current user
         query = db.session.query(Task).filter_by(
@@ -38,7 +42,10 @@ def get_task_clusters():
         
         tasks = query.all()
         
+        logger.info(f"   Found {len(tasks)} tasks for clustering")
+        
         if not tasks:
+            logger.warning("⚠️  No tasks found - returning empty clusters")
             return jsonify({
                 'success': True,
                 'clusters': [],
