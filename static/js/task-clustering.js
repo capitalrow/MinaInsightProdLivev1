@@ -61,11 +61,30 @@ class TaskClusteringManager {
             // Show loading state
             this.showLoadingState();
 
+            console.log('🔗 Fetching clusters from /api/tasks/clusters');
             const response = await fetch('/api/tasks/clusters');
+            
+            console.log('🔗 Cluster response status:', response.status, response.statusText);
+            
+            // Check if response is OK
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Clustering API error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
+                this.showError(`Failed to group tasks (${response.status}): ${errorText.substring(0, 100)}`);
+                this.enabled = false;
+                return;
+            }
+
             const data = await response.json();
+            console.log('🔗 Cluster response data:', data);
 
             if (data.success) {
                 this.clusters = data.clusters;
+                console.log('✅ Received', data.clusters.length, 'clusters');
                 this.displayClusters();
                 
                 // Record telemetry
@@ -74,13 +93,14 @@ class TaskClusteringManager {
                     window.CROWNTelemetry.recordMetric('task_clusters_count', data.clusters.length);
                 }
             } else {
-                console.error('Failed to fetch clusters:', data.error);
-                this.showError('Failed to group tasks');
+                console.error('❌ Clustering failed:', data.error, data);
+                this.showError(`Failed to group tasks: ${data.error || 'Unknown error'}`);
                 this.enabled = false;
             }
         } catch (error) {
-            console.error('Clustering error:', error);
-            this.showError('Failed to group tasks');
+            console.error('❌ Clustering exception:', error);
+            console.error('Error stack:', error.stack);
+            this.showError(`Failed to group tasks: ${error.message}`);
             this.enabled = false;
         }
     }
