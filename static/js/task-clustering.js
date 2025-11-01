@@ -62,19 +62,31 @@ class TaskClusteringManager {
             this.showLoadingState();
 
             console.log('🔗 Fetching clusters from /api/tasks/clusters');
-            const response = await fetch('/api/tasks/clusters');
+            const response = await fetch('/api/tasks/clusters', {
+                credentials: 'include'  // ✅ Include session cookies for mobile/PWA
+            });
             
             console.log('🔗 Cluster response status:', response.status, response.statusText);
             
             // Check if response is OK
             if (!response.ok) {
+                // Handle authentication errors (mobile/PWA session loss)
+                if (response.status === 401 || response.status === 302) {
+                    console.error('❌ Authentication required - session may have expired');
+                    this.showError('Session expired. Please refresh the page.');
+                    this.enabled = false;
+                    // Optionally trigger a page reload after a delay
+                    setTimeout(() => window.location.reload(), 2000);
+                    return;
+                }
+                
                 const errorText = await response.text();
                 console.error('❌ Clustering API error:', {
                     status: response.status,
                     statusText: response.statusText,
-                    body: errorText
+                    body: errorText.substring(0, 200)
                 });
-                this.showError(`Failed to group tasks (${response.status}): ${errorText.substring(0, 100)}`);
+                this.showError(`Failed to group tasks (${response.status})`);
                 this.enabled = false;
                 return;
             }
