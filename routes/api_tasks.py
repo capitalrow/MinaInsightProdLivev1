@@ -1,7 +1,6 @@
 """
-Tasks API Routes - CROWN⁴.5 Compliant
-REST API endpoints for task management with comprehensive error handling.
-All endpoints return JSON responses even on errors.
+Tasks API Routes
+REST API endpoints for task management, CRUD operations, and status updates.
 """
 
 from flask import Blueprint, request, jsonify
@@ -9,8 +8,9 @@ from flask_login import login_required, current_user
 from models import db, Task, Meeting, User, Session, Workspace
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_, select
-from functools import wraps
+# server/routes/api_tasks.py
 import logging
+from app import db
 from models.summary import Summary
 from services.event_broadcaster import EventBroadcaster
 
@@ -18,22 +18,6 @@ logger = logging.getLogger(__name__)
 event_broadcaster = EventBroadcaster()
 
 api_tasks_bp = Blueprint('api_tasks', __name__, url_prefix='/api/tasks')
-
-
-def json_error_handler(f):
-    """Decorator to ensure all errors return JSON responses."""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except Exception as e:
-            logger.error(f"API Error in {f.__name__}: {str(e)}", exc_info=True)
-            return jsonify({
-                'success': False,
-                'message': str(e),
-                'error_type': type(e).__name__
-            }), 500
-    return decorated_function
 
 
 @api_tasks_bp.route('/', methods=['GET'])
@@ -616,119 +600,122 @@ def merge_tasks(task_id):
 
 @api_tasks_bp.route('/bulk/complete', methods=['POST'])
 @login_required
-@json_error_handler
 def bulk_complete_tasks():
-    """Bulk complete multiple tasks - CROWN⁴.5 compliant."""
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify({'success': False, 'message': 'Invalid request format'}), 400
-    
-    task_ids = data.get('task_ids', [])
-    if not isinstance(task_ids, list) or len(task_ids) == 0:
-        return jsonify({'success': False, 'message': 'task_ids is required'}), 400
-    
-    # Convert to integers
+    """Bulk complete multiple tasks."""
     try:
-        task_ids = [int(tid) for tid in task_ids]
-    except (ValueError, TypeError):
-        return jsonify({'success': False, 'message': 'Invalid task IDs'}), 400
-    
-    # Fetch all tasks and verify ownership
-    tasks = db.session.query(Task).join(Meeting).filter(
-        Task.id.in_(task_ids),
-        Meeting.workspace_id == current_user.workspace_id
-    ).all()
-    
-    if len(tasks) != len(task_ids):
-        return jsonify({'success': False, 'message': 'Some tasks not found'}), 404
-    
-    # Mark all as completed
-    now = datetime.utcnow()
-    for task in tasks:
-        task.status = 'completed'
-        task.completed_at = now
-        task.updated_at = now
-    
-    db.session.commit()
-    
-    # Broadcast bulk operation event
-    event_broadcaster.broadcast_task_update(
-        task_id=None,
-        task_data={
-            'event_type': 'task_multiselect:bulk',
-            'action': 'bulk_complete',
-            'task_ids': task_ids,
-            'count': len(task_ids)
-        },
-        meeting_id=None,
-        workspace_id=current_user.workspace_id,
-        user_id=current_user.id
-    )
-    
-    logger.info(f"✅ Bulk completed {len(tasks)} tasks for user {current_user.id}")
-    
-    return jsonify({
-        'success': True,
-        'message': f'{len(tasks)} tasks completed',
-        'count': len(tasks)
-    })
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'success': False, 'message': 'Invalid request format'}), 400
+        
+        task_ids = data.get('task_ids', [])
+        if not isinstance(task_ids, list) or len(task_ids) == 0:
+            return jsonify({'success': False, 'message': 'task_ids is required'}), 400
+        
+        # Convert to integers
+        try:
+            task_ids = [int(tid) for tid in task_ids]
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': 'Invalid task IDs'}), 400
+        
+        # Fetch all tasks and verify ownership
+        tasks = db.session.query(Task).join(Meeting).filter(
+            Task.id.in_(task_ids),
+            Meeting.workspace_id == current_user.workspace_id
+        ).all()
+        
+        if len(tasks) != len(task_ids):
+            return jsonify({'success': False, 'message': 'Some tasks not found'}), 404
+        
+        # Mark all as completed
+        from datetime import datetime
+        for task in tasks:
+            task.status = 'completed'
+            task.completed_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        # Broadcast bulk operation event
+        event_broadcaster.broadcast_task_update(
+            task_id=None,
+            task_data={
+                'event_type': 'task_multiselect:bulk',
+                'action': 'bulk_complete',
+                'task_ids': task_ids,
+                'count': len(task_ids)
+            },
+            meeting_id=None,
+            workspace_id=current_user.workspace_id,
+            user_id=current_user.id
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(tasks)} tasks completed',
+            'count': len(tasks)
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @api_tasks_bp.route('/bulk/delete', methods=['POST'])
 @login_required
-@json_error_handler
 def bulk_delete_tasks():
-    """Bulk delete multiple tasks - CROWN⁴.5 compliant."""
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify({'success': False, 'message': 'Invalid request format'}), 400
-    
-    task_ids = data.get('task_ids', [])
-    if not isinstance(task_ids, list) or len(task_ids) == 0:
-        return jsonify({'success': False, 'message': 'task_ids is required'}), 400
-    
-    # Convert to integers
+    """Bulk delete multiple tasks."""
     try:
-        task_ids = [int(tid) for tid in task_ids]
-    except (ValueError, TypeError):
-        return jsonify({'success': False, 'message': 'Invalid task IDs'}), 400
-    
-    # Fetch all tasks and verify ownership
-    tasks = db.session.query(Task).join(Meeting).filter(
-        Task.id.in_(task_ids),
-        Meeting.workspace_id == current_user.workspace_id
-    ).all()
-    
-    if len(tasks) != len(task_ids):
-        return jsonify({'success': False, 'message': 'Some tasks not found'}), 404
-    
-    # Delete all tasks
-    for task in tasks:
-        db.session.delete(task)
-    
-    db.session.commit()
-    
-    # Broadcast bulk operation event
-    event_broadcaster.broadcast_task_update(
-        task_id=None,
-        task_data={
-            'event_type': 'task_multiselect:bulk',
-            'action': 'bulk_delete',
-            'task_ids': task_ids,
-            'count': len(task_ids)
-        },
-        meeting_id=None,
-        workspace_id=current_user.workspace_id,
-        user_id=current_user.id
-    )
-    
-    logger.info(f"✅ Bulk deleted {len(tasks)} tasks for user {current_user.id}")
-    
-    return jsonify({
-        'success': True,
-        'message': f'{len(tasks)} tasks deleted',
-        'count': len(tasks)
-    })
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'success': False, 'message': 'Invalid request format'}), 400
+        
+        task_ids = data.get('task_ids', [])
+        if not isinstance(task_ids, list) or len(task_ids) == 0:
+            return jsonify({'success': False, 'message': 'task_ids is required'}), 400
+        
+        # Convert to integers
+        try:
+            task_ids = [int(tid) for tid in task_ids]
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': 'Invalid task IDs'}), 400
+        
+        # Fetch all tasks and verify ownership
+        tasks = db.session.query(Task).join(Meeting).filter(
+            Task.id.in_(task_ids),
+            Meeting.workspace_id == current_user.workspace_id
+        ).all()
+        
+        if len(tasks) != len(task_ids):
+            return jsonify({'success': False, 'message': 'Some tasks not found'}), 404
+        
+        # Delete all tasks
+        for task in tasks:
+            db.session.delete(task)
+        
+        db.session.commit()
+        
+        # Broadcast bulk operation event
+        event_broadcaster.broadcast_task_update(
+            task_id=None,
+            task_data={
+                'event_type': 'task_multiselect:bulk',
+                'action': 'bulk_delete',
+                'task_ids': task_ids,
+                'count': len(task_ids)
+            },
+            meeting_id=None,
+            workspace_id=current_user.workspace_id,
+            user_id=current_user.id
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(tasks)} tasks deleted',
+            'count': len(tasks)
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @api_tasks_bp.route('/bulk/label', methods=['POST'])
@@ -882,17 +869,6 @@ def update_task_status(task_id):
             meeting_id=meeting.id if meeting else None,
             workspace_id=current_user.workspace_id
         )
-        
-        # CROWN⁵+: Broadcast analytics delta on task status change
-        if old_status != new_status:
-            from services.analytics_delta_service import analytics_delta_service
-            analytics_delta_service.broadcast_task_delta_on_status_change(
-                task_id=task.id,
-                workspace_id=current_user.workspace_id,
-                old_status=old_status,
-                new_status=new_status,
-                user_id=current_user.id
-            )
         
         return jsonify({
             'success': True,
