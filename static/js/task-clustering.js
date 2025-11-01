@@ -1,0 +1,347 @@
+/**
+ * CROWN⁴.5 Semantic Task Clustering
+ * Groups related tasks using AI-powered semantic similarity.
+ */
+
+class TaskClusteringManager {
+    constructor() {
+        this.enabled = false;
+        this.clusters = [];
+        this.viewMode = 'list'; // 'list' or 'clusters'
+        this.init();
+    }
+
+    init() {
+        // Add cluster toggle button to UI
+        this.addClusterToggle();
+        
+        // Listen for task updates
+        window.addEventListener('tasks:updated', () => {
+            if (this.enabled) {
+                this.refreshClusters();
+            }
+        });
+
+        console.log('🔗 CROWN⁴.5 TaskClusteringManager initialized');
+    }
+
+    addClusterToggle() {
+        const filtersContainer = document.querySelector('.task-filters');
+        if (!filtersContainer) return;
+
+        const toggleButton = document.createElement('button');
+        toggleButton.className = 'filter-tab cluster-toggle';
+        toggleButton.innerHTML = '🔗 Group Similar';
+        toggleButton.title = 'Group tasks by similarity';
+        
+        toggleButton.addEventListener('click', () => {
+            this.toggleClustering();
+        });
+
+        filtersContainer.appendChild(toggleButton);
+    }
+
+    async toggleClustering() {
+        this.enabled = !this.enabled;
+        
+        const toggleBtn = document.querySelector('.cluster-toggle');
+        if (toggleBtn) {
+            toggleBtn.classList.toggle('active', this.enabled);
+        }
+
+        if (this.enabled) {
+            await this.fetchAndDisplayClusters();
+        } else {
+            this.showNormalView();
+        }
+    }
+
+    async fetchAndDisplayClusters() {
+        try {
+            // Show loading state
+            this.showLoadingState();
+
+            const response = await fetch('/api/tasks/clusters');
+            const data = await response.json();
+
+            if (data.success) {
+                this.clusters = data.clusters;
+                this.displayClusters();
+                
+                // Record telemetry
+                if (window.CROWNTelemetry) {
+                    window.CROWNTelemetry.recordMetric('task_clustering_enabled', 1);
+                    window.CROWNTelemetry.recordMetric('task_clusters_count', data.clusters.length);
+                }
+            } else {
+                console.error('Failed to fetch clusters:', data.error);
+                this.showError('Failed to group tasks');
+                this.enabled = false;
+            }
+        } catch (error) {
+            console.error('Clustering error:', error);
+            this.showError('Failed to group tasks');
+            this.enabled = false;
+        }
+    }
+
+    async refreshClusters() {
+        if (this.enabled) {
+            await this.fetchAndDisplayClusters();
+        }
+    }
+
+    displayClusters() {
+        const container = document.getElementById('tasks-list-container');
+        if (!container) return;
+
+        let html = '';
+
+        // Add cluster info header
+        html += `
+            <div class="clusters-header" style="margin-bottom: 2rem; padding: 1rem; background: var(--glass-bg); border-radius: var(--radius-lg); border: 1px solid var(--glass-border);">
+                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                    <span style="font-size: 1.5rem;">🔗</span>
+                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Grouped by Similarity</h3>
+                </div>
+                <p style="margin: 0; color: var(--color-text-secondary); font-size: 0.875rem;">
+                    ${this.clusters.length} groups found using ${this.clusters[0]?.label ? 'AI semantic analysis' : 'keyword matching'}
+                </p>
+            </div>
+        `;
+
+        // Render each cluster
+        this.clusters.forEach((cluster, index) => {
+            html += this.renderCluster(cluster, index);
+        });
+
+        container.innerHTML = html;
+
+        // Attach event listeners
+        this.attachClusterEventListeners();
+    }
+
+    renderCluster(cluster, index) {
+        const clusterColor = this.getClusterColor(index);
+        
+        let html = `
+            <div class="task-cluster" data-cluster-id="${cluster.id}" style="margin-bottom: 2rem;">
+                <div class="cluster-header" style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 1rem 1.5rem;
+                    background: var(--glass-bg);
+                    backdrop-filter: var(--backdrop-blur);
+                    border: 1px solid var(--glass-border);
+                    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+                    border-left: 4px solid ${clusterColor};
+                ">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <h3 style="margin: 0; font-size: 1.125rem; font-weight: 600;">
+                            ${this.escapeHtml(cluster.label)}
+                        </h3>
+                        <span class="cluster-count-badge" style="
+                            padding: 0.25rem 0.75rem;
+                            background: rgba(99, 102, 241, 0.1);
+                            color: var(--color-primary);
+                            border-radius: var(--radius-full);
+                            font-size: 0.875rem;
+                            font-weight: 500;
+                        ">
+                            ${cluster.size} tasks
+                        </span>
+                    </div>
+                    <button class="cluster-collapse-btn" data-cluster-id="${cluster.id}" style="
+                        background: transparent;
+                        border: none;
+                        cursor: pointer;
+                        padding: 0.5rem;
+                        color: var(--color-text-secondary);
+                        font-size: 1.25rem;
+                    ">
+                        ▼
+                    </button>
+                </div>
+                <div class="cluster-tasks" data-cluster-id="${cluster.id}" style="
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                    padding: 1rem;
+                    background: var(--glass-bg);
+                    border: 1px solid var(--glass-border);
+                    border-top: none;
+                    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+                ">
+        `;
+
+        // Render tasks in this cluster
+        cluster.tasks.forEach(task => {
+            html += this.renderClusteredTask(task);
+        });
+
+        html += `
+                </div>
+            </div>
+        `;
+
+        return html;
+    }
+
+    renderClusteredTask(task) {
+        const priority = task.priority || 'medium';
+        const status = task.status || 'todo';
+        const isCompleted = status === 'completed';
+
+        return `
+            <div class="task-card clustered" data-task-id="${task.id}" style="margin: 0;">
+                <div class="task-card-header">
+                    <div class="task-checkbox-wrapper">
+                        <input type="checkbox" 
+                               class="task-checkbox" 
+                               ${isCompleted ? 'checked' : ''}
+                               data-task-id="${task.id}">
+                    </div>
+                    <div class="task-content">
+                        <h3 class="task-title ${isCompleted ? 'completed' : ''}">
+                            ${this.escapeHtml(task.title || 'Untitled Task')}
+                        </h3>
+                        ${task.description ? `
+                            <p class="task-description">${this.escapeHtml(task.description)}</p>
+                        ` : ''}
+                        <div class="task-meta">
+                            <span class="priority-badge priority-${priority.toLowerCase()}">
+                                ${priority}
+                            </span>
+                            ${task.due_date ? `
+                                <span class="due-date-badge">
+                                    ${this.formatDueDate(task.due_date)}
+                                </span>
+                            ` : ''}
+                            ${task.labels && task.labels.length > 0 ? `
+                                <div class="task-labels">
+                                    ${task.labels.slice(0, 3).map(label => `
+                                        <span class="label-badge">${this.escapeHtml(label)}</span>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    attachClusterEventListeners() {
+        // Collapse/expand clusters
+        document.querySelectorAll('.cluster-collapse-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const clusterId = e.target.dataset.clusterId;
+                const tasksContainer = document.querySelector(`.cluster-tasks[data-cluster-id="${clusterId}"]`);
+                const isCollapsed = tasksContainer.style.display === 'none';
+                
+                tasksContainer.style.display = isCollapsed ? 'flex' : 'none';
+                e.target.textContent = isCollapsed ? '▼' : '▶';
+            });
+        });
+
+        // Task checkboxes
+        document.querySelectorAll('.task-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', async (e) => {
+                const taskId = e.target.dataset.taskId;
+                if (window.optimisticUI) {
+                    await window.optimisticUI.toggleTaskStatus(taskId);
+                }
+            });
+        });
+
+        // Task clicks
+        document.querySelectorAll('.task-card.clustered').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.classList.contains('task-checkbox')) return;
+                
+                const taskId = card.dataset.taskId;
+                window.dispatchEvent(new CustomEvent('task:clicked', {
+                    detail: { task_id: taskId }
+                }));
+            });
+        });
+    }
+
+    showNormalView() {
+        // Trigger re-render of normal task list
+        window.dispatchEvent(new CustomEvent('tasks:refresh-view'));
+    }
+
+    showLoadingState() {
+        const container = document.getElementById('tasks-list-container');
+        if (container) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 4rem; color: var(--color-text-secondary);">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">🔗</div>
+                    <p style="font-size: 1.125rem;">Analyzing task relationships...</p>
+                    <p style="font-size: 0.875rem; margin-top: 0.5rem;">Using AI to group similar tasks</p>
+                </div>
+            `;
+        }
+    }
+
+    showError(message) {
+        const container = document.getElementById('tasks-list-container');
+        if (container) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 4rem; color: var(--color-danger);">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">❌</div>
+                    <p style="font-size: 1.125rem;">${this.escapeHtml(message)}</p>
+                </div>
+            `;
+        }
+    }
+
+    getClusterColor(index) {
+        const colors = [
+            '#6366f1', // indigo
+            '#8b5cf6', // purple
+            '#ec4899', // pink
+            '#f59e0b', // amber
+            '#10b981', // emerald
+            '#3b82f6', // blue
+            '#ef4444'  // red
+        ];
+        return colors[index % colors.length];
+    }
+
+    formatDueDate(dueDate) {
+        if (!dueDate) return '';
+        
+        const due = new Date(dueDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const diffDays = Math.floor((due - today) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 0) return 'Today';
+        if (diffDays === 1) return 'Tomorrow';
+        if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`;
+        if (diffDays <= 7) return `In ${diffDays}d`;
+        
+        return due.toLocaleDateString();
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
+// Initialize on page load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.taskClusteringManager = new TaskClusteringManager();
+    });
+} else {
+    window.taskClusteringManager = new TaskClusteringManager();
+}
+
+console.log('🔗 CROWN⁴.5 Task Clustering loaded');
