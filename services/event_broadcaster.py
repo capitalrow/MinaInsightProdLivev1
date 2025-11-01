@@ -166,7 +166,7 @@ class EventBroadcaster:
     
     def broadcast_task_update(
         self,
-        task_id: int,
+        task_id: Optional[int],
         task_data: Dict[str, Any],
         meeting_id: Optional[int],
         workspace_id: int,
@@ -177,7 +177,7 @@ class EventBroadcaster:
         Broadcast task_update event when task status changes (CROWN⁴.5).
         
         Args:
-            task_id: Task ID
+            task_id: Task ID (None for bulk operations)
             task_data: Task information
             meeting_id: Associated meeting ID (None if no meeting)
             workspace_id: Workspace ID
