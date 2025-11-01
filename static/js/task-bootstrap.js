@@ -251,48 +251,29 @@ class TaskBootstrap {
         const isCompleted = status === 'completed';
         const isSnoozed = task.snoozed_until && new Date(task.snoozed_until) > new Date();
         const isSyncing = task._is_syncing || (task.id && typeof task.id === 'string' && task.id.startsWith('temp_'));
-        
-        // CROWN⁴.5 Event #3: AI Proposal Detection
-        const isAIProposal = task.emotional_state === 'pending_suggest';
-        const confidence = task.confidence_score || 0;
-        const confidenceClass = this.getConfidenceClass(confidence);
-        
-        // Transcript linking
-        const hasTranscriptLink = task.transcript_span && task.transcript_span.start_ms;
-        const transcriptHref = hasTranscriptLink 
-            ? `/sessions/${task.session_id || task.meeting_id}?start_ms=${task.transcript_span.start_ms}&end_ms=${task.transcript_span.end_ms}`
-            : '#';
 
         return `
-            <div class="task-card ${isSyncing ? 'task-syncing' : ''} ${isAIProposal ? `ai-proposal ${confidenceClass}` : ''}" 
+            <div class="task-card ${isSyncing ? 'task-syncing' : ''}" 
                  data-task-id="${task.id}"
                  data-status="${status}"
                  data-priority="${priority}"
                  style="animation-delay: ${index * 0.05}s;">
-                <div class="flex items-start gap-4">
-                    ${isAIProposal ? `
-                        <div class="ai-proposal-badge">
-                            <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                            </svg>
-                            AI (${Math.round(confidence * 100)}%)
-                        </div>
-                    ` : `
+                <div class="task-card-header">
+                    <div class="task-checkbox-wrapper">
                         <input type="checkbox" 
                                class="task-checkbox" 
                                ${isCompleted ? 'checked' : ''}
                                ${isSyncing ? 'disabled title="Task is syncing with server..."' : ''}
                                data-task-id="${task.id}">
-                    `}
-                    <div class="flex-1 min-w-0">
+                    </div>
+                    <div class="task-content">
                         <h3 class="task-title ${isCompleted ? 'completed' : ''}">
                             ${this.escapeHtml(task.title || 'Untitled Task')}
                         </h3>
                         ${task.description ? `
-                            <p class="task-description text-sm text-secondary mt-1">${this.escapeHtml(task.description)}</p>
+                            <p class="task-description">${this.escapeHtml(task.description)}</p>
                         ` : ''}
-                        
-                        <div class="task-meta mt-2 flex flex-wrap gap-2 items-center">
+                        <div class="task-meta">
                             ${isSyncing ? `
                                 <span class="syncing-badge">
                                     <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" class="spin-animation">
@@ -301,60 +282,17 @@ class TaskBootstrap {
                                     Syncing...
                                 </span>
                             ` : ''}
-                            
-                            <button class="priority-badge priority-${priority.toLowerCase()}" 
-                                    data-task-id="${task.id}"
-                                    title="Click to change priority"
-                                    aria-label="Change priority. Current: ${priority}">
+                            <span class="priority-badge priority-${priority.toLowerCase()}">
                                 ${priority}
-                            </button>
-                            
+                            </span>
                             ${task.due_date ? `
-                                <button class="due-date-badge ${this.isDueDateOverdue(task.due_date) ? 'overdue' : ''}"
-                                        data-task-id="${task.id}"
-                                        data-iso-date="${task.due_date}"
-                                        title="Click to change due date"
-                                        aria-label="Change due date. Current: ${this.formatDueDate(task.due_date)}">
+                                <span class="due-date-badge ${this.isDueDateOverdue(task.due_date) ? 'overdue' : ''}">
                                     <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                     </svg>
                                     ${this.formatDueDate(task.due_date)}
-                                </button>
-                            ` : `
-                                <button class="due-date-badge due-date-add"
-                                        data-task-id="${task.id}"
-                                        title="Click to add due date"
-                                        aria-label="Add due date">
-                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                    + Add due date
-                                </button>
-                            `}
-                            
-                            ${task.assigned_to_id ? `
-                                <button class="assignee-badge"
-                                        data-task-id="${task.id}"
-                                        data-user-id="${task.assigned_to_id}"
-                                        title="Click to change assignee"
-                                        aria-label="Change assignee. Current: ${task.assigned_to_id === window.currentUserId ? 'Me' : 'Assigned'}">
-                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                                    </svg>
-                                    ${task.assigned_to_id === window.currentUserId ? 'Me' : 'Assigned'}
-                                </button>
-                            ` : `
-                                <button class="assignee-badge assignee-add"
-                                        data-task-id="${task.id}"
-                                        title="Click to assign"
-                                        aria-label="Assign this task">
-                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                                    </svg>
-                                    + Assign
-                                </button>
-                            `}
-                            
+                                </span>
+                            ` : ''}
                             ${isSnoozed ? `
                                 <span class="snoozed-badge">
                                     <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -363,94 +301,42 @@ class TaskBootstrap {
                                     Snoozed
                                 </span>
                             ` : ''}
-                        </div>
-                        
-                        <!-- Labels Section -->
-                        <div class="task-labels mt-2">
                             ${task.labels && task.labels.length > 0 ? `
-                                ${task.labels.slice(0, 3).map(label => `
-                                    <span class="label-badge" data-label="${this.escapeHtml(label)}">
-                                        ${this.escapeHtml(label)}
-                                        <button class="label-remove-btn" data-task-id="${task.id}" data-label="${this.escapeHtml(label)}" title="Remove label">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M18 6L6 18M6 6l12 12"/>
-                                            </svg>
-                                        </button>
-                                    </span>
-                                `).join('')}
-                                ${task.labels.length > 3 ? `
-                                    <span class="label-badge label-count" title="${task.labels.slice(3).join(', ')}">+${task.labels.length - 3}</span>
-                                ` : ''}
-                            ` : ''}
-                            <button class="label-add-btn ${task.labels && task.labels.length > 0 ? '' : 'label-add-btn-empty'}" data-task-id="${task.id}" title="Add label">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                                </svg>
-                                ${task.labels && task.labels.length > 0 ? '+' : 'Add label'}
-                            </button>
+                                <div class="task-labels">
+                                    ${task.labels.slice(0, 3).map(label => `
+                                        <span class="label-badge" data-label="${this.escapeHtml(label)}">
+                                            ${this.escapeHtml(label)}
+                                            <button class="label-remove-btn" data-task-id="${task.id}" data-label="${this.escapeHtml(label)}" title="Remove label">
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M18 6L6 18M6 6l12 12"/>
+                                                </svg>
+                                            </button>
+                                        </span>
+                                    `).join('')}
+                                    ${task.labels.length > 3 ? `
+                                        <span class="label-badge label-count" title="${task.labels.slice(3).join(', ')}">+${task.labels.length - 3}</span>
+                                    ` : ''}
+                                    <button class="label-add-btn" data-task-id="${task.id}" title="Add label">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M12 5v14m-7-7h14"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            ` : `
+                                <div class="task-labels">
+                                    <button class="label-add-btn label-add-btn-empty" data-task-id="${task.id}" title="Add label">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                                        </svg>
+                                        Add label
+                                    </button>
+                                </div>
+                            `}
                         </div>
                     </div>
-                    
-                    <!-- Always-Visible Action Toolbar -->
-                    ${!isAIProposal ? `
-                        <div class="task-actions flex gap-1 items-center flex-shrink-0">
-                            ${hasTranscriptLink ? `
-                                <a href="${transcriptHref}" 
-                                   class="transcript-link-badge task-action-btn" 
-                                   data-task-id="${task.id}"
-                                   title="Jump to transcript">
-                                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/>
-                                    </svg>
-                                </a>
-                            ` : ''}
-                            <button class="task-action-btn task-merge-btn" title="Merge with another task">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-                                </svg>
-                            </button>
-                            <button class="task-action-btn task-snooze-btn" title="Snooze task">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                </svg>
-                            </button>
-                            <button class="task-action-btn task-delete-btn" title="Delete task">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                </svg>
-                            </button>
-                        </div>
-                    ` : `
-                        <div class="ai-proposal-actions flex gap-2">
-                            <button class="btn-accept-proposal" data-task-id="${task.id}">
-                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                </svg>
-                                Accept
-                            </button>
-                            <button class="btn-reject-proposal" data-task-id="${task.id}">
-                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                </svg>
-                                Reject
-                            </button>
-                        </div>
-                    `}
                 </div>
             </div>
         `;
-    }
-
-    /**
-     * Get CSS class based on confidence score (CROWN⁴.5 Event #3)
-     * @param {number} confidence - Confidence score (0-1)
-     * @returns {string} CSS class name
-     */
-    getConfidenceClass(confidence) {
-        if (confidence >= 0.8) return 'confidence-high';
-        if (confidence >= 0.6) return 'confidence-medium';
-        if (confidence >= 0.4) return 'confidence-low';
-        return 'confidence-very-low';
     }
 
     /**

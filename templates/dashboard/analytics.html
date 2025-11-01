@@ -653,51 +653,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<!-- CROWN⁵+ Analytics Modules -->
-<script type="module" nonce="{{ g.csp_nonce }}">
-    import { Crown5Analytics } from '/static/js/analytics-crown5.js';
-    
-    // Initialize when DOM ready
-    window.addEventListener('DOMContentLoaded', () => {
-        const workspaceId = {{ current_user.workspace_id }};
-        const userId = {{ current_user.id }};
-        
-        // Store globally for use by all modules
-        window.currentWorkspaceId = workspaceId;
-        window.currentUserId = userId;
-        
-        console.log(`🔧 CROWN⁵+ Initialization: workspace_id=${workspaceId}, user_id=${userId}`);
-        
-        // Connect to analytics namespace
-        console.log('🔌 Connecting to /analytics namespace...');
-        const analyticsSocket = io('/analytics');
-        
-        analyticsSocket.on('connect', () => {
-            console.log('✅ Analytics WebSocket connected (socket.id:', analyticsSocket.id + ')');
-            console.log('🚀 Initializing Crown5Analytics...');
-            
-            // Initialize CROWN⁵+ analytics
-            window.crown5Analytics = new Crown5Analytics(workspaceId, analyticsSocket);
-            
-            // Expose telemetry for debugging
-            window.getAnalyticsTelemetry = () => {
-                return window.crown5Analytics?.getTelemetry();
-            };
-        });
-        
-        analyticsSocket.on('disconnect', () => {
-            console.warn('⚠️ Analytics WebSocket disconnected');
-        });
-        
-        analyticsSocket.on('connect_error', (error) => {
-            console.error('❌ Analytics WebSocket connection error:', error);
-        });
-        
-        analyticsSocket.on('error', (error) => {
-            console.error('❌ Analytics WebSocket error:', error);
-        });
-    });
-</script>
+<script src="/static/js/analytics.js" nonce="{{ g.csp_nonce }}"></script>
 
 <script nonce="{{ g.csp_nonce }}">
 /**

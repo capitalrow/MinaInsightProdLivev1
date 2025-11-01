@@ -101,14 +101,6 @@ class AnalyticsService:
                         },
                         workspace_id=meeting.workspace_id
                     )
-                    
-                    # CROWN⁵+: Broadcast analytics delta for real-time KPI updates
-                    from services.analytics_delta_service import analytics_delta_service
-                    analytics_delta_service.broadcast_kpi_delta_on_meeting_completion(
-                        meeting_id=meeting.id,
-                        workspace_id=meeting.workspace_id,
-                        user_id=None
-                    )
                 except Exception as e:
                     logger.warning(f"Failed to get workspace stats for analytics_refresh: {e}")
                     # Fallback to basic broadcast without KPIs
