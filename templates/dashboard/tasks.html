@@ -1212,6 +1212,19 @@
                 ></textarea>
             </div>
             
+            <!-- AI Prediction Suggestions (CROWN⁴.5) -->
+            <div id="ai-prediction-banner" class="ai-prediction-banner" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: white;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                    </svg>
+                    <strong style="font-size: 14px;">AI Suggestions</strong>
+                </div>
+                <div id="ai-prediction-content" style="font-size: 13px; line-height: 1.5; opacity: 0.95;">
+                    <!-- Predictions will be rendered here -->
+                </div>
+            </div>
+            
             <!-- Priority -->
             <div class="task-form-group">
                 <label class="task-form-label" for="task-priority">Priority</label>
@@ -1761,6 +1774,7 @@
 <script src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-idle-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/predictive-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-websocket-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-virtual-list.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-proposal-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -1796,8 +1810,8 @@
             const check = () => {
                 if (window.taskCache && window.taskBootstrap && window.optimisticUI && 
                     window.offlineQueue && window.multiTabSync && window.idleSyncService && 
-                    window.tasksWS && window.taskVirtualList && window.taskShortcuts && 
-                    window.TaskInlineEditing) {
+                    window.predictiveEngine && window.tasksWS && window.taskVirtualList && 
+                    window.taskShortcuts && window.TaskInlineEditing) {
                     resolve();
                 } else {
                     setTimeout(check, 50);
@@ -1809,6 +1823,10 @@
     
     await waitForModules();
     console.log('✅ All CROWN⁴.5 modules loaded');
+    
+    // Initialize PredictiveEngine
+    await window.predictiveEngine.init();
+    console.log('🤖 PredictiveEngine initialized');
     
     window.taskInlineEditing = new window.TaskInlineEditing(window.optimisticUI);
     console.log('✏️ Inline editing initialized');
@@ -1883,6 +1901,89 @@
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && modalOverlay.classList.contains('active')) {
             closeTaskModal();
+        }
+    });
+    
+    // CROWN⁴.5 Predictive suggestions on task title/description input
+    let predictionDebounceTimer = null;
+    const titleInput = document.getElementById('task-title');
+    const descInput = document.getElementById('task-description');
+    const predictionBanner = document.getElementById('ai-prediction-banner');
+    const predictionContent = document.getElementById('ai-prediction-content');
+    const prioritySelect = document.getElementById('task-priority');
+    const dueDateInput = document.getElementById('task-due-date');
+    
+    async function showPredictions() {
+        const title = titleInput.value.trim();
+        const description = descInput.value.trim();
+        
+        if (!title || !window.predictiveEngine) {
+            predictionBanner.style.display = 'none';
+            return;
+        }
+        
+        const predictions = await window.predictiveEngine.predict({ title, description });
+        console.log('🤖 Predictive suggestions:', predictions);
+        
+        // Render predictions in banner
+        if (predictions && (predictions.priority || predictions.dueDate || predictions.labels?.length)) {
+            let html = '<div>';
+            
+            if (predictions.priority) {
+                const confidence = Math.round((predictions.priority_confidence || 0.7) * 100);
+                html += `<div style="margin-bottom: 6px;">
+                    📊 <strong>Priority:</strong> ${predictions.priority.toUpperCase()} 
+                    <span style="opacity: 0.8; font-size: 12px;">(${confidence}% confident)</span>
+                    <button onclick="document.getElementById('task-priority').value='${predictions.priority}'; return false;" 
+                            style="margin-left: 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                        Apply
+                    </button>
+                </div>`;
+            }
+            
+            if (predictions.dueDate) {
+                const confidence = Math.round((predictions.due_date_confidence || 0.7) * 100);
+                const dateStr = new Date(predictions.dueDate).toLocaleDateString();
+                html += `<div style="margin-bottom: 6px;">
+                    📅 <strong>Due Date:</strong> ${dateStr} 
+                    <span style="opacity: 0.8; font-size: 12px;">(${confidence}% confident)</span>
+                    <button onclick="document.getElementById('task-due-date').value='${predictions.dueDate}'; return false;" 
+                            style="margin-left: 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                        Apply
+                    </button>
+                </div>`;
+            }
+            
+            if (predictions.labels?.length) {
+                html += `<div>🏷️ <strong>Suggested Labels:</strong> ${predictions.labels.join(', ')}</div>`;
+            }
+            
+            if (predictions.reasoning) {
+                html += `<div style="margin-top: 8px; opacity: 0.85; font-size: 12px; font-style: italic;">${predictions.reasoning}</div>`;
+            }
+            
+            html += '</div>';
+            predictionContent.innerHTML = html;
+            predictionBanner.style.display = 'block';
+            
+            // Telemetry for predictions shown
+            if (window.CROWNTelemetry && window.CROWNTelemetry.recordMetric) {
+                window.CROWNTelemetry.recordMetric('prediction_shown_in_ui', 1);
+                window.CROWNTelemetry.recordMetric('prediction_confidence_priority', predictions.priority_confidence || 0);
+                window.CROWNTelemetry.recordMetric('prediction_confidence_due_date', predictions.due_date_confidence || 0);
+            }
+        } else {
+            predictionBanner.style.display = 'none';
+        }
+    }
+    
+    // Debounced prediction on input
+    [titleInput, descInput].forEach(input => {
+        if (input) {
+            input.addEventListener('input', () => {
+                clearTimeout(predictionDebounceTimer);
+                predictionDebounceTimer = setTimeout(showPredictions, 500);
+            });
         }
     });
     

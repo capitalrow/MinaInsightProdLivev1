@@ -585,9 +585,14 @@ class OptimisticUI {
         const taskHTML = window.taskBootstrap.renderTaskCard(task, 0);
         container.insertAdjacentHTML('afterbegin', taskHTML);
 
-        // Add animation (CROWN⁴.5 QuietStateManager)
+        // Add CROWN⁴.5 emotional pop-in animation
         const card = container.querySelector(`[data-task-id="${task.id}"]`);
-        if (card && window.quietStateManager) {
+        if (card && window.emotionalAnimations) {
+            window.emotionalAnimations.popIn(card, {
+                emotion_cue: 'task_created'
+            });
+        } else if (card && window.quietStateManager) {
+            // Fallback to QuietStateManager
             window.quietStateManager.queueAnimation((setCancelHandler) => {
                 card.classList.add('optimistic-create');
                 card.style.animation = 'slideInFromTop 0.3s ease-out';
@@ -598,6 +603,7 @@ class OptimisticUI {
                 });
             }, { duration: 300, priority: 7, metadata: { type: 'task_create', task_id: task.id } });
         } else if (card) {
+            // Final fallback
             card.classList.add('optimistic-create');
             card.style.animation = 'slideInFromTop 0.3s ease-out';
         }

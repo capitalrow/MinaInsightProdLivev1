@@ -6,12 +6,13 @@
 
 class IdleSyncService {
     constructor() {
-        this.intervalMs = 30000; // 30 seconds
+        this.baseIntervalMs = 30000; // 30 seconds
+        this.currentIntervalMs = 30000; // Current interval (grows with failures)
+        this.maxIntervalMs = 300000; // Max 5 minutes
         this.intervalId = null;
         this.running = false;
         this.lastSyncTimestamp = null;
         this.consecutiveFailures = 0;
-        this.maxConsecutiveFailures = 3;
         this.userActivityDetected = false;
         this.activityTimeout = null;
         this.paused = false;
@@ -28,7 +29,7 @@ class IdleSyncService {
             return;
         }
 
-        console.log(`🔄 Starting idle sync (every ${this.intervalMs / 1000}s)`);
+        console.log(`🔄 Starting idle sync (every ${this.currentIntervalMs / 1000}s)`);
         this.running = true;
         this.paused = false;
 
@@ -36,9 +37,23 @@ class IdleSyncService {
         this._performSync();
 
         // Schedule periodic syncs
-        this.intervalId = setInterval(() => {
-            this._performSync();
-        }, this.intervalMs);
+        this._scheduleNextSync();
+    }
+
+    /**
+     * Schedule next sync with current interval
+     */
+    _scheduleNextSync() {
+        if (this.intervalId) {
+            clearTimeout(this.intervalId);
+        }
+
+        if (this.running) {
+            this.intervalId = setTimeout(() => {
+                this._performSync();
+                this._scheduleNextSync();
+            }, this.currentIntervalMs);
+        }
     }
 
     /**
@@ -53,7 +68,7 @@ class IdleSyncService {
         this.running = false;
 
         if (this.intervalId) {
-            clearInterval(this.intervalId);
+            clearTimeout(this.intervalId);
             this.intervalId = null;
         }
     }
@@ -105,6 +120,7 @@ class IdleSyncService {
         window.addEventListener('online', () => {
             console.log('🌐 Connection restored - triggering sync');
             this.consecutiveFailures = 0;
+            this._resetInterval();
             this._performSync({ force: true });
         });
     }
@@ -147,12 +163,6 @@ class IdleSyncService {
             return;
         }
 
-        // Skip if too many consecutive failures (unless forced)
-        if (this.consecutiveFailures >= this.maxConsecutiveFailures && !force) {
-            console.log('❌ Skipping sync - too many failures');
-            return;
-        }
-
         const startTime = performance.now();
         console.log('🔄 [Idle Sync] Starting background sync...');
 
@@ -188,6 +198,7 @@ class IdleSyncService {
             // Update metadata
             this.lastSyncTimestamp = Date.now();
             this.consecutiveFailures = 0;
+            this._resetInterval(); // Reset to base interval on success
 
             if (window.taskCache) {
                 await window.taskCache.setMetadata('last_idle_sync', this.lastSyncTimestamp);
@@ -200,6 +211,7 @@ class IdleSyncService {
             if (window.CROWNTelemetry) {
                 window.CROWNTelemetry.recordMetric('idle_sync_ms', syncTime);
                 window.CROWNTelemetry.recordMetric('idle_sync_task_count', serverTasks.length);
+                window.CROWNTelemetry.recordMetric('idle_sync_interval_ms', this.currentIntervalMs);
             }
 
             // Emit success event
@@ -215,20 +227,39 @@ class IdleSyncService {
             this.consecutiveFailures++;
             console.error(`❌ [Idle Sync] Failed (attempt ${this.consecutiveFailures}):`, error);
 
+            // Apply exponential backoff: 30s → 60s → 120s → 240s → 300s (max)
+            this._applyBackoff();
+
             // Emit error event
             window.dispatchEvent(new CustomEvent('tasks:idle_sync:error', {
                 detail: {
                     error: error.message,
-                    attempts: this.consecutiveFailures
+                    attempts: this.consecutiveFailures,
+                    next_retry_ms: this.currentIntervalMs
                 }
             }));
 
-            // Exponential backoff: 30s, 60s, 120s
-            if (this.consecutiveFailures < this.maxConsecutiveFailures) {
-                const backoffMs = this.intervalMs * Math.pow(2, this.consecutiveFailures - 1);
-                console.log(`⏰ Retrying in ${backoffMs / 1000}s...`);
-            }
+            console.log(`⏰ Next retry in ${this.currentIntervalMs / 1000}s (attempt ${this.consecutiveFailures})`);
         }
+    }
+
+    /**
+     * Apply exponential backoff to interval
+     * Progression: 30s → 60s → 120s → 240s → 300s (max)
+     */
+    _applyBackoff() {
+        this.currentIntervalMs = Math.min(
+            this.baseIntervalMs * Math.pow(2, this.consecutiveFailures),
+            this.maxIntervalMs
+        );
+    }
+
+    /**
+     * Reset interval to base value
+     */
+    _resetInterval() {
+        this.currentIntervalMs = this.baseIntervalMs;
+        console.log(`✅ Sync interval reset to ${this.currentIntervalMs / 1000}s`);
     }
 
     /**
