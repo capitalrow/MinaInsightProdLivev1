@@ -52,26 +52,12 @@ class MeetingLifecycleService:
                 existing_meeting = db.session.get(Meeting, session.meeting_id)
                 return existing_meeting
             
-            # Get workspace_id - if session doesn't have one, assign default workspace (id=1)
+            # 🔒 CROWN¹⁰ Fix: Require workspace_id - no silent fallbacks!
             workspace_id = session.workspace_id
             if not workspace_id:
-                # Get default workspace or create one
-                from models.workspace import Workspace
-                
-                default_workspace = db.session.scalar(select(Workspace).limit(1))
-                if not default_workspace:
-                    # Create a default workspace if none exists
-                    default_workspace = Workspace(
-                        name="Default Workspace",
-                        description="Auto-created default workspace for meetings"
-                    )
-                    db.session.add(default_workspace)
-                    db.session.flush()
-                
-                workspace_id = default_workspace.id
-                # Update session with workspace_id for future reference
-                session.workspace_id = workspace_id
-                logger.info(f"Assigned default workspace {workspace_id} to session {session_id}")
+                error_msg = f"Session {session_id} missing workspace_id - cannot create meeting. Sessions must be created with workspace_id."
+                logger.error(f"❌ {error_msg}")
+                raise ValueError(error_msg)
             
             # Calculate meeting duration from segments
             segments = db.session.scalars(

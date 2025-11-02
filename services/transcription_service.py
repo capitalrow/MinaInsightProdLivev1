@@ -494,9 +494,16 @@ class TranscriptionService:
         logger.info(f"Ended transcription session (sync): {session_id}")
         return final_stats
 
-    def _save_transcription_text(self, session_id: str, text: str, confidence: float = 0.0) -> None:
+    def _save_transcription_text(self, session_id: str, text: str, confidence: float = 0.0, workspace_id: int = None, user_id: int = None) -> None:
         """
         Save transcription text into the database and update session statistics.
+        
+        Args:
+            session_id: External session identifier
+            text: Transcribed text
+            confidence: Transcription confidence score
+            workspace_id: Required workspace ID for proper data scoping
+            user_id: Required user ID for session ownership
         """
         try:
             from models.session import Session
@@ -512,14 +519,24 @@ class TranscriptionService:
             stmt = select(Session).filter_by(external_id=session_id)
             db_session = db.session.execute(stmt).scalar_one_or_none()
             if not db_session:
+                # 🔒 CROWN¹⁰ Fix: Require workspace_id for proper data scoping
+                if workspace_id is None:
+                    logger.error(f"❌ Cannot create session without workspace_id: {session_id}")
+                    raise ValueError("workspace_id is required when creating new sessions")
+                if user_id is None:
+                    logger.warning(f"⚠️ Creating session without user_id: {session_id}")
+                
                 db_session = Session(
                     external_id=session_id,
-                    title="Transcription Session",
+                    title="Live Transcription Session",
                     status="active",
-                    created_at=datetime.utcnow(),
+                    workspace_id=workspace_id,  # ✅ Always set workspace
+                    user_id=user_id,  # ✅ Track session owner
+                    started_at=datetime.utcnow(),
                 )
                 db.session.add(db_session)
                 db.session.commit()
+                logger.info(f"✅ Created session {session_id} in workspace {workspace_id} for user {user_id}")
 
             # ✅ 2. Create new segment/transcript entry
             segment = Segment(
