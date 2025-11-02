@@ -2384,6 +2384,7 @@
             if (taskIds.length === 0) return;
             
             console.log(`✅ Bulk completing ${taskIds.length} tasks`);
+            console.log('📋 Task IDs to complete:', taskIds);
             
             try {
                 // Optimistic UI: mark all as completed
@@ -2480,6 +2481,7 @@
             }
             
             console.log(`🗑️ Bulk deleting ${taskIds.length} tasks`);
+            console.log('📋 Task IDs to delete:', taskIds);
             
             // Save original cards for rollback
             const savedCards = new Map();
@@ -2572,6 +2574,7 @@
             if (!label || label.trim() === '') return;
             
             console.log(`🏷️ Bulk adding label "${label}" to ${taskIds.length} tasks`);
+            console.log('📋 Task IDs to label:', taskIds);
             
             try {
                 // Optimistic UI: add label to all cards
