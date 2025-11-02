@@ -108,6 +108,17 @@ def get_sessions_header():
     """
     try:
         workspace_id = current_user.workspace_id
+        
+        # Handle case where user has no workspace
+        if workspace_id is None:
+            return jsonify({
+                'total': 0,
+                'live': 0,
+                'archived': 0,
+                'last_event_id': 0,
+                'etag': 'w0:c0'
+            })
+        
         range_param = request.args.get('range', 'last30')
         show_archived = request.args.get('archived', 'false').lower() == 'true'
         
@@ -169,6 +180,16 @@ def get_sessions_diff():
     """
     try:
         workspace_id = current_user.workspace_id
+        
+        # Handle case where user has no workspace
+        if workspace_id is None:
+            return jsonify({
+                'upserts': [],
+                'deletes': [],
+                'cursor': None,
+                'last_event_id': 0
+            })
+        
         range_param = request.args.get('range', 'last30')
         sort_order = request.args.get('sort', 'newest')
         cursor = request.args.get('cursor')
