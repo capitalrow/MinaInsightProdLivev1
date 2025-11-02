@@ -229,6 +229,7 @@ class TaskClusteringManager {
             <div class="task-card clustered" data-task-id="${task.id}" style="margin: 0;">
                 <div class="task-card-header">
                     <div class="task-checkbox-wrapper">
+                        <input type="checkbox" class="bulk-select-checkbox" data-task-id="${task.id}">
                         <input type="checkbox" 
                                class="task-checkbox" 
                                ${isCompleted ? 'checked' : ''}
@@ -290,7 +291,7 @@ class TaskClusteringManager {
         // Task clicks
         document.querySelectorAll('.task-card.clustered').forEach(card => {
             card.addEventListener('click', (e) => {
-                if (e.target.classList.contains('task-checkbox')) return;
+                if (e.target.classList.contains('task-checkbox') || e.target.classList.contains('bulk-select-checkbox')) return;
                 
                 const taskId = card.dataset.taskId;
                 window.dispatchEvent(new CustomEvent('task:clicked', {
