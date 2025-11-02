@@ -60,9 +60,10 @@ def billing():
             {
                 'id': 'pro',
                 'name': 'Pro',
-                'price': 19,
+                'price': 12,
+                'currency': 'GBP',
                 'billing_period': 'month',
-                'price_id': 'price_pro_monthly',
+                'price_id': 'price_1SP1CuLJSqSqVnk8BxVR6SK',
                 'features': [
                     'Unlimited meetings',
                     'Advanced AI insights',
@@ -77,9 +78,10 @@ def billing():
             {
                 'id': 'team',
                 'name': 'Team',
-                'price': 49,
+                'price': 30,
+                'currency': 'GBP',
                 'billing_period': 'month',
-                'price_id': 'price_team_monthly',
+                'price_id': 'price_1SP1DrLJSqSqVnkO2sJesmM',
                 'features': [
                     'Everything in Pro',
                     'Team workspaces',
