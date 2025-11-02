@@ -1532,16 +1532,36 @@
     /**
      * Setup filter tab handlers (CROWN⁴.5 Architecture)
      * Proper implementation: Update viewState → Fetch filtered tasks → Re-render
+     * CRITICAL FIX: Disable clustering mode when switching filter tabs
      */
     function setupFilterTabs() {
         document.querySelectorAll('.filter-tab').forEach(tab => {
             tab.addEventListener('click', async () => {
+                if (tab.classList.contains('cluster-toggle')) {
+                    return;
+                }
+                
                 const filter = tab.dataset.filter;
                 
                 console.log(`🔍 Filter changed to: ${filter}`);
                 
+                // CRITICAL FIX: Disable clustering mode when switching to filter tabs
+                if (window.taskClusteringManager && window.taskClusteringManager.enabled) {
+                    console.log('📋 Disabling clustering mode (switching to filter view)');
+                    window.taskClusteringManager.enabled = false;
+                    
+                    const clusterToggle = document.querySelector('.cluster-toggle');
+                    if (clusterToggle) {
+                        clusterToggle.classList.remove('active');
+                    }
+                }
+                
                 // Update active tab visual state
-                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.filter-tab').forEach(t => {
+                    if (!t.classList.contains('cluster-toggle')) {
+                        t.classList.remove('active');
+                    }
+                });
                 tab.classList.add('active');
                 
                 // Update viewState in cache (persist filter preference)
@@ -2408,6 +2428,11 @@
                 
             } catch (error) {
                 console.error('❌ Bulk complete failed:', error);
+                console.error('Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                });
                 
                 // Rollback optimistic UI
                 taskIds.forEach(taskId => {
@@ -2476,6 +2501,11 @@
                 
             } catch (error) {
                 console.error('❌ Bulk delete failed:', error);
+                console.error('Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                });
                 
                 // Rollback: restore cards
                 const container = document.getElementById('tasks-list-container');
@@ -2483,7 +2513,12 @@
                     container.appendChild(card);
                 });
                 
-                alert('Failed to delete tasks. Please try again.');
+                const errorMsg = error.message || 'Failed to delete tasks. Please try again.';
+                alert(errorMsg);
+                
+                if (window.showToast) {
+                    window.showToast(errorMsg, 'error');
+                }
             }
         });
     }
@@ -2553,6 +2588,11 @@
                 
             } catch (error) {
                 console.error('❌ Bulk label failed:', error);
+                console.error('Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                });
                 
                 // Rollback: remove added labels
                 taskIds.forEach(taskId => {
@@ -2566,7 +2606,12 @@
                     }
                 });
                 
-                alert('Failed to add labels. Please try again.');
+                const errorMsg = error.message || 'Failed to add labels. Please try again.';
+                alert(errorMsg);
+                
+                if (window.showToast) {
+                    window.showToast(errorMsg, 'error');
+                }
             }
         });
     }
