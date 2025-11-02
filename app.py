@@ -825,6 +825,7 @@ def create_app() -> Flask:
     try:
         from routes.api_sessions_crown import api_sessions_crown_bp
         app.register_blueprint(api_sessions_crown_bp)
+        csrf.exempt(api_sessions_crown_bp)
         app.logger.info("✅ CROWN 4.6 Sessions API registered (delta sync)")
     except Exception as e:
         app.logger.error(f"Failed to register CROWN Sessions API: {e}")
