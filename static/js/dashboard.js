@@ -414,6 +414,420 @@ class MinaDashboard {
                 }
             });
         }
+        
+        // CROWN ¹⁰ WebSocket Event Listeners
+        this.setupWebSocketListeners();
+    }
+    
+    /**
+     * CROWN ¹⁰ Cross-Surface Event Synchronization
+     * Wire WebSocket listeners for real-time dashboard updates
+     */
+    setupWebSocketListeners() {
+        if (!window.socket) {
+            console.warn('[Dashboard] Socket.IO not available, skipping WebSocket listeners');
+            return;
+        }
+        
+        const dashboardSocket = window.socket.io(`/dashboard`, {
+            transports: ['websocket', 'polling']
+        });
+        
+        // Store socket reference
+        this.socket = dashboardSocket;
+        
+        // Connection events
+        dashboardSocket.on('connect', () => {
+            console.log('✅ Dashboard WebSocket connected');
+            
+            // Join workspace room for isolated broadcasts
+            dashboardSocket.emit('join_workspace', {
+                workspace_id: this.workspaceId
+            });
+            
+            // Request event replay to catch up
+            const lastSequence = this.getLastSequenceNum();
+            dashboardSocket.emit('request_event_replay', {
+                workspace_id: this.workspaceId,
+                last_sequence_num: lastSequence,
+                namespace: '/dashboard',
+                is_initial_sync: lastSequence === 0
+            });
+        });
+        
+        dashboardSocket.on('disconnect', () => {
+            console.warn('⚠️ Dashboard WebSocket disconnected');
+        });
+        
+        dashboardSocket.on('error', (error) => {
+            console.error('❌ Dashboard WebSocket error:', error);
+        });
+        
+        // Event replay handler
+        dashboardSocket.on('event_replay', async (data) => {
+            console.log(`📦 Event replay received: ${data.count} events (seq ${data.last_sequence_num})`);
+            
+            if (data.events && data.events.length > 0) {
+                for (const event of data.events) {
+                    await this.handleWebSocketEvent(event);
+                }
+                
+                // Update last sequence number
+                this.saveLastSequenceNum(data.last_sequence_num);
+            }
+        });
+        
+        // CROWN ¹⁰ Event Handlers: SESSION/MEETING LIFECYCLE
+        dashboardSocket.on('session_update:created', async (event) => {
+            console.log('🆕 New meeting created:', event);
+            await this.handleSessionCreated(event);
+        });
+        
+        dashboardSocket.on('meeting_update', async (event) => {
+            console.log('📝 Meeting updated:', event);
+            await this.handleMeetingUpdate(event);
+        });
+        
+        dashboardSocket.on('session_refined_ready', async (event) => {
+            console.log('✨ Meeting refined:', event);
+            await this.handleSessionRefined(event);
+        });
+        
+        // CROWN ¹⁰ Event Handlers: ANALYTICS
+        dashboardSocket.on('analytics_refresh', async (event) => {
+            console.log('📊 Analytics refresh:', event);
+            await this.handleAnalyticsRefresh(event);
+        });
+        
+        dashboardSocket.on('analytics_update', async (event) => {
+            console.log('📈 Analytics update:', event);
+            await this.handleAnalyticsUpdate(event);
+        });
+        
+        // CROWN ¹⁰ Event Handlers: TASKS
+        dashboardSocket.on('task_update', async (event) => {
+            console.log('✓ Task updated:', event);
+            await this.handleTaskUpdate(event);
+        });
+        
+        dashboardSocket.on('tasks_generation', async (event) => {
+            console.log('📋 Tasks generated:', event);
+            await this.handleTasksGenerated(event);
+        });
+        
+        // CROWN ¹⁰ Event Handlers: SYSTEM
+        dashboardSocket.on('dashboard_idle_sync', async (event) => {
+            console.log('🔄 Idle sync triggered:', event);
+            await this.handleIdleSync(event);
+        });
+        
+        dashboardSocket.on('cache_invalidate', async (event) => {
+            console.log('🗑️ Cache invalidated:', event);
+            await this.handleCacheInvalidate(event);
+        });
+        
+        console.log('✅ Dashboard WebSocket listeners registered');
+    }
+    
+    /**
+     * Handle new meeting created event
+     */
+    async handleSessionCreated(event) {
+        const { data, checksum } = event;
+        
+        // Invalidate meetings cache
+        if (this.cache) {
+            await this.cache.invalidate('meetings');
+        }
+        
+        // Reload meetings list with calm pulse animation
+        await this.loadRecentMeetings();
+        
+        // Update stats
+        await this.loadStats();
+        
+        // Show notification
+        this.showNotification('New meeting recorded', 'success');
+        
+        // Track telemetry
+        if (this.telemetry) {
+            this.telemetry.recordEvent('session_created', {
+                event_id: event.event_id,
+                latency_ms: Date.now() - new Date(event.timestamp).getTime()
+            });
+        }
+    }
+    
+    /**
+     * Handle meeting update event
+     */
+    async handleMeetingUpdate(event) {
+        const { data } = event;
+        
+        // Invalidate cache
+        if (this.cache) {
+            await this.cache.invalidate('meetings');
+        }
+        
+        // Reload meetings
+        await this.loadRecentMeetings();
+        
+        // Track telemetry
+        if (this.telemetry) {
+            this.telemetry.recordEvent('meeting_update', {
+                event_id: event.event_id,
+                latency_ms: Date.now() - new Date(event.timestamp).getTime()
+            });
+        }
+    }
+    
+    /**
+     * Handle session refined event (transcript finalized + insights generated)
+     */
+    async handleSessionRefined(event) {
+        const { data } = event;
+        
+        // Invalidate cache
+        if (this.cache) {
+            await this.cache.invalidate('meetings');
+            await this.cache.invalidate('analytics');
+        }
+        
+        // Reload with calm flip animation
+        await this.loadRecentMeetings();
+        await this.loadAnalyticsOverview();
+        
+        // Show notification
+        this.showNotification('Meeting insights ready', 'success');
+    }
+    
+    /**
+     * Handle analytics refresh event
+     */
+    async handleAnalyticsRefresh(event) {
+        const { data } = event;
+        
+        // Invalidate analytics cache
+        if (this.cache) {
+            await this.cache.invalidate('analytics');
+        }
+        
+        // Reload analytics with pulse animation
+        await this.loadAnalyticsOverview();
+        
+        // Track telemetry
+        if (this.telemetry) {
+            this.telemetry.recordEvent('analytics_refresh', {
+                event_id: event.event_id,
+                latency_ms: Date.now() - new Date(event.timestamp).getTime()
+            });
+        }
+    }
+    
+    /**
+     * Handle analytics update event (KPI changes)
+     */
+    async handleAnalyticsUpdate(event) {
+        const { data } = event;
+        
+        // Apply delta update directly without full reload
+        if (data.delta) {
+            this.applyAnalyticsDelta(data.delta);
+        } else {
+            // Full reload if no delta
+            await this.loadAnalyticsOverview();
+        }
+    }
+    
+    /**
+     * Apply analytics delta for efficient updates
+     */
+    applyAnalyticsDelta(delta) {
+        // Update individual KPIs without reloading entire dashboard
+        if (delta.total_meetings !== undefined) {
+            this.updateStatCard('total-meetings', delta.total_meetings);
+        }
+        if (delta.total_tasks !== undefined) {
+            this.updateStatCard('total-tasks', delta.total_tasks);
+        }
+        if (delta.completion_rate !== undefined) {
+            this.updateStatCard('task-completion-rate', `${delta.completion_rate}%`);
+        }
+        
+        console.log('📊 Analytics delta applied:', delta);
+    }
+    
+    /**
+     * Handle task update event
+     */
+    async handleTaskUpdate(event) {
+        const { data } = event;
+        
+        // Invalidate tasks cache
+        if (this.cache) {
+            await this.cache.invalidate('tasks');
+        }
+        
+        // Reload tasks and stats
+        await this.loadMyTasks();
+        await this.loadStats();
+        
+        // Track telemetry
+        if (this.telemetry) {
+            this.telemetry.recordEvent('task_update', {
+                event_id: event.event_id,
+                latency_ms: Date.now() - new Date(event.timestamp).getTime()
+            });
+        }
+    }
+    
+    /**
+     * Handle tasks generated event
+     */
+    async handleTasksGenerated(event) {
+        const { data } = event;
+        
+        // Invalidate caches
+        if (this.cache) {
+            await this.cache.invalidate('tasks');
+            await this.cache.invalidate('analytics');
+        }
+        
+        // Reload tasks and stats
+        await this.loadMyTasks();
+        await this.loadStats();
+        
+        // Show notification
+        const taskCount = data.tasks?.length || 0;
+        this.showNotification(`${taskCount} tasks generated`, 'success');
+    }
+    
+    /**
+     * Handle idle sync event (30s reconciliation)
+     */
+    async handleIdleSync(event) {
+        const { data } = event;
+        
+        // Check checksum to determine if sync needed
+        const currentChecksum = await this.getCurrentChecksum();
+        
+        if (data.checksum && data.checksum !== currentChecksum) {
+            console.log('🔄 Checksum mismatch, syncing...');
+            
+            // Invalidate all caches
+            if (this.cache) {
+                await this.cache.invalidate('meetings');
+                await this.cache.invalidate('tasks');
+                await this.cache.invalidate('analytics');
+            }
+            
+            // Full reload
+            await this.loadDashboardData();
+        }
+    }
+    
+    /**
+     * Handle cache invalidate event
+     */
+    async handleCacheInvalidate(event) {
+        const { data } = event;
+        const cacheKey = data.cache_key || 'all';
+        
+        if (this.cache) {
+            if (cacheKey === 'all') {
+                await this.cache.clear();
+            } else {
+                await this.cache.invalidate(cacheKey);
+            }
+        }
+        
+        // Reload affected data
+        if (cacheKey === 'meetings' || cacheKey === 'all') {
+            await this.loadRecentMeetings();
+        }
+        if (cacheKey === 'tasks' || cacheKey === 'all') {
+            await this.loadMyTasks();
+        }
+        if (cacheKey === 'analytics' || cacheKey === 'all') {
+            await this.loadAnalyticsOverview();
+        }
+    }
+    
+    /**
+     * Generic WebSocket event handler
+     */
+    async handleWebSocketEvent(event) {
+        // Update last sequence number
+        if (event.sequence_num) {
+            this.saveLastSequenceNum(event.sequence_num);
+        }
+        
+        // Route to specific handler based on event type
+        const handlers = {
+            'session_update:created': () => this.handleSessionCreated(event),
+            'meeting_update': () => this.handleMeetingUpdate(event),
+            'session_refined_ready': () => this.handleSessionRefined(event),
+            'analytics_refresh': () => this.handleAnalyticsRefresh(event),
+            'analytics_update': () => this.handleAnalyticsUpdate(event),
+            'task_update': () => this.handleTaskUpdate(event),
+            'tasks_generation': () => this.handleTasksGenerated(event),
+            'dashboard_idle_sync': () => this.handleIdleSync(event),
+            'cache_invalidate': () => this.handleCacheInvalidate(event)
+        };
+        
+        const handler = handlers[event.event_type];
+        if (handler) {
+            await handler();
+        }
+    }
+    
+    /**
+     * Get last processed sequence number from localStorage
+     */
+    getLastSequenceNum() {
+        try {
+            const stored = localStorage.getItem(`mina_last_seq_${this.workspaceId}`);
+            return stored ? parseInt(stored, 10) : 0;
+        } catch (error) {
+            return 0;
+        }
+    }
+    
+    /**
+     * Save last processed sequence number to localStorage
+     */
+    saveLastSequenceNum(sequenceNum) {
+        try {
+            localStorage.setItem(`mina_last_seq_${this.workspaceId}`, sequenceNum.toString());
+        } catch (error) {
+            console.error('Failed to save sequence number:', error);
+        }
+    }
+    
+    /**
+     * Get current checksum for sync validation
+     */
+    async getCurrentChecksum() {
+        if (this.cache) {
+            const metadata = await this.cache.getMetadata('dashboard_checksum');
+            return metadata?.checksum || null;
+        }
+        return null;
+    }
+    
+    /**
+     * Generate checksum from data
+     */
+    generateChecksum(data) {
+        // Simple checksum generation (can be replaced with MD5)
+        const str = JSON.stringify(data);
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return hash.toString(16);
     }
 
     /**
