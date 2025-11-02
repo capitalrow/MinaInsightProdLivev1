@@ -63,7 +63,7 @@ def billing():
                 'price': 12,
                 'currency': 'GBP',
                 'billing_period': 'month',
-                'price_id': 'price_1SP1CuLJSqSqVnk8BxVR6SK',
+                'price_id': 'price_1SP46vLJSqSqVnkHDu6LfRt',
                 'features': [
                     'Unlimited meetings',
                     'Advanced AI insights',
@@ -81,7 +81,7 @@ def billing():
                 'price': 30,
                 'currency': 'GBP',
                 'billing_period': 'month',
-                'price_id': 'price_1SP1DrLJSqSqVnkO2sJesmM',
+                'price_id': 'price_1SP4ArLJSqSqVnksFm2zFmp',
                 'features': [
                     'Everything in Pro',
                     'Team workspaces',
