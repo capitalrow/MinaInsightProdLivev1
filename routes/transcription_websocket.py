@@ -19,6 +19,9 @@ from app import socketio
 # Import advanced buffer management
 from services.session_buffer_manager import buffer_registry, BufferConfig
 from services.transcription_service import TranscriptionService
+from services.session_service import SessionService
+from services.post_transcription_orchestrator import PostTranscriptionOrchestrator
+from flask_login import current_user
 # After existing imports
 import asyncio
 from jobs.analysis_dispatcher import AnalysisDispatcher
@@ -124,6 +127,20 @@ def on_start_session(data):
             emit('error', {'message': 'Workspace not found. Please ensure you are logged in.'})
             return
         
+        # 🔒 CROWN¹⁰ Fix: Create Session record in database immediately
+        try:
+            db_session_id = SessionService.create_session(
+                external_id=session_id,
+                title=data.get('title', 'Live Transcription'),
+                workspace_id=workspace_id,
+                user_id=user_id
+            )
+            logger.info(f"✅ [transcription] Created Session in database: db_id={db_session_id}, external_id={session_id}, workspace={workspace_id}")
+        except Exception as db_error:
+            logger.error(f"❌ [transcription] Failed to create Session in database: {db_error}")
+            emit('error', {'message': 'Failed to create session in database'})
+            return
+        
         active_sessions[session_id] = {
             'client_sid': request.sid,
             'started_at': datetime.utcnow(),
@@ -134,7 +151,8 @@ def on_start_session(data):
             'webm_header': None,
             'last_process_time': 0,
             'workspace_id': workspace_id,
-            'user_id': user_id
+            'user_id': user_id,
+            'db_session_id': db_session_id  # Store database Session.id for later use
         }
         
         # Start background processing worker for this session
@@ -352,19 +370,21 @@ def on_end_session(data=None):
             except Exception as e:
                 logger.error(f"[transcription] Error finalizing transcript: {e}")
 
-            # 🚀 CROWN¹⁰: Finalize session and trigger post-transcription pipeline
+            # 🚀 CROWN¹⁰: Finalize session and trigger post-transcription pipeline directly
             try:
-                finalize_response = requests.post(
-                    f'http://localhost:5000/api/sessions/{session_id}/complete',
-                    json={'force': False},
-                    timeout=5
-                )
-                if finalize_response.status_code == 200:
+                # Get the Session object from database
+                from models.core_models import Session
+                db_session = Session.query.filter_by(external_id=session_id).first()
+                
+                if db_session:
+                    # Directly trigger PostTranscriptionOrchestrator
+                    orchestrator = PostTranscriptionOrchestrator()
+                    orchestrator.trigger_post_processing(db_session)
                     logger.info(f"✅ [transcription] Session {session_id} finalized, post-transcription pipeline started")
                 else:
-                    logger.warning(f"⚠️ [transcription] Session finalization returned {finalize_response.status_code}")
+                    logger.warning(f"⚠️ [transcription] Session {session_id} not found in database for finalization")
             except Exception as finalize_error:
-                logger.error(f"❌ [transcription] Failed to finalize session: {finalize_error}")
+                logger.error(f"❌ [transcription] Failed to finalize session: {finalize_error}", exc_info=True)
 
             # ✅ Notify the client that the session is done
             emit('session_ended', {
