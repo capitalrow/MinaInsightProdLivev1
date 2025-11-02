@@ -180,6 +180,76 @@
     flex: 1;
     min-width: 0;
     margin: 0;
+    cursor: text;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-base);
+    position: relative;
+}
+
+.task-title:hover {
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.task-title[contenteditable="true"] {
+    background: rgba(99, 102, 241, 0.1);
+    outline: 2px solid rgba(99, 102, 241, 0.3);
+    white-space: normal;
+    overflow: visible;
+}
+
+.task-title-input {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(99, 102, 241, 0.1);
+    outline: 2px solid rgba(99, 102, 241, 0.3);
+    border: none;
+    font-family: inherit;
+}
+
+.task-title.saving {
+    opacity: 0.6;
+}
+
+.task-title.saving::after {
+    content: '';
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    border-top-color: rgb(99, 102, 241);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: translateY(-50%) rotate(360deg); }
+}
+
+.task-title.saved::after {
+    content: '✓';
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgb(34, 197, 94);
+    font-weight: bold;
+    animation: fadeOut 2s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    0% { opacity: 1; }
+    70% { opacity: 1; }
+    100% { opacity: 0; }
 }
 
 .task-card.completed .task-title {
@@ -2349,90 +2419,363 @@
     
     // ═══════════════════════════════════════════════════════════════════════
     // 🎯 CROWN⁴.5 Smart Selection System (Industry Best Practice 2025)
+    // Global Selection Manager - accessible from clustering and main views
     // ═══════════════════════════════════════════════════════════════════════
     
-    const bulkSelection = new Set();
-    const bulkToolbar = document.getElementById('bulk-action-toolbar');
-    const bulkSelectedCount = document.getElementById('bulk-selected-count');
-    let selectionMode = false;
-    let selectionModeIndicator = null;
-    let lastSelectedIndex = -1;
-    
-    function updateBulkToolbar() {
-        const count = bulkSelection.size;
-        if (count > 0) {
-            bulkToolbar.style.display = 'flex';
-            bulkSelectedCount.textContent = count;
-        } else {
-            bulkToolbar.style.display = 'none';
-        }
-    }
-    
-    function enterSelectionMode() {
-        if (selectionMode) return;
-        selectionMode = true;
+    window.selectionManager = {
+        selection: new Set(),
+        active: false,
+        indicator: null,
+        lastSelectedIndex: -1,
+        toolbar: document.getElementById('bulk-action-toolbar'),
+        countElement: document.getElementById('bulk-selected-count'),
         
-        // Add visual indicator
-        selectionModeIndicator = document.createElement('div');
-        selectionModeIndicator.className = 'selection-mode-indicator';
-        selectionModeIndicator.textContent = '📋 Selection Mode';
-        document.body.appendChild(selectionModeIndicator);
+        isActive() {
+            return this.active;
+        },
         
-        // Add selection-mode class to all task cards
-        document.querySelectorAll('.task-card').forEach(card => {
-            card.classList.add('selection-mode');
-        });
+        getSelection() {
+            return Array.from(this.selection);
+        },
         
-        console.log('🎯 Entered selection mode');
-        
-        // Haptic feedback on mobile
-        if ('vibrate' in navigator) {
-            navigator.vibrate(50);
-        }
-    }
-    
-    function exitSelectionMode() {
-        if (!selectionMode) return;
-        selectionMode = false;
-        
-        // Remove indicator
-        if (selectionModeIndicator) {
-            selectionModeIndicator.remove();
-            selectionModeIndicator = null;
-        }
-        
-        // Remove selection-mode class
-        document.querySelectorAll('.task-card').forEach(card => {
-            card.classList.remove('selection-mode');
-            card.classList.remove('bulk-selected');
-        });
-        
-        // Clear selection
-        bulkSelection.clear();
-        updateBulkToolbar();
-        lastSelectedIndex = -1;
-        
-        console.log('🎯 Exited selection mode');
-    }
-    
-    function toggleTaskSelection(taskCard) {
-        const taskId = taskCard.dataset.taskId;
-        
-        if (bulkSelection.has(taskId)) {
-            bulkSelection.delete(taskId);
-            taskCard.classList.remove('bulk-selected');
-        } else {
-            bulkSelection.add(taskId);
-            taskCard.classList.add('bulk-selected');
-            
-            // Haptic feedback
-            if ('vibrate' in navigator) {
-                navigator.vibrate(10);
+        updateToolbar() {
+            const count = this.selection.size;
+            if (count > 0) {
+                this.toolbar.style.display = 'flex';
+                this.countElement.textContent = count;
+            } else {
+                this.toolbar.style.display = 'none';
             }
+        },
+        
+        enter() {
+            if (this.active) return;
+            this.active = true;
+            
+            // Add visual indicator
+            this.indicator = document.createElement('div');
+            this.indicator.className = 'selection-mode-indicator';
+            this.indicator.textContent = '📋 Selection Mode';
+            document.body.appendChild(this.indicator);
+            
+            // Add selection-mode class to all task cards
+            this.restoreSelectionUI();
+            
+            console.log('🎯 Entered selection mode');
+            
+            // Haptic feedback on mobile
+            if ('vibrate' in navigator) {
+                navigator.vibrate(50);
+            }
+        },
+        
+        exit() {
+            if (!this.active) return;
+            this.active = false;
+            
+            // Remove indicator
+            if (this.indicator) {
+                this.indicator.remove();
+                this.indicator = null;
+            }
+            
+            // Remove selection-mode class
+            document.querySelectorAll('.task-card').forEach(card => {
+                card.classList.remove('selection-mode');
+                card.classList.remove('bulk-selected');
+            });
+            
+            // Clear selection
+            this.selection.clear();
+            this.updateToolbar();
+            this.lastSelectedIndex = -1;
+            
+            console.log('🎯 Exited selection mode');
+        },
+        
+        toggle(taskCard) {
+            const taskId = taskCard.dataset.taskId;
+            
+            if (this.selection.has(taskId)) {
+                this.selection.delete(taskId);
+                taskCard.classList.remove('bulk-selected');
+            } else {
+                this.selection.add(taskId);
+                taskCard.classList.add('bulk-selected');
+                
+                // Haptic feedback
+                if ('vibrate' in navigator) {
+                    navigator.vibrate(10);
+                }
+            }
+            
+            this.updateToolbar();
+        },
+        
+        // Restore selection UI after view changes (list ↔ cluster)
+        restoreSelectionUI() {
+            document.querySelectorAll('.task-card').forEach(card => {
+                const taskId = card.dataset.taskId;
+                
+                if (this.active) {
+                    card.classList.add('selection-mode');
+                }
+                
+                if (this.selection.has(taskId)) {
+                    card.classList.add('bulk-selected');
+                }
+            });
+            
+            console.log(`🔄 Restored selection UI: ${this.selection.size} tasks selected`);
+        }
+    };
+    
+    // Backward compatibility aliases
+    const bulkSelection = window.selectionManager.selection;
+    const updateBulkToolbar = () => window.selectionManager.updateToolbar();
+    const enterSelectionMode = () => window.selectionManager.enter();
+    const exitSelectionMode = () => window.selectionManager.exit();
+    const toggleTaskSelection = (taskCard) => window.selectionManager.toggle(taskCard);
+    
+    // Restore selection UI after task list refreshes
+    window.addEventListener('tasks:refresh-view', () => {
+        setTimeout(() => {
+            if (window.selectionManager) {
+                window.selectionManager.restoreSelectionUI();
+            }
+        }, 100);
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // ✏️ CROWN⁴.5 Inline Title Editing (Event #6)
+    // Debounced save (250ms), ESC cancel, Enter save, visual indicators
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    let editingTitle = null;
+    let originalTitleText = '';
+    let saveDebounceTimer = null;
+    const SAVE_DEBOUNCE_MS = 250;
+    
+    function makeTitleEditable(titleElement) {
+        if (editingTitle === titleElement) return;
+        
+        // Cancel any existing edit
+        if (editingTitle) {
+            cancelTitleEdit();
         }
         
-        updateBulkToolbar();
+        editingTitle = titleElement;
+        originalTitleText = titleElement.textContent.trim();
+        
+        // Replace h3 with input for cross-browser security (prevents HTML injection)
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = originalTitleText;
+        input.className = 'task-title-input';
+        input.style.cssText = titleElement.style.cssText;
+        input.maxLength = 500;
+        
+        // Store reference to original element
+        input.dataset.originalElement = 'true';
+        titleElement.dataset.editing = 'true';
+        titleElement.style.display = 'none';
+        titleElement.parentNode.insertBefore(input, titleElement);
+        
+        input.focus();
+        input.select();
+        
+        // Store the input reference
+        editingTitle.inputElement = input;
+        
+        console.log('✏️ Started editing title');
     }
+    
+    function saveTitleEdit() {
+        if (!editingTitle || !editingTitle.inputElement) return;
+        
+        // Cancel any pending debounce timer
+        if (saveDebounceTimer) {
+            clearTimeout(saveDebounceTimer);
+            saveDebounceTimer = null;
+        }
+        
+        const input = editingTitle.inputElement;
+        const newTitle = input.value.trim().replace(/\s+/g, ' ');
+        const taskCard = editingTitle.closest('.task-card');
+        const taskId = taskCard?.dataset.taskId;
+        
+        if (!taskId || newTitle === originalTitleText) {
+            cancelTitleEdit();
+            return;
+        }
+        
+        // Validate: no empty titles
+        if (newTitle === '' || newTitle.length > 500) {
+            cancelTitleEdit();
+            if (window.showToast) {
+                window.showToast('Title must be between 1-500 characters', 'error');
+            }
+            return;
+        }
+        
+        const titleElement = editingTitle;
+        
+        // Optimistic UI: update immediately (<50ms CROWN⁴.5 requirement)
+        titleElement.textContent = newTitle;
+        titleElement.style.display = '';
+        input.remove();
+        titleElement.classList.add('saving');
+        
+        console.log(`💾 Saving title: "${newTitle}" for task ${taskId}`);
+        
+        // Send update to server
+        fetch(`/api/tasks/${taskId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                description: newTitle
+            })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to save');
+            return response.json();
+        })
+        .then(data => {
+            console.log('✅ Title saved successfully');
+            
+            // Show saved indicator
+            titleElement.classList.remove('saving');
+            titleElement.classList.add('saved');
+            
+            // Remove saved indicator after 2s
+            setTimeout(() => {
+                titleElement.classList.remove('saved');
+            }, 2000);
+            
+            originalTitleText = newTitle;
+            delete titleElement.inputElement;
+            delete titleElement.dataset.editing;
+            editingTitle = null;
+            
+            // Broadcast to other tabs via WebSocket (CROWN⁴.5 multi-tab sync)
+            if (window.socket) {
+                window.socket.emit('task:updated', {
+                    task_id: taskId,
+                    field: 'description',
+                    value: newTitle
+                });
+            }
+        })
+        .catch(error => {
+            console.error('❌ Failed to save title:', error);
+            
+            // Revert to original
+            titleElement.textContent = originalTitleText;
+            titleElement.style.display = '';
+            if (input.parentNode) input.remove();
+            titleElement.classList.remove('saving');
+            delete titleElement.inputElement;
+            delete titleElement.dataset.editing;
+            editingTitle = null;
+            
+            if (window.showToast) {
+                window.showToast('Failed to save title', 'error');
+            }
+        });
+    }
+    
+    function cancelTitleEdit() {
+        if (!editingTitle) return;
+        
+        // Cancel any pending save
+        if (saveDebounceTimer) {
+            clearTimeout(saveDebounceTimer);
+            saveDebounceTimer = null;
+        }
+        
+        // Remove input and restore original title
+        if (editingTitle.inputElement && editingTitle.inputElement.parentNode) {
+            editingTitle.inputElement.remove();
+        }
+        editingTitle.textContent = originalTitleText;
+        editingTitle.style.display = '';
+        editingTitle.classList.remove('saving', 'saved');
+        delete editingTitle.inputElement;
+        delete editingTitle.dataset.editing;
+        editingTitle = null;
+        
+        console.log('❌ Cancelled title edit');
+    }
+    
+    // Click on title to edit
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('task-title') && !window.selectionManager.isActive()) {
+            e.stopPropagation();
+            makeTitleEditable(e.target);
+        } else if (e.target.classList.contains('task-title-input')) {
+            // Clicking on input - do nothing (keep editing)
+            e.stopPropagation();
+        } else if (editingTitle && !e.target.closest('.task-title') && !e.target.classList.contains('task-title-input')) {
+            // Click outside - save
+            saveTitleEdit();
+        }
+    });
+    
+    // Handle keyboard shortcuts on input
+    document.addEventListener('keydown', (e) => {
+        if (!e.target.classList.contains('task-title-input')) return;
+        
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelTitleEdit();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            saveTitleEdit();
+        }
+    });
+    
+    // Debounced save on input
+    document.addEventListener('input', (e) => {
+        if (e.target.classList.contains('task-title-input')) {
+            // Clear existing timer
+            if (saveDebounceTimer) {
+                clearTimeout(saveDebounceTimer);
+            }
+            
+            // Set new timer
+            saveDebounceTimer = setTimeout(() => {
+                saveTitleEdit();
+            }, SAVE_DEBOUNCE_MS);
+        }
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // ✅ CROWN⁴.5 Centralized Checkbox Handler
+    // Uses event delegation to work across all views without rebinding
+    // Respects selection mode to prevent completion toggle during bulk select
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    document.addEventListener('change', async (e) => {
+        if (!e.target.classList.contains('task-checkbox')) return;
+        
+        // If selection mode is active, checkboxes control selection, not completion
+        if (window.selectionManager && window.selectionManager.isActive()) {
+            e.preventDefault();
+            const taskCard = e.target.closest('.task-card');
+            if (taskCard) {
+                window.selectionManager.toggle(taskCard);
+            }
+            return;
+        }
+        
+        // Normal mode: toggle task completion
+        const taskId = e.target.dataset.taskId;
+        if (taskId && window.optimisticUI) {
+            await window.optimisticUI.toggleTaskStatus(taskId);
+        }
+    });
     
     // Long-press for mobile selection mode
     let longPressTimer = null;
