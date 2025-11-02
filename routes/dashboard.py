@@ -3,7 +3,7 @@ Dashboard Routes for Mina Productivity Platform
 Main dashboard with meetings, tasks, analytics overview.
 """
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, make_response
 from flask_login import login_required, current_user
 from models import db, Meeting, Task, Analytics, Session, Marker
 from sqlalchemy import desc, func, and_
@@ -240,8 +240,15 @@ def api_meetings():
 def meetings():
     """✨ CROWN⁴ Phase 4.6: Meetings overview page with real-time updates."""
     # Just render the template - data will be loaded via API
-    return render_template('dashboard/meetings_crown.html',
-                         workspace_id=current_user.workspace_id)
+    response = make_response(render_template('dashboard/meetings_crown.html',
+                         workspace_id=current_user.workspace_id))
+    
+    # Prevent browser caching to ensure fresh template loads
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    
+    return response
 
 
 
