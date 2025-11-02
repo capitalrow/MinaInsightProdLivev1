@@ -1,5 +1,8 @@
 from flask import Blueprint, render_template, abort
+from flask_login import login_required, current_user
 from jinja2 import TemplateNotFound
+from models.core_models import Customer, Subscription
+from models import db
 
 ui_bp = Blueprint('ui', __name__, url_prefix='/ui', template_folder='../templates')
 
@@ -13,7 +16,6 @@ def dashboard():
 @ui_bp.route('/transcript')
 def transcript():
     try:
-        # Temporary dummy data for rendering
         sample_transcript = "This is a sample transcript. Say hi to Mina!"
         return render_template(
             'transcript.html',
@@ -36,9 +38,84 @@ def admin_flags():
         abort(404)
 
 @ui_bp.route('/billing')
+@login_required
 def billing():
     try:
-        return render_template('billing.html', title='Billing')
+        pricing_plans = [
+            {
+                'id': 'starter',
+                'name': 'Starter',
+                'price': 0,
+                'billing_period': 'forever',
+                'price_id': None,
+                'features': [
+                    'Up to 5 meetings per month',
+                    'Real-time transcription',
+                    'Basic speaker identification',
+                    'Download transcripts',
+                    '7 days of history'
+                ],
+                'recommended': False
+            },
+            {
+                'id': 'pro',
+                'name': 'Pro',
+                'price': 19,
+                'billing_period': 'month',
+                'price_id': 'price_pro_monthly',
+                'features': [
+                    'Unlimited meetings',
+                    'Advanced AI insights',
+                    'Multi-speaker diarization',
+                    'Task extraction & tracking',
+                    'Calendar integration',
+                    'Unlimited storage',
+                    'Priority support'
+                ],
+                'recommended': True
+            },
+            {
+                'id': 'team',
+                'name': 'Team',
+                'price': 49,
+                'billing_period': 'month',
+                'price_id': 'price_team_monthly',
+                'features': [
+                    'Everything in Pro',
+                    'Team workspaces',
+                    'Shared meeting library',
+                    'Custom integrations',
+                    'Advanced analytics',
+                    'SSO & SAML',
+                    'Dedicated support'
+                ],
+                'recommended': False
+            }
+        ]
+        
+        subscription_status = None
+        customer = Customer.query.filter_by(user_id=str(current_user.id)).first()
+        
+        if customer:
+            active_subscription = Subscription.query.filter_by(
+                customer_id=customer.id,
+                status='active'
+            ).first()
+            
+            if active_subscription:
+                subscription_status = {
+                    'status': active_subscription.status,
+                    'current_period_end': active_subscription.current_period_end,
+                    'cancel_at_period_end': active_subscription.cancel_at_period_end
+                }
+        
+        return render_template(
+            'billing.html',
+            title='Billing',
+            pricing_plans=pricing_plans,
+            subscription_status=subscription_status,
+            user_id=str(current_user.id)
+        )
     except TemplateNotFound:
         abort(404)
 

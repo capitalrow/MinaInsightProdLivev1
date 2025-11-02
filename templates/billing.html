@@ -1,32 +1,422 @@
 {% extends "base.html" %}
-{% block title %}Billing – Mina{% endblock %}
+{% block title %}Billing - Mina{% endblock %}
+
 {% block extra_css %}
 <style>
-.billing-workspace{width:clamp(960px,90vw,1440px);margin:0 auto;padding:var(--space-8)var(--space-6);}
-.billing-title{font-size:var(--font-size-4xl);font-weight:var(--font-weight-bold);
-background:var(--gradient-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.billing-card{background:var(--glass-bg);backdrop-filter:var(--backdrop-blur);
-border:1px solid var(--glass-border);border-radius:var(--radius-xl);
-padding:var(--space-6);animation:fadeInUp .6s ease-out;}
-.form-row{display:flex;gap:var(--space-4);margin-bottom:var(--space-4);}
-.form-row input{flex:1;}
+.billing-container {
+    min-height: calc(100vh - var(--header-height));
+    padding: var(--space-8) 0;
+}
+
+.billing-header {
+    margin-bottom: var(--space-8);
+    animation: fadeInUp 0.6s ease-out;
+}
+
+.billing-title {
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-bold);
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: var(--space-2);
+}
+
+.billing-subtitle {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-lg);
+}
+
+.subscription-status-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-6);
+    margin-bottom: var(--space-8);
+    animation: fadeInUp 0.6s ease-out 0.1s;
+    animation-fill-mode: both;
+    position: relative;
+    overflow: hidden;
+}
+
+.subscription-status-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-primary);
+}
+
+.subscription-status-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+}
+
+.status-info h3 {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-2);
+}
+
+.status-info p {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: var(--space-6);
+    margin-bottom: var(--space-8);
+}
+
+.pricing-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-6);
+    transition: all var(--transition-base);
+    position: relative;
+    overflow: hidden;
+    animation: fadeInUp 0.6s ease-out;
+    animation-fill-mode: both;
+    display: flex;
+    flex-direction: column;
+}
+
+.pricing-card:nth-child(1) { animation-delay: 0.2s; }
+.pricing-card:nth-child(2) { animation-delay: 0.3s; }
+.pricing-card:nth-child(3) { animation-delay: 0.4s; }
+
+.pricing-card.recommended {
+    border-color: var(--color-primary);
+}
+
+.pricing-card.recommended::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-primary);
+}
+
+.pricing-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--color-primary);
+}
+
+.recommended-badge {
+    position: absolute;
+    top: var(--space-4);
+    right: var(--space-4);
+    background: var(--gradient-primary);
+    color: white;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.pricing-header {
+    margin-bottom: var(--space-6);
+}
+
+.plan-name {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-2);
+}
+
+.plan-price {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+}
+
+.price-amount {
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary);
+}
+
+.price-currency {
+    font-size: var(--font-size-xl);
+    color: var(--color-text-secondary);
+}
+
+.price-period {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+}
+
+.plan-billing {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.features-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--space-6) 0;
+    flex-grow: 1;
+}
+
+.features-list li {
+    padding: var(--space-3) 0;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.features-list li:last-child {
+    border-bottom: none;
+}
+
+.feature-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.plan-cta {
+    margin-top: auto;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    right: var(--space-4);
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+@keyframes spin {
+    to { transform: translateY(-50%) rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+    .pricing-grid {
+        grid-template-columns: 1fr;
+    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="billing-workspace">
-  <h1 class="billing-title mb-6">Billing</h1>
-  <div class="billing-card">
-    <form id="billingForm">
-      <div class="form-row">
-        <input type="text" name="user_id" placeholder="user_id" class="input">
-        <input type="text" name="price_id" placeholder="price_id" class="input">
-      </div>
-      <div class="flex gap-3">
-        <button class="btn btn-primary" type="submit">Start Checkout</button>
-        <button class="btn btn-outline" id="openPortalBtn" type="button">Open Portal</button>
-      </div>
-    </form>
-  </div>
+<div class="container billing-container">
+    <div class="billing-header">
+        <h1 class="billing-title">Billing & Subscription</h1>
+        <p class="billing-subtitle">Manage your subscription and billing preferences</p>
+    </div>
+
+    {% if subscription_status %}
+    <div class="subscription-status-card">
+        <div class="subscription-status-content">
+            <div class="status-info">
+                <h3>Current Subscription</h3>
+                <p>Status: <strong style="color: var(--color-success);">{{ subscription_status.status|title }}</strong></p>
+                {% if subscription_status.current_period_end %}
+                <p>Renews on: {{ subscription_status.current_period_end.strftime('%B %d, %Y') }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <button class="btn btn-outline" id="openPortalBtn">Manage Subscription</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="pricing-grid">
+        {% for plan in pricing_plans %}
+        <div class="pricing-card {% if plan.recommended %}recommended{% endif %}">
+            {% if plan.recommended %}
+            <div class="recommended-badge">Recommended</div>
+            {% endif %}
+            
+            <div class="pricing-header">
+                <h3 class="plan-name">{{ plan.name }}</h3>
+                <div class="plan-price">
+                    {% if plan.price == 0 %}
+                    <span class="price-amount">Free</span>
+                    {% else %}
+                    <span class="price-currency">$</span>
+                    <span class="price-amount">{{ plan.price }}</span>
+                    <span class="price-period">/{{ plan.billing_period }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <ul class="features-list">
+                {% for feature in plan.features %}
+                <li>
+                    <span class="feature-icon">✓</span>
+                    <span>{{ feature }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+
+            <div class="plan-cta">
+                {% if plan.price_id %}
+                <button 
+                    class="btn btn-primary w-full start-checkout-btn" 
+                    data-price-id="{{ plan.price_id }}"
+                    data-plan-name="{{ plan.name }}">
+                    Get {{ plan.name }}
+                </button>
+                {% else %}
+                <button class="btn btn-ghost w-full" disabled>Current Plan</button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const userId = '{{ user_id }}';
+    
+    // Handle checkout session creation
+    const checkoutButtons = document.querySelectorAll('.start-checkout-btn');
+    checkoutButtons.forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const priceId = this.getAttribute('data-price-id');
+            const planName = this.getAttribute('data-plan-name');
+            
+            // Add loading state
+            this.classList.add('btn-loading');
+            this.disabled = true;
+            const originalText = this.textContent;
+            this.textContent = 'Processing...';
+            
+            try {
+                const response = await fetch('/billing/create-checkout-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        price_id: priceId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to create checkout session');
+                }
+                
+                const data = await response.json();
+                
+                if (data.checkout_url) {
+                    // Redirect to Stripe Checkout
+                    window.location.href = data.checkout_url;
+                } else {
+                    throw new Error('No checkout URL returned');
+                }
+            } catch (error) {
+                console.error('Checkout error:', error);
+                alert('Failed to start checkout. Please try again.');
+                
+                // Remove loading state
+                this.classList.remove('btn-loading');
+                this.disabled = false;
+                this.textContent = originalText;
+            }
+        });
+    });
+    
+    // Handle billing portal
+    const portalBtn = document.getElementById('openPortalBtn');
+    if (portalBtn) {
+        portalBtn.addEventListener('click', async function() {
+            // Add loading state
+            this.classList.add('btn-loading');
+            this.disabled = true;
+            const originalText = this.textContent;
+            this.textContent = 'Opening...';
+            
+            try {
+                const response = await fetch('/billing/create-portal-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: userId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to create portal session');
+                }
+                
+                const data = await response.json();
+                
+                if (data.portal_url) {
+                    // Redirect to Stripe Customer Portal
+                    window.location.href = data.portal_url;
+                } else {
+                    throw new Error('No portal URL returned');
+                }
+            } catch (error) {
+                console.error('Portal error:', error);
+                alert('Failed to open billing portal. Please try again.');
+                
+                // Remove loading state
+                this.classList.remove('btn-loading');
+                this.disabled = false;
+                this.textContent = originalText;
+            }
+        });
+    }
+})();
+</script>
 {% endblock %}
