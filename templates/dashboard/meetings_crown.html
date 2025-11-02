@@ -296,8 +296,9 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/toast-notifications.js') }}"></script>
 <script nonce="{{ g.csp_nonce }}">
-// CROWN 4.6 Meetings Page Implementation
-console.log('🎬 Meetings page script loaded');
+// CROWN 4.6 Meetings Page Implementation - v2.0.1-credentials-fix
+console.log('🎬 Meetings page script loaded v2.0.1');
+console.log('✅ Script includes credentials fix for /api/sessions');
 
 const WORKSPACE_ID = {{ workspace_id | tojson }};
 let allMeetings = [];
