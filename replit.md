@@ -40,6 +40,7 @@ The application utilizes a layered architecture with Flask as the web framework 
 **System Design Choices:**
 - **Backend**: Flask with Flask-SocketIO.
 - **Database**: SQLAlchemy ORM (SQLite for dev, PostgreSQL for prod).
+- **Session Management**: Server-side sessions with triple-layer fallback (Redis → Filesystem → Cookie) to solve cookie size limits. Industry-standard approach stores only session ID (~50 bytes) in cookie, keeps all data server-side. Features: environment-aware security (HTTPS-only in production), connection retry with exponential backoff, distinct cookie names per backend, automatic graceful degradation.
 - **Real-time Communication**: Socket.IO for WebSockets with polling fallback.
 - **Frontend**: Bootstrap dark theme, vanilla JavaScript, Socket.IO client.
 - **Data Model**: Session and Segment models.
@@ -72,6 +73,7 @@ The application utilizes a layered architecture with Flask as the web framework 
 
 **Security & Authentication:**
 - Flask-Login
+- Flask-Session (server-side sessions)
 - Cryptography
 - bcrypt
 - PyJWT
