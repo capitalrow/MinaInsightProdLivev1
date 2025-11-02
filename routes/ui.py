@@ -81,7 +81,7 @@ def billing():
                 'price': 30,
                 'currency': 'GBP',
                 'billing_period': 'month',
-                'price_id': 'price_1SP1DrLJSqSqVnkO2sJesmM',
+                'price_id': 'price_1SP1DrLJSqSqVnk8O2sJesmM',
                 'features': [
                     'Everything in Pro',
                     'Team workspaces',

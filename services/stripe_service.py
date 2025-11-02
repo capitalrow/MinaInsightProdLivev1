@@ -5,7 +5,7 @@ from typing import Optional
 from models.core_models import Customer, Subscription
 from models import db
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+stripe.api_key = os.getenv("STRIPE_TEST_API_KEY", "")
 
 class StripeService:
     def _get_base_url(self) -> str:
