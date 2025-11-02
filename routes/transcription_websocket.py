@@ -122,8 +122,10 @@ def on_start_session(data):
         workspace_id = current_user.workspace_id if current_user.is_authenticated else None
         user_id = current_user.id if current_user.is_authenticated else None
         
+        logger.info(f"🔑 [CROWN¹⁰] Session start - User: {user_id}, Workspace: {workspace_id}, Authenticated: {current_user.is_authenticated}")
+        
         if not workspace_id:
-            logger.error(f"❌ Cannot start session without workspace_id for user {user_id}")
+            logger.error(f"❌ [CROWN¹⁰] CRITICAL: Cannot start session without workspace_id for user {user_id}")
             emit('error', {'message': 'Workspace not found. Please ensure you are logged in.'})
             return
         
@@ -135,7 +137,7 @@ def on_start_session(data):
                 workspace_id=workspace_id,
                 user_id=user_id
             )
-            logger.info(f"✅ [transcription] Created Session in database: db_id={db_session_id}, external_id={session_id}, workspace={workspace_id}")
+            logger.info(f"✅ [CROWN¹⁰] Session created in DB - db_id={db_session_id}, external_id={session_id}, workspace={workspace_id}, user={user_id}")
         except Exception as db_error:
             logger.error(f"❌ [transcription] Failed to create Session in database: {db_error}")
             emit('error', {'message': 'Failed to create session in database'})
@@ -310,7 +312,7 @@ def on_audio_data(data):
                                 workspace_id=session_info.get('workspace_id'),
                                 user_id=session_info.get('user_id')
                             )
-                            logger.info(f"✅ [transcription] Saved to database: session={session_id}, workspace={session_info.get('workspace_id')}")
+                            logger.info(f"✅ [CROWN¹⁰] Transcription saved - session={session_id}, workspace={session_info.get('workspace_id')}, user={session_info.get('user_id')}, text_length={len(text)}")
                         except Exception as db_error:
                             logger.error(f"❌ [transcription] Failed to save to database: {db_error}")
                         
@@ -377,12 +379,14 @@ def on_end_session(data=None):
                 db_session = Session.query.filter_by(external_id=session_id).first()
                 
                 if db_session:
+                    logger.info(f"🔍 [CROWN¹⁰] Session found in DB - id={db_session.id}, user_id={db_session.user_id}, workspace_id={db_session.workspace_id}")
+                    
                     # Directly trigger PostTranscriptionOrchestrator
                     orchestrator = PostTranscriptionOrchestrator()
                     orchestrator.trigger_post_processing(db_session)
-                    logger.info(f"✅ [transcription] Session {session_id} finalized, post-transcription pipeline started")
+                    logger.info(f"✅ [CROWN¹⁰] Post-processing triggered - session={session_id}, will create Meeting record")
                 else:
-                    logger.warning(f"⚠️ [transcription] Session {session_id} not found in database for finalization")
+                    logger.error(f"❌ [CROWN¹⁰] CRITICAL: Session {session_id} not found in database for finalization!")
             except Exception as finalize_error:
                 logger.error(f"❌ [transcription] Failed to finalize session: {finalize_error}", exc_info=True)
 
