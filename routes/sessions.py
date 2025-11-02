@@ -133,31 +133,27 @@ def get_session_detail(session_identifier):
 
 
 @sessions_bp.route('/', methods=['POST'])
+@login_required
 def create_session():
     """
-    POST /sessions - Create a new session
+    POST /sessions - Create a new session (authenticated endpoint)
     
     Request body (JSON):
     - title: Optional session title
     - external_id: Optional external ID (auto-generated if not provided)
     - locale: Optional language/locale code
     - device_info: Optional device information dictionary
-    - workspace_id: Required workspace ID
-    - user_id: Required user ID
+    
+    Note: workspace_id and user_id are automatically obtained from current_user
     """
     data = request.get_json() or {}
     
-    # 🔒 CROWN¹⁰ Fix: Accept workspace_id and user_id from request (for internal service calls)
-    workspace_id = data.get('workspace_id')
-    user_id = data.get('user_id')
-    
-    # Fallback to current_user if not provided (for authenticated web requests)
-    if not workspace_id and current_user.is_authenticated:
-        workspace_id = current_user.workspace_id
-        user_id = current_user.id
+    # 🔒 CROWN¹⁰ Fix: Get workspace_id and user_id from authenticated user
+    workspace_id = current_user.workspace_id if current_user.is_authenticated else None
+    user_id = current_user.id if current_user.is_authenticated else None
     
     if not workspace_id:
-        return jsonify({'error': 'Workspace ID is required'}), 400
+        return jsonify({'error': 'Workspace not found. Please ensure you are logged in.'}), 403
     
     try:
         session_id = SessionService.create_session(
