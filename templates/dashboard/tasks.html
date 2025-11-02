@@ -2380,7 +2380,18 @@
     const bulkCompleteBtn = document.getElementById('bulk-complete-btn');
     if (bulkCompleteBtn) {
         bulkCompleteBtn.addEventListener('click', async () => {
-            const taskIds = Array.from(bulkSelection);
+            // Collect task IDs from ALL checked tasks (both bulk-select and task-checkbox)
+            const taskIds = [];
+            document.querySelectorAll('.task-card').forEach(card => {
+                const bulkCheckbox = card.querySelector('.bulk-select-checkbox');
+                const taskCheckbox = card.querySelector('.task-checkbox');
+                if ((bulkCheckbox && bulkCheckbox.checked) || (taskCheckbox && taskCheckbox.checked)) {
+                    const taskId = card.dataset.taskId;
+                    if (taskId && !taskIds.includes(taskId)) {
+                        taskIds.push(taskId);
+                    }
+                }
+            });
             if (taskIds.length === 0) return;
             
             console.log(`✅ Bulk completing ${taskIds.length} tasks`);
@@ -2473,7 +2484,18 @@
     const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
     if (bulkDeleteBtn) {
         bulkDeleteBtn.addEventListener('click', async () => {
-            const taskIds = Array.from(bulkSelection);
+            // Collect task IDs from ALL checked tasks (both bulk-select and task-checkbox)
+            const taskIds = [];
+            document.querySelectorAll('.task-card').forEach(card => {
+                const bulkCheckbox = card.querySelector('.bulk-select-checkbox');
+                const taskCheckbox = card.querySelector('.task-checkbox');
+                if ((bulkCheckbox && bulkCheckbox.checked) || (taskCheckbox && taskCheckbox.checked)) {
+                    const taskId = card.dataset.taskId;
+                    if (taskId && !taskIds.includes(taskId)) {
+                        taskIds.push(taskId);
+                    }
+                }
+            });
             if (taskIds.length === 0) return;
             
             if (!confirm(`Are you sure you want to delete ${taskIds.length} tasks? This cannot be undone.`)) {
@@ -2567,7 +2589,18 @@
     const bulkLabelBtn = document.getElementById('bulk-label-btn');
     if (bulkLabelBtn) {
         bulkLabelBtn.addEventListener('click', async () => {
-            const taskIds = Array.from(bulkSelection);
+            // Collect task IDs from ALL checked tasks (both bulk-select and task-checkbox)
+            const taskIds = [];
+            document.querySelectorAll('.task-card').forEach(card => {
+                const bulkCheckbox = card.querySelector('.bulk-select-checkbox');
+                const taskCheckbox = card.querySelector('.task-checkbox');
+                if ((bulkCheckbox && bulkCheckbox.checked) || (taskCheckbox && taskCheckbox.checked)) {
+                    const taskId = card.dataset.taskId;
+                    if (taskId && !taskIds.includes(taskId)) {
+                        taskIds.push(taskId);
+                    }
+                }
+            });
             if (taskIds.length === 0) return;
             
             const label = prompt('Enter label to add to selected tasks:');
