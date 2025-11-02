@@ -2406,7 +2406,18 @@
                     body: JSON.stringify({ task_ids: taskIds })
                 });
                 
-                if (!response.ok) throw new Error('Bulk complete failed');
+                console.log('📡 Bulk complete response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    ok: response.ok,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ Server returned error:', errorText);
+                    throw new Error(`Bulk complete failed: ${response.status} ${response.statusText} - ${errorText}`);
+                }
                 
                 const result = await response.json();
                 console.log('✅ Bulk complete successful:', result);
@@ -2486,7 +2497,18 @@
                     body: JSON.stringify({ task_ids: taskIds })
                 });
                 
-                if (!response.ok) throw new Error('Bulk delete failed');
+                console.log('📡 Bulk delete response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    ok: response.ok,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ Server returned error:', errorText);
+                    throw new Error(`Bulk delete failed: ${response.status} ${response.statusText} - ${errorText}`);
+                }
                 
                 const result = await response.json();
                 console.log('✅ Bulk delete successful:', result);
@@ -2566,7 +2588,18 @@
                     })
                 });
                 
-                if (!response.ok) throw new Error('Bulk label failed');
+                console.log('📡 Bulk label response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    ok: response.ok,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ Server returned error:', errorText);
+                    throw new Error(`Bulk label failed: ${response.status} ${response.statusText} - ${errorText}`);
+                }
                 
                 const result = await response.json();
                 console.log('✅ Bulk label successful:', result);
