@@ -322,7 +322,9 @@ async function loadMeetings() {
     
     try {
         console.log('🔍 Fetching from /api/sessions...');
-        const response = await fetch('/api/sessions');
+        const response = await fetch('/api/sessions', {
+            credentials: 'same-origin'
+        });
         console.log('📥 Response received:', response.status, response.statusText);
         
         if (!response.ok) {
@@ -504,6 +506,7 @@ async function archiveMeeting(sessionId) {
         const clientUlid = generateULID();
         const response = await fetch(`/api/sessions/${sessionId}`, {
             method: 'PATCH',
+            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 operation: 'archive',
@@ -534,6 +537,7 @@ async function restoreMeeting(sessionId, isUndo = false) {
         const clientUlid = generateULID();
         const response = await fetch(`/api/sessions/${sessionId}`, {
             method: 'PATCH',
+            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 operation: 'restore',
