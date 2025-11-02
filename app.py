@@ -615,6 +615,7 @@ def create_app() -> Flask:
     try:
         from routes.api_tasks import api_tasks_bp
         app.register_blueprint(api_tasks_bp)
+        csrf.exempt(api_tasks_bp)
         app.logger.info("Tasks API routes registered")
     except Exception as e:
         app.logger.warning(f"Failed to register tasks API routes: {e}")
@@ -622,6 +623,7 @@ def create_app() -> Flask:
     try:
         from routes.api_tasks_clustering import api_tasks_clustering_bp
         app.register_blueprint(api_tasks_clustering_bp)
+        csrf.exempt(api_tasks_clustering_bp)
         app.logger.info("Task Clustering API routes registered")
     except Exception as e:
         app.logger.warning(f"Failed to register task clustering API routes: {e}")
