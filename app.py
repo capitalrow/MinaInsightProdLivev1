@@ -760,6 +760,14 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning(f"Failed to register CROWN+ Monitoring API: {e}")
 
+    # --- CROWN¹⁰ Diagnostics ---
+    try:
+        from routes.crown_diagnostics import crown_diagnostics_bp
+        app.register_blueprint(crown_diagnostics_bp)
+        app.logger.info("CROWN¹⁰ Diagnostics routes registered (/crown-diagnostics/)")
+    except Exception as e:
+        app.logger.warning(f"Failed to register CROWN¹⁰ Diagnostics: {e}")
+
     # Settings routes
     try:
         from routes.settings import settings_bp
