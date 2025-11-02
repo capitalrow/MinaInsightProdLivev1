@@ -169,6 +169,7 @@ def get_sessions_header():
         return jsonify({'error': str(e)}), 500
 
 
+@api_sessions_crown_bp.route('', methods=['GET'])
 @api_sessions_crown_bp.route('/', methods=['GET'])
 @login_required
 def get_sessions_diff():
