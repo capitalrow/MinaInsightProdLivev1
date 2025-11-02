@@ -297,6 +297,8 @@
 <script src="{{ url_for('static', filename='js/toast-notifications.js') }}"></script>
 <script>
 // CROWN 4.6 Meetings Page Implementation
+console.log('🎬 Meetings page script loaded');
+
 const WORKSPACE_ID = {{ workspace_id | tojson }};
 let allMeetings = [];
 let activeMeetings = [];
@@ -307,30 +309,37 @@ let undoTimers = new Map();
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 DOMContentLoaded fired - initializing meetings page');
     loadMeetings();
     connectWebSocket();
 });
 
 // Load meetings from API
 async function loadMeetings() {
+    console.log('📡 loadMeetings() called - fetching from /api/sessions');
     const loading = document.getElementById('loading-active');
     const loadingArchive = document.getElementById('loading-archive');
     
     try {
+        console.log('🔍 Fetching from /api/sessions...');
         const response = await fetch('/api/sessions');
+        console.log('📥 Response received:', response.status, response.statusText);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
+        console.log('✅ Data parsed:', data);
         
         allMeetings = data.upserts || [];
+        console.log(`📊 Loaded ${allMeetings.length} meetings`);
+        
         separateMeetings();
         renderMeetings();
         
     } catch (error) {
-        console.error('Error loading meetings:', error);
+        console.error('❌ Error loading meetings:', error);
         
         // Hide loading states
         if (loading) loading.style.display = 'none';
@@ -338,6 +347,11 @@ async function loadMeetings() {
         
         // Show error state
         showError('Failed to load meetings');
+    } finally {
+        // Ensure loading spinner is always hidden
+        console.log('🔄 Hiding loading spinners in finally block');
+        if (loading) loading.style.display = 'none';
+        if (loadingArchive) loadingArchive.style.display = 'none';
     }
 }
 
