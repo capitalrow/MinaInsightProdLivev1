@@ -8,6 +8,7 @@ from flask_login import login_required, current_user
 from models import db, Task, Meeting, User, Session, Workspace
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_, select
+from utils.etag_helper import with_etag, compute_collection_etag
 # server/routes/api_tasks.py
 import logging
 from app import db
@@ -982,6 +983,7 @@ def get_my_tasks():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @api_tasks_bp.route('/stats', methods=['GET'])
+@with_etag
 @login_required
 def get_task_stats():
     """Get task statistics for current workspace."""
