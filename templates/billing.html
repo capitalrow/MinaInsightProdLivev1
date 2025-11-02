@@ -322,12 +322,17 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎬 Billing page JavaScript loaded');
     const userId = '{{ user_id }}';
+    console.log('👤 User ID:', userId);
     
     // Handle checkout session creation
     const checkoutButtons = document.querySelectorAll('.start-checkout-btn');
-    checkoutButtons.forEach(btn => {
+    console.log('🔘 Found checkout buttons:', checkoutButtons.length);
+    checkoutButtons.forEach((btn, index) => {
+        console.log(`📋 Button ${index + 1}:`, btn.getAttribute('data-plan-name'), btn.getAttribute('data-price-id'));
         btn.addEventListener('click', async function() {
+            console.log('🖱️ Button clicked!', this.getAttribute('data-plan-name'));
             const priceId = this.getAttribute('data-price-id');
             const planName = this.getAttribute('data-plan-name');
             
