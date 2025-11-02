@@ -313,8 +313,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Load meetings from API
 async function loadMeetings() {
+    const loading = document.getElementById('loading-active');
+    const loadingArchive = document.getElementById('loading-archive');
+    
     try {
         const response = await fetch('/api/sessions');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         allMeetings = data.upserts || [];
@@ -323,6 +331,12 @@ async function loadMeetings() {
         
     } catch (error) {
         console.error('Error loading meetings:', error);
+        
+        // Hide loading states
+        if (loading) loading.style.display = 'none';
+        if (loadingArchive) loadingArchive.style.display = 'none';
+        
+        // Show error state
         showError('Failed to load meetings');
     }
 }
