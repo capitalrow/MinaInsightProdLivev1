@@ -120,10 +120,3 @@ def billing():
         )
     except TemplateNotFound:
         abort(404)
-
-@ui_bp.route('/integrations')
-def integrations():
-    try:
-        return render_template('integrations.html', title='Integrations')
-    except TemplateNotFound:
-        abort(404)
