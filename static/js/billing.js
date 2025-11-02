@@ -3,7 +3,8 @@ console.log('🚀 Billing.js loaded!');
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎬 DOM Content Loaded - Billing page ready');
     
-    const userId = document.body.getAttribute('data-user-id');
+    const container = document.querySelector('[data-user-id]');
+    const userId = container ? container.getAttribute('data-user-id') : null;
     console.log('👤 User ID from data attribute:', userId);
     
     const checkoutButtons = document.querySelectorAll('.start-checkout-btn');
