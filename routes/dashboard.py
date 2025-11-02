@@ -238,45 +238,10 @@ def api_meetings():
 @dashboard_bp.route('/meetings')
 @login_required
 def meetings():
-    """Meetings overview page."""
-    # Filter and pagination
-    page = request.args.get('page', 1, type=int)
-    status_filter = request.args.get('status', 'all')
-    search_query = request.args.get('search', '')
-    
-    # Build query - use impossible condition if no workspace
-    # ✨ CROWN⁴: Eager load session relationship for card navigation
-    # ✨ CROWN⁴ Phase 4: Exclude archived meetings from active view
-    if current_user.workspace_id:
-        query = db.select(Meeting).options(
-            joinedload(Meeting.session)
-        ).where(
-            Meeting.workspace_id == current_user.workspace_id,
-            Meeting.archived == False
-        )
-    else:
-        query = db.select(Meeting).where(Meeting.id == -1)
-    
-    # Apply filters
-    if status_filter != 'all':
-        query = query.filter_by(status=status_filter)
-    
-    if search_query:
-        query = query.filter(Meeting.title.contains(search_query))
-    
-    # Order by created_at descending
-    query = query.order_by(desc(Meeting.created_at))
-    
-    # Paginate results
-    meetings_paginated = db.paginate(query, page=page, per_page=20, error_out=False)
-    
-    return render_template('dashboard/meetings.html',
-                         meetings=meetings_paginated.items,
-                         has_more=meetings_paginated.has_next,
-                         page=page,
-                         total=meetings_paginated.total,
-                         status_filter=status_filter,
-                         search_query=search_query)
+    """✨ CROWN⁴ Phase 4.6: Meetings overview page with real-time updates."""
+    # Just render the template - data will be loaded via API
+    return render_template('dashboard/meetings_crown.html',
+                         workspace_id=current_user.workspace_id)
 
 
 
