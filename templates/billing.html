@@ -321,7 +321,7 @@
 
 {% block extra_js %}
 <script>
-(function() {
+document.addEventListener('DOMContentLoaded', function() {
     const userId = '{{ user_id }}';
     
     // Handle checkout session creation
@@ -417,6 +417,6 @@
             }
         });
     }
-})();
+});
 </script>
 {% endblock %}
