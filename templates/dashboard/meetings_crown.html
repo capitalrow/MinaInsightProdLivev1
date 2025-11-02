@@ -295,7 +295,7 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/toast-notifications.js') }}"></script>
-<script>
+<script nonce="{{ g.csp_nonce }}">
 // CROWN 4.6 Meetings Page Implementation
 console.log('🎬 Meetings page script loaded');
 
