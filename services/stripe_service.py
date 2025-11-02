@@ -8,6 +8,24 @@ from extensions import db
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 
 class StripeService:
+    def _get_base_url(self) -> str:
+        """Get the base URL for the application based on Replit environment."""
+        # Check if this is a deployment
+        if os.getenv("REPLIT_DEPLOYMENT"):
+            # Get deployment domain
+            domain = os.getenv("REPLIT_DEV_DOMAIN", "")
+            if domain:
+                return f"https://{domain}"
+        
+        # Development: Use the first Replit domain
+        domains = os.getenv("REPLIT_DOMAINS", "")
+        if domains:
+            first_domain = domains.split(",")[0].strip()
+            return f"https://{first_domain}"
+        
+        # Fallback
+        return "http://localhost:5000"
+    
     def _ensure_customer(self, user_id: str) -> Customer:
         cust = Customer.query.filter_by(user_id=user_id).first()
         if cust and cust.stripe_customer_id:
@@ -23,20 +41,22 @@ class StripeService:
 
     def create_checkout_session(self, user_id: str, price_id: str) -> str:
         cust = self._ensure_customer(user_id)
+        base_url = self._get_base_url()
         sess = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": price_id, "quantity": 1}],
             customer=cust.stripe_customer_id,
-            success_url=os.getenv("BILLING_SUCCESS_URL","https://example.com/success"),
-            cancel_url=os.getenv("BILLING_CANCEL_URL","https://example.com/cancel"),
+            success_url=f"{base_url}/ui/billing?success=true",
+            cancel_url=f"{base_url}/ui/billing?canceled=true",
         )
         return sess["url"]
 
     def create_billing_portal(self, user_id: str) -> str:
         cust = self._ensure_customer(user_id)
+        base_url = self._get_base_url()
         sess = stripe.billing_portal.Session.create(
             customer=cust.stripe_customer_id,
-            return_url=os.getenv("BILLING_PORTAL_RETURN_URL","https://example.com/account")
+            return_url=f"{base_url}/ui/billing"
         )
         return sess["url"]
 
