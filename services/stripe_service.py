@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import stripe
+from stripe import InvalidRequestError
 from typing import Optional
 from models.core_models import Customer, Subscription
 from models import db
@@ -34,7 +35,7 @@ class StripeService:
             try:
                 stripe.Customer.retrieve(cust.stripe_customer_id)
                 return cust
-            except stripe.error.InvalidRequestError:
+            except InvalidRequestError:
                 # Customer doesn't exist in current mode, need to create new one
                 pass
         
