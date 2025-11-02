@@ -67,6 +67,9 @@ export function MeetingsPage() {
     if (card) {
       const restoredCard = { ...card, status: 'ready' as const };
       meetingsStore.applyDiff([restoredCard], []);
+      
+      // Send restore request to backend
+      patchSession(session_id, 'restore', {}, ulid()).catch(console.error);
     }
   };
 
@@ -184,6 +187,16 @@ export function MeetingsPage() {
           You're offline. Changes will sync when you reconnect.
         </div>
       )}
+      
+      {/* Undo toast */}
+      {Array.from(undoTimers.keys()).map((session_id) => (
+        <div key={session_id} className="undo-toast">
+          <span>Meeting archived</span>
+          <button onClick={() => handleUndo(session_id)} className="undo-button">
+            Undo
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

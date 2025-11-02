@@ -7,16 +7,14 @@ import {
 } from '@/types/meeting';
 import { 
   isToday, 
-  isThisWeek, 
   parseISO, 
-  startOfDay, 
   getISOWeek,
   getYear 
 } from 'date-fns';
 
 export function buildGroups(
   byId: Record<string, MeetingCard>,
-  range: RangeFilter,
+  _range: RangeFilter,
   showArchived: boolean
 ): MeetingsGroups {
   const groups: MeetingsGroups = {
