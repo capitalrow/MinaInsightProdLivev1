@@ -32,9 +32,7 @@ class StripeService:
             return cust
         sc = stripe.Customer.create(metadata={"user_id": user_id})
         if not cust:
-            cust = Customer()
-            cust.user_id = user_id
-            cust.stripe_customer_id = sc["id"]
+            cust = Customer(user_id=user_id, stripe_customer_id=sc["id"])
             db.session.add(cust)
         else:
             cust.stripe_customer_id = sc["id"]
@@ -87,10 +85,7 @@ class StripeService:
     def _upsert_subscription(self, cust: Customer, sub_id: str, status: str):
         s = Subscription.query.filter_by(stripe_subscription_id=sub_id).first()
         if not s:
-            s = Subscription()
-            s.customer_id = cust.id
-            s.stripe_subscription_id = sub_id
-            s.status = status
+            s = Subscription(customer_id=cust.id, stripe_subscription_id=sub_id, status=status)
             db.session.add(s)
         else:
             s.status = status
