@@ -28,6 +28,47 @@ class SlackService:
         """Check if Slack service is available."""
         return self.is_configured
     
+    def post_message(self, channel: str, text: str) -> bool:
+        """
+        Post a simple text message to Slack (for testing).
+        
+        Args:
+            channel: Channel ID or name (e.g., #general)
+            text: Message text to post
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_configured:
+            logger.warning("⚠️ Slack not configured - cannot post message")
+            return False
+        
+        try:
+            payload = {
+                "text": text,
+                "channel": channel
+            }
+            
+            webhook_url = self.webhook_url or ""
+            response = requests.post(
+                webhook_url,
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            
+            success = response.status_code == 200
+            if success:
+                logger.info(f"✅ Posted message to Slack channel: {channel}")
+            else:
+                logger.error(f"❌ Slack post failed: {response.status_code}")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"❌ Error posting to Slack: {str(e)}")
+            return False
+    
     def post_transcript_summary(
         self,
         session_title: str,
