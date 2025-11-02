@@ -50,3 +50,5 @@ reportlab
 python-docx
 psycopg2-binary
 celery
+flask-sqlalchemy
+sqlalchemy
