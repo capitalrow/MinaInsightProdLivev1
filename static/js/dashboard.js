@@ -48,6 +48,16 @@ class MinaDashboard {
         this.setupEventListeners();
         this.startAutoRefresh();
         
+        // Start CROWN ¹⁰ 30-second reconciliation cycle
+        if (typeof ReconciliationCycle !== 'undefined') {
+            this.reconciliation = new ReconciliationCycle(this.workspaceId);
+            this.reconciliation.start();
+            console.log('✅ ETag reconciliation cycle started (30s interval)');
+            
+            // Make globally available for debugging
+            window.reconciliation = this.reconciliation;
+        }
+        
         // Log performance metrics
         this.performanceMetrics.totalBootstrapTime = performance.now() - this.performanceMetrics.bootstrapStart;
         console.log(`⚡ Dashboard bootstrap: ${this.performanceMetrics.totalBootstrapTime.toFixed(0)}ms (target: <200ms)`);
