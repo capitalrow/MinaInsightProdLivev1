@@ -5,7 +5,6 @@ import { getSessionsHeader, getSessionsDiff } from '@/api/sessions';
 import { sessionChannel } from '@/ws/sessionChannel';
 import { prefetchController } from '@/services/prefetchController';
 import { telemetry } from '@/services/telemetry';
-import { MeetingsState } from '@/types/meeting';
 
 export function useMeetingsBootstrap(workspace_id: number) {
   const [isBootstrapping, setIsBootstrapping] = useState(true);

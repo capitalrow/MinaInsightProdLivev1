@@ -32,7 +32,8 @@ def register_meetings_namespace(socketio):
     def handle_meetings_connect():
         """Handle client connection to meetings namespace."""
         try:
-            client_id = request.sid
+            # Get client ID from Flask request (patched by Flask-SocketIO)
+            client_id = request.sid if hasattr(request, 'sid') else 'unknown'
             logger.info(f"Meetings client connected: {client_id}")
             
             emit('connected', {
@@ -48,7 +49,7 @@ def register_meetings_namespace(socketio):
     def handle_meetings_disconnect():
         """Handle client disconnection from meetings namespace."""
         try:
-            client_id = request.sid
+            client_id = request.sid if hasattr(request, 'sid') else 'unknown'
             logger.info(f"Meetings client disconnected: {client_id}")
             
         except Exception as e:
@@ -71,7 +72,8 @@ def register_meetings_namespace(socketio):
             room = f"workspace_{workspace_id}"
             join_room(room)
             
-            logger.info(f"Client {request.sid} joined meetings room: {room}")
+            client_id = request.sid if hasattr(request, 'sid') else 'unknown'
+            logger.info(f"Client {client_id} joined meetings room: {room}")
             
             emit('joined_workspace', {
                 'workspace_id': workspace_id,
@@ -99,7 +101,8 @@ def register_meetings_namespace(socketio):
             room = f"meeting_{meeting_id}"
             join_room(room)
             
-            logger.info(f"Client {request.sid} subscribed to meeting {meeting_id} updates")
+            client_id = request.sid if hasattr(request, 'sid') else 'unknown'
+            logger.info(f"Client {client_id} subscribed to meeting {meeting_id} updates")
             
             emit('subscribed_meeting', {
                 'meeting_id': meeting_id,

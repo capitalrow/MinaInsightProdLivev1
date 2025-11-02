@@ -1,5 +1,5 @@
 import { MeetingCard as MeetingCardType } from '@/types/meeting';
-import { formatDistanceToNow, format } from 'date-fns';
+import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { indexedDBCache } from '@/lib/cache/indexedDb';
 

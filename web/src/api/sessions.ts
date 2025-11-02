@@ -1,4 +1,4 @@
-import { SessionHeaderResponse, SessionDiffResponse, MeetingCard } from '@/types/meeting';
+import { SessionHeaderResponse, SessionDiffResponse } from '@/types/meeting';
 
 const API_BASE = '/api';
 
