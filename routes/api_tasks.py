@@ -1251,6 +1251,119 @@ def get_all_tasks():
         logger.error(f"Error retrieving tasks: {e}")
         return jsonify({"success": False, "error": "Failed to retrieve tasks"}), 500
 
+@api_tasks_bp.route('/users', methods=['GET'])
+@login_required
+def list_assignable_users():
+    """
+    Get list of users in workspace for assignee autocomplete.
+    CROWN⁴.5 Event #7: Assignee selection support.
+    """
+    try:
+        # Get users in current workspace
+        stmt = select(User).where(User.workspace_id == current_user.workspace_id)
+        users = db.session.execute(stmt).scalars().all()
+        
+        return jsonify({
+            "success": True,
+            "users": [{
+                "id": user.id,
+                "name": user.display_name or f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username,
+                "username": user.username,
+                "email": user.email
+            } for user in users]
+        }), 200
+    except Exception as e:
+        logger.error(f"Error fetching assignable users: {e}")
+        return jsonify({"success": False, "error": "Failed to fetch users"}), 500
+
+
+@api_tasks_bp.route('/ai-proposals/<int:meeting_id>', methods=['GET'])
+@login_required
+def get_ai_task_proposals(meeting_id):
+    """
+    Get AI-proposed tasks for a meeting.
+    CROWN⁴.5 Event #10: AI task proposals from transcript.
+    """
+    try:
+        import asyncio
+        from services.task_extraction_service import TaskExtractionService
+        
+        # Check if meeting belongs to user's workspace
+        meeting = db.session.get(Meeting, meeting_id)
+        if not meeting or meeting.workspace_id != current_user.workspace_id:
+            return jsonify({"success": False, "error": "Meeting not found"}), 404
+        
+        # Extract tasks using AI (run async service in sync context)
+        extraction_service = TaskExtractionService()
+        proposed_tasks = asyncio.run(extraction_service.extract_tasks_from_meeting(meeting_id))
+        
+        return jsonify({
+            "success": True,
+            "proposals": [{
+                "title": task.title,
+                "description": task.description,
+                "priority": task.priority,
+                "confidence": task.confidence,
+                "assigned_to": task.assigned_to,
+                "category": task.category,
+                "context": task.context
+            } for task in proposed_tasks]
+        }), 200
+    except Exception as e:
+        logger.error(f"Error fetching AI task proposals: {e}")
+        return jsonify({"success": False, "error": "Failed to fetch AI proposals"}), 500
+
+
+@api_tasks_bp.route('/create-from-proposal', methods=['POST'])
+@login_required
+def create_task_from_proposal():
+    """
+    Create a task from an AI proposal.
+    CROWN⁴.5 Event #10: Click-to-create from AI proposal.
+    """
+    try:
+        data = request.get_json()
+        
+        # Create task from proposal
+        task = Task(
+            title=data.get('title'),
+            description=data.get('description'),
+            priority=data.get('priority', 'medium'),
+            meeting_id=data.get('meeting_id'),
+            created_by_id=current_user.id,
+            extracted_by_ai=True,
+            confidence_score=data.get('confidence', 0.0),
+            extraction_context=data.get('context', {}),
+            source='ai_extraction'
+        )
+        
+        db.session.add(task)
+        db.session.commit()
+        
+        # Broadcast via WebSocket
+        event_broadcaster.broadcast_task_update(
+            task_id=task.id,
+            task_data={"title": task.title, "priority": task.priority},
+            meeting_id=task.meeting_id,
+            workspace_id=current_user.workspace_id
+        )
+        
+        logger.info(f"✅ Task created from AI proposal: {task.title}")
+        
+        return jsonify({
+            "success": True,
+            "task": {
+                "id": task.id,
+                "title": task.title,
+                "priority": task.priority
+            }
+        }), 201
+    except Exception as e:
+        logger.error(f"Error creating task from proposal: {e}")
+        db.session.rollback()
+        return jsonify({"success": False, "error": "Failed to create task"}), 500
+
+
 @api_tasks_bp.route('/<int:session_id>/<int:task_index>', methods=['PUT'])
 def update_summary_task(session_id, task_index):
     """
