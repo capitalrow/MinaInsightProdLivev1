@@ -922,6 +922,25 @@ class TaskCache {
     }
 
     /**
+     * Clear only tasks cache (preserves events, queue, metadata)
+     * @returns {Promise<void>}
+     */
+    async clearAllTasks() {
+        await this.init();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['tasks'], 'readwrite');
+            const store = transaction.objectStore('tasks');
+            const request = store.clear();
+
+            request.onsuccess = () => {
+                console.log('✅ Tasks cache cleared');
+                resolve();
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
      * Clear all caches (used for reset/logout)
      * @returns {Promise<void>}
      */
