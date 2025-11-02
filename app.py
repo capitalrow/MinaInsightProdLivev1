@@ -753,7 +753,8 @@ def create_app() -> Flask:
     try:
         from routes.billing import billing_bp
         app.register_blueprint(billing_bp)
-        app.logger.info("Blueprint registered: billing_bp")
+        csrf.exempt(billing_bp)
+        app.logger.info("Blueprint registered: billing_bp (CSRF exempt for JSON API)")
     except Exception as e:
         app.logger.warning(f"Failed to register billing_bp: {e}")
         
