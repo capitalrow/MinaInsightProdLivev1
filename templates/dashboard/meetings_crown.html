@@ -1,0 +1,664 @@
+{% extends "base.html" %}
+
+{% block title %}Meetings - Mina{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/toast-notifications.css') }}">
+<style>
+.meetings-container {
+    min-height: calc(100vh - var(--header-height));
+    padding: var(--space-8) 0;
+}
+
+.meetings-header {
+    margin-bottom: var(--space-8);
+    animation: fadeInUp 0.6s ease-out;
+}
+
+.meetings-title {
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-bold);
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: var(--space-2);
+}
+
+.meetings-subtitle {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-lg);
+}
+
+.meetings-tabs {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-6);
+    animation: fadeInUp 0.6s ease-out 0.05s;
+    animation-fill-mode: both;
+}
+
+.tab-btn {
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    position: relative;
+    overflow: hidden;
+}
+
+.tab-btn.active {
+    background: var(--gradient-primary);
+    border-color: transparent;
+    color: white;
+    font-weight: var(--font-weight-semibold);
+}
+
+.tab-count {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+}
+
+.filters-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.section-header {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-primary);
+    margin: var(--space-8) 0 var(--space-4);
+    padding-left: var(--space-2);
+    border-left: 4px solid var(--color-primary);
+}
+
+.meeting-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    transition: all var(--transition-base);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: var(--space-4);
+}
+
+.meeting-card:hover {
+    transform: translateX(8px);
+    border-color: var(--color-primary);
+}
+
+.meeting-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--gradient-primary);
+    opacity: 0;
+    transition: opacity var(--transition-base);
+}
+
+.meeting-card:hover::before {
+    opacity: 1;
+}
+
+.meeting-icon {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-primary);
+    border-radius: var(--radius-xl);
+    flex-shrink: 0;
+}
+
+.meeting-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.meeting-date {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-2);
+}
+
+.meeting-meta {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+    flex-wrap: wrap;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.empty-state {
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-16);
+    text-align: center;
+}
+
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+}
+
+.undo-toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    animation: slideInRight 0.3s ease-out;
+    z-index: 9999;
+}
+
+.undo-button {
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    font-weight: var(--font-weight-medium);
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container meetings-container">
+    <div class="meetings-header">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="meetings-title">Meetings</h1>
+                <p class="meetings-subtitle">View and manage all your recorded meetings</p>
+            </div>
+            <a href="{{ url_for('pages.live') }}" class="btn btn-primary">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New Recording
+            </a>
+        </div>
+    </div>
+
+    <div class="meetings-tabs">
+        <button class="tab-btn active" data-tab="active" onclick="switchTab('active')">
+            Active
+            <span class="tab-count" id="active-count">0</span>
+        </button>
+        <button class="tab-btn" data-tab="archive" onclick="switchTab('archive')">
+            Archive
+            <span class="tab-count" id="archive-count">0</span>
+        </button>
+    </div>
+
+    <div class="filters-card">
+        <div style="display: grid; grid-template-columns: 1fr auto; gap: var(--space-4); align-items: center;">
+            <div class="flex gap-3 flex-wrap">
+                <input type="search" class="input" id="search-input" placeholder="Search meetings..." style="max-width: 400px;" oninput="filterMeetings()">
+                <select class="input" id="time-filter" style="max-width: 200px;" onchange="filterMeetings()">
+                    <option value="all">All Time</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                    <option value="year">This Year</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Meetings Tab -->
+    <div id="active-meetings" class="tab-content">
+        <div id="loading-active" class="loading-spinner">
+            <div style="font-size: var(--font-size-lg); color: var(--color-text-secondary);">Loading meetings...</div>
+        </div>
+        <div id="meetings-content" style="display: none;"></div>
+    </div>
+
+    <!-- Archive Tab -->
+    <div id="archive-meetings" class="tab-content" style="display: none;">
+        <div id="loading-archive" class="loading-spinner">
+            <div style="font-size: var(--font-size-lg); color: var(--color-text-secondary);">Loading archived meetings...</div>
+        </div>
+        <div id="archive-content" style="display: none;"></div>
+    </div>
+
+    <!-- Undo Toast Container -->
+    <div id="undo-toast-container"></div>
+</div>
+
+<!-- Socket.IO -->
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/toast-notifications.js') }}"></script>
+<script>
+// CROWN 4.6 Meetings Page Implementation
+const WORKSPACE_ID = {{ workspace_id }};
+let allMeetings = [];
+let activeMeetings = [];
+let archivedMeetings = [];
+let currentTab = 'active';
+let socket = null;
+let undoTimers = new Map();
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadMeetings();
+    connectWebSocket();
+});
+
+// Load meetings from API
+async function loadMeetings() {
+    try {
+        const response = await fetch('/api/sessions/header');
+        const data = await response.json();
+        
+        allMeetings = data.meetings || [];
+        separateMeetings();
+        renderMeetings();
+        
+    } catch (error) {
+        console.error('Error loading meetings:', error);
+        showError('Failed to load meetings');
+    }
+}
+
+// Separate active and archived meetings
+function separateMeetings() {
+    activeMeetings = allMeetings.filter(m => !m.archived);
+    archivedMeetings = allMeetings.filter(m => m.archived);
+    
+    // Update counts
+    document.getElementById('active-count').textContent = activeMeetings.length;
+    document.getElementById('archive-count').textContent = archivedMeetings.length;
+}
+
+// Group meetings by time period
+function groupMeetings(meetings) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const groups = {
+        today: [],
+        thisWeek: [],
+        earlier: []
+    };
+    
+    meetings.forEach(meeting => {
+        const meetingDate = new Date(meeting.created_at || meeting.timestamp);
+        
+        if (meetingDate >= today) {
+            groups.today.push(meeting);
+        } else if (meetingDate >= weekAgo) {
+            groups.thisWeek.push(meeting);
+        } else {
+            groups.earlier.push(meeting);
+        }
+    });
+    
+    return groups;
+}
+
+// Render meetings with grouping
+function renderMeetings() {
+    const meetings = currentTab === 'active' ? activeMeetings : archivedMeetings;
+    const container = document.getElementById(currentTab === 'active' ? 'meetings-content' : 'archive-content');
+    const loading = document.getElementById(currentTab === 'active' ? 'loading-active' : 'loading-archive');
+    
+    loading.style.display = 'none';
+    container.style.display = 'block';
+    
+    if (meetings.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div style="font-size: 4rem; opacity: 0.3; margin-bottom: 1rem;">📋</div>
+                <h2 style="font-size: var(--font-size-2xl); margin-bottom: 1rem;">No ${currentTab} meetings</h2>
+                <p style="color: var(--color-text-secondary);">
+                    ${currentTab === 'active' ? 'Start recording your first meeting!' : 'Archived meetings will appear here'}
+                </p>
+            </div>
+        `;
+        return;
+    }
+    
+    const groups = groupMeetings(meetings);
+    let html = '';
+    
+    if (groups.today.length > 0) {
+        html += '<h2 class="section-header">Today</h2>';
+        html += groups.today.map(renderMeetingCard).join('');
+    }
+    
+    if (groups.thisWeek.length > 0) {
+        html += '<h2 class="section-header">This Week</h2>';
+        html += groups.thisWeek.map(renderMeetingCard).join('');
+    }
+    
+    if (groups.earlier.length > 0) {
+        html += '<h2 class="section-header">Earlier</h2>';
+        html += groups.earlier.map(renderMeetingCard).join('');
+    }
+    
+    container.innerHTML = html;
+}
+
+// Render individual meeting card
+function renderMeetingCard(meeting) {
+    const date = new Date(meeting.created_at || meeting.timestamp);
+    const sessionId = meeting.external_session_id || meeting.session_id;
+    
+    return `
+        <div class="meeting-card" onclick="navigateToMeeting('${sessionId}')" data-session-id="${sessionId}">
+            <div class="flex justify-between items-start gap-4">
+                <div class="flex gap-4 flex-1">
+                    <div class="meeting-icon">
+                        <svg width="28" height="28" fill="white" viewBox="0 0 24 24">
+                            <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="meeting-title">${meeting.title || 'Untitled Meeting'}</h3>
+                        <p class="meeting-date">${formatDate(date)}</p>
+                        ${meeting.summary ? `<p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-top: 0.5rem;">${meeting.summary.substring(0, 150)}...</p>` : ''}
+                        <div class="meeting-meta">
+                            ${meeting.duration ? `<span class="meta-item">⏱️ ${Math.round(meeting.duration / 60)} min</span>` : ''}
+                            ${meeting.word_count ? `<span class="meta-item">📝 ${meeting.word_count} words</span>` : ''}
+                            ${meeting.speaker_count ? `<span class="meta-item">👥 ${meeting.speaker_count} speakers</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="meeting-actions" onclick="event.stopPropagation()">
+                    ${currentTab === 'active' ? 
+                        `<button class="btn btn-sm" onclick="archiveMeeting('${sessionId}')">Archive</button>` :
+                        `<button class="btn btn-sm" onclick="restoreMeeting('${sessionId}')">Restore</button>`
+                    }
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Navigate to meeting detail
+function navigateToMeeting(sessionId) {
+    window.location.href = `/sessions/${sessionId}`;
+}
+
+// Format date
+function formatDate(date) {
+    const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return date.toLocaleDateString('en-US', options);
+}
+
+// Switch tab
+function switchTab(tab) {
+    currentTab = tab;
+    
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    
+    // Show/hide content
+    document.getElementById('active-meetings').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('archive-meetings').style.display = tab === 'archive' ? 'block' : 'none';
+    
+    renderMeetings();
+}
+
+// Archive meeting
+async function archiveMeeting(sessionId) {
+    try {
+        const clientUlid = generateULID();
+        const response = await fetch(`/api/sessions/${sessionId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                operation: 'archive',
+                client_ulid: clientUlid
+            })
+        });
+        
+        if (!response.ok) throw new Error('Archive failed');
+        
+        // Update local state
+        const meeting = allMeetings.find(m => (m.external_session_id || m.session_id) === sessionId);
+        if (meeting) {
+            meeting.archived = true;
+            separateMeetings();
+            renderMeetings();
+            showUndoToast(sessionId, meeting.title);
+        }
+        
+    } catch (error) {
+        console.error('Error archiving meeting:', error);
+        window.toast?.error('Failed to archive meeting');
+    }
+}
+
+// Restore meeting
+async function restoreMeeting(sessionId, isUndo = false) {
+    try {
+        const clientUlid = generateULID();
+        const response = await fetch(`/api/sessions/${sessionId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                operation: 'restore',
+                client_ulid: clientUlid
+            })
+        });
+        
+        if (!response.ok) throw new Error('Restore failed');
+        
+        // Update local state
+        const meeting = allMeetings.find(m => (m.external_session_id || m.session_id) === sessionId);
+        if (meeting) {
+            meeting.archived = false;
+            separateMeetings();
+            renderMeetings();
+            if (!isUndo) window.toast?.success('Meeting restored');
+        }
+        
+        // Clear undo timer
+        if (undoTimers.has(sessionId)) {
+            clearTimeout(undoTimers.get(sessionId));
+            undoTimers.delete(sessionId);
+            hideUndoToast(sessionId);
+        }
+        
+    } catch (error) {
+        console.error('Error restoring meeting:', error);
+        window.toast?.error('Failed to restore meeting');
+    }
+}
+
+// Show undo toast
+function showUndoToast(sessionId, title) {
+    const container = document.getElementById('undo-toast-container');
+    const toastId = `undo-${sessionId}`;
+    
+    const toast = document.createElement('div');
+    toast.id = toastId;
+    toast.className = 'undo-toast';
+    toast.innerHTML = `
+        <span>Meeting archived</span>
+        <button class="undo-button" onclick="restoreMeeting('${sessionId}', true)">Undo</button>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-hide after 5 seconds
+    const timer = setTimeout(() => {
+        hideUndoToast(sessionId);
+        undoTimers.delete(sessionId);
+    }, 5000);
+    
+    undoTimers.set(sessionId, timer);
+}
+
+// Hide undo toast
+function hideUndoToast(sessionId) {
+    const toast = document.getElementById(`undo-${sessionId}`);
+    if (toast) {
+        toast.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }
+}
+
+// Connect to WebSocket
+function connectWebSocket() {
+    socket = io('/meetings');
+    
+    socket.on('connect', () => {
+        console.log('✅ Connected to meetings WebSocket');
+        socket.emit('join_workspace', { workspace_id: WORKSPACE_ID });
+    });
+    
+    socket.on('meeting_created', (data) => {
+        console.log('📨 New meeting created:', data);
+        loadMeetings(); // Reload to get new meeting
+    });
+    
+    socket.on('meeting_updated', (data) => {
+        console.log('📨 Meeting updated:', data);
+        // Update meeting in local state
+        const meeting = allMeetings.find(m => m.meeting_id === data.meeting_id);
+        if (meeting) {
+            Object.assign(meeting, data.meeting_data);
+            separateMeetings();
+            renderMeetings();
+        }
+    });
+}
+
+// Filter meetings
+function filterMeetings() {
+    const search = document.getElementById('search-input').value.toLowerCase();
+    const timeFilter = document.getElementById('time-filter').value;
+    
+    let filtered = currentTab === 'active' ? [...activeMeetings] : [...archivedMeetings];
+    
+    // Apply search filter
+    if (search) {
+        filtered = filtered.filter(m => 
+            (m.title || '').toLowerCase().includes(search) ||
+            (m.summary || '').toLowerCase().includes(search)
+        );
+    }
+    
+    // Apply time filter
+    if (timeFilter !== 'all') {
+        const now = new Date();
+        const cutoff = new Date();
+        
+        if (timeFilter === 'week') cutoff.setDate(now.getDate() - 7);
+        else if (timeFilter === 'month') cutoff.setMonth(now.getMonth() - 1);
+        else if (timeFilter === 'year') cutoff.setFullYear(now.getFullYear() - 1);
+        
+        filtered = filtered.filter(m => new Date(m.created_at || m.timestamp) >= cutoff);
+    }
+    
+    // Render filtered results
+    const groups = groupMeetings(filtered);
+    const container = document.getElementById(currentTab === 'active' ? 'meetings-content' : 'archive-content');
+    
+    let html = '';
+    if (groups.today.length > 0) {
+        html += '<h2 class="section-header">Today</h2>';
+        html += groups.today.map(renderMeetingCard).join('');
+    }
+    if (groups.thisWeek.length > 0) {
+        html += '<h2 class="section-header">This Week</h2>';
+        html += groups.thisWeek.map(renderMeetingCard).join('');
+    }
+    if (groups.earlier.length > 0) {
+        html += '<h2 class="section-header">Earlier</h2>';
+        html += groups.earlier.map(renderMeetingCard).join('');
+    }
+    
+    container.innerHTML = html || '<div class="empty-state"><p>No meetings found</p></div>';
+}
+
+// Generate ULID (simplified)
+function generateULID() {
+    return Date.now().toString(36) + Math.random().toString(36).substring(2);
+}
+
+// Show error
+function showError(message) {
+    const container = document.getElementById('meetings-content');
+    container.innerHTML = `
+        <div class="empty-state">
+            <div style="font-size: 4rem; opacity: 0.3; margin-bottom: 1rem;">⚠️</div>
+            <h2 style="font-size: var(--font-size-2xl); margin-bottom: 1rem;">Error</h2>
+            <p style="color: var(--color-text-secondary);">${message}</p>
+        </div>
+    `;
+}
+</script>
+{% endblock %}
