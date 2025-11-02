@@ -151,6 +151,11 @@ class TaskClusteringManager {
 
         // Attach event listeners
         this.attachClusterEventListeners();
+        
+        // Restore selection state across view toggle
+        if (window.selectionManager) {
+            window.selectionManager.restoreSelectionUI();
+        }
     }
 
     renderCluster(cluster, index) {
@@ -258,16 +263,9 @@ class TaskClusteringManager {
             });
         });
 
-        // Task checkboxes
-        document.querySelectorAll('.task-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', async (e) => {
-                const taskId = e.target.dataset.taskId;
-                if (window.optimisticUI) {
-                    await window.optimisticUI.toggleTaskStatus(taskId);
-                }
-            });
-        });
-
+        // Note: Checkbox changes are handled by centralized event delegation in tasks.html
+        // This prevents duplicate handlers and ensures selection mode works correctly
+        
         // Task clicks
         document.querySelectorAll('.task-card.clustered').forEach(card => {
             card.addEventListener('click', (e) => {
@@ -284,6 +282,13 @@ class TaskClusteringManager {
     showNormalView() {
         // Trigger re-render of normal task list
         window.dispatchEvent(new CustomEvent('tasks:refresh-view'));
+        
+        // Restore selection state after view switches back
+        setTimeout(() => {
+            if (window.selectionManager) {
+                window.selectionManager.restoreSelectionUI();
+            }
+        }, 100);
     }
 
     showLoadingState() {
