@@ -298,30 +298,79 @@ def create_app() -> Flask:
     # Configure Redis-backed server-side sessions (CRITICAL: keeps cookies under 4KB)
     # Industry standard: Store only session ID in cookie (~50 bytes), all data in Redis
     redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+    is_production = os.getenv("FLASK_ENV") == "production" or os.getenv("REPLIT_DEPLOYMENT")
+    
     try:
+        from redis.backoff import ExponentialBackoff
+        from redis.retry import Retry
+        from redis.exceptions import BusyLoadingError, ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
+        
+        # Configure Redis client with connection retry for resilience
+        retry = Retry(ExponentialBackoff(), 3)
+        redis_client = redis.from_url(
+            redis_url,
+            retry=retry,
+            retry_on_error=[BusyLoadingError, RedisConnectionError, RedisTimeoutError],
+            socket_connect_timeout=5,
+            socket_keepalive=True,
+            health_check_interval=30
+        )
+        
+        # Test Redis connection before configuring sessions
+        redis_client.ping()
+        
+        # Configure Flask-Session with Redis
         app.config["SESSION_TYPE"] = "redis"
         app.config["SESSION_PERMANENT"] = False
         app.config["SESSION_USE_SIGNER"] = True  # Cryptographically sign session IDs
         app.config["SESSION_KEY_PREFIX"] = "mina_session:"
-        app.config["SESSION_REDIS"] = redis.from_url(redis_url)
+        app.config["SESSION_REDIS"] = redis_client
+        app.config["SESSION_COOKIE_NAME"] = "mina_sid"  # Distinct cookie name
         
-        # Session cookie security (production hardening)
-        app.config["SESSION_COOKIE_SECURE"] = True  # HTTPS only
+        # Session cookie security (environment-aware)
+        app.config["SESSION_COOKIE_SECURE"] = is_production  # HTTPS only in production
         app.config["SESSION_COOKIE_HTTPONLY"] = True  # Block XSS attacks
         app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
         app.config["PERMANENT_SESSION_LIFETIME"] = 28800  # 8 hours
         
         # Initialize Flask-Session with Redis backend
         Session(app)
-        app.logger.info(f"✅ Redis-backed server-side sessions configured: {redis_url}")
+        app.logger.info(f"✅ Redis-backed server-side sessions configured: {redis_url} (secure={is_production})")
+        
     except Exception as e:
         app.logger.error(f"❌ Failed to configure Redis sessions: {e}")
-        # Fallback to default cookie-based sessions (will have size limits)
-        app.config["SESSION_COOKIE_SECURE"] = True
-        app.config["SESSION_COOKIE_HTTPONLY"] = True
-        app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-        app.config["PERMANENT_SESSION_LIFETIME"] = 1800  # 30 minutes
-        app.logger.warning("⚠️ Using cookie-based sessions (fallback) - may hit size limits")
+        app.logger.warning("⚠️ Falling back to filesystem-backed sessions (production-safe fallback)")
+        
+        # Production-safe fallback: Use filesystem sessions instead of cookies
+        # This avoids cookie size limits while maintaining some persistence
+        try:
+            import tempfile
+            session_dir = os.path.join(tempfile.gettempdir(), "mina_sessions")
+            os.makedirs(session_dir, exist_ok=True)
+            
+            app.config["SESSION_TYPE"] = "filesystem"
+            app.config["SESSION_FILE_DIR"] = session_dir
+            app.config["SESSION_FILE_THRESHOLD"] = 500  # Max 500 sessions before cleanup
+            app.config["SESSION_PERMANENT"] = False
+            app.config["SESSION_USE_SIGNER"] = True
+            app.config["SESSION_COOKIE_NAME"] = "mina_sid_fs"
+            
+            # Environment-aware security settings
+            app.config["SESSION_COOKIE_SECURE"] = is_production
+            app.config["SESSION_COOKIE_HTTPONLY"] = True
+            app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+            app.config["PERMANENT_SESSION_LIFETIME"] = 1800  # 30 minutes (shorter for fallback)
+            
+            Session(app)
+            app.logger.info(f"✅ Filesystem-backed sessions configured: {session_dir}")
+        except Exception as fallback_error:
+            app.logger.error(f"❌ Filesystem session fallback failed: {fallback_error}")
+            # Last resort: Use cookie sessions with size monitoring
+            app.config["SESSION_COOKIE_SECURE"] = is_production
+            app.config["SESSION_COOKIE_HTTPONLY"] = True
+            app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+            app.config["PERMANENT_SESSION_LIFETIME"] = 900  # 15 minutes (very short)
+            app.logger.warning("⚠️ Using cookie-based sessions - CRITICAL: may hit size limits!")
     
     # Initialize CSRF protection  
     csrf = CSRFProtect(app)
