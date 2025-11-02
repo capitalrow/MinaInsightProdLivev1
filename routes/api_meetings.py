@@ -21,6 +21,7 @@ api_meetings_bp = Blueprint('api_meetings', __name__, url_prefix='/api/meetings'
 
 
 @api_meetings_bp.route('/', methods=['GET'])
+@with_etag
 @cache_response(ttl=300, prefix='session')  # 5 min cache for meeting lists
 @login_required
 def list_meetings():
