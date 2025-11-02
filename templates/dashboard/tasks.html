@@ -2402,7 +2402,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    credentials: 'same-origin',
+                    credentials: 'include',
                     body: JSON.stringify({ task_ids: taskIds })
                 });
                 
@@ -2416,6 +2416,14 @@
                 if (!response.ok) {
                     const errorText = await response.text();
                     console.error('❌ Server returned error:', errorText);
+                    
+                    // Handle authentication errors
+                    if (response.status === 401) {
+                        alert('Your session has expired. Please log in again.');
+                        window.location.href = '/login';
+                        return;
+                    }
+                    
                     throw new Error(`Bulk complete failed: ${response.status} ${response.statusText} - ${errorText}`);
                 }
                 
@@ -2493,7 +2501,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    credentials: 'same-origin',
+                    credentials: 'include',
                     body: JSON.stringify({ task_ids: taskIds })
                 });
                 
@@ -2507,6 +2515,14 @@
                 if (!response.ok) {
                     const errorText = await response.text();
                     console.error('❌ Server returned error:', errorText);
+                    
+                    // Handle authentication errors
+                    if (response.status === 401) {
+                        alert('Your session has expired. Please log in again.');
+                        window.location.href = '/login';
+                        return;
+                    }
+                    
                     throw new Error(`Bulk delete failed: ${response.status} ${response.statusText} - ${errorText}`);
                 }
                 
@@ -2581,7 +2597,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    credentials: 'same-origin',
+                    credentials: 'include',
                     body: JSON.stringify({ 
                         task_ids: taskIds,
                         label: label.trim()
@@ -2598,6 +2614,14 @@
                 if (!response.ok) {
                     const errorText = await response.text();
                     console.error('❌ Server returned error:', errorText);
+                    
+                    // Handle authentication errors
+                    if (response.status === 401) {
+                        alert('Your session has expired. Please log in again.');
+                        window.location.href = '/login';
+                        return;
+                    }
+                    
                     throw new Error(`Bulk label failed: ${response.status} ${response.statusText} - ${errorText}`);
                 }
                 
