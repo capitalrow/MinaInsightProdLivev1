@@ -1,0 +1,506 @@
+{
+  "audit_metadata": {
+    "timestamp": "2025-11-02T19:01:30.944994",
+    "duration_seconds": 0.17,
+    "total_tests": 36
+  },
+  "summary": {
+    "pass": 26,
+    "fail": 5,
+    "warn": 5,
+    "score": 79.17,
+    "certification": "\ud83d\udd36 CROWN 10 PARTIALLY COMPLIANT"
+  },
+  "results": [
+    {
+      "dimension": "Database Infrastructure",
+      "test_name": "Table Schema",
+      "status": "PASS",
+      "message": "All 12 required tables exist",
+      "details": {
+        "tables_count": 39
+      },
+      "timestamp": "2025-11-02T19:01:30.919724"
+    },
+    {
+      "dimension": "Database Infrastructure",
+      "test_name": "Database Connection",
+      "status": "FAIL",
+      "message": "Database error: type object 'Meeting' has no attribute 'query'",
+      "details": null,
+      "timestamp": "2025-11-02T19:01:30.920081"
+    },
+    {
+      "dimension": "Test Infrastructure",
+      "test_name": "Test User",
+      "status": "FAIL",
+      "message": "Error checking test user: type object 'User' has no attribute 'query'",
+      "details": null,
+      "timestamp": "2025-11-02T19:01:30.920186"
+    },
+    {
+      "dimension": "Law 1: Atomic Truth",
+      "test_name": "Event Structure",
+      "status": "PASS",
+      "message": "EventLedger model supports atomic event tracking",
+      "details": {
+        "fields": [
+          "id",
+          "event_type",
+          "payload",
+          "created_at"
+        ],
+        "immutable": true
+      },
+      "timestamp": "2025-11-02T19:01:30.920299"
+    },
+    {
+      "dimension": "Law 1: Atomic Truth",
+      "test_name": "Event Taxonomy",
+      "status": "PASS",
+      "message": "All 8 required CROWN event types defined",
+      "details": {
+        "event_types_count": 36
+      },
+      "timestamp": "2025-11-02T19:01:30.920671"
+    },
+    {
+      "dimension": "Law 2: Idempotent Integrity",
+      "test_name": "Idempotency Fields",
+      "status": "PASS",
+      "message": "EventLedger supports idempotent replay",
+      "details": {
+        "fields": [
+          "idempotency_key",
+          "event_version",
+          "sequence_num",
+          "last_applied_id"
+        ],
+        "deduplication": "enabled"
+      },
+      "timestamp": "2025-11-02T19:01:30.921029"
+    },
+    {
+      "dimension": "Law 2: Idempotent Integrity",
+      "test_name": "Task Deduplication",
+      "status": "PASS",
+      "message": "Task model supports CROWN\u2074.5 deduplication",
+      "details": {
+        "origin_hash": true,
+        "reconciliation_status": true,
+        "vector_clock": true
+      },
+      "timestamp": "2025-11-02T19:01:30.921568"
+    },
+    {
+      "dimension": "Law 3: Chronological Order",
+      "test_name": "Event Ordering",
+      "status": "PASS",
+      "message": "EventLedger supports chronological + vector clock ordering",
+      "details": {
+        "timestamp": "created_at",
+        "sequence": "sequence_num",
+        "vector_clock": "enabled"
+      },
+      "timestamp": "2025-11-02T19:01:30.922021"
+    },
+    {
+      "dimension": "Law 3: Chronological Order",
+      "test_name": "Event Sequencer",
+      "status": "PASS",
+      "message": "EventSequencer service is implemented",
+      "details": {
+        "service": "event_sequencer",
+        "ordering": "guaranteed"
+      },
+      "timestamp": "2025-11-02T19:01:30.922412"
+    },
+    {
+      "dimension": "Law 4: Cross-Surface Awareness",
+      "test_name": "Event Broadcaster",
+      "status": "PASS",
+      "message": "EventBroadcaster service is implemented",
+      "details": {
+        "service": "event_broadcaster",
+        "real_time": true
+      },
+      "timestamp": "2025-11-02T19:01:30.922794"
+    },
+    {
+      "dimension": "Law 4: Cross-Surface Awareness",
+      "test_name": "WebSocket Namespaces",
+      "status": "PASS",
+      "message": "Expected 4 WebSocket namespaces for cross-surface sync",
+      "details": {
+        "namespaces": [
+          "/dashboard",
+          "/tasks",
+          "/analytics",
+          "/meetings"
+        ]
+      },
+      "timestamp": "2025-11-02T19:01:30.923245"
+    },
+    {
+      "dimension": "Law 5: Predictive Prefetch",
+      "test_name": "Prefetch Controller",
+      "status": "PASS",
+      "message": "PrefetchController implements intelligent background loading",
+      "details": {
+        "abort_control": true,
+        "caching": true,
+        "queue_management": true,
+        "lru_eviction": true
+      },
+      "timestamp": "2025-11-02T19:01:30.925901"
+    },
+    {
+      "dimension": "Law 6: Offline Resilience",
+      "test_name": "Offline Queue Model",
+      "status": "PASS",
+      "message": "OfflineQueue model exists for persistence",
+      "details": {
+        "model": "OfflineQueue"
+      },
+      "timestamp": "2025-11-02T19:01:30.926273"
+    },
+    {
+      "dimension": "Law 6: Offline Resilience",
+      "test_name": "Offline Queue Manager",
+      "status": "PASS",
+      "message": "OfflineQueueManager implements FIFO replay with conflict resolution",
+      "details": {
+        "queue_operations": true,
+        "replay": true,
+        "fifo_order": true,
+        "conflict_resolution": true
+      },
+      "timestamp": "2025-11-02T19:01:30.927563"
+    },
+    {
+      "dimension": "Law 7: Checksum Reconciliation",
+      "test_name": "Event Checksums",
+      "status": "PASS",
+      "message": "EventLedger supports checksum validation",
+      "details": {
+        "checksum_field": "checksum",
+        "algorithm": "MD5/SHA-256"
+      },
+      "timestamp": "2025-11-02T19:01:30.927821"
+    },
+    {
+      "dimension": "Law 7: Checksum Reconciliation",
+      "test_name": "Cache Validator",
+      "status": "PASS",
+      "message": "CacheValidator implements checksum reconciliation",
+      "details": {
+        "checksum_calculation": true,
+        "validation": true,
+        "reconciliation": false
+      },
+      "timestamp": "2025-11-02T19:01:30.929216"
+    },
+    {
+      "dimension": "Law 8: Calm Motion",
+      "test_name": "Emotional Animations",
+      "status": "PASS",
+      "message": "Emotional animation system implements calm motion (200-400ms, cubic-bezier)",
+      "details": {
+        "timing_control": true,
+        "easing_curves": true,
+        "animation_types": true,
+        "target_duration": true
+      },
+      "timestamp": "2025-11-02T19:01:30.930119"
+    },
+    {
+      "dimension": "Law 9: Telemetry Truth",
+      "test_name": "Telemetry System",
+      "status": "PASS",
+      "message": "CROWN Telemetry tracks calm score, latency, and events",
+      "details": {
+        "calm_score": true,
+        "latency_tracking": true,
+        "event_tracking": true,
+        "persistence": true
+      },
+      "timestamp": "2025-11-02T19:01:30.931208"
+    },
+    {
+      "dimension": "Law 10: Emotional Continuity",
+      "test_name": "Design System",
+      "status": "PASS",
+      "message": "Base template maintains CROWN design consistency",
+      "details": {
+        "crown_system": true,
+        "theming": true,
+        "navigation": true,
+        "animations": true
+      },
+      "timestamp": "2025-11-02T19:01:30.932138"
+    },
+    {
+      "dimension": "Law 10: Emotional Continuity",
+      "test_name": "Notification System",
+      "status": "PASS",
+      "message": "Unified toast notification system for emotional continuity",
+      "details": null,
+      "timestamp": "2025-11-02T19:01:30.932573"
+    },
+    {
+      "dimension": "Event Lifecycle",
+      "test_name": "Lifecycle Chain",
+      "status": "PASS",
+      "message": "Complete event lifecycle chain is implemented",
+      "details": {
+        "backend_routes": true,
+        "sequencer": true,
+        "broadcaster": true,
+        "ledger": true,
+        "chain": "User\u2192Backend\u2192Sequencer\u2192Ledger\u2192Broadcast\u2192Sync"
+      },
+      "timestamp": "2025-11-02T19:01:30.932866"
+    },
+    {
+      "dimension": "Event Taxonomy",
+      "test_name": "Event Categories",
+      "status": "WARN",
+      "message": "Event taxonomy only covers 68.8% of required events",
+      "details": {
+        "categories": {
+          "session_meeting": {
+            "expected": 4,
+            "found": 4,
+            "events": [
+              "record_start",
+              "transcript_partial",
+              "record_stop",
+              "transcript_finalized"
+            ]
+          },
+          "task": {
+            "expected": 3,
+            "found": 3,
+            "events": [
+              "tasks_generation",
+              "task_update",
+              "task_complete"
+            ]
+          },
+          "calendar": {
+            "expected": 2,
+            "found": 0,
+            "events": []
+          },
+          "analytics": {
+            "expected": 2,
+            "found": 2,
+            "events": [
+              "analytics_update",
+              "analytics_refresh"
+            ]
+          },
+          "copilot": {
+            "expected": 2,
+            "found": 0,
+            "events": []
+          },
+          "global": {
+            "expected": 3,
+            "found": 2,
+            "events": [
+              "ui_state_sync",
+              "dashboard_refresh"
+            ]
+          }
+        }
+      },
+      "timestamp": "2025-11-02T19:01:30.933164"
+    },
+    {
+      "dimension": "Macro Timeline",
+      "test_name": "13-Event Timeline",
+      "status": "WARN",
+      "message": "Macro timeline only 61.5% complete",
+      "details": {
+        "missing_events": [
+          "transcription_complete",
+          "insights_generated",
+          "tasks_created",
+          "calendar_event_created",
+          "task_completed",
+          "analytics_delta",
+          "copilot_action_trigger",
+          "offline_replay_complete"
+        ]
+      },
+      "timestamp": "2025-11-02T19:01:30.933550"
+    },
+    {
+      "dimension": "Surface Pipelines",
+      "test_name": "Pipeline Implementation",
+      "status": "PASS",
+      "message": "3/5 surface pipelines implemented",
+      "details": {
+        "meetings": {
+          "path": "routes/meetings_websocket.py",
+          "exists": true
+        },
+        "tasks": {
+          "path": "routes/tasks_websocket.py",
+          "exists": true
+        },
+        "calendar": {
+          "path": "routes/calendar_websocket.py",
+          "exists": false
+        },
+        "analytics": {
+          "path": "routes/analytics_websocket.py",
+          "exists": true
+        },
+        "copilot": {
+          "path": "routes/copilot_websocket.py",
+          "exists": false
+        }
+      },
+      "timestamp": "2025-11-02T19:01:30.934150"
+    },
+    {
+      "dimension": "Global Ledger",
+      "test_name": "Global Ledger",
+      "status": "FAIL",
+      "message": "Error validating global ledger: type object 'EventLedger' has no attribute 'query'",
+      "details": null,
+      "timestamp": "2025-11-02T19:01:30.934419"
+    },
+    {
+      "dimension": "Sequencer Logic",
+      "test_name": "Sequencer Implementation",
+      "status": "PASS",
+      "message": "EventSequencer implements validation, checksums, and sequencing",
+      "details": {
+        "create_event": true,
+        "validation": true,
+        "checksum_validation": true,
+        "sequence_control": true
+      },
+      "timestamp": "2025-11-02T19:01:30.935676"
+    },
+    {
+      "dimension": "Prefetch Matrix",
+      "test_name": "Prefetch Patterns",
+      "status": "WARN",
+      "message": "Prefetch patterns partially implemented",
+      "details": null,
+      "timestamp": "2025-11-02T19:01:30.936768"
+    },
+    {
+      "dimension": "Offline Recovery",
+      "test_name": "Offline Queue",
+      "status": "PASS",
+      "message": "Offline queue implements FIFO replay with retry logic",
+      "details": {
+        "queue_operations": true,
+        "replay": true,
+        "fifo_order": true,
+        "retry_logic": false,
+        "attention_flag": false
+      },
+      "timestamp": "2025-11-02T19:01:30.937774"
+    },
+    {
+      "dimension": "Offline Recovery",
+      "test_name": "Offline Recovery",
+      "status": "FAIL",
+      "message": "Error validating offline recovery: type object 'OfflineQueue' has no attribute 'query'",
+      "details": null,
+      "timestamp": "2025-11-02T19:01:30.938023"
+    },
+    {
+      "dimension": "Emotional Architecture",
+      "test_name": "Emotional Phases",
+      "status": "WARN",
+      "message": "Only 3/6 emotional phases found",
+      "details": {
+        "arrival": false,
+        "action": true,
+        "processing": true,
+        "reflection": true,
+        "completion": false,
+        "idle": false
+      },
+      "timestamp": "2025-11-02T19:01:30.938982"
+    },
+    {
+      "dimension": "Telemetry Schema",
+      "test_name": "Telemetry Fields",
+      "status": "WARN",
+      "message": "Only 3/8 telemetry fields found",
+      "details": null,
+      "timestamp": "2025-11-02T19:01:30.940066"
+    },
+    {
+      "dimension": "Performance Targets",
+      "test_name": "Performance Metrics",
+      "status": "PASS",
+      "message": "3/4 performance targets defined in telemetry",
+      "details": {
+        "event_latency_300ms": true,
+        "ws_buffer_20": true,
+        "calm_score_95": true,
+        "first_paint_200ms": false
+      },
+      "timestamp": "2025-11-02T19:01:30.941293"
+    },
+    {
+      "dimension": "Security Framework",
+      "test_name": "Security Features",
+      "status": "PASS",
+      "message": "6/7 security features enabled",
+      "details": {
+        "csrf_protection": true,
+        "session_security": true,
+        "rate_limiting": true,
+        "cors": true,
+        "csp": true,
+        "hsts": true,
+        "encryption": false
+      },
+      "timestamp": "2025-11-02T19:01:30.943075"
+    },
+    {
+      "dimension": "Security Framework",
+      "test_name": "Authentication Security",
+      "status": "PASS",
+      "message": "User model implements secure password hashing",
+      "details": {
+        "password_hash": true,
+        "secure_algo": true
+      },
+      "timestamp": "2025-11-02T19:01:30.943960"
+    },
+    {
+      "dimension": "System Continuity",
+      "test_name": "Continuity Dimensions",
+      "status": "PASS",
+      "message": "All 6 system continuity dimensions are implemented",
+      "details": {
+        "latency_tracking": true,
+        "cache_system": true,
+        "offline_queue": true,
+        "checksum_validation": true,
+        "emotional_system": true,
+        "event_ledger": true
+      },
+      "timestamp": "2025-11-02T19:01:30.944452"
+    },
+    {
+      "dimension": "Narrative Flow",
+      "test_name": "Narrative Flow",
+      "status": "FAIL",
+      "message": "Error validating narrative flow: type object 'Task' has no attribute 'query'",
+      "details": null,
+      "timestamp": "2025-11-02T19:01:30.944849"
+    }
+  ]
+}
