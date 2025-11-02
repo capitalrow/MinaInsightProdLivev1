@@ -28,8 +28,17 @@ class StripeService:
     
     def _ensure_customer(self, user_id: str) -> Customer:
         cust = Customer.query.filter_by(user_id=user_id).first()
+        
+        # Check if existing customer ID is valid in current mode (test/live)
         if cust and cust.stripe_customer_id:
-            return cust
+            try:
+                stripe.Customer.retrieve(cust.stripe_customer_id)
+                return cust
+            except stripe.error.InvalidRequestError:
+                # Customer doesn't exist in current mode, need to create new one
+                pass
+        
+        # Create new Stripe customer
         sc = stripe.Customer.create(metadata={"user_id": user_id})
         if not cust:
             cust = Customer(user_id=user_id, stripe_customer_id=sc["id"])
