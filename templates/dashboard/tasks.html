@@ -2686,7 +2686,25 @@
         console.log('📊 CROWN⁴.5 Stats:', stats);
     }, 30000);
     
+    // Add global cache clear function for debugging
+    window.clearTaskCache = async function() {
+        console.log('🧹 Clearing IndexedDB cache...');
+        try {
+            const request = indexedDB.deleteDatabase('MinaDB');
+            request.onsuccess = () => {
+                console.log('✅ Cache cleared successfully! Reloading page...');
+                setTimeout(() => window.location.reload(), 500);
+            };
+            request.onerror = () => {
+                console.error('❌ Failed to clear cache');
+            };
+        } catch (error) {
+            console.error('❌ Error clearing cache:', error);
+        }
+    };
+    
     console.log('✨ CROWN⁴.5 Tasks Page Ready');
+    console.log('💡 Debug tip: Run clearTaskCache() to clear cache and reload');
 })();
 </script>
 {% endblock %}
