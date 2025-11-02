@@ -314,10 +314,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // Load meetings from API
 async function loadMeetings() {
     try {
-        const response = await fetch('/api/sessions/header');
+        const response = await fetch('/api/sessions');
         const data = await response.json();
         
-        allMeetings = data.meetings || [];
+        allMeetings = data.upserts || [];
         separateMeetings();
         renderMeetings();
         
@@ -329,8 +329,8 @@ async function loadMeetings() {
 
 // Separate active and archived meetings
 function separateMeetings() {
-    activeMeetings = allMeetings.filter(m => !m.archived);
-    archivedMeetings = allMeetings.filter(m => m.archived);
+    activeMeetings = allMeetings.filter(m => m.status !== 'archived');
+    archivedMeetings = allMeetings.filter(m => m.status === 'archived');
     
     // Update counts
     document.getElementById('active-count').textContent = activeMeetings.length;
@@ -350,7 +350,7 @@ function groupMeetings(meetings) {
     };
     
     meetings.forEach(meeting => {
-        const meetingDate = new Date(meeting.created_at || meeting.timestamp);
+        const meetingDate = new Date(meeting.started_at);
         
         if (meetingDate >= today) {
             groups.today.push(meeting);
@@ -409,8 +409,8 @@ function renderMeetings() {
 
 // Render individual meeting card
 function renderMeetingCard(meeting) {
-    const date = new Date(meeting.created_at || meeting.timestamp);
-    const sessionId = meeting.external_session_id || meeting.session_id;
+    const date = new Date(meeting.started_at);
+    const sessionId = meeting.session_id;
     
     return `
         <div class="meeting-card" onclick="navigateToMeeting('${sessionId}')" data-session-id="${sessionId}">
@@ -426,9 +426,9 @@ function renderMeetingCard(meeting) {
                         <p class="meeting-date">${formatDate(date)}</p>
                         ${meeting.summary ? `<p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-top: 0.5rem;">${meeting.summary.substring(0, 150)}...</p>` : ''}
                         <div class="meeting-meta">
-                            ${meeting.duration ? `<span class="meta-item">⏱️ ${Math.round(meeting.duration / 60)} min</span>` : ''}
-                            ${meeting.word_count ? `<span class="meta-item">📝 ${meeting.word_count} words</span>` : ''}
-                            ${meeting.speaker_count ? `<span class="meta-item">👥 ${meeting.speaker_count} speakers</span>` : ''}
+                            ${meeting.duration_s ? `<span class="meta-item">⏱️ ${Math.round(meeting.duration_s / 60)} min</span>` : ''}
+                            ${meeting.tasks ? `<span class="meta-item">✅ ${meeting.tasks} tasks</span>` : ''}
+                            ${meeting.highlights ? `<span class="meta-item">⭐ ${meeting.highlights} highlights</span>` : ''}
                         </div>
                     </div>
                 </div>
@@ -486,9 +486,9 @@ async function archiveMeeting(sessionId) {
         if (!response.ok) throw new Error('Archive failed');
         
         // Update local state
-        const meeting = allMeetings.find(m => (m.external_session_id || m.session_id) === sessionId);
+        const meeting = allMeetings.find(m => m.session_id === sessionId);
         if (meeting) {
-            meeting.archived = true;
+            meeting.status = 'archived';
             separateMeetings();
             renderMeetings();
             showUndoToast(sessionId, meeting.title);
@@ -516,9 +516,9 @@ async function restoreMeeting(sessionId, isUndo = false) {
         if (!response.ok) throw new Error('Restore failed');
         
         // Update local state
-        const meeting = allMeetings.find(m => (m.external_session_id || m.session_id) === sessionId);
+        const meeting = allMeetings.find(m => m.session_id === sessionId);
         if (meeting) {
-            meeting.archived = false;
+            meeting.status = 'ready';
             separateMeetings();
             renderMeetings();
             if (!isUndo) window.toast?.success('Meeting restored');
