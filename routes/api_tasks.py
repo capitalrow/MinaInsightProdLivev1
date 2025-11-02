@@ -22,6 +22,7 @@ api_tasks_bp = Blueprint('api_tasks', __name__, url_prefix='/api/tasks')
 
 
 @api_tasks_bp.route('/', methods=['GET'])
+@with_etag
 @login_required
 def list_tasks():
     """Get tasks for current user's workspace with filtering and pagination."""

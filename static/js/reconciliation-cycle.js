@@ -88,38 +88,55 @@ class ReconciliationCycle {
     }
     
     /**
-     * Check meetings endpoint for changes
+     * Check meetings endpoint for changes (CROWN ¹⁰ Law #5: HEAD + If-None-Match)
      */
     async checkMeetings() {
         try {
-            const response = await fetch('/api/meetings/recent?limit=5', {
-                method: 'GET',
+            // STEP 1: HEAD request with If-None-Match to check ETag
+            const headResponse = await fetch('/api/meetings/recent?limit=5', {
+                method: 'HEAD',
                 headers: {
                     'If-None-Match': this.lastETags.meetings || ''
                 }
             });
             
-            if (response.status === 304) {
+            if (headResponse.status === 304) {
                 // No changes - ETag matches
                 return false;
             }
             
-            // ETag changed - data drift detected
-            const newETag = response.headers.get('ETag');
+            // STEP 2: ETag changed or first check - get new ETag
+            const newETag = headResponse.headers.get('ETag');
             const oldETag = this.lastETags.meetings;
+            
+            if (!newETag) {
+                // No ETag support - fallback to regular GET
+                console.warn('[Reconciliation] No ETag header on meetings endpoint');
+                return false;
+            }
+            
             this.lastETags.meetings = newETag;
             
-            if (oldETag) {
+            if (oldETag && oldETag !== newETag) {
                 console.log(`🔄 Meetings drift detected (ETag: ${oldETag?.substring(0, 12)}... → ${newETag?.substring(0, 12)}...)`);
                 
-                // Fetch and reconcile data
-                const data = await response.json();
+                // STEP 3: ETag mismatch - fetch full data with GET
+                const getResponse = await fetch('/api/meetings/recent?limit=5', {
+                    method: 'GET'
+                });
+                
+                if (!getResponse.ok) {
+                    console.error('[Reconciliation] Failed to fetch meetings:', getResponse.status);
+                    return false;
+                }
+                
+                const data = await getResponse.json();
                 await this.reconcileMeetings(data);
                 
                 return true; // Drift detected and reconciled
             }
             
-            // First check - store ETag
+            // First check - just store ETag
             return false;
         } catch (error) {
             console.error('[Reconciliation] Meetings check failed:', error);
@@ -128,30 +145,47 @@ class ReconciliationCycle {
     }
     
     /**
-     * Check tasks endpoint for changes
+     * Check tasks endpoint for changes (CROWN ¹⁰ Law #5: HEAD + If-None-Match)
      */
     async checkTasks() {
         try {
-            const response = await fetch('/api/tasks/stats', {
-                method: 'GET',
+            // STEP 1: HEAD request with If-None-Match
+            const headResponse = await fetch('/api/tasks/stats', {
+                method: 'HEAD',
                 headers: {
                     'If-None-Match': this.lastETags.tasks || ''
                 }
             });
             
-            if (response.status === 304) {
+            if (headResponse.status === 304) {
                 // No changes
                 return false;
             }
             
-            const newETag = response.headers.get('ETag');
+            const newETag = headResponse.headers.get('ETag');
             const oldETag = this.lastETags.tasks;
+            
+            if (!newETag) {
+                console.warn('[Reconciliation] No ETag header on tasks endpoint');
+                return false;
+            }
+            
             this.lastETags.tasks = newETag;
             
-            if (oldETag) {
+            if (oldETag && oldETag !== newETag) {
                 console.log(`🔄 Tasks drift detected (ETag: ${oldETag?.substring(0, 12)}... → ${newETag?.substring(0, 12)}...)`);
                 
-                const data = await response.json();
+                // STEP 2: Fetch full data with GET
+                const getResponse = await fetch('/api/tasks/stats', {
+                    method: 'GET'
+                });
+                
+                if (!getResponse.ok) {
+                    console.error('[Reconciliation] Failed to fetch tasks:', getResponse.status);
+                    return false;
+                }
+                
+                const data = await getResponse.json();
                 await this.reconcileTasks(data);
                 
                 return true;
@@ -165,30 +199,47 @@ class ReconciliationCycle {
     }
     
     /**
-     * Check analytics endpoint for changes
+     * Check analytics endpoint for changes (CROWN ¹⁰ Law #5: HEAD + If-None-Match)
      */
     async checkAnalytics() {
         try {
-            const response = await fetch('/api/analytics/dashboard?days=7', {
-                method: 'GET',
+            // STEP 1: HEAD request with If-None-Match
+            const headResponse = await fetch('/api/analytics/dashboard?days=7', {
+                method: 'HEAD',
                 headers: {
                     'If-None-Match': this.lastETags.analytics || ''
                 }
             });
             
-            if (response.status === 304) {
+            if (headResponse.status === 304) {
                 // No changes
                 return false;
             }
             
-            const newETag = response.headers.get('ETag');
+            const newETag = headResponse.headers.get('ETag');
             const oldETag = this.lastETags.analytics;
+            
+            if (!newETag) {
+                console.warn('[Reconciliation] No ETag header on analytics endpoint');
+                return false;
+            }
+            
             this.lastETags.analytics = newETag;
             
-            if (oldETag) {
+            if (oldETag && oldETag !== newETag) {
                 console.log(`🔄 Analytics drift detected (ETag: ${oldETag?.substring(0, 12)}... → ${newETag?.substring(0, 12)}...)`);
                 
-                const data = await response.json();
+                // STEP 2: Fetch full data with GET
+                const getResponse = await fetch('/api/analytics/dashboard?days=7', {
+                    method: 'GET'
+                });
+                
+                if (!getResponse.ok) {
+                    console.error('[Reconciliation] Failed to fetch analytics:', getResponse.status);
+                    return false;
+                }
+                
+                const data = await getResponse.json();
                 await this.reconcileAnalytics(data);
                 
                 return true;
