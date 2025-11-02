@@ -106,13 +106,18 @@
     background: var(--glass-bg);
     backdrop-filter: var(--backdrop-blur);
     border: 1px solid var(--glass-border);
-    border-radius: var(--radius-xl);
-    padding: var(--space-5);
+    border-radius: var(--radius-lg);
+    padding: 8px 16px;
     transition: all var(--transition-base);
-    animation: fadeInUp 0.6s ease-out;
+    animation: fadeInUp 0.4s ease-out;
     animation-fill-mode: both;
     position: relative;
     overflow: hidden;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
 }
 
 .task-card::before {
@@ -120,7 +125,7 @@
     position: absolute;
     top: 0;
     left: 0;
-    width: 4px;
+    width: 3px;
     height: 100%;
     background: var(--color-primary);
     opacity: 0;
@@ -128,9 +133,9 @@
 }
 
 .task-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--color-primary);
-    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.15);
+    background: rgba(99, 102, 241, 0.03);
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
 }
 
 .task-card:hover::before {
@@ -138,11 +143,11 @@
 }
 
 .task-card.completed {
-    opacity: 0.7;
+    opacity: 0.6;
 }
 
 .task-card.completed:hover {
-    opacity: 0.9;
+    opacity: 0.75;
 }
 
 .task-checkbox {
@@ -166,10 +171,15 @@
 }
 
 .task-title {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    margin-bottom: var(--space-2);
+    font-size: 14px;
+    font-weight: 500;
     color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+    margin: 0;
 }
 
 .task-card.completed .task-title {
@@ -178,20 +188,31 @@
 }
 
 .task-meta {
-    font-size: var(--font-size-sm);
+    font-size: 12px;
     color: var(--color-text-secondary);
-    margin-bottom: var(--space-3);
+    white-space: nowrap;
+    margin: 0;
+}
+
+.task-meta-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
 }
 
 .priority-badge {
     display: inline-flex;
     align-items: center;
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
+    padding: 2px 8px;
+    border-radius: var(--radius-md);
+    font-size: 10px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
 }
 
 .priority-high {
@@ -215,15 +236,20 @@
 .due-date-badge {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-3);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
+    gap: 4px;
+    font-size: 12px;
     color: var(--color-text-tertiary);
-    cursor: pointer;
-    transition: all var(--transition-base);
+    flex-shrink: 0;
+}
+
+.meeting-source {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+    flex-shrink: 0;
 }
 
 .due-date-badge:hover,
@@ -1540,53 +1566,24 @@
         const priority = task.priority || 'medium';
         const completed = task.completed || false;
         const status = completed ? 'completed' : 'pending';
+        const dueDate = task.due_date || null;
+        const meetingTitle = task.meeting_title || 'Unknown meeting';
         
         return `
             <div class="task-card ${completed ? 'completed' : ''}" 
                  data-status="${status}" 
                  data-task-id="${task.id}"
-                 style="animation: slideInFromTop 0.5s ease-out;">
-                <div class="flex items-start gap-4">
-                    <input type="checkbox" class="bulk-select-checkbox" data-task-id="${task.id}">
-                    <input type="checkbox" ${completed ? 'checked' : ''} class="task-checkbox">
-                    <div class="flex-1">
-                        <h3 class="task-title">${escapeHtml(task.description || 'Untitled Task')}</h3>
-                        <p class="task-meta">
-                            <svg class="inline-block w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                            </svg>
-                            From: <span class="font-medium">${escapeHtml(task.meeting_title || 'Unknown meeting')}</span>
-                        </p>
-                        <div class="flex gap-2 flex-wrap">
-                            <span class="priority-badge priority-${priority.toLowerCase()}">
-                                ${priority}
-                            </span>
-                            ${task.due_date ? `
-                                <span class="due-date-badge">
-                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                    ${task.due_date}
-                                </span>
-                            ` : `
-                                <span class="due-date-badge">
-                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                    No due date
-                                </span>
-                            `}
-                            ${task.assignee ? `
-                                <span class="due-date-badge">
-                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                                    </svg>
-                                    ${escapeHtml(task.assignee)}
-                                </span>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
+                 style="animation: slideInFromTop 0.4s ease-out;">
+                <input type="checkbox" class="bulk-select-checkbox" data-task-id="${task.id}">
+                <input type="checkbox" ${completed ? 'checked' : ''} class="task-checkbox">
+                <h3 class="task-title">${escapeHtml(task.description || 'Untitled Task')}</h3>
+                <span class="priority-badge priority-${priority.toLowerCase()}">
+                    ${priority}
+                </span>
+                ${dueDate ? `
+                    <span class="due-date-badge">${escapeHtml(dueDate)}</span>
+                ` : ''}
+                <span class="meeting-source">${escapeHtml(meetingTitle)}</span>
             </div>
         `;
     }

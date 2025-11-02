@@ -224,43 +224,24 @@ class TaskClusteringManager {
         const priority = task.priority || 'medium';
         const status = task.status || 'todo';
         const isCompleted = status === 'completed';
+        const dueDate = task.due_date || null;
+        const meetingTitle = task.meeting_title || 'Unknown meeting';
 
         return `
-            <div class="task-card clustered" data-task-id="${task.id}" style="margin: 0;">
-                <div class="task-card-header">
-                    <div class="task-checkbox-wrapper">
-                        <input type="checkbox" class="bulk-select-checkbox" data-task-id="${task.id}">
-                        <input type="checkbox" 
-                               class="task-checkbox" 
-                               ${isCompleted ? 'checked' : ''}
-                               data-task-id="${task.id}">
-                    </div>
-                    <div class="task-content">
-                        <h3 class="task-title ${isCompleted ? 'completed' : ''}">
-                            ${this.escapeHtml(task.title || 'Untitled Task')}
-                        </h3>
-                        ${task.description ? `
-                            <p class="task-description">${this.escapeHtml(task.description)}</p>
-                        ` : ''}
-                        <div class="task-meta">
-                            <span class="priority-badge priority-${priority.toLowerCase()}">
-                                ${priority}
-                            </span>
-                            ${task.due_date ? `
-                                <span class="due-date-badge">
-                                    ${this.formatDueDate(task.due_date)}
-                                </span>
-                            ` : ''}
-                            ${task.labels && task.labels.length > 0 ? `
-                                <div class="task-labels">
-                                    ${task.labels.slice(0, 3).map(label => `
-                                        <span class="label-badge">${this.escapeHtml(label)}</span>
-                                    `).join('')}
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
+            <div class="task-card clustered ${isCompleted ? 'completed' : ''}" 
+                 data-task-id="${task.id}" 
+                 data-status="${status}"
+                 style="margin: 0;">
+                <input type="checkbox" class="bulk-select-checkbox" data-task-id="${task.id}">
+                <input type="checkbox" ${isCompleted ? 'checked' : ''} class="task-checkbox" data-task-id="${task.id}">
+                <h3 class="task-title">${this.escapeHtml(task.title || task.description || 'Untitled Task')}</h3>
+                <span class="priority-badge priority-${priority.toLowerCase()}">
+                    ${priority}
+                </span>
+                ${dueDate ? `
+                    <span class="due-date-badge">${this.escapeHtml(dueDate)}</span>
+                ` : ''}
+                <span class="meeting-source">${this.escapeHtml(meetingTitle)}</span>
             </div>
         `;
     }
