@@ -297,7 +297,7 @@
 <script src="{{ url_for('static', filename='js/toast-notifications.js') }}"></script>
 <script>
 // CROWN 4.6 Meetings Page Implementation
-const WORKSPACE_ID = {{ workspace_id }};
+const WORKSPACE_ID = {{ workspace_id | tojson }};
 let allMeetings = [];
 let activeMeetings = [];
 let archivedMeetings = [];
