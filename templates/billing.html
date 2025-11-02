@@ -321,6 +321,9 @@
 
 {% block extra_js %}
 <script>
+console.log('🚀 Script tag loaded - BEFORE DOMContentLoaded');
+alert('JavaScript is working! Check console for logs.');
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎬 Billing page JavaScript loaded');
     const userId = '{{ user_id }}';
