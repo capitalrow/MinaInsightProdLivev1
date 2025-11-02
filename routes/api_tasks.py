@@ -617,13 +617,21 @@ def bulk_complete_tasks():
         except (ValueError, TypeError):
             return jsonify({'success': False, 'message': 'Invalid task IDs'}), 400
         
+        print(f"📋 [BULK COMPLETE] Requested task IDs: {task_ids}")
+        print(f"🔑 [BULK COMPLETE] User workspace: {current_user.workspace_id}")
+        
         # Fetch all tasks and verify ownership
         tasks = db.session.query(Task).join(Meeting).filter(
             Task.id.in_(task_ids),
             Meeting.workspace_id == current_user.workspace_id
         ).all()
         
+        found_ids = [t.id for t in tasks]
+        print(f"✅ [BULK COMPLETE] Found {len(tasks)} tasks: {found_ids}")
+        
         if len(tasks) != len(task_ids):
+            missing_ids = set(task_ids) - set(found_ids)
+            print(f"❌ [BULK COMPLETE] Missing {len(missing_ids)} tasks: {missing_ids}")
             return jsonify({'success': False, 'message': 'Some tasks not found'}), 404
         
         # Mark all as completed
