@@ -12,6 +12,8 @@ from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_session import Session
+import redis
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
@@ -293,11 +295,33 @@ def create_app() -> Flask:
     # reverse proxy (Replit)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
     
-    # Set security headers (production hardening)
-    app.config["SESSION_COOKIE_SECURE"] = True
-    app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["PERMANENT_SESSION_LIFETIME"] = 1800  # 30 minutes
+    # Configure Redis-backed server-side sessions (CRITICAL: keeps cookies under 4KB)
+    # Industry standard: Store only session ID in cookie (~50 bytes), all data in Redis
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+    try:
+        app.config["SESSION_TYPE"] = "redis"
+        app.config["SESSION_PERMANENT"] = False
+        app.config["SESSION_USE_SIGNER"] = True  # Cryptographically sign session IDs
+        app.config["SESSION_KEY_PREFIX"] = "mina_session:"
+        app.config["SESSION_REDIS"] = redis.from_url(redis_url)
+        
+        # Session cookie security (production hardening)
+        app.config["SESSION_COOKIE_SECURE"] = True  # HTTPS only
+        app.config["SESSION_COOKIE_HTTPONLY"] = True  # Block XSS attacks
+        app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
+        app.config["PERMANENT_SESSION_LIFETIME"] = 28800  # 8 hours
+        
+        # Initialize Flask-Session with Redis backend
+        Session(app)
+        app.logger.info(f"✅ Redis-backed server-side sessions configured: {redis_url}")
+    except Exception as e:
+        app.logger.error(f"❌ Failed to configure Redis sessions: {e}")
+        # Fallback to default cookie-based sessions (will have size limits)
+        app.config["SESSION_COOKIE_SECURE"] = True
+        app.config["SESSION_COOKIE_HTTPONLY"] = True
+        app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+        app.config["PERMANENT_SESSION_LIFETIME"] = 1800  # 30 minutes
+        app.logger.warning("⚠️ Using cookie-based sessions (fallback) - may hit size limits")
     
     # Initialize CSRF protection  
     csrf = CSRFProtect(app)
