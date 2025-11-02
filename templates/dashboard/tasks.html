@@ -257,6 +257,181 @@
     color: var(--color-text-tertiary);
 }
 
+.task-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.task-metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    align-items: center;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.task-assignee,
+.task-due-date,
+.task-labels-empty {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.task-assignee:hover,
+.task-due-date:hover,
+.task-labels-empty:hover {
+    background: rgba(99, 102, 241, 0.15);
+    transform: translateY(-1px);
+}
+
+.task-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    cursor: pointer;
+}
+
+.task-label {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(99, 102, 241, 0.2);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: var(--color-text-primary);
+    transition: background 0.2s ease;
+}
+
+.task-label:hover {
+    background: rgba(99, 102, 241, 0.3);
+}
+
+/* Inline editing dropdown */
+.task-assignee-dropdown,
+.task-due-date-picker,
+.task-labels-editor {
+    position: absolute;
+    z-index: 1000;
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    padding: var(--space-3);
+    min-width: 200px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.assignee-option {
+    padding: var(--space-2) var(--space-3);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background 0.2s ease;
+}
+
+.assignee-option:hover {
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.date-shortcuts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.date-shortcut-btn {
+    padding: var(--space-2);
+    border: none;
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.date-shortcut-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    transform: translateX(4px);
+}
+
+.label-input-container {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.label-input {
+    flex: 1;
+    padding: var(--space-2);
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+}
+
+.label-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.label-suggestion {
+    padding: 4px 8px;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.2s ease;
+}
+
+.label-suggestion:hover {
+    background: rgba(99, 102, 241, 0.3);
+    transform: scale(1.05);
+}
+
+.task-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.task-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    background: transparent;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+}
+
+.task-action-btn:hover {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-primary);
+    transform: scale(1.1);
+}
+
+.jump-to-transcript svg {
+    width: 14px;
+    height: 14px;
+}
+
 .task-meta {
     font-size: 12px;
     color: var(--color-text-secondary);
@@ -1205,16 +1380,61 @@
             <div class="task-card{% if task.completed %} completed{% endif %}" 
                  data-task-id="{{ task.id }}"
                  data-status="{% if task.completed %}completed{% else %}pending{% endif %}"
-                 data-priority="{{ task.priority|default('medium')|lower }}">
+                 data-priority="{{ task.priority|default('medium')|lower }}"
+                 data-assigned-to="{{ task.assigned_to_id or '' }}"
+                 data-due-date="{{ task.due_date or '' }}"
+                 data-labels="{{ task.labels|tojson|escape if task.labels else '[]' }}">
                 <input type="checkbox" {% if task.completed %}checked{% endif %} class="task-checkbox" data-task-id="{{ task.id }}">
-                <h3 class="task-title">{{ task.description }}</h3>
-                <span class="priority-badge priority-{{ task.priority|default('medium')|lower }}">
-                    {{ task.priority|default('medium') }}
-                </span>
-                {% if task.due_date %}
-                <span class="due-date-badge">{{ task.due_date }}</span>
-                {% endif %}
-                <span class="meeting-source">{{ task.meeting_title|default('Unknown meeting') }}</span>
+                <div class="task-content">
+                    <h3 class="task-title">{{ task.description }}</h3>
+                    <div class="task-metadata">
+                        <span class="task-assignee" data-field="assignee" title="Click to assign">
+                            {% if task.assigned_to %}
+                                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                {{ task.assigned_to.display_name or task.assigned_to.username }}
+                            {% else %}
+                                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                Unassigned
+                            {% endif %}
+                        </span>
+                        <span class="task-due-date" data-field="due_date" title="Click to set due date">
+                            {% if task.due_date %}
+                                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+                                {{ task.due_date.strftime('%b %d') }}
+                            {% else %}
+                                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+                                No due date
+                            {% endif %}
+                        </span>
+                        {% if task.labels and task.labels|length > 0 %}
+                            <div class="task-labels" data-field="labels" title="Click to edit labels">
+                                {% for label in task.labels %}
+                                    <span class="task-label">{{ label }}</span>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <span class="task-labels-empty" data-field="labels" title="Click to add labels">
+                                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z"/></svg>
+                                Add labels
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="task-actions">
+                    {% if task.transcript_span and task.session_id %}
+                    <button class="task-action-btn jump-to-transcript" 
+                            data-session-id="{{ task.session_id }}"
+                            data-transcript-span="{{ task.transcript_span|tojson|escape }}"
+                            title="View in transcript">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M9 5v2h6.59L4 18.59 5.41 20 17 8.41V15h2V5z"/>
+                        </svg>
+                    </button>
+                    {% endif %}
+                    <span class="priority-badge priority-{{ task.priority|default('medium')|lower }}">
+                        {{ task.priority|default('medium') }}
+                    </span>
+                </div>
             </div>
             {% endfor %}
         {% endif %}
@@ -2775,6 +2995,390 @@
         if (taskId && window.optimisticUI) {
             await window.optimisticUI.toggleTaskStatus(taskId);
         }
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // CROWN⁴.5 Event #7-9: Inline Metadata Editing
+    // Assignee, Due Date, Labels with optimistic UI and WebSocket sync
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    let activeDropdown = null;
+    let cachedUsers = null;
+    
+    // Fetch assignable users (cached)
+    async function fetchAssignableUsers() {
+        if (cachedUsers) return cachedUsers;
+        
+        try {
+            const response = await fetch('/api/tasks/users');
+            const data = await response.json();
+            if (data.success) {
+                cachedUsers = data.users;
+                return cachedUsers;
+            }
+        } catch (error) {
+            console.error('Failed to fetch users:', error);
+        }
+        return [];
+    }
+    
+    // Close active dropdown
+    function closeActiveDropdown() {
+        if (activeDropdown) {
+            activeDropdown.remove();
+            activeDropdown = null;
+        }
+    }
+    
+    // Show assignee dropdown
+    async function showAssigneeDropdown(taskCard, targetElement) {
+        closeActiveDropdown();
+        
+        const users = await fetchAssignableUsers();
+        const taskId = taskCard.dataset.taskId;
+        const currentAssigneeId = taskCard.dataset.assignedTo;
+        
+        // Create dropdown
+        const dropdown = document.createElement('div');
+        dropdown.className = 'task-assignee-dropdown';
+        
+        // Add "Unassigned" option
+        const unassignedOption = document.createElement('div');
+        unassignedOption.className = 'assignee-option';
+        unassignedOption.textContent = '👤 Unassigned';
+        unassignedOption.onclick = () => updateTaskAssignee(taskId, null, taskCard);
+        dropdown.appendChild(unassignedOption);
+        
+        // Add user options
+        users.forEach(user => {
+            const option = document.createElement('div');
+            option.className = 'assignee-option';
+            option.textContent = `👤 ${user.name}`;
+            if (user.id == currentAssigneeId) {
+                option.style.background = 'rgba(99, 102, 241, 0.2)';
+            }
+            option.onclick = () => updateTaskAssignee(taskId, user.id, taskCard, user.name);
+            dropdown.appendChild(option);
+        });
+        
+        // Position dropdown
+        const rect = targetElement.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.top = `${rect.bottom + 4}px`;
+        dropdown.style.left = `${rect.left}px`;
+        
+        document.body.appendChild(dropdown);
+        activeDropdown = dropdown;
+    }
+    
+    // Update task assignee
+    async function updateTaskAssignee(taskId, userId, taskCard, userName) {
+        closeActiveDropdown();
+        
+        // Optimistic UI
+        const assigneeElement = taskCard.querySelector('.task-assignee');
+        const originalHTML = assigneeElement.innerHTML;
+        
+        if (userId) {
+            assigneeElement.innerHTML = `<svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg> ${userName}`;
+            taskCard.dataset.assignedTo = userId;
+        } else {
+            assigneeElement.innerHTML = `<svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg> Unassigned`;
+            taskCard.dataset.assignedTo = '';
+        }
+        
+        try {
+            const response = await fetch(`/api/tasks/${taskId}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({assigned_to_id: userId})
+            });
+            
+            if (!response.ok) throw new Error('Failed to update');
+            
+            // WebSocket broadcast
+            if (window.socket) {
+                window.socket.emit('task:updated', {
+                    task_id: taskId,
+                    field: 'assigned_to_id',
+                    value: userId
+                });
+            }
+            
+            console.log(`✅ Task ${taskId} assigned to ${userName || 'Unassigned'}`);
+        } catch (error) {
+            console.error('Failed to update assignee:', error);
+            assigneeElement.innerHTML = originalHTML;
+            if (window.showToast) {
+                window.showToast('Failed to update assignee', 'error');
+            }
+        }
+    }
+    
+    // Show due date picker
+    function showDueDatePicker(taskCard, targetElement) {
+        closeActiveDropdown();
+        
+        const taskId = taskCard.dataset.taskId;
+        
+        // Create picker
+        const picker = document.createElement('div');
+        picker.className = 'task-due-date-picker';
+        
+        // Add shortcuts
+        const shortcuts = document.createElement('div');
+        shortcuts.className = 'date-shortcuts';
+        
+        const addShortcut = (label, days) => {
+            const btn = document.createElement('button');
+            btn.className = 'date-shortcut-btn';
+            btn.textContent = label;
+            btn.onclick = () => {
+                const date = new Date();
+                date.setDate(date.getDate() + days);
+                updateTaskDueDate(taskId, date.toISOString().split('T')[0], taskCard, label);
+            };
+            shortcuts.appendChild(btn);
+        };
+        
+        addShortcut('📅 Today', 0);
+        addShortcut('📅 Tomorrow', 1);
+        addShortcut('📅 Next Week', 7);
+        addShortcut('🗑️ Clear due date', null);
+        
+        picker.appendChild(shortcuts);
+        
+        // Add date input
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.className = 'label-input';
+        dateInput.value = taskCard.dataset.dueDate || '';
+        dateInput.onchange = (e) => {
+            updateTaskDueDate(taskId, e.target.value, taskCard, e.target.value);
+        };
+        picker.appendChild(dateInput);
+        
+        // Position picker
+        const rect = targetElement.getBoundingClientRect();
+        picker.style.position = 'fixed';
+        picker.style.top = `${rect.bottom + 4}px`;
+        picker.style.left = `${rect.left}px`;
+        
+        document.body.appendChild(picker);
+        activeDropdown = picker;
+    }
+    
+    // Update task due date
+    async function updateTaskDueDate(taskId, dueDate, taskCard, displayText) {
+        closeActiveDropdown();
+        
+        // Optimistic UI
+        const dueDateElement = taskCard.querySelector('.task-due-date');
+        const originalHTML = dueDateElement.innerHTML;
+        
+        if (dueDate && dueDate !== 'null') {
+            const date = new Date(dueDate);
+            const formatted = date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+            dueDateElement.innerHTML = `<svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg> ${formatted}`;
+            taskCard.dataset.dueDate = dueDate;
+        } else {
+            dueDateElement.innerHTML = `<svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg> No due date`;
+            taskCard.dataset.dueDate = '';
+        }
+        
+        try {
+            const response = await fetch(`/api/tasks/${taskId}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({due_date: dueDate || null})
+            });
+            
+            if (!response.ok) throw new Error('Failed to update');
+            
+            // WebSocket broadcast
+            if (window.socket) {
+                window.socket.emit('task:updated', {
+                    task_id: taskId,
+                    field: 'due_date',
+                    value: dueDate
+                });
+            }
+            
+            console.log(`✅ Task ${taskId} due date set to ${dueDate || 'none'}`);
+        } catch (error) {
+            console.error('Failed to update due date:', error);
+            dueDateElement.innerHTML = originalHTML;
+            if (window.showToast) {
+                window.showToast('Failed to update due date', 'error');
+            }
+        }
+    }
+    
+    // Show labels editor
+    function showLabelsEditor(taskCard, targetElement) {
+        closeActiveDropdown();
+        
+        const taskId = taskCard.dataset.taskId;
+        const currentLabels = JSON.parse(taskCard.dataset.labels || '[]');
+        
+        // Create editor
+        const editor = document.createElement('div');
+        editor.className = 'task-labels-editor';
+        
+        // Add input container
+        const inputContainer = document.createElement('div');
+        inputContainer.className = 'label-input-container';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'label-input';
+        input.placeholder = 'Type to add label...';
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter' && input.value.trim()) {
+                e.preventDefault();
+                const newLabels = [...currentLabels, input.value.trim()];
+                updateTaskLabels(taskId, newLabels, taskCard);
+                input.value = '';
+            }
+        };
+        inputContainer.appendChild(input);
+        editor.appendChild(inputContainer);
+        
+        // Show current labels
+        if (currentLabels.length > 0) {
+            const currentLabelsDiv = document.createElement('div');
+            currentLabelsDiv.className = 'label-suggestions';
+            currentLabelsDiv.innerHTML = '<small style="color: var(--color-text-secondary); width: 100%;">Current labels (click to remove):</small>';
+            currentLabels.forEach(label => {
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'label-suggestion';
+                labelSpan.textContent = label;
+                labelSpan.onclick = () => {
+                    const newLabels = currentLabels.filter(l => l !== label);
+                    updateTaskLabels(taskId, newLabels, taskCard);
+                };
+                currentLabelsDiv.appendChild(labelSpan);
+            });
+            editor.appendChild(currentLabelsDiv);
+        }
+        
+        // Position editor
+        const rect = targetElement.getBoundingClientRect();
+        editor.style.position = 'fixed';
+        editor.style.top = `${rect.bottom + 4}px`;
+        editor.style.left = `${rect.left}px`;
+        
+        document.body.appendChild(editor);
+        activeDropdown = editor;
+        input.focus();
+    }
+    
+    // Update task labels
+    async function updateTaskLabels(taskId, labels, taskCard) {
+        closeActiveDropdown();
+        
+        // Optimistic UI
+        const labelsContainer = taskCard.querySelector('[data-field="labels"]');
+        const originalHTML = labelsContainer.outerHTML;
+        
+        if (labels && labels.length > 0) {
+            labelsContainer.className = 'task-labels';
+            labelsContainer.innerHTML = labels.map(label => 
+                `<span class="task-label">${label}</span>`
+            ).join('');
+        } else {
+            labelsContainer.className = 'task-labels-empty';
+            labelsContainer.innerHTML = `<svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z"/></svg> Add labels`;
+        }
+        
+        taskCard.dataset.labels = JSON.stringify(labels);
+        
+        try {
+            const response = await fetch(`/api/tasks/${taskId}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({labels: labels})
+            });
+            
+            if (!response.ok) throw new Error('Failed to update');
+            
+            // WebSocket broadcast
+            if (window.socket) {
+                window.socket.emit('task:updated', {
+                    task_id: taskId,
+                    field: 'labels',
+                    value: labels
+                });
+            }
+            
+            console.log(`✅ Task ${taskId} labels updated`);
+        } catch (error) {
+            console.error('Failed to update labels:', error);
+            labelsContainer.outerHTML = originalHTML;
+            if (window.showToast) {
+                window.showToast('Failed to update labels', 'error');
+            }
+        }
+    }
+    
+    // Click handlers for metadata fields
+    document.addEventListener('click', (e) => {
+        const metadataField = e.target.closest('[data-field]');
+        if (!metadataField) {
+            // Click outside - close dropdown
+            if (activeDropdown && !e.target.closest('.task-assignee-dropdown, .task-due-date-picker, .task-labels-editor')) {
+                closeActiveDropdown();
+            }
+            return;
+        }
+        
+        if (window.selectionManager && window.selectionManager.isActive()) return;
+        
+        const taskCard = metadataField.closest('.task-card');
+        if (!taskCard) return;
+        
+        const field = metadataField.dataset.field;
+        
+        if (field === 'assignee') {
+            showAssigneeDropdown(taskCard, metadataField);
+        } else if (field === 'due_date') {
+            showDueDatePicker(taskCard, metadataField);
+        } else if (field === 'labels') {
+            showLabelsEditor(taskCard, metadataField);
+        }
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // CROWN⁴.5 Event #11: Jump to Transcript
+    // Navigate to session transcript and highlight task origin
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    document.addEventListener('click', (e) => {
+        const jumpBtn = e.target.closest('.jump-to-transcript');
+        if (!jumpBtn) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const sessionId = jumpBtn.dataset.sessionId;
+        const transcriptSpan = JSON.parse(jumpBtn.dataset.transcriptSpan || '{}');
+        
+        if (!sessionId) {
+            console.error('No session ID found for jump to transcript');
+            return;
+        }
+        
+        // Navigate to session transcript with highlight parameters
+        const highlightParams = new URLSearchParams({
+            highlight_start: transcriptSpan.start_ms || 0,
+            highlight_end: transcriptSpan.end_ms || 0,
+            segment_ids: JSON.stringify(transcriptSpan.segment_ids || [])
+        });
+        
+        const url = `/sessions/${sessionId}?${highlightParams.toString()}`;
+        
+        console.log(`🎯 Jumping to transcript: ${url}`);
+        window.location.href = url;
     });
     
     // Long-press for mobile selection mode
