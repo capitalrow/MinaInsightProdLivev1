@@ -85,3 +85,112 @@ def onboarding_complete():
     print(f"Preferences: email={email_notifications}, reminders={meeting_reminders}, tasks={task_updates}")
     
     return redirect(url_for("dashboard.index"))
+
+@pages_bp.route("/clear-cache")
+@login_required
+def clear_cache():
+    """Utility page to clear all browser cache and IndexedDB"""
+    return """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Cache - Mina</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+        }
+        h1 { margin: 0 0 1rem; font-size: 2rem; }
+        p { margin: 0 0 2rem; opacity: 0.9; }
+        button {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        #status {
+            margin-top: 1.5rem;
+            font-weight: 600;
+            min-height: 24px;
+        }
+        .success { color: #4ade80; }
+        .loading { opacity: 0.7; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Clear Cache</h1>
+        <p>This will clear all cached data and reload the application with a fresh state.</p>
+        <button onclick="clearAll()">Clear All Cache</button>
+        <div id="status"></div>
+    </div>
+    
+    <script>
+    async function clearAll() {
+        const status = document.getElementById('status');
+        status.textContent = 'Clearing cache...';
+        status.className = 'loading';
+        
+        try {
+            // Clear IndexedDB databases
+            const databases = ['MinaCache', 'mina-cache', 'MinaTasks', 'mina-tasks'];
+            for (const db of databases) {
+                try {
+                    await new Promise((resolve, reject) => {
+                        const req = indexedDB.deleteDatabase(db);
+                        req.onsuccess = resolve;
+                        req.onerror = reject;
+                        req.onblocked = resolve; // Continue even if blocked
+                    });
+                    console.log(`Deleted ${db}`);
+                } catch (e) {
+                    console.warn(`Could not delete ${db}:`, e);
+                }
+            }
+            
+            // Clear localStorage
+            localStorage.clear();
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            
+            status.textContent = '✅ Cache cleared! Redirecting...';
+            status.className = 'success';
+            
+            setTimeout(() => {
+                window.location.href = '/dashboard/meetings';
+            }, 1000);
+            
+        } catch (error) {
+            status.textContent = '❌ Error: ' + error.message;
+            console.error('Clear cache error:', error);
+        }
+    }
+    </script>
+</body>
+</html>
+    """
