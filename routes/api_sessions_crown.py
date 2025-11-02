@@ -180,6 +180,7 @@ def get_sessions_diff():
     CROWN 4.6 Step 4: meetings_diff_fetch
     """
     try:
+        logger.info(f"GET /api/sessions called - user_id={current_user.id}, workspace_id={getattr(current_user, 'workspace_id', None)}")
         workspace_id = current_user.workspace_id
         
         # Handle case where user has no workspace
