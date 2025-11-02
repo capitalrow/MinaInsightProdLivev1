@@ -7,6 +7,7 @@ from models.core_models import Customer, Subscription
 from models import db
 
 stripe.api_key = os.getenv("STRIPE_TEST_API_KEY", "")
+stripe.api_version = "2024-11-20.acacia"
 
 class StripeService:
     def _get_base_url(self) -> str:
