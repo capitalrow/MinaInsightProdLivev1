@@ -280,6 +280,43 @@ class IdleSyncService {
         let addedCount = 0;
         let removedCount = 0;
 
+        // CRITICAL FIX: If server returns 0 tasks but cache has tasks, force clear cache
+        if (serverTasks.length === 0 && localTasks.length > 0) {
+            console.log(`🧹 [Idle Sync] Force-clearing stale cache (${localTasks.length} orphaned tasks)`);
+            
+            // Clear all cached tasks
+            await window.taskCache.clearAllTasks();
+            
+            // Clear all task cards from DOM
+            const allCards = document.querySelectorAll('.task-card');
+            allCards.forEach(card => {
+                card.remove();
+            });
+            
+            // Show empty state
+            const emptyState = document.getElementById('tasks-empty-state');
+            if (emptyState) {
+                emptyState.style.display = 'block';
+            }
+            
+            // Reset counters
+            if (window.taskBootstrap) {
+                await window.taskBootstrap.updateCounters([]);
+            }
+            
+            removedCount = localTasks.length;
+            console.log(`✅ [Idle Sync] Cache cleared, ${removedCount} stale tasks removed`);
+            
+            // Telemetry
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordEvent('cache_force_clear', {
+                    stale_task_count: removedCount
+                });
+            }
+            
+            return;
+        }
+
         // Check for updates and additions
         for (const [taskId, serverTask] of serverTasksById) {
             const localTask = localTasksById.get(taskId);
@@ -308,13 +345,17 @@ class IdleSyncService {
         // Check for deletions
         for (const [taskId, localTask] of localTasksById) {
             if (!serverTasksById.has(taskId)) {
-                // Task deleted on server
+                // Task deleted on server - remove from cache AND DOM
                 // Only remove if it's not a pending local creation (temp ID)
                 if (!taskId.toString().startsWith('temp_')) {
+                    // Remove from cache
+                    await window.taskCache.deleteTask(taskId);
+                    
+                    // Remove from DOM
                     if (window.optimisticUI) {
                         window.optimisticUI._removeTaskFromDOM(taskId);
-                        removedCount++;
                     }
+                    removedCount++;
                 }
             }
         }
