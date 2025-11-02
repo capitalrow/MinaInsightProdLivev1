@@ -3,7 +3,7 @@ import os
 import stripe
 from typing import Optional
 from models.core_models import Customer, Subscription
-from extensions import db
+from models import db
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 
