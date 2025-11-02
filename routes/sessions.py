@@ -5,6 +5,7 @@ REST API endpoints for session management, list, detail, and finalization.
 
 import logging
 from flask import Blueprint, request, jsonify, render_template, abort, Response
+from flask_login import current_user, login_required
 from app import db
 from services.session_service import SessionService
 from services.export_service import ExportService
@@ -132,6 +133,7 @@ def get_session_detail(session_identifier):
 
 
 @sessions_bp.route('/', methods=['POST'])
+@login_required
 def create_session():
     """
     POST /sessions - Create a new session
@@ -144,12 +146,21 @@ def create_session():
     """
     data = request.get_json() or {}
     
+    # 🔒 CROWN¹⁰ Fix: Require workspace_id and user_id from authenticated user
+    workspace_id = current_user.workspace_id if current_user.is_authenticated else None
+    user_id = current_user.id if current_user.is_authenticated else None
+    
+    if not workspace_id:
+        return jsonify({'error': 'Workspace not found. Please ensure you are logged in.'}), 403
+    
     try:
         session_id = SessionService.create_session(
             title=data.get('title'),
             external_id=data.get('external_id'),
             locale=data.get('locale'),
-            device_info=data.get('device_info')
+            device_info=data.get('device_info'),
+            workspace_id=workspace_id,
+            user_id=user_id
         )
         
         # Get created session for response
