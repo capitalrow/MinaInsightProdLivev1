@@ -249,7 +249,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container billing-container">
+<div class="container billing-container" data-user-id="{{ user_id }}">
     <div class="billing-header">
         <h1 class="billing-title">Billing & Subscription</h1>
         <p class="billing-subtitle">Manage your subscription and billing preferences</p>
@@ -320,111 +320,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-console.log('🚀 Script tag loaded - BEFORE DOMContentLoaded');
-alert('JavaScript is working! Check console for logs.');
-
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎬 Billing page JavaScript loaded');
-    const userId = '{{ user_id }}';
-    console.log('👤 User ID:', userId);
-    
-    // Handle checkout session creation
-    const checkoutButtons = document.querySelectorAll('.start-checkout-btn');
-    console.log('🔘 Found checkout buttons:', checkoutButtons.length);
-    checkoutButtons.forEach((btn, index) => {
-        console.log(`📋 Button ${index + 1}:`, btn.getAttribute('data-plan-name'), btn.getAttribute('data-price-id'));
-        btn.addEventListener('click', async function() {
-            console.log('🖱️ Button clicked!', this.getAttribute('data-plan-name'));
-            const priceId = this.getAttribute('data-price-id');
-            const planName = this.getAttribute('data-plan-name');
-            
-            // Add loading state
-            this.classList.add('btn-loading');
-            this.disabled = true;
-            const originalText = this.textContent;
-            this.textContent = 'Processing...';
-            
-            try {
-                const response = await fetch('/billing/create-checkout-session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        user_id: userId,
-                        price_id: priceId
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to create checkout session');
-                }
-                
-                const data = await response.json();
-                
-                if (data.checkout_url) {
-                    // Redirect to Stripe Checkout
-                    window.location.href = data.checkout_url;
-                } else {
-                    throw new Error('No checkout URL returned');
-                }
-            } catch (error) {
-                console.error('Checkout error:', error);
-                alert('Failed to start checkout. Please try again.');
-                
-                // Remove loading state
-                this.classList.remove('btn-loading');
-                this.disabled = false;
-                this.textContent = originalText;
-            }
-        });
-    });
-    
-    // Handle billing portal
-    const portalBtn = document.getElementById('openPortalBtn');
-    if (portalBtn) {
-        portalBtn.addEventListener('click', async function() {
-            // Add loading state
-            this.classList.add('btn-loading');
-            this.disabled = true;
-            const originalText = this.textContent;
-            this.textContent = 'Opening...';
-            
-            try {
-                const response = await fetch('/billing/create-portal-session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        user_id: userId
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to create portal session');
-                }
-                
-                const data = await response.json();
-                
-                if (data.portal_url) {
-                    // Redirect to Stripe Customer Portal
-                    window.location.href = data.portal_url;
-                } else {
-                    throw new Error('No portal URL returned');
-                }
-            } catch (error) {
-                console.error('Portal error:', error);
-                alert('Failed to open billing portal. Please try again.');
-                
-                // Remove loading state
-                this.classList.remove('btn-loading');
-                this.disabled = false;
-                this.textContent = originalText;
-            }
-        });
-    }
-});
-</script>
+<script src="/static/js/billing.js?v={{ range(1, 99999)|random }}"></script>
 {% endblock %}
