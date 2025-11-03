@@ -1559,12 +1559,20 @@
             <h1 class="tasks-title">Action Items</h1>
             <p class="tasks-subtitle">Track and manage tasks from your meetings</p>
         </div>
-        <button class="btn btn-primary">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            New Task
-        </button>
+        <div style="display: flex; gap: var(--space-3); align-items: center;">
+            <button class="btn btn-secondary btn-generate-proposals" data-meeting-id="{{ meeting_id if meeting_id else '' }}">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                AI Proposals
+            </button>
+            <button class="btn btn-primary">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New Task
+            </button>
+        </div>
     </div>
 
     <!-- Offline/Status Banner -->
@@ -1625,6 +1633,9 @@
             </button>
         </div>
     </div>
+
+    <!-- AI Proposals Section (CROWN⁴.5 Task 10) -->
+    <div id="ai-proposals-container"></div>
 
     <!-- Task List Container (CROWN⁴.5 Required Structure) -->
     <div id="tasks-list-container" style="display: flex; flex-direction: column; gap: var(--space-4);">
@@ -2603,11 +2614,47 @@
             taskMenuController = new TaskMenuController();
             initTasksWebSocket();
             setupFilterTabs();
+            initAIProposals();
         });
     } else {
         taskMenuController = new TaskMenuController();
         initTasksWebSocket();
         setupFilterTabs();
+        initAIProposals();
+    }
+    
+    // Initialize AI Proposals UI
+    function initAIProposals() {
+        if (!window.TaskProposalUI) {
+            console.warn('TaskProposalUI not loaded');
+            return;
+        }
+        
+        const proposalUI = new window.TaskProposalUI('ai-proposals-container');
+        const generateButton = document.querySelector('.btn-generate-proposals');
+        
+        if (generateButton) {
+            generateButton.addEventListener('click', async () => {
+                const meetingId = generateButton.dataset.meetingId;
+                if (!meetingId) {
+                    if (window.showToast) {
+                        window.showToast('Please select a meeting first', 'warning');
+                    } else {
+                        alert('Please select a meeting first');
+                    }
+                    return;
+                }
+                
+                try {
+                    await proposalUI.streamProposals(meetingId);
+                } catch (error) {
+                    console.error('Failed to generate proposals:', error);
+                    if (window.showToast) {
+                        window.showToast('Failed to generate proposals', 'error');
+                    }
+                }
+            });
+        }
     }
     
     // Add CSS for animations
@@ -2683,6 +2730,7 @@
 <script src="{{ url_for('static', filename='js/task-actions-menu.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-bulk-operations.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-drag-drop.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-proposal-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-idle-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
