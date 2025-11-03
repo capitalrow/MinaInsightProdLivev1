@@ -287,31 +287,41 @@ def meetings():
 @login_required
 def tasks():
     """Tasks overview page with kanban board."""
-    # Get all tasks for workspace (not just assigned to current user)
-    if current_user.workspace_id:
-        # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
-        all_tasks = db.session.query(Task)\
-            .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
-            .outerjoin(Session, Task.session_id == Session.id)\
-            .filter(
-                or_(
-                    Meeting.workspace_id == current_user.workspace_id,
-                    Session.workspace_id == current_user.workspace_id
-                )
-            ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
-    else:
-        all_tasks = []
+    try:
+        # Get all tasks for workspace (not just assigned to current user)
+        # CROWN⁴.5 Phase 1: Exclude soft-deleted tasks
+        if current_user.workspace_id:
+            # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
+            all_tasks = db.session.query(Task)\
+                .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
+                .outerjoin(Session, Task.session_id == Session.id)\
+                .filter(
+                    Task.deleted_at == None,
+                    or_(
+                        Meeting.workspace_id == current_user.workspace_id,
+                        Session.workspace_id == current_user.workspace_id
+                    )
+                ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+        else:
+            all_tasks = []
     
-    # Get tasks by status
-    todo_tasks = [t for t in all_tasks if t.status == 'todo']
-    in_progress_tasks = [t for t in all_tasks if t.status == 'in_progress']
-    completed_tasks = [t for t in all_tasks if t.status == 'completed'][:10]
-    
-    return render_template('dashboard/tasks.html',
-                         tasks=all_tasks,
-                         todo_tasks=todo_tasks,
-                         in_progress_tasks=in_progress_tasks,
-                         completed_tasks=completed_tasks)
+        # Get tasks by status
+        todo_tasks = [t for t in all_tasks if t.status == 'todo']
+        in_progress_tasks = [t for t in all_tasks if t.status == 'in_progress']
+        completed_tasks = [t for t in all_tasks if t.status == 'completed'][:10]
+        
+        return render_template('dashboard/tasks.html',
+                             tasks=all_tasks,
+                             todo_tasks=todo_tasks,
+                             in_progress_tasks=in_progress_tasks,
+                             completed_tasks=completed_tasks)
+    except Exception as e:
+        logger.exception(f"Tasks page error for user {current_user.id}: {e}")
+        return jsonify({
+            'error': 'server error',
+            'message': 'An unexpected error occurred',
+            'request_id': request.environ.get('SENTRY_TRANSACTION_ID', 'N/A')
+        }), 500
 
 
 @dashboard_bp.route('/analytics')
@@ -348,10 +358,15 @@ def analytics():
     )
     meeting_ids = [row[0] for row in db.session.execute(meeting_ids_query)]
     
-    total_tasks = db.session.query(Task).filter(Task.meeting_id.in_(meeting_ids)).count() if meeting_ids else 0
+    # CROWN⁴.5 Phase 1: Exclude soft-deleted tasks from analytics
+    total_tasks = db.session.query(Task).filter(
+        Task.meeting_id.in_(meeting_ids),
+        Task.deleted_at == None
+    ).count() if meeting_ids else 0
     completed_tasks = db.session.query(Task).filter(
         Task.meeting_id.in_(meeting_ids),
-        Task.status == 'completed'
+        Task.status == 'completed',
+        Task.deleted_at == None
     ).count() if meeting_ids else 0
     
     task_completion_rate = round((completed_tasks / total_tasks * 100), 1) if total_tasks > 0 else 0
@@ -423,9 +438,10 @@ def api_recent_activity():
         workspace_id=current_user.workspace_id
     ).order_by(desc(Meeting.created_at)).limit(5).all()
     
-    # Get recent tasks
+    # Get recent tasks (CROWN⁴.5 Phase 1: Exclude soft-deleted tasks)
     recent_tasks = db.session.query(Task).join(Meeting).filter(
-        Meeting.workspace_id == current_user.workspace_id
+        Meeting.workspace_id == current_user.workspace_id,
+        Task.deleted_at == None
     ).order_by(desc(Task.created_at)).limit(5).all()
     
     # Combine and sort activities
@@ -467,18 +483,21 @@ def api_stats():
         status='live'
     ).count()
     
-    # Task stats
+    # Task stats (CROWN⁴.5 Phase 1: Exclude soft-deleted tasks)
     total_tasks = db.session.query(Task).join(Meeting).filter(
-        Meeting.workspace_id == current_user.workspace_id
+        Meeting.workspace_id == current_user.workspace_id,
+        Task.deleted_at == None
     ).count()
     completed_tasks = db.session.query(Task).join(Meeting).filter(
         Meeting.workspace_id == current_user.workspace_id,
-        Task.status == 'completed'
+        Task.status == 'completed',
+        Task.deleted_at == None
     ).count()
     overdue_tasks = db.session.query(Task).join(Meeting).filter(
         Meeting.workspace_id == current_user.workspace_id,
         Task.due_date < datetime.now().date(),
-        Task.status.in_(['todo', 'in_progress'])
+        Task.status.in_(['todo', 'in_progress']),
+        Task.deleted_at == None
     ).count()
     
     # This week's activity
@@ -489,7 +508,8 @@ def api_stats():
     
     this_week_tasks = db.session.query(Task).join(Meeting).filter(
         Meeting.workspace_id == current_user.workspace_id,
-        Task.created_at >= week_start
+        Task.created_at >= week_start,
+        Task.deleted_at == None
     ).count()
     
     return jsonify({
