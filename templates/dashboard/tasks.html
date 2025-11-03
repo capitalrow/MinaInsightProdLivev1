@@ -240,7 +240,7 @@
 </div>
 
 <!-- Task Creation Modal (Crown+ Glassmorphism) -->
-<div id="task-modal-overlay" class="task-modal-overlay">
+<div id="task-modal-overlay" class="task-modal-overlay hidden">
     <div class="task-modal">
         <div class="task-modal-header">
             <h2 class="task-modal-title">Create New Task</h2>
@@ -653,6 +653,7 @@
     // Open modal function
     function openTaskModal() {
         if (modalOverlay) {
+            modalOverlay.classList.remove('hidden');
             modalOverlay.classList.add('active');
             const titleInput = document.getElementById('task-title');
             if (titleInput) titleInput.focus();
@@ -664,6 +665,7 @@
     function closeTaskModal() {
         if (modalOverlay) {
             modalOverlay.classList.remove('active');
+            modalOverlay.classList.add('hidden');
         }
     }
     
