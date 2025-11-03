@@ -319,30 +319,11 @@
 
 .task-card.completed .task-title {
     color: var(--color-text-tertiary);
-    position: relative;
-    text-decoration: none;
     opacity: 0.65;
-    transition: opacity 0.4s ease-out;
-}
-
-.task-card.completed .task-title::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    width: 100%;
-    height: 2.5px;
-    background: rgba(148, 163, 184, 0.95);
-    transform: scaleX(0);
-    transform-origin: left;
-    animation: strikeThrough 0.4s ease-out 0.15s forwards;
-    text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
-}
-
-@keyframes strikeThrough {
-    to {
-        transform: scaleX(1);
-    }
+    text-decoration: line-through;
+    text-decoration-color: rgba(148, 163, 184, 0.95);
+    text-decoration-thickness: 2.5px;
+    transition: opacity 0.4s ease-out, text-decoration 0.4s ease-out 0.15s;
 }
 
 .task-content {
@@ -1949,21 +1930,7 @@
                 
                 console.log(`🔍 Filter changed to: ${filter}`);
                 
-                // CRITICAL FIX: Disable clustering mode when switching to filter tabs
-                if (window.taskClusteringManager && window.taskClusteringManager.enabled) {
-                    console.log('📋 Disabling clustering mode (switching to filter view)');
-                    window.taskClusteringManager.enabled = false;
-                    
-                    const clusterToggle = document.querySelector('.cluster-toggle');
-                    if (clusterToggle) {
-                        clusterToggle.classList.remove('active');
-                    }
-                    
-                    // Re-render flat list view
-                    await window.taskClusteringManager.showNormalView();
-                }
-                
-                // Update active tab visual state
+                // Update active tab visual state FIRST
                 document.querySelectorAll('.filter-tab').forEach(t => {
                     if (!t.classList.contains('cluster-toggle')) {
                         t.classList.remove('active');
@@ -1974,6 +1941,21 @@
                 // Update viewState in cache (persist filter preference)
                 if (window.taskCache) {
                     await window.taskCache.setViewState({ activeFilter: filter });
+                }
+                
+                // CRITICAL FIX: Disable clustering mode when switching to filter tabs
+                if (window.taskClusteringManager && window.taskClusteringManager.enabled) {
+                    console.log('📋 Disabling clustering mode (switching to filter view)');
+                    window.taskClusteringManager.enabled = false;
+                    
+                    const clusterToggle = document.querySelector('.cluster-toggle');
+                    if (clusterToggle) {
+                        clusterToggle.classList.remove('active');
+                    }
+                    
+                    // Re-render flat list view (respects active filter set above)
+                    await window.taskClusteringManager.showNormalView();
+                    return;
                 }
                 
                 // Fetch filtered tasks from cache
