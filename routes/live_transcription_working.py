@@ -168,9 +168,21 @@ def transcribe_chunk_streaming():
 
             from services.transcription_service import TranscriptionService
             from app import socketio
+            from flask_login import current_user
 
             transcription_service = TranscriptionService()
-            transcription_service._save_transcription_text(session_id, text, confidence)
+            
+            # 🔒 CROWN¹⁰ Fix: Pass workspace_id and user_id for proper data scoping
+            workspace_id = current_user.workspace_id if current_user.is_authenticated else None
+            user_id = current_user.id if current_user.is_authenticated else None
+            
+            transcription_service._save_transcription_text(
+                session_id, 
+                text, 
+                confidence,
+                workspace_id=workspace_id,
+                user_id=user_id
+            )
             socketio.emit('update_dashboard', {'session_id': session_id, 'text': text})
 
             print(f"[LIVE-API]    Text: '{text[:100]}{'...' if len(text) > 100 else ''}'")

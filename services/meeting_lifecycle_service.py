@@ -7,7 +7,7 @@ This is the critical bridge that fixes the broken data pipeline.
 import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
-from sqlalchemy import select
+from sqlalchemy import select, update
 from models import db
 from models.session import Session
 from models.meeting import Meeting
@@ -52,26 +52,12 @@ class MeetingLifecycleService:
                 existing_meeting = db.session.get(Meeting, session.meeting_id)
                 return existing_meeting
             
-            # Get workspace_id - if session doesn't have one, assign default workspace (id=1)
+            # 🔒 CROWN¹⁰ Fix: Require workspace_id - no silent fallbacks!
             workspace_id = session.workspace_id
             if not workspace_id:
-                # Get default workspace or create one
-                from models.workspace import Workspace
-                
-                default_workspace = db.session.scalar(select(Workspace).limit(1))
-                if not default_workspace:
-                    # Create a default workspace if none exists
-                    default_workspace = Workspace(
-                        name="Default Workspace",
-                        description="Auto-created default workspace for meetings"
-                    )
-                    db.session.add(default_workspace)
-                    db.session.flush()
-                
-                workspace_id = default_workspace.id
-                # Update session with workspace_id for future reference
-                session.workspace_id = workspace_id
-                logger.info(f"Assigned default workspace {workspace_id} to session {session_id}")
+                error_msg = f"Session {session_id} missing workspace_id - cannot create meeting. Sessions must be created with workspace_id."
+                logger.error(f"❌ {error_msg}")
+                raise ValueError(error_msg)
             
             # Calculate meeting duration from segments
             segments = db.session.scalars(
@@ -110,6 +96,16 @@ class MeetingLifecycleService:
             
             # Link session to meeting
             session.meeting_id = meeting.id
+            
+            # 🔒 CROWN¹⁰ Fix: Backfill meeting_id on existing tasks
+            # Tasks created during post-processing have session_id but no meeting_id
+            # Update them now that the meeting exists
+            task_update_count = db.session.execute(
+                update(Task).where(Task.session_id == session_id).values(meeting_id=meeting.id)
+            ).rowcount
+            
+            if task_update_count > 0:
+                logger.info(f"✅ Updated {task_update_count} tasks with meeting_id={meeting.id}")
             
             # Create basic Analytics record
             analytics = Analytics(
@@ -320,13 +316,26 @@ class MeetingLifecycleService:
                 total_tasks = 0
                 completed_tasks = 0
             
+            # Calculate total duration hours from all meetings
+            meetings = db.session.scalars(
+                select(Meeting).where(Meeting.workspace_id == workspace_id)
+            ).all()
+            
+            total_duration_minutes = 0
+            for meeting in meetings:
+                if meeting.duration_minutes:
+                    total_duration_minutes += meeting.duration_minutes
+            
+            total_duration_hours = round(total_duration_minutes / 60, 2)
+            
             return {
                 'total_meetings': total_meetings,
                 'recent_meetings': recent_meetings,
                 'completed_meetings': completed_meetings,
                 'total_tasks': total_tasks,
                 'completed_tasks': completed_tasks,
-                'task_completion_rate': (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+                'task_completion_rate': (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0,
+                'total_duration_hours': total_duration_hours
             }
             
         except Exception as e:
@@ -337,5 +346,6 @@ class MeetingLifecycleService:
                 'completed_meetings': 0,
                 'total_tasks': 0,
                 'completed_tasks': 0,
-                'task_completion_rate': 0
+                'task_completion_rate': 0,
+                'total_duration_hours': 0
             }

@@ -18,6 +18,10 @@ from app import socketio
 
 # Import advanced buffer management
 from services.session_buffer_manager import buffer_registry, BufferConfig
+from services.transcription_service import TranscriptionService
+from services.session_service import SessionService
+from services.post_transcription_orchestrator import PostTranscriptionOrchestrator
+from flask_login import current_user
 # After existing imports
 import asyncio
 from jobs.analysis_dispatcher import AnalysisDispatcher
@@ -114,6 +118,31 @@ def on_start_session(data):
         # Store session info with advanced buffer manager
         buffer_manager = buffer_registry.get_or_create_session(session_id)
         
+        # 🔒 CROWN¹⁰ Fix: Capture workspace_id and user_id from authenticated user
+        workspace_id = current_user.workspace_id if current_user.is_authenticated else None
+        user_id = current_user.id if current_user.is_authenticated else None
+        
+        logger.info(f"🔑 [CROWN¹⁰] Session start - User: {user_id}, Workspace: {workspace_id}, Authenticated: {current_user.is_authenticated}")
+        
+        if not workspace_id:
+            logger.error(f"❌ [CROWN¹⁰] CRITICAL: Cannot start session without workspace_id for user {user_id}")
+            emit('error', {'message': 'Workspace not found. Please ensure you are logged in.'})
+            return
+        
+        # 🔒 CROWN¹⁰ Fix: Create Session record in database immediately
+        try:
+            db_session_id = SessionService.create_session(
+                external_id=session_id,
+                title=data.get('title', 'Live Transcription'),
+                workspace_id=workspace_id,
+                user_id=user_id
+            )
+            logger.info(f"✅ [CROWN¹⁰] Session created in DB - db_id={db_session_id}, external_id={session_id}, workspace={workspace_id}, user={user_id}")
+        except Exception as db_error:
+            logger.error(f"❌ [transcription] Failed to create Session in database: {db_error}")
+            emit('error', {'message': 'Failed to create session in database'})
+            return
+        
         active_sessions[session_id] = {
             'client_sid': request.sid,
             'started_at': datetime.utcnow(),
@@ -122,7 +151,10 @@ def on_start_session(data):
             'buffer_manager': buffer_manager,
             'audio_buffer': bytearray(),
             'webm_header': None,
-            'last_process_time': 0
+            'last_process_time': 0,
+            'workspace_id': workspace_id,
+            'user_id': user_id,
+            'db_session_id': db_session_id  # Store database Session.id for later use
         }
         
         # Start background processing worker for this session
@@ -249,14 +281,20 @@ def on_audio_data(data):
             try:
                 # Send reconstructed audio to transcription API
                 file_extension = '.wav' if 'wav' in mime_type else '.webm'
+                
+                # 🔒 CROWN¹⁰ Fix: Pass workspace_id and user_id to transcription endpoint
+                post_data = {
+                    'session_id': session_id,
+                    'is_interim': 'true',
+                    'chunk_id': str(int(time.time() * 1000)),
+                    'workspace_id': str(session_info.get('workspace_id')),
+                    'user_id': str(session_info.get('user_id'))
+                }
+                
                 response = requests.post(
                     'http://localhost:5000/api/transcribe-audio',
                     files={'audio': (f'audio{file_extension}', reconstructed_audio, mime_type)},
-                    data={
-                        'session_id': session_id,
-                        'is_interim': 'true',
-                        'chunk_id': str(int(time.time() * 1000))
-                    },
+                    data=post_data,
                     timeout=10
                 )
             
@@ -264,6 +302,20 @@ def on_audio_data(data):
                     result = response.json()
                     text = result.get('final_text', '') or result.get('text', '')
                     if text and text.strip():
+                        # 🔒 CROWN¹⁰ Fix: Save transcription to database with workspace_id and user_id
+                        try:
+                            transcription_service = TranscriptionService()
+                            transcription_service._save_transcription_text(
+                                session_id=session_id,
+                                text=text,
+                                confidence=result.get('confidence', 0.9),
+                                workspace_id=session_info.get('workspace_id'),
+                                user_id=session_info.get('user_id')
+                            )
+                            logger.info(f"✅ [CROWN¹⁰] Transcription saved - session={session_id}, workspace={session_info.get('workspace_id')}, user={session_info.get('user_id')}, text_length={len(text)}")
+                        except Exception as db_error:
+                            logger.error(f"❌ [transcription] Failed to save to database: {db_error}")
+                        
                         # Emit properly formatted transcription result
                         emit('transcription_result', {
                             'text': text,
@@ -320,17 +372,23 @@ def on_end_session(data=None):
             except Exception as e:
                 logger.error(f"[transcription] Error finalizing transcript: {e}")
 
-            # 🚀 Kick off downstream analytics + summary generation asynchronously
+            # 🚀 CROWN¹⁰: Finalize session and trigger post-transcription pipeline directly
             try:
-                asyncio.create_task(
-                    AnalysisDispatcher.run_full_analysis(
-                        session_id=session_id,
-                        meeting_id=session_info.get("meeting_id", str(uuid.uuid4()))  # fallback if not tracked
-                    )
-                )
-                logger.info(f"[analysis] Dispatched background analytics job for session {session_id}")
-            except Exception as e:
-                logger.error(f"[analysis] Failed to dispatch analytics job: {e}")
+                # Get the Session object from database
+                from models.core_models import Session
+                db_session = Session.query.filter_by(external_id=session_id).first()
+                
+                if db_session:
+                    logger.info(f"🔍 [CROWN¹⁰] Session found in DB - id={db_session.id}, user_id={db_session.user_id}, workspace_id={db_session.workspace_id}")
+                    
+                    # Directly trigger PostTranscriptionOrchestrator
+                    orchestrator = PostTranscriptionOrchestrator()
+                    orchestrator.trigger_post_processing(db_session)
+                    logger.info(f"✅ [CROWN¹⁰] Post-processing triggered - session={session_id}, will create Meeting record")
+                else:
+                    logger.error(f"❌ [CROWN¹⁰] CRITICAL: Session {session_id} not found in database for finalization!")
+            except Exception as finalize_error:
+                logger.error(f"❌ [transcription] Failed to finalize session: {finalize_error}", exc_info=True)
 
             # ✅ Notify the client that the session is done
             emit('session_ended', {

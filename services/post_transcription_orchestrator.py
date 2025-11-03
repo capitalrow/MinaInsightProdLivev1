@@ -1326,7 +1326,7 @@ class PostTranscriptionOrchestrator:
                     # Reject if quality score below threshold (0.70)
                     if quality_score.total_score < 0.70:
                         logger.info(f"[Pattern+Validation] REJECTED (score={quality_score.total_score:.2f}): '{task_text[:60]}'")
-                        logger.debug(f"  Rejection reasons: {quality_score.deductions}")
+                        logger.debug(f"  Quality breakdown: verb={quality_score.has_action_verb}, subject={quality_score.has_subject}, length={quality_score.appropriate_length}, evidence={quality_score.has_evidence}")
                         continue  # Skip this task
                     else:
                         logger.debug(f"[Pattern+Validation] PASSED (score={quality_score.total_score:.2f}): '{task_text[:60]}'")

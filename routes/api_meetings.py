@@ -10,6 +10,7 @@ from services.task_extraction_service import task_extraction_service
 from services.meeting_metadata_service import meeting_metadata_service
 from services.analytics_service import analytics_service
 from middleware.cache_decorator import cache_response, invalidate_cache, invalidate_meeting_cache
+from utils.etag_helper import with_etag, compute_collection_etag
 from datetime import datetime
 import asyncio
 import json
@@ -20,6 +21,7 @@ api_meetings_bp = Blueprint('api_meetings', __name__, url_prefix='/api/meetings'
 
 
 @api_meetings_bp.route('/', methods=['GET'])
+@with_etag
 @cache_response(ttl=300, prefix='session')  # 5 min cache for meeting lists
 @login_required
 def list_meetings():
@@ -443,6 +445,7 @@ def get_meeting_analytics(meeting_id):
 
 
 @api_meetings_bp.route('/recent', methods=['GET'])
+@with_etag
 @login_required
 def get_recent_meetings():
     """Get recent meetings for dashboard."""
@@ -453,9 +456,13 @@ def get_recent_meetings():
             workspace_id=current_user.workspace_id
         ).order_by(Meeting.created_at.desc()).limit(limit).all()
         
+        meetings_data = [meeting.to_dict() for meeting in meetings]
+        checksum = compute_collection_etag(meetings_data)
+        
         return jsonify({
             'success': True,
-            'meetings': [meeting.to_dict() for meeting in meetings]
+            'meetings': meetings_data,
+            'checksum': checksum
         })
         
     except Exception as e:
@@ -463,6 +470,7 @@ def get_recent_meetings():
 
 
 @api_meetings_bp.route('/stats', methods=['GET'])
+@with_etag
 @login_required
 def get_meeting_stats():
     """Get meeting statistics for current workspace."""

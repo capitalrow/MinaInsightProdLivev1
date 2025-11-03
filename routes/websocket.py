@@ -54,19 +54,28 @@ def _decode_b64(b64: Optional[str]) -> bytes:
 
 @socketio.on("join_session")
 def on_join_session(data):
+    from flask_login import current_user
+    
     session_id = (data or {}).get("session_id")
     if not session_id:
         emit("error", {"message": "Missing session_id"})
+        return
+    
+    # 🔒 CROWN¹⁰ Fix: Get workspace_id and user_id from authenticated user
+    workspace_id = current_user.workspace_id if current_user.is_authenticated else None
+    user_id = current_user.id if current_user.is_authenticated else None
+    
+    logger.info(f"🔑 [CROWN¹⁰] join_session - User: {user_id}, Workspace: {workspace_id}, Authenticated: {current_user.is_authenticated}")
+    
+    if not workspace_id:
+        logger.error(f"❌ [CROWN¹⁰] CRITICAL: Cannot join session without workspace_id for user {user_id}")
+        emit('error', {'message': 'Workspace not found. Please ensure you are logged in.'})
         return
     
     # Create or get existing session in database
     try:
         session = db.session.query(Session).filter_by(external_id=session_id).first()
         if not session:
-            # Extract optional ownership info from client (if authenticated)
-            user_id = (data or {}).get("user_id")  # Client can pass user_id if authenticated
-            workspace_id = (data or {}).get("workspace_id")  # Client can pass workspace_id
-            
             session = Session(
                 external_id=session_id,
                 title="Live Transcription Session",
@@ -79,11 +88,11 @@ def on_join_session(data):
             )
             db.session.add(session)
             db.session.commit()
-            logger.info(f"[ws] Created new session in DB: {session_id} (user_id={user_id}, workspace_id={workspace_id})")
+            logger.info(f"✅ [CROWN¹⁰] Session created in DB - external_id={session_id}, workspace={workspace_id}, user={user_id}")
         else:
             logger.info(f"[ws] Using existing session: {session_id}")
     except Exception as e:
-        logger.error(f"[ws] Database error creating session: {e}")
+        logger.error(f"❌ [ws] Database error creating session: {e}", exc_info=True)
         # Continue with in-memory only
     
     # init/clear in-memory buffers
