@@ -326,11 +326,14 @@ class MeetingLifecycleService:
                     select(Session).where(Session.meeting_id.in_(meeting_ids))
                 ).all()
                 
+                logger.debug(f"📊 Found {len(sessions)} sessions for {len(meeting_ids)} meetings")
                 for session in sessions:
                     if session.total_duration:
+                        logger.debug(f"  Session {session.external_id}: {session.total_duration} seconds")
                         total_duration_seconds += session.total_duration
             
             total_duration_hours = round(total_duration_seconds / 3600, 2)
+            logger.debug(f"📊 Total duration: {total_duration_seconds} seconds = {total_duration_hours} hours")
             
             return {
                 'total_meetings': total_meetings,
