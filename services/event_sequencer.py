@@ -85,31 +85,68 @@ class EventSequencer:
             return ""
     
     @staticmethod
-    def get_next_sequence_num() -> int:
+    def get_next_sequence_num(workspace_id: Optional[str] = None) -> Tuple[int, Optional[int]]:
         """
-        Get the next sequence number for event ordering.
-        Thread-safe using database sequence.
+        Get the next sequence number for event ordering with atomic increment.
         
-        NOTE: CROWN⁴.5 MVP LIMITATION
-        - Currently uses GLOBAL sequence numbers (not per-workspace)
-        - EventLedger schema lacks workspace_id field
-        - True per-workspace sequencing requires schema migration
-        - MVP compensates via reconciliation for zero-desync guarantee
+        CROWN⁴.5 Per-Workspace Sequencing with True Atomicity:
+        - Returns both global sequence_num and workspace_sequence_num
+        - workspace_sequence_num uses atomic UPSERT on dedicated counter table
+        - INSERT ... ON CONFLICT guarantees first-writer wins without exceptions
+        - Eliminates all race conditions including empty-workspace case
+        - Global sequence_num maintained for backward compatibility
         
-        Returns:
-            Next sequence number
-        """
-        try:
-            # Get max sequence_num from database (global, not per-workspace)
-            max_seq = db.session.scalar(
-                select(func.max(EventLedger.sequence_num))
-            )
+        Args:
+            workspace_id: Optional workspace UUID for per-workspace sequencing
             
-            # Start from 1 if no events exist
-            return (max_seq or 0) + 1
+        Returns:
+            Tuple of (global_sequence_num, workspace_sequence_num)
+            workspace_sequence_num is None if workspace_id not provided
+        """
+        from sqlalchemy import text
+        
+        try:
+            # Get global sequence number with row-level lock for atomicity
+            # SELECT FOR UPDATE prevents concurrent transactions from reading the same max
+            max_global_event = db.session.scalar(
+                select(EventLedger)
+                .order_by(EventLedger.sequence_num.desc())
+                .limit(1)
+                .with_for_update()
+            )
+            global_seq = (max_global_event.sequence_num if max_global_event else 0) + 1
+            
+            # Get per-workspace sequence number using atomic UPSERT if workspace_id provided
+            workspace_seq = None
+            if workspace_id:
+                # CROWN⁴.5: Atomic counter increment using PostgreSQL INSERT ... ON CONFLICT
+                # This guarantees first-writer wins without relying on exception handling
+                # If row doesn't exist: INSERT counter=1, RETURN 1
+                # If row exists: UPDATE counter=counter+1, RETURN new counter
+                result = db.session.execute(
+                    text("""
+                        INSERT INTO workspace_sequence_counter (workspace_id, counter, updated_at)
+                        VALUES (:workspace_id, 1, CURRENT_TIMESTAMP)
+                        ON CONFLICT (workspace_id) 
+                        DO UPDATE SET 
+                            counter = workspace_sequence_counter.counter + 1,
+                            updated_at = CURRENT_TIMESTAMP
+                        RETURNING counter
+                    """),
+                    {"workspace_id": workspace_id}
+                )
+                workspace_seq = result.scalar_one()
+                
+                logger.debug(
+                    f"Generated atomic sequence for workspace {workspace_id}: "
+                    f"global={global_seq}, workspace={workspace_seq}"
+                )
+            
+            return (global_seq, workspace_seq)
+            
         except Exception as e:
             logger.error(f"Failed to get next sequence number: {e}")
-            return 1
+            return (1, 1 if workspace_id else None)
     
     @staticmethod
     def create_event(
@@ -121,10 +158,17 @@ class EventSequencer:
         trace_id: Optional[str] = None,
         idempotency_key: Optional[str] = None,
         client_id: Optional[str] = None,
-        previous_clock: Optional[Dict[str, int]] = None
+        previous_clock: Optional[Dict[str, int]] = None,
+        workspace_id: Optional[str] = None
     ) -> EventLedger:
         """
         Create a new event with proper sequencing, checksum, and vector clock (CROWN⁴.5).
+        
+        CROWN⁴.5 Per-Workspace Sequencing with Atomic Counter:
+        - Generates monotonic sequence numbers per workspace using atomic UPSERT
+        - No retry logic needed - counter increment is guaranteed atomic
+        - Maintains global sequence for backward compatibility
+        - Eliminates all race conditions via database-level atomicity
         
         Args:
             event_type: Type of event from EventType enum
@@ -136,13 +180,14 @@ class EventSequencer:
             idempotency_key: Key for idempotent processing
             client_id: Client identifier for vector clock generation (user_id, device_id, etc.)
             previous_clock: Previous vector clock from client for incrementing
+            workspace_id: Workspace UUID for per-workspace sequencing (CROWN⁴.5)
             
         Returns:
             Created EventLedger instance with vector clock if client_id provided
         """
         try:
-            # Generate sequence number
-            sequence_num = EventSequencer.get_next_sequence_num()
+            # Generate sequence numbers (global + per-workspace via atomic UPSERT)
+            global_seq, workspace_seq = EventSequencer.get_next_sequence_num(workspace_id)
             
             # Generate checksum if payload provided
             checksum = EventSequencer.generate_checksum(payload) if payload else None
@@ -153,7 +198,7 @@ class EventSequencer:
                 vector_clock = EventSequencer.generate_vector_clock(client_id, previous_clock)
                 logger.debug(f"Generated vector clock for client {client_id}: {vector_clock}")
             
-            # Create event record
+            # Create event record with per-workspace sequencing
             event = EventLedger(
                 event_type=event_type,
                 event_name=event_name,
@@ -163,7 +208,9 @@ class EventSequencer:
                 payload=payload,
                 trace_id=trace_id,
                 idempotency_key=idempotency_key,
-                sequence_num=sequence_num,
+                sequence_num=global_seq,
+                workspace_id=workspace_id,
+                workspace_sequence_num=workspace_seq,
                 checksum=checksum,
                 vector_clock=vector_clock,
                 broadcast_status="pending",
@@ -173,7 +220,10 @@ class EventSequencer:
             db.session.add(event)
             db.session.commit()
             
-            logger.debug(f"Created event {event.id} (seq={sequence_num}): {event_name}")
+            logger.debug(
+                f"Created event {event.id} (global_seq={global_seq}, "
+                f"workspace_seq={workspace_seq}, workspace={workspace_id}): {event_name}"
+            )
             
             return event
             

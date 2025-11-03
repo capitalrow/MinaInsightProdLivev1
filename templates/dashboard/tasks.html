@@ -3,1368 +3,7 @@
 {% block title %}Tasks - Mina{% endblock %}
 
 {% block extra_css %}
-<style>
-.tasks-container {
-    min-height: calc(100vh - var(--header-height));
-    padding: var(--space-8) 0;
-    max-width: 1200px;
-}
-
-.tasks-header {
-    margin-bottom: var(--space-6);
-    animation: fadeInUp 0.6s ease-out;
-}
-
-.tasks-title {
-    font-size: var(--font-size-4xl);
-    font-weight: var(--font-weight-bold);
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: var(--space-2);
-}
-
-.tasks-subtitle {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-lg);
-}
-
-.connection-banner {
-    padding: var(--space-3) var(--space-4);
-    background: var(--glass-bg);
-    backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-lg);
-    margin-bottom: var(--space-4);
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    font-size: var(--font-size-sm);
-    transition: all var(--transition-base);
-}
-
-.connection-banner.offline {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.5);
-    color: #ef4444;
-}
-
-.connection-banner.reconnecting {
-    background: rgba(249, 115, 22, 0.1);
-    border-color: rgba(249, 115, 22, 0.5);
-    color: #f97316;
-}
-
-.connection-banner.online {
-    background: rgba(34, 197, 94, 0.1);
-    border-color: rgba(34, 197, 94, 0.5);
-    color: #22c55e;
-}
-
-.connection-status-icon::before {
-    content: '●';
-    margin-right: var(--space-2);
-}
-
-.task-filters {
-    display: flex;
-    gap: var(--space-3);
-    padding: var(--space-4);
-    background: var(--glass-bg);
-    backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-xl);
-    margin-bottom: var(--space-6);
-    animation: fadeInUp 0.6s ease-out 0.1s;
-    animation-fill-mode: both;
-}
-
-.filter-tab {
-    padding: var(--space-2) var(--space-4);
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: var(--radius-lg);
-    color: var(--color-text-secondary);
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-base);
-}
-
-.filter-tab:hover {
-    color: var(--color-text-primary);
-    background: var(--color-surface-hover);
-}
-
-.filter-tab.active {
-    color: var(--color-primary);
-    background: rgba(99, 102, 241, 0.1);
-    border-color: var(--color-primary);
-}
-
-.task-card {
-    background: var(--glass-bg);
-    backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-lg);
-    padding: 8px 16px;
-    transition: all var(--transition-base);
-    animation: fadeInUp 0.4s ease-out;
-    animation-fill-mode: both;
-    position: relative;
-    overflow: hidden;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 8px;
-}
-
-.task-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 3px;
-    height: 100%;
-    background: var(--color-primary);
-    opacity: 0;
-    transition: opacity var(--transition-base);
-}
-
-.task-card:hover {
-    background: rgba(99, 102, 241, 0.03);
-    border-color: rgba(99, 102, 241, 0.3);
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
-}
-
-.task-card:hover::before {
-    opacity: 1;
-}
-
-.task-card.completed {
-    opacity: 0.6;
-}
-
-.task-card.completed:hover {
-    opacity: 0.75;
-}
-
-.checkbox-wrapper {
-    /* Invisible 36x36px click area for comfortable interaction */
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    flex-shrink: 0;
-    cursor: pointer;
-}
-
-.task-checkbox {
-    /* Premium circular checkbox - elegant 22x22px visual size */
-    appearance: none;
-    -webkit-appearance: none;
-    width: 22px;
-    height: 22px;
-    border: 2px solid rgba(99, 102, 241, 0.3);
-    border-radius: 50%;
-    cursor: pointer;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    flex-shrink: 0;
-    position: relative;
-    background: rgba(99, 102, 241, 0.05);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.task-checkbox:hover {
-    border-color: rgba(99, 102, 241, 0.6);
-    background: rgba(99, 102, 241, 0.08);
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1),
-                inset 0 1px 2px rgba(0, 0, 0, 0.1);
-    transform: scale(1.08);
-}
-
-.task-checkbox:checked {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-color: #667eea;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3),
-                inset 0 1px 2px rgba(255, 255, 255, 0.2);
-    animation: checkboxPulse 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.task-checkbox:checked::after {
-    /* Checkmark rendered as pseudo-element */
-    content: '✓';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0);
-    color: white;
-    font-size: 13px;
-    font-weight: bold;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-    animation: checkmarkPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s forwards;
-}
-
-.task-checkbox:focus {
-    outline: none;
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
-}
-
-@keyframes checkboxPulse {
-    0% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.1);
-    }
-    100% {
-        transform: scale(1);
-    }
-}
-
-@keyframes checkmarkPop {
-    0% {
-        transform: translate(-50%, -50%) scale(0) rotate(-45deg);
-        opacity: 0;
-    }
-    100% {
-        transform: translate(-50%, -50%) scale(1) rotate(0deg);
-        opacity: 1;
-    }
-}
-
-.task-title {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--color-text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-    min-width: 0;
-    margin: 0;
-    cursor: text;
-    position: relative;
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
-    transition: all var(--transition-base);
-}
-
-.task-title:hover {
-    background: rgba(99, 102, 241, 0.05);
-}
-
-.task-title[contenteditable="true"] {
-    background: rgba(99, 102, 241, 0.1);
-    outline: 2px solid rgba(99, 102, 241, 0.3);
-    white-space: normal;
-    overflow: visible;
-}
-
-.task-title-input {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--color-text-primary);
-    flex: 1;
-    min-width: 0;
-    margin: 0;
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
-    background: rgba(99, 102, 241, 0.1);
-    outline: 2px solid rgba(99, 102, 241, 0.3);
-    border: none;
-    font-family: inherit;
-}
-
-.task-title.saving {
-    opacity: 0.6;
-}
-
-.task-title.saving::after {
-    content: '';
-    position: absolute;
-    right: -20px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 12px;
-    height: 12px;
-    border: 2px solid rgba(99, 102, 241, 0.3);
-    border-top-color: rgb(99, 102, 241);
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: translateY(-50%) rotate(360deg); }
-}
-
-.task-title.saved::after {
-    content: '✓';
-    position: absolute;
-    right: -20px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: rgb(34, 197, 94);
-    font-weight: bold;
-    animation: fadeOut 2s ease-out forwards;
-}
-
-@keyframes fadeOut {
-    0% { opacity: 1; }
-    70% { opacity: 1; }
-    100% { opacity: 0; }
-}
-
-.task-card.completed .task-title {
-    color: var(--color-text-tertiary);
-    opacity: 0.65;
-    text-decoration: line-through;
-    text-decoration-color: rgba(148, 163, 184, 0.95);
-    text-decoration-thickness: 2.5px;
-    transition: opacity 0.4s ease-out, text-decoration 0.4s ease-out 0.15s;
-}
-
-.task-content {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-}
-
-.task-metadata {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3);
-    align-items: center;
-    font-size: 12px;
-    color: var(--color-text-secondary);
-}
-
-.task-assignee,
-.task-due-date,
-.task-labels-empty {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    background: rgba(99, 102, 241, 0.05);
-}
-
-.task-assignee:hover,
-.task-due-date:hover,
-.task-labels-empty:hover {
-    background: rgba(99, 102, 241, 0.15);
-    transform: translateY(-1px);
-}
-
-.task-labels {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    cursor: pointer;
-}
-
-.task-label {
-    display: inline-block;
-    padding: 2px 8px;
-    background: rgba(99, 102, 241, 0.2);
-    border-radius: var(--radius-sm);
-    font-size: 11px;
-    color: var(--color-text-primary);
-    transition: background 0.2s ease;
-}
-
-.task-label:hover {
-    background: rgba(99, 102, 241, 0.3);
-}
-
-/* Inline editing dropdown */
-.task-assignee-dropdown,
-.task-due-date-picker,
-.task-labels-editor {
-    position: absolute;
-    z-index: 1000;
-    background: var(--color-bg-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-    padding: var(--space-3);
-    min-width: 200px;
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.assignee-option {
-    padding: var(--space-2) var(--space-3);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: background 0.2s ease;
-}
-
-.assignee-option:hover {
-    background: rgba(99, 102, 241, 0.1);
-}
-
-.date-shortcuts {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    margin-bottom: var(--space-3);
-}
-
-.date-shortcut-btn {
-    padding: var(--space-2);
-    border: none;
-    background: rgba(99, 102, 241, 0.1);
-    color: var(--color-text-primary);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-align: left;
-}
-
-.date-shortcut-btn:hover {
-    background: rgba(99, 102, 241, 0.2);
-    transform: translateX(4px);
-}
-
-.label-input-container {
-    display: flex;
-    gap: var(--space-2);
-    margin-bottom: var(--space-2);
-}
-
-.label-input {
-    flex: 1;
-    padding: var(--space-2);
-    background: var(--color-bg-tertiary);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    color: var(--color-text-primary);
-}
-
-.label-suggestions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    max-height: 150px;
-    overflow-y: auto;
-}
-
-.label-suggestion {
-    padding: 4px 8px;
-    background: rgba(99, 102, 241, 0.1);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: 11px;
-    transition: all 0.2s ease;
-}
-
-.label-suggestion:hover {
-    background: rgba(99, 102, 241, 0.3);
-    transform: scale(1.05);
-}
-
-.task-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-}
-
-.task-action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-    background: transparent;
-    border: none;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all 0.2s ease;
-}
-
-.task-action-btn:hover {
-    background: rgba(99, 102, 241, 0.1);
-    color: var(--color-primary);
-    transform: scale(1.1);
-}
-
-.jump-to-transcript svg {
-    width: 14px;
-    height: 14px;
-}
-
-.task-meta {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    white-space: nowrap;
-    margin: 0;
-}
-
-.task-meta-inline {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    white-space: nowrap;
-}
-
-.priority-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: var(--radius-md);
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    flex-shrink: 0;
-}
-
-.priority-high {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
-    color: rgb(239, 68, 68);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.priority-medium {
-    background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(234, 88, 12, 0.15) 100%);
-    color: rgb(249, 115, 22);
-    border: 1px solid rgba(249, 115, 22, 0.3);
-}
-
-.priority-low {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.15) 100%);
-    color: rgb(34, 197, 94);
-    border: 1px solid rgba(34, 197, 94, 0.3);
-}
-
-.due-date-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 12px;
-    color: var(--color-text-tertiary);
-    flex-shrink: 0;
-}
-
-.meeting-source {
-    font-size: 12px;
-    color: var(--color-text-tertiary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 180px;
-    flex-shrink: 0;
-}
-
-.due-date-badge:hover,
-.priority-badge:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-}
-
-.due-date-add {
-    border-style: dashed;
-    opacity: 0.7;
-}
-
-.due-date-add:hover {
-    opacity: 1;
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-}
-
-.syncing-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-3);
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.15) 100%);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    color: rgb(59, 130, 246);
-    font-weight: var(--font-weight-medium);
-}
-
-.task-syncing {
-    opacity: 0.8;
-    position: relative;
-}
-
-.task-syncing::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
-    animation: shimmer 2s infinite;
-    pointer-events: none;
-}
-
-.spin-animation {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-@keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
-
-.assignee-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-3);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    transition: all var(--transition-base);
-}
-
-.assignee-badge:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-}
-
-.assignee-add {
-    border-style: dashed;
-    opacity: 0.7;
-}
-
-.assignee-add:hover {
-    opacity: 1;
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-}
-
-.ai-proposal {
-    border: 2px solid var(--color-primary);
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
-}
-
-.ai-proposal-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-2) var(--space-3);
-    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-    color: white;
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    margin-right: var(--space-3);
-}
-
-.ai-proposal-actions {
-    display: flex;
-    gap: var(--space-2);
-    margin-top: var(--space-3);
-}
-
-.btn-accept-proposal,
-.btn-reject-proposal {
-    padding: var(--space-2) var(--space-4);
-    border: none;
-    border-radius: var(--radius-lg);
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition-base);
-}
-
-.btn-accept-proposal {
-    background: var(--color-success);
-    color: white;
-}
-
-.btn-accept-proposal:hover {
-    background: var(--color-success-dark);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
-}
-
-.btn-reject-proposal {
-    background: var(--color-surface);
-    color: var(--color-text-secondary);
-    border: 1px solid var(--color-border);
-}
-
-.btn-reject-proposal:hover {
-    background: var(--color-error);
-    color: white;
-    border-color: var(--color-error);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-}
-
-.btn-accept-proposal:disabled,
-.btn-reject-proposal:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.inline-edit-select,
-.inline-edit-input {
-    padding: var(--space-1) var(--space-2);
-    border: 2px solid var(--color-primary);
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    background: var(--color-surface);
-    color: var(--color-text-primary);
-    outline: none;
-    transition: all var(--transition-base);
-}
-
-.inline-edit-select:focus,
-.inline-edit-input:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.priority-select {
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.transcript-link-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-3);
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(16, 185, 129, 0.1));
-    border: 1px solid rgba(34, 197, 94, 0.4);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    color: rgb(34, 197, 94);
-    text-decoration: none;
-    transition: all var(--transition-base);
-    cursor: pointer;
-}
-
-.transcript-link-badge:hover {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(16, 185, 129, 0.2));
-    border-color: rgb(34, 197, 94);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
-}
-
-.transcript-link-badge:active {
-    transform: translateY(0);
-}
-
-.bulk-action-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-4) var(--space-6);
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    border-radius: var(--radius-lg);
-    animation: slideDown 0.3s ease-out;
-    margin-bottom: var(--space-4);
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.bulk-action-info {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-primary);
-}
-
-#bulk-selected-count {
-    font-weight: var(--font-weight-bold);
-    color: rgb(99, 102, 241);
-}
-
-.bulk-action-buttons {
-    display: flex;
-    gap: var(--space-2);
-}
-
-.bulk-action-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-4);
-    background: white;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: all var(--transition-base);
-}
-
-.bulk-action-btn:hover {
-    background: var(--color-surface-hover);
-    color: var(--color-text-primary);
-    border-color: rgb(99, 102, 241);
-    transform: translateY(-1px);
-}
-
-.bulk-action-btn-cancel {
-    background: var(--color-surface);
-    color: var(--color-text-tertiary);
-}
-
-.bulk-action-btn-cancel:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: rgb(239, 68, 68);
-    border-color: rgb(239, 68, 68);
-}
-
-.task-card.selection-mode {
-    cursor: pointer;
-    user-select: none;
-}
-
-.task-card.selection-mode:hover {
-    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
-}
-
-.task-card.bulk-selected {
-    background: rgba(99, 102, 241, 0.08);
-    border-color: rgb(99, 102, 241);
-    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.2);
-    transform: translateY(-1px);
-}
-
-.selection-mode-indicator {
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    padding: 8px 16px;
-    background: rgba(99, 102, 241, 0.1);
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    border-radius: var(--radius-lg);
-    color: rgb(99, 102, 241);
-    font-size: 13px;
-    font-weight: 500;
-    z-index: 100;
-    animation: slideInFromRight 0.3s ease-out;
-    backdrop-filter: blur(10px);
-}
-
-@keyframes slideInFromRight {
-    from {
-        transform: translateX(100px);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-.task-card.bulk-selected {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.05));
-    border-color: rgba(99, 102, 241, 0.4);
-}
-
-.empty-state {
-    background: var(--glass-bg);
-    backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-xl);
-    padding: var(--space-12);
-    text-align: center;
-    animation: fadeInUp 0.6s ease-out 0.2s;
-    animation-fill-mode: both;
-}
-
-.empty-state-icon {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto var(--space-4);
-    color: var(--color-text-tertiary);
-}
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Stagger animation delays */
-.task-card:nth-child(1) { animation-delay: 0.2s; }
-.task-card:nth-child(2) { animation-delay: 0.25s; }
-.task-card:nth-child(3) { animation-delay: 0.3s; }
-.task-card:nth-child(4) { animation-delay: 0.35s; }
-.task-card:nth-child(5) { animation-delay: 0.4s; }
-.task-card:nth-child(6) { animation-delay: 0.45s; }
-
-/* Task Action Buttons */
-.task-actions {
-    display: flex;
-    gap: var(--space-1);
-    align-items: center;
-}
-
-.task-action-btn {
-    background: transparent;
-    border: none;
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    padding: var(--space-2);
-    border-radius: var(--radius-lg);
-    transition: all var(--transition-base);
-    opacity: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.task-card:hover .task-action-btn {
-    opacity: 1;
-}
-
-.task-action-btn:active {
-    transform: scale(0.95);
-}
-
-.task-merge-btn:hover {
-    background: rgba(168, 85, 247, 0.1);
-    color: rgb(168, 85, 247);
-    transform: scale(1.1);
-}
-
-.task-snooze-btn:hover {
-    background: rgba(99, 102, 241, 0.1);
-    color: rgb(99, 102, 241);
-    transform: scale(1.1);
-}
-
-.task-delete-btn:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: rgb(239, 68, 68);
-    transform: scale(1.1);
-}
-
-/* Label Management */
-.task-labels {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    align-items: center;
-}
-
-.label-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-2);
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-secondary);
-    animation: labelSlideIn 0.3s ease-out;
-}
-
-.label-badge.label-count {
-    background: var(--color-surface);
-    border-color: var(--color-border);
-    cursor: help;
-}
-
-.label-remove-btn {
-    background: transparent;
-    border: none;
-    color: inherit;
-    cursor: pointer;
-    padding: 2px;
-    border-radius: 50%;
-    transition: all var(--transition-base);
-    opacity: 0.6;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.label-remove-btn:hover {
-    opacity: 1;
-    background: rgba(239, 68, 68, 0.2);
-    color: rgb(239, 68, 68);
-    transform: scale(1.2);
-}
-
-.label-remove-btn:active {
-    transform: scale(0.9);
-}
-
-.label-add-btn {
-    background: transparent;
-    border: 1px dashed var(--color-border);
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    transition: all var(--transition-base);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-}
-
-.label-add-btn:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-    background: rgba(99, 102, 241, 0.05);
-    transform: translateY(-1px);
-}
-
-.label-add-btn:active {
-    transform: translateY(0) scale(0.98);
-}
-
-.label-add-btn-empty {
-    padding: var(--space-2) var(--space-4);
-    border-style: solid;
-}
-
-@keyframes labelSlideIn {
-    from {
-        opacity: 0;
-        transform: translateX(-10px) scale(0.8);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0) scale(1);
-    }
-}
-
-@keyframes labelSlideOut {
-    from {
-        opacity: 1;
-        transform: scale(1);
-    }
-    to {
-        opacity: 0;
-        transform: scale(0.8);
-    }
-}
-
-@keyframes fadeOut {
-    from {
-        opacity: 1;
-        transform: scale(1);
-    }
-    to {
-        opacity: 0;
-        transform: scale(0.95);
-    }
-}
-
-/* Snooze Modal */
-.snooze-options {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
-}
-
-.snooze-option-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-4);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    cursor: pointer;
-    transition: all var(--transition-base);
-    color: var(--color-text-primary);
-    font-weight: var(--font-weight-medium);
-}
-
-.snooze-option-btn:hover {
-    background: rgba(99, 102, 241, 0.05);
-    border-color: var(--color-primary);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
-}
-
-.snooze-option-btn:active {
-    transform: translateY(0) scale(0.98);
-}
-
-.snooze-option-btn svg {
-    color: var(--color-primary);
-}
-
-/* Merge Modal */
-.merge-task-list {
-    max-height: 400px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-}
-
-.merge-task-option {
-    padding: var(--space-4);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    cursor: pointer;
-    transition: all var(--transition-base);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-}
-
-.merge-task-option:hover {
-    background: rgba(168, 85, 247, 0.05);
-    border-color: rgb(168, 85, 247);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.2);
-}
-
-.merge-task-option:active {
-    transform: translateY(0) scale(0.98);
-}
-
-.merge-task-option-title {
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
-}
-
-.merge-task-option-meta {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    display: flex;
-    gap: var(--space-4);
-}
-
-/* Task Creation Modal - Crown+ Glassmorphism */
-.task-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    animation: fadeIn 0.2s ease-out;
-}
-
-.task-modal-overlay.active {
-    display: flex;
-}
-
-.task-modal {
-    background: var(--glass-bg);
-    backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-2xl);
-    padding: var(--space-6);
-    max-width: 500px;
-    width: 90%;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.task-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--space-6);
-}
-
-.task-modal-title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.task-modal-close {
-    background: transparent;
-    border: none;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    padding: var(--space-2);
-    border-radius: var(--radius-lg);
-    transition: all var(--transition-base);
-}
-
-.task-modal-close:hover {
-    background: var(--color-surface-hover);
-    color: var(--color-text-primary);
-}
-
-.task-form-group {
-    margin-bottom: var(--space-5);
-}
-
-.task-form-label {
-    display: block;
-    font-weight: var(--font-weight-medium);
-    margin-bottom: var(--space-2);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm);
-}
-
-.task-form-label.required::after {
-    content: '*';
-    color: rgb(239, 68, 68);
-    margin-left: 4px;
-}
-
-.task-form-input,
-.task-form-textarea,
-.task-form-select {
-    width: 100%;
-    padding: var(--space-3);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-base);
-    transition: all var(--transition-base);
-}
-
-.task-form-input:focus,
-.task-form-textarea:focus,
-.task-form-select:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.task-form-textarea {
-    resize: vertical;
-    min-height: 80px;
-    font-family: inherit;
-}
-
-.task-form-actions {
-    display: flex;
-    gap: var(--space-3);
-    justify-content: flex-end;
-    margin-top: var(--space-6);
-}
-
-.task-form-btn {
-    padding: var(--space-3) var(--space-5);
-    border-radius: var(--radius-lg);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: all var(--transition-base);
-    border: none;
-}
-
-.task-form-btn-cancel {
-    background: var(--color-surface);
-    color: var(--color-text-secondary);
-    border: 1px solid var(--color-border);
-}
-
-.task-form-btn-cancel:hover {
-    background: var(--color-surface-hover);
-    color: var(--color-text-primary);
-}
-
-.task-form-btn-create {
-    background: var(--gradient-primary);
-    color: white;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-}
-
-.task-form-btn-create:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
-}
-
-.task-form-btn-create:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes scaleIn {
-    from {
-        opacity: 0;
-        transform: scale(0.9);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-@media (max-width: 768px) {
-    .tasks-title {
-        font-size: var(--font-size-3xl);
-    }
-    
-    .task-filters {
-        flex-wrap: wrap;
-    }
-    
-    .tasks-header {
-        flex-direction: column;
-        align-items: flex-start !important;
-        gap: var(--space-4);
-    }
-    
-    .task-modal {
-        width: 95%;
-        padding: var(--space-5);
-    }
-}
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -1375,16 +14,24 @@
             <h1 class="tasks-title">Action Items</h1>
             <p class="tasks-subtitle">Track and manage tasks from your meetings</p>
         </div>
-        <button class="btn btn-primary">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            New Task
-        </button>
+        <div class="header-actions">
+            <button class="btn btn-secondary btn-generate-proposals" data-meeting-id="{{ meeting_id if meeting_id else '' }}">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                AI Proposals
+            </button>
+            <button class="btn btn-primary">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New Task
+            </button>
+        </div>
     </div>
 
     <!-- Offline/Status Banner -->
-    <div id="connection-banner" class="connection-banner" style="display: none;">
+    <div id="connection-banner" class="connection-banner hidden">
         <span class="connection-status-icon"></span>
         <span class="connection-message"></span>
         <span class="pending-count"></span>
@@ -1394,26 +41,26 @@
     <div class="task-filters">
         <button class="filter-tab active" data-filter="all">
             All Tasks
-            <span class="ml-2 px-2 py-0.5 rounded-full text-xs" style="background: rgba(99, 102, 241, 0.2);" data-counter="all">
+            <span class="filter-counter filter-counter-all" data-counter="all">
                 {{ tasks|length if tasks else 0 }}
             </span>
         </button>
         <button class="filter-tab" data-filter="pending">
             Pending
-            <span class="ml-2 px-2 py-0.5 rounded-full text-xs" style="background: rgba(249, 115, 22, 0.2);" data-counter="pending">
+            <span class="filter-counter filter-counter-pending" data-counter="pending">
                 {{ tasks|selectattr('completed', 'equalto', false)|list|length if tasks else 0 }}
             </span>
         </button>
         <button class="filter-tab" data-filter="completed">
             Completed
-            <span class="ml-2 px-2 py-0.5 rounded-full text-xs" style="background: rgba(34, 197, 94, 0.2);" data-counter="completed">
+            <span class="filter-counter filter-counter-completed" data-counter="completed">
                 {{ tasks|selectattr('completed', 'equalto', true)|list|length if tasks else 0 }}
             </span>
         </button>
     </div>
 
     <!-- Bulk Action Toolbar (appears when tasks selected) -->
-    <div id="bulk-action-toolbar" class="bulk-action-toolbar" style="display: none;">
+    <div id="bulk-action-toolbar" class="bulk-action-toolbar hidden">
         <div class="bulk-action-info">
             <span id="bulk-selected-count">0</span> tasks selected
         </div>
@@ -1442,8 +89,11 @@
         </div>
     </div>
 
+    <!-- AI Proposals Section (CROWN⁴.5 Task 10) -->
+    <div id="ai-proposals-container"></div>
+
     <!-- Task List Container (CROWN⁴.5 Required Structure) -->
-    <div id="tasks-list-container" style="display: flex; flex-direction: column; gap: var(--space-4);">
+    <div id="tasks-list-container" class="tasks-list-container">
         {% if tasks and tasks|length > 0 %}
             {% for task in tasks %}
             <div class="task-card{% if task.completed %} completed{% endif %}" 
@@ -1457,7 +107,7 @@
                     <input type="checkbox" {% if task.completed %}checked{% endif %} class="task-checkbox" data-task-id="{{ task.id }}">
                 </div>
                 <div class="task-content">
-                    <h3 class="task-title">{{ task.description }}</h3>
+                    <h3 class="task-title">{{ task.title or 'Untitled Task' }}</h3>
                     <div class="task-metadata">
                         <span class="task-assignee" data-field="assignee" title="Click to assign">
                             {% if task.assigned_to %}
@@ -1492,19 +142,22 @@
                     </div>
                 </div>
                 <div class="task-actions">
-                    {% if task.transcript_span and task.session_id %}
-                    <button class="task-action-btn jump-to-transcript" 
-                            data-session-id="{{ task.session_id }}"
-                            data-transcript-span="{{ task.transcript_span|tojson|escape }}"
-                            title="View in transcript">
-                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M9 5v2h6.59L4 18.59 5.41 20 17 8.41V15h2V5z"/>
-                        </svg>
-                    </button>
-                    {% endif %}
                     <span class="priority-badge priority-{{ task.priority|default('medium')|lower }}">
                         {{ task.priority|default('medium') }}
                     </span>
+                    <button class="task-menu-trigger" 
+                            data-task-id="{{ task.id }}"
+                            role="button"
+                            aria-haspopup="menu"
+                            aria-expanded="false"
+                            aria-label="Task actions menu"
+                            title="More actions">
+                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="5" r="2"/>
+                            <circle cx="12" cy="12" r="2"/>
+                            <circle cx="12" cy="19" r="2"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
             {% endfor %}
@@ -1512,7 +165,7 @@
     </div>
 
     <!-- Empty State (CROWN⁴.5 Required ID) -->
-    <div id="tasks-empty-state" class="empty-state" style="{% if tasks and tasks|length > 0 %}display: none;{% endif %}">
+    <div id="tasks-empty-state" class="empty-state{% if tasks and tasks|length > 0 %} hidden{% endif %}">
         <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
         </svg>
@@ -1525,10 +178,69 @@
             Create your first task
         </button>
     </div>
+
+    <!-- Loading State (CROWN⁴.5 Skeleton Loaders) -->
+    <div id="tasks-loading-state" class="tasks-loading-state hidden">
+        <div class="task-skeleton">
+            <div class="skeleton-checkbox"></div>
+            <div class="skeleton-content">
+                <div class="skeleton-title"></div>
+                <div class="skeleton-meta"></div>
+            </div>
+        </div>
+        <div class="task-skeleton">
+            <div class="skeleton-checkbox"></div>
+            <div class="skeleton-content">
+                <div class="skeleton-title skeleton-width-random"></div>
+                <div class="skeleton-meta skeleton-width-random"></div>
+            </div>
+        </div>
+        <div class="task-skeleton">
+            <div class="skeleton-checkbox"></div>
+            <div class="skeleton-content">
+                <div class="skeleton-title skeleton-width-random"></div>
+                <div class="skeleton-meta skeleton-width-random"></div>
+            </div>
+        </div>
+        <div class="task-skeleton">
+            <div class="skeleton-checkbox"></div>
+            <div class="skeleton-content">
+                <div class="skeleton-title skeleton-width-random"></div>
+                <div class="skeleton-meta skeleton-width-random"></div>
+            </div>
+        </div>
+        <div class="task-skeleton">
+            <div class="skeleton-checkbox"></div>
+            <div class="skeleton-content">
+                <div class="skeleton-title skeleton-width-random"></div>
+                <div class="skeleton-meta skeleton-width-random"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error State (CROWN⁴.5) -->
+    <div id="tasks-error-state" class="tasks-error-state hidden">
+        <svg class="error-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <h3 class="error-state-title">Unable to load tasks</h3>
+        <p class="error-state-message">We couldn't fetch your tasks. Please check your connection and try again.</p>
+        <div class="error-state-actions">
+            <button class="btn btn-primary" id="error-state-retry-btn">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Retry
+            </button>
+            <button class="btn btn-secondary" id="error-state-clear-cache-btn">
+                Clear Cache
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- Task Creation Modal (Crown+ Glassmorphism) -->
-<div id="task-modal-overlay" class="task-modal-overlay">
+<div id="task-modal-overlay" class="task-modal-overlay hidden">
     <div class="task-modal">
         <div class="task-modal-header">
             <h2 class="task-modal-title">Create New Task</h2>
@@ -1564,14 +276,14 @@
             </div>
             
             <!-- AI Prediction Suggestions (CROWN⁴.5) -->
-            <div id="ai-prediction-banner" class="ai-prediction-banner" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: white;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div id="ai-prediction-banner" class="ai-prediction-banner hidden">
+                <div class="ai-prediction-banner-header">
                     <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
                     </svg>
-                    <strong style="font-size: 14px;">AI Suggestions</strong>
+                    <strong class="ai-prediction-title">AI Suggestions</strong>
                 </div>
-                <div id="ai-prediction-content" style="font-size: 13px; line-height: 1.5; opacity: 0.95;">
+                <div id="ai-prediction-content" class="ai-prediction-content">
                     <!-- Predictions will be rendered here -->
                 </div>
             </div>
@@ -1625,9 +337,77 @@
     </div>
 </div>
 
+<!-- Reusable Task Menu (Glassmorphic Dropdown) -->
+<div id="task-menu" class="task-menu" role="menu" data-state="closed">
+    <button class="task-menu-item" data-action="edit" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        <span>Edit title</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="toggle-status" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span>Mark complete</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="priority" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+        </svg>
+        <span>Change priority</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="due-date" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span>Set due date</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="assign" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+        <span>Assign to...</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="labels" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+        </svg>
+        <span>Edit labels</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="jump-to-transcript" role="menuitem" class="hidden">
+        <svg fill="currentColor" viewBox="0 0 24 24">
+            <path d="M9 5v2h6.59L4 18.59 5.41 20 17 8.41V15h2V5z"/>
+        </svg>
+        <span>Jump to transcript</span>
+    </button>
+    
+    <div class="task-menu-divider"></div>
+    
+    <button class="task-menu-item" data-action="archive" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+        </svg>
+        <span>Archive</span>
+    </button>
+    
+    <button class="task-menu-item destructive" data-action="delete" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+        <span>Delete</span>
+    </button>
+</div>
+
 <!-- Snooze Duration Picker Modal -->
-<div id="snooze-modal-overlay" class="task-modal-overlay" style="display: none;">
-    <div class="task-modal" style="max-width: 400px;">
+<div id="snooze-modal-overlay" class="task-modal-overlay hidden">
+    <div class="task-modal task-modal-small">
         <div class="task-modal-header">
             <h2 class="task-modal-title">Snooze Task</h2>
             <button class="task-modal-close" id="snooze-modal-close">
@@ -1637,7 +417,7 @@
             </button>
         </div>
         
-        <div style="padding: var(--space-6); padding-top: 0;">
+        <div class="modal-body">
             <p class="text-secondary mb-4" id="snooze-task-title">Snooze this task until...</p>
             
             <div class="snooze-options">
@@ -1671,8 +451,8 @@
 </div>
 
 <!-- Merge Task Selector Modal -->
-<div id="merge-modal-overlay" class="task-modal-overlay" style="display: none;">
-    <div class="task-modal" style="max-width: 600px;">
+<div id="merge-modal-overlay" class="task-modal-overlay hidden">
+    <div class="task-modal task-modal-medium">
         <div class="task-modal-header">
             <h2 class="task-modal-title">Merge Tasks</h2>
             <button class="task-modal-close" id="merge-modal-close">
@@ -1682,7 +462,7 @@
             </button>
         </div>
         
-        <div style="padding: var(--space-6); padding-top: 0;">
+        <div class="modal-body">
             <p class="text-secondary mb-4" id="merge-task-title">Select a task to merge with:</p>
             
             <div id="merge-task-list" class="merge-task-list">
@@ -1696,229 +476,116 @@
     </div>
 </div>
 
+
+<!-- CROWN⁴.5 Frontend Modules (crown-telemetry and websocket-manager loaded in base.html) -->
+<script src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-bootstrap.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-inline-editing.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-actions-menu.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-bulk-operations.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-drag-drop.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-proposal-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-idle-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/predictive-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-websocket-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-virtual-list.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-clustering.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/haptic-feedback.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-keyboard-shortcuts.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}" nonce="{{ g.csp_nonce }}"></script>
+
+<!-- CROWN⁴.5 Phase 2: Cache-First Architecture -->
+<script src="{{ url_for('static', filename='js/indexeddb-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-store.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/temporal-recovery-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
+
 <script nonce="{{ g.csp_nonce }}">
 /**
- * Tasks Page - Real-time WebSocket Integration
- * CROWN⁴ Event Handling for Live Task Updates
+ * CROWN⁴.5 Tasks Page Initialization
+ * Integrates all frontend modules for enterprise-grade task management
  */
-
-(function() {
+(async function() {
     'use strict';
     
-    // Get user context for WebSocket authentication
+    // Set user context for WebSocket authentication and CROWN⁴.5 modules
     window.CURRENT_USER_ID = {{ current_user.id if current_user.is_authenticated else 'null' }};
     window.WORKSPACE_ID = {{ current_user.workspace_id if current_user.workspace_id else 'null' }};
-    window.CURRENT_SESSION_ID = null; // Will be set dynamically when session is active
+    window.CURRENT_SESSION_ID = null;
     
-    const WORKSPACE_ID = window.WORKSPACE_ID;
+    console.log('🚀 Initializing CROWN⁴.5 Tasks Page (Phase 2)...');
     
-    // Cache DOM elements
-    const filterCounts = {
-        all: document.querySelector('.filter-tab[data-filter="all"] .px-2'),
-        pending: document.querySelector('.filter-tab[data-filter="pending"] .px-2'),
-        completed: document.querySelector('.filter-tab[data-filter="completed"] .px-2')
+    // CROWN Telemetry is auto-initialized by crown-telemetry.js
+    // Just verify it's available
+    if (window.CROWNTelemetry) {
+        window.crownTelemetry = window.CROWNTelemetry;
+        console.log('📊 CROWN Telemetry ready');
+    } else {
+        console.warn('⚠️ CROWNTelemetry not available');
+    }
+    
+    // Initialize WebSocket Manager with workspace and tasks namespace
+    if (window.wsManager) {
+        const workspaceId = window.WORKSPACE_ID || 1;
+        await window.wsManager.init(workspaceId, ['tasks']);
+        console.log('🔌 WebSocket Manager initialized for workspace', workspaceId);
+    } else {
+        console.warn('⚠️ WebSocket Manager not available');
+    }
+    
+    // Wait for all modules to load (with 5-second timeout)
+    const waitForModules = () => {
+        return new Promise((resolve) => {
+            const startTime = Date.now();
+            const timeout = 5000; // 5 seconds max wait
+            
+            const check = () => {
+                const allModulesLoaded = window.taskCache && window.taskBootstrap && window.optimisticUI && 
+                    window.offlineQueue && window.multiTabSync && window.idleSyncService && 
+                    window.predictiveEngine && window.tasksWS && window.taskVirtualList && 
+                    window.taskShortcuts && window.TaskInlineEditing && window.TaskActionsMenu &&
+                    window.TaskBulkOperations && window.TaskDragDrop;
+                
+                if (allModulesLoaded) {
+                    resolve(true);
+                } else if (Date.now() - startTime > timeout) {
+                    console.warn('⚠️ Module loading timeout - proceeding with available modules');
+                    console.warn('Missing modules:', {
+                        taskCache: !!window.taskCache,
+                        taskBootstrap: !!window.taskBootstrap,
+                        optimisticUI: !!window.optimisticUI,
+                        offlineQueue: !!window.offlineQueue,
+                        multiTabSync: !!window.multiTabSync,
+                        idleSyncService: !!window.idleSyncService,
+                        predictiveEngine: !!window.predictiveEngine,
+                        tasksWS: !!window.tasksWS,
+                        taskVirtualList: !!window.taskVirtualList,
+                        taskShortcuts: !!window.taskShortcuts,
+                        TaskInlineEditing: !!window.TaskInlineEditing,
+                        TaskActionsMenu: !!window.TaskActionsMenu,
+                        TaskBulkOperations: !!window.TaskBulkOperations,
+                        TaskDragDrop: !!window.TaskDragDrop
+                    });
+                    resolve(false);
+                } else {
+                    setTimeout(check, 50);
+                }
+            };
+            check();
+        });
     };
     
-    const tasksContainer = document.querySelector('.tasks-container > div:last-of-type');
-    const emptyStateEl = document.querySelector('.empty-state');
+    // ═══════════════════════════════════════════════════════════════════════
+    // CRITICAL: Setup basic UI FIRST (before waiting for advanced modules)
+    // This ensures filter tabs and modals work even if advanced features fail
+    // ═══════════════════════════════════════════════════════════════════════
     
-    /**
-     * Initialize WebSocket connection for tasks page
-     */
-    function initTasksWebSocket() {
-        console.log('🚀 Initializing tasks WebSocket...');
-        
-        // Initialize WebSocket manager with tasks namespace
-        if (!window.wsManager) {
-            console.error('❌ WebSocket manager not found');
-            return;
-        }
-        
-        // Connect to tasks namespace
-        window.wsManager.connect('tasks');
-        
-        // Listen for task_update events
-        window.wsManager.on('task_update', handleTaskUpdate);
-        
-        console.log('📡 Tasks WebSocket listeners registered');
-    }
-    
-    /**
-     * Handle task update event
-     * @param {Object} data - Event data with task information
-     */
-    function handleTaskUpdate(data) {
-        console.log('✅ Task update event received:', data);
-        
-        const taskData = data.data || data;
-        const action = taskData.action; // 'created', 'updated', 'deleted', 'completed'
-        
-        switch (action) {
-            case 'created':
-                handleTaskCreated(taskData);
-                break;
-            case 'updated':
-                handleTaskUpdated(taskData);
-                break;
-            case 'deleted':
-                handleTaskDeleted(taskData);
-                break;
-            case 'completed':
-                handleTaskCompleted(taskData);
-                break;
-        }
-    }
-    
-    /**
-     * Handle new task created
-     * @param {Object} taskData - Task data
-     */
-    function handleTaskCreated(taskData) {
-        const task = taskData.task || taskData;
-        
-        // Remove empty state if present
-        if (emptyStateEl && emptyStateEl.style.display !== 'none') {
-            emptyStateEl.style.opacity = '0';
-            setTimeout(() => {
-                emptyStateEl.style.display = 'none';
-            }, 300);
-        }
-        
-        // Create task card HTML
-        const cardHTML = createTaskCardHTML(task);
-        
-        // Insert at top of list
-        if (tasksContainer && !emptyStateEl.parentElement.contains(emptyStateEl)) {
-            tasksContainer.insertAdjacentHTML('afterbegin', cardHTML);
-        }
-        
-        // Show notification
-        showNotification('New task created', task.description || 'A new task has been added');
-    }
-    
-    /**
-     * Handle task updated
-     * @param {Object} taskData - Task data
-     */
-    function handleTaskUpdated(taskData) {
-        const task = taskData.task || taskData;
-        const taskCard = document.querySelector(`[data-task-id="${task.id}"]`);
-        
-        if (taskCard) {
-            // Update task title
-            const titleEl = taskCard.querySelector('.task-title');
-            if (titleEl) titleEl.textContent = task.description || 'Untitled Task';
-            
-            // Update priority badge
-            const priorityBadge = taskCard.querySelector('.priority-badge');
-            if (priorityBadge && task.priority) {
-                priorityBadge.className = `priority-badge priority-${task.priority.toLowerCase()}`;
-                priorityBadge.textContent = task.priority;
-            }
-            
-            // Add update animation
-            taskCard.style.animation = 'taskUpdate 0.5s ease-out';
-            setTimeout(() => {
-                taskCard.style.animation = '';
-            }, 500);
-        }
-    }
-    
-    /**
-     * Handle task deleted
-     * @param {Object} taskData - Task data
-     */
-    function handleTaskDeleted(taskData) {
-        const task = taskData.task || taskData;
-        const taskCard = document.querySelector(`[data-task-id="${task.id}"]`);
-        
-        if (taskCard) {
-            // Fade out and remove
-            taskCard.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
-            taskCard.style.opacity = '0';
-            taskCard.style.transform = 'translateX(-20px)';
-            
-            setTimeout(() => {
-                taskCard.remove();
-                
-                // Show empty state if no tasks left
-                const remainingTasks = document.querySelectorAll('.task-card').length;
-                if (remainingTasks === 0 && emptyStateEl) {
-                    emptyStateEl.style.display = 'block';
-                    emptyStateEl.style.opacity = '1';
-                }
-            }, 300);
-        }
-    }
-    
-    /**
-     * Handle task completed
-     * @param {Object} taskData - Task data
-     */
-    function handleTaskCompleted(taskData) {
-        const task = taskData.task || taskData;
-        const taskCard = document.querySelector(`[data-task-id="${task.id}"]`);
-        
-        if (taskCard) {
-            const checkbox = taskCard.querySelector('.task-checkbox');
-            
-            if (task.completed) {
-                taskCard.classList.add('completed');
-                taskCard.dataset.status = 'completed';
-                if (checkbox) checkbox.checked = true;
-            } else {
-                taskCard.classList.remove('completed');
-                taskCard.dataset.status = 'pending';
-                if (checkbox) checkbox.checked = false;
-            }
-            
-            // Add completion animation
-            if (task.completed) {
-                taskCard.style.animation = 'taskComplete 0.5s ease-out';
-                setTimeout(() => {
-                    taskCard.style.animation = '';
-                }, 500);
-            }
-        }
-    }
-    
-    /**
-     * Create task card HTML
-     * @param {Object} task - Task data
-     * @returns {string} HTML string
-     */
-    function createTaskCardHTML(task) {
-        const priority = task.priority || 'medium';
-        const completed = task.completed || false;
-        const status = completed ? 'completed' : 'pending';
-        const dueDate = task.due_date || null;
-        const meetingTitle = task.meeting_title || 'Unknown meeting';
-        
-        return `
-            <div class="task-card ${completed ? 'completed' : ''}" 
-                 data-status="${status}" 
-                 data-task-id="${task.id}"
-                 style="animation: slideInFromTop 0.4s ease-out;">
-                <div class="checkbox-wrapper">
-                    <input type="checkbox" ${completed ? 'checked' : ''} class="task-checkbox" data-task-id="${task.id}">
-                </div>
-                <h3 class="task-title">${escapeHtml(task.description || 'Untitled Task')}</h3>
-                <span class="priority-badge priority-${priority.toLowerCase()}">
-                    ${priority}
-                </span>
-                ${dueDate ? `
-                    <span class="due-date-badge">${escapeHtml(dueDate)}</span>
-                ` : ''}
-                <span class="meeting-source">${escapeHtml(meetingTitle)}</span>
-            </div>
-        `;
-    }
-    
-    /**
-     * Setup filter tab handlers (CROWN⁴.5 Architecture)
-     * Proper implementation: Update viewState → Fetch filtered tasks → Re-render
-     * CRITICAL FIX: Disable clustering mode when switching filter tabs
-     */
+    // Filter Tabs Setup (All / Pending / Completed)
     function setupFilterTabs() {
         document.querySelectorAll('.filter-tab').forEach(tab => {
             tab.addEventListener('click', async () => {
@@ -1927,7 +594,6 @@
                 }
                 
                 const filter = tab.dataset.filter;
-                
                 console.log(`🔍 Filter changed to: ${filter}`);
                 
                 // Update active tab visual state
@@ -1938,19 +604,24 @@
                 });
                 tab.classList.add('active');
                 
-                // Update viewState in cache (persist filter preference)
+                // Update viewState in cache if available
                 if (window.taskCache) {
-                    await window.taskCache.setViewState({ activeFilter: filter });
+                    await window.taskCache.setViewState('tasks_page', { activeFilter: filter });
                 }
                 
-                // If clustering is enabled, exit cluster mode (showNormalView handles disable internally)
+                // If clustering is enabled, exit cluster mode
                 if (window.taskClusteringManager && window.taskClusteringManager.enabled) {
                     console.log('📋 Exiting clustering mode (switching to filter view)');
                     await window.taskClusteringManager.showNormalView();
                     return;
                 }
                 
-                // Fetch filtered tasks from cache
+                // Fetch filtered tasks from cache if available
+                if (!window.taskCache) {
+                    console.warn('⚠️ TaskCache not available - filter tabs disabled');
+                    return;
+                }
+                
                 const allTasks = await window.taskCache.getAllTasks();
                 let filteredTasks = allTasks;
                 
@@ -1965,243 +636,12 @@
                 // Re-render with filtered tasks using TaskBootstrap
                 if (window.taskBootstrap) {
                     await window.taskBootstrap.renderTasks(filteredTasks);
-                    
-                    // Update counters (always uses ALL tasks from cache)
                     await window.taskBootstrap.updateCounters(filteredTasks);
                 }
             });
         });
-    }
-    
-    /**
-     * Show notification toast
-     * @param {string} title - Notification title
-     * @param {string} message - Notification message
-     */
-    function showNotification(title, message) {
-        const notification = document.createElement('div');
-        notification.className = 'notification-toast';
-        notification.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            max-width: 400px;
-            padding: 16px;
-            background: var(--glass-bg);
-            backdrop-filter: var(--backdrop-blur);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-xl);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
-            animation: slideInFromRight 0.3s ease-out;
-        `;
         
-        notification.innerHTML = `
-            <div style="display: flex; gap: 12px; align-items: start;">
-                <div style="flex-shrink: 0; width: 40px; height: 40px; background: var(--gradient-primary); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                    <svg width="20" height="20" fill="white" viewBox="0 0 24 24">
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                </div>
-                <div style="flex: 1;">
-                    <p style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(title)}</p>
-                    <p style="font-size: 14px; color: var(--color-text-secondary);">${escapeHtml(message)}</p>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(notification);
-        
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            notification.style.animation = 'slideOutToRight 0.3s ease-out';
-            setTimeout(() => notification.remove(), 300);
-        }, 5000);
-    }
-    
-    /**
-     * Escape HTML to prevent XSS
-     * @param {string} text - Text to escape
-     * @returns {string} Escaped text
-     */
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    // Initialize on DOM ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            initTasksWebSocket();
-            setupFilterTabs();
-        });
-    } else {
-        initTasksWebSocket();
-        setupFilterTabs();
-    }
-    
-    // Add CSS for animations
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideInFromTop {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        @keyframes slideInFromRight {
-            from {
-                opacity: 0;
-                transform: translateX(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-        
-        @keyframes slideOutToRight {
-            from {
-                opacity: 1;
-                transform: translateX(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateX(20px);
-            }
-        }
-        
-        @keyframes taskUpdate {
-            0%, 100% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(1.02);
-                box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
-            }
-        }
-        
-        @keyframes taskComplete {
-            0% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(0.98);
-            }
-            100% {
-                transform: scale(1);
-            }
-        }
-    `;
-    document.head.appendChild(style);
-    
-})();
-</script>
-
-<!-- CROWN⁴.5 Frontend Modules (crown-telemetry and websocket-manager loaded in base.html) -->
-<script src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-bootstrap.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-inline-editing.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-idle-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/predictive-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-websocket-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-virtual-list.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-clustering.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/haptic-feedback.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-proposal-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-keyboard-shortcuts.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}" nonce="{{ g.csp_nonce }}"></script>
-
-<script nonce="{{ g.csp_nonce }}">
-/**
- * CROWN⁴.5 Tasks Page Initialization
- * Integrates all frontend modules for enterprise-grade task management
- */
-(async function() {
-    'use strict';
-    
-    console.log('🚀 Initializing CROWN⁴.5 Tasks Page...');
-    
-    // Initialize CROWN Telemetry FIRST (before other modules)
-    if (window.CROWNTelemetry) {
-        const CROWNTelemetryClass = window.CROWNTelemetry;
-        const workspaceId = window.WORKSPACE_ID || 1;
-        window.crownTelemetry = new CROWNTelemetryClass(workspaceId);
-        await window.crownTelemetry.init();
-        console.log('📊 CROWN Telemetry initialized');
-        
-        // Replace class with instance for backwards compatibility
-        window.CROWNTelemetry = window.crownTelemetry;
-    } else {
-        console.warn('⚠️ CROWNTelemetry class not found');
-    }
-    
-    // Initialize WebSocket Manager with workspace and tasks namespace
-    if (window.wsManager) {
-        const workspaceId = window.WORKSPACE_ID || 1;
-        window.wsManager.init(workspaceId, ['tasks']);
-        console.log('🔌 WebSocket Manager initialized for workspace', workspaceId);
-    } else {
-        console.warn('⚠️ WebSocket Manager not found');
-    }
-    
-    // Wait for all modules to load
-    const waitForModules = () => {
-        return new Promise((resolve) => {
-            const check = () => {
-                if (window.taskCache && window.taskBootstrap && window.optimisticUI && 
-                    window.offlineQueue && window.multiTabSync && window.idleSyncService && 
-                    window.predictiveEngine && window.tasksWS && window.taskVirtualList && 
-                    window.taskShortcuts && window.TaskInlineEditing) {
-                    resolve();
-                } else {
-                    setTimeout(check, 50);
-                }
-            };
-            check();
-        });
-    };
-    
-    await waitForModules();
-    console.log('✅ All CROWN⁴.5 modules loaded');
-    
-    // Initialize PredictiveEngine
-    await window.predictiveEngine.init();
-    console.log('🤖 PredictiveEngine initialized');
-    
-    window.taskInlineEditing = new window.TaskInlineEditing(window.optimisticUI);
-    console.log('✏️ Inline editing initialized');
-    
-    window.taskProposalUI = new window.TaskProposalUI(window.optimisticUI);
-    console.log('✨ AI proposal UI initialized');
-    
-    // Initialize cache-first bootstrap
-    try {
-        const startTime = performance.now();
-        await window.taskBootstrap.bootstrap();
-        const bootstrapTime = performance.now() - startTime;
-        console.log(`⚡ Bootstrap completed in ${bootstrapTime.toFixed(2)}ms`);
-        
-        // Log performance metrics
-        if (bootstrapTime < 200) {
-            console.log('🎯 CROWN⁴.5 Target Met: <200ms first paint');
-        } else {
-            console.warn(`⚠️ Bootstrap slower than target: ${bootstrapTime.toFixed(2)}ms > 200ms`);
-        }
-    } catch (error) {
-        console.error('❌ Bootstrap failed:', error);
+        console.log('🔍 Filter tabs initialized');
     }
     
     // Modal elements
@@ -2212,15 +652,21 @@
     
     // Open modal function
     function openTaskModal() {
-        modalOverlay.classList.add('active');
-        document.getElementById('task-title').focus();
-        // Reset form
-        taskForm.reset();
+        if (modalOverlay) {
+            modalOverlay.classList.remove('hidden');
+            modalOverlay.classList.add('active');
+            const titleInput = document.getElementById('task-title');
+            if (titleInput) titleInput.focus();
+            if (taskForm) taskForm.reset();
+        }
     }
     
     // Close modal function
     function closeTaskModal() {
-        modalOverlay.classList.remove('active');
+        if (modalOverlay) {
+            modalOverlay.classList.remove('active');
+            modalOverlay.classList.add('hidden');
+        }
     }
     
     // Setup task creation buttons
@@ -2242,20 +688,162 @@
     }
     
     // Close modal handlers
-    modalClose.addEventListener('click', closeTaskModal);
-    modalCancel.addEventListener('click', closeTaskModal);
-    modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) {
+    if (modalClose) {
+        modalClose.addEventListener('click', closeTaskModal);
+    }
+    if (modalCancel) {
+        modalCancel.addEventListener('click', closeTaskModal);
+    }
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) {
+                closeTaskModal();
+            }
+        });
+    }
+    
+    // Keyboard shortcut - ESC to close
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalOverlay && modalOverlay.classList.contains('active')) {
             closeTaskModal();
         }
     });
     
-    // Keyboard shortcut - ESC to close
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modalOverlay.classList.contains('active')) {
-            closeTaskModal();
+    // Initialize filter tabs immediately
+    setupFilterTabs();
+    console.log('✅ Basic UI initialized (filter tabs, modals, buttons)');
+    
+    // Now wait for advanced modules (with timeout)
+    const modulesLoaded = await waitForModules();
+    
+    if (modulesLoaded) {
+        console.log('✅ All CROWN⁴.5 modules loaded');
+    } else {
+        console.warn('⚠️ Some modules failed to load - basic features still work');
+    }
+    
+    // Initialize PredictiveEngine if available
+    if (window.predictiveEngine) {
+        await window.predictiveEngine.init();
+        console.log('🤖 PredictiveEngine initialized');
+    } else {
+        console.warn('⚠️ PredictiveEngine not available');
+    }
+    
+    // Initialize task editing modules if available
+    if (window.TaskInlineEditing && window.optimisticUI) {
+        window.taskInlineEditing = new window.TaskInlineEditing(window.optimisticUI);
+        console.log('✏️ Inline editing initialized');
+    } else {
+        console.warn('⚠️ Inline editing not available');
+    }
+    
+    if (window.TaskActionsMenu && window.optimisticUI) {
+        window.taskActionsMenu = new window.TaskActionsMenu(window.optimisticUI);
+        console.log('🎯 Task actions menu initialized');
+    } else {
+        console.warn('⚠️ Task actions menu not available');
+    }
+    
+    if (window.TaskBulkOperations && window.optimisticUI) {
+        window.taskBulkOperations = new window.TaskBulkOperations(window.optimisticUI);
+        console.log('☑️ Bulk operations initialized');
+    } else {
+        console.warn('⚠️ Bulk operations not available');
+    }
+    
+    if (window.TaskDragDrop && window.optimisticUI) {
+        window.taskDragDrop = new window.TaskDragDrop(window.optimisticUI);
+        console.log('🔄 Drag-drop reordering initialized');
+    } else {
+        console.warn('⚠️ Drag-drop reordering not available');
+    }
+    
+    if (window.TaskProposalUI && window.optimisticUI) {
+        window.taskProposalUI = new window.TaskProposalUI(window.optimisticUI);
+        console.log('✨ AI proposal UI initialized');
+    } else {
+        console.warn('⚠️ AI proposal UI not available');
+    }
+    
+    // Initialize cache-first bootstrap
+    if (window.taskBootstrap) {
+        try {
+            const startTime = performance.now();
+            await window.taskBootstrap.bootstrap();
+            const bootstrapTime = performance.now() - startTime;
+            console.log(`⚡ Bootstrap completed in ${bootstrapTime.toFixed(2)}ms`);
+            
+            // Log performance metrics
+            if (bootstrapTime < 200) {
+                console.log('🎯 CROWN⁴.5 Target Met: <200ms first paint');
+            } else {
+                console.warn(`⚠️ Bootstrap slower than target: ${bootstrapTime.toFixed(2)}ms > 200ms`);
+            }
+        } catch (error) {
+            console.error('❌ Bootstrap failed:', error);
         }
-    });
+    } else {
+        console.warn('⚠️ TaskBootstrap not available - page may have limited functionality');
+    }
+    
+    // CROWN⁴.5: Error state retry button
+    const retryBtn = document.getElementById('error-state-retry-btn');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', async () => {
+            console.log('🔄 Retry button clicked');
+            retryBtn.disabled = true;
+            retryBtn.textContent = 'Retrying...';
+            
+            try {
+                if (window.taskBootstrap) {
+                    await window.taskBootstrap.retryBootstrap();
+                }
+            } finally {
+                retryBtn.disabled = false;
+                retryBtn.innerHTML = `
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Retry
+                `;
+            }
+        });
+    }
+    
+    // CROWN⁴.5: Error state clear cache button
+    const clearCacheBtn = document.getElementById('error-state-clear-cache-btn');
+    if (clearCacheBtn) {
+        clearCacheBtn.addEventListener('click', async () => {
+            console.log('🗑️ Clear cache button clicked');
+            clearCacheBtn.disabled = true;
+            clearCacheBtn.textContent = 'Clearing...';
+            
+            try {
+                if (window.taskCache) {
+                    await window.taskCache.clear();
+                    console.log('✅ Cache cleared successfully');
+                }
+                
+                // Show toast if available
+                if (window.showToast) {
+                    window.showToast('Cache cleared. Reloading...', 'success');
+                }
+                
+                // Reload page after short delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } catch (error) {
+                console.error('❌ Failed to clear cache:', error);
+                if (window.showToast) {
+                    window.showToast('Failed to clear cache', 'error');
+                }
+                clearCacheBtn.disabled = false;
+                clearCacheBtn.textContent = 'Clear Cache';
+            }
+        });
+    }
     
     // CROWN⁴.5 Predictive suggestions on task title/description input
     let predictionDebounceTimer = null;
@@ -2396,30 +984,16 @@
         }
     });
     
-    // Wire up task checkboxes for status toggle (using event delegation)
+    // ═════════════════════════════════════════════════════════════════════════
+    // REMOVED: Duplicate checkbox handler
+    // The CROWN⁴.5 centralized handler (line 3066) handles checkboxes globally
+    // with proper selection mode support. This duplicate handler was causing 
+    // double-toggle bug (todo→completed→todo instantly).
+    // ═════════════════════════════════════════════════════════════════════════
+    
+    // Wire up delete buttons (using event delegation)
     const tasksListContainer = document.getElementById('tasks-list-container');
     if (tasksListContainer) {
-        tasksListContainer.addEventListener('change', async (e) => {
-            if (e.target.classList.contains('task-checkbox')) {
-                const taskCard = e.target.closest('.task-card');
-                const taskId = taskCard.dataset.taskId;
-                const isCompleted = e.target.checked;
-                
-                console.log(`📝 Toggling task ${taskId} to ${isCompleted ? 'completed' : 'todo'}`);
-                
-                try {
-                    // Use toggleTaskStatus for proper status toggle
-                    await window.optimisticUI.toggleTaskStatus(taskId);
-                    console.log('✅ Task status updated');
-                } catch (error) {
-                    console.error('❌ Failed to update task:', error);
-                    // Revert checkbox on error
-                    e.target.checked = !isCompleted;
-                    alert('Failed to update task. Please try again.');
-                }
-            }
-        });
-        
         // Wire up delete buttons (using event delegation)
         tasksListContainer.addEventListener('click', async (e) => {
             const deleteBtn = e.target.closest('.task-delete-btn');
@@ -3607,6 +2181,31 @@
                 
                 const result = await response.json();
                 console.log('✅ Bulk complete successful:', result);
+                
+                // CRITICAL FIX: Update IndexedDB cache for all completed tasks
+                if (window.taskCache) {
+                    for (const taskId of taskIds) {
+                        await window.taskCache.updateTaskStatus(taskId, 'completed');
+                    }
+                    console.log(`💾 Updated cache for ${taskIds.length} tasks → completed`);
+                }
+                
+                // Re-apply active filter to hide completed tasks from Pending view
+                const viewState = await window.taskCache?.getViewState();
+                const activeFilter = viewState?.activeFilter || 'all';
+                
+                if (activeFilter === 'pending') {
+                    console.log('🔄 Re-applying Pending filter to hide completed tasks');
+                    // Fetch all tasks and filter
+                    const allTasks = await window.taskCache.getAllTasks();
+                    const pendingTasks = allTasks.filter(t => t.status === 'todo' || t.status === 'in_progress');
+                    
+                    // Re-render filtered view
+                    if (window.taskBootstrap) {
+                        await window.taskBootstrap.renderTasks(pendingTasks);
+                        await window.taskBootstrap.updateCounters(pendingTasks);
+                    }
+                }
                 
                 // Exit selection mode
                 exitSelectionMode();

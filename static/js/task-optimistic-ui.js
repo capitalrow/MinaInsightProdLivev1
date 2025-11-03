@@ -273,7 +273,8 @@ class OptimisticUI {
     }
 
     /**
-     * Delete task optimistically
+     * Delete task optimistically (soft delete with 15s undo window)
+     * CROWN⁴.5: Soft delete to support undo functionality
      * @param {number|string} taskId
      * @returns {Promise<void>}
      */
@@ -287,48 +288,154 @@ class OptimisticUI {
                 throw new Error('Task not found');
             }
 
-            // Step 1: Remove from DOM immediately
-            this._removeTaskFromDOM(taskId);
+            // Step 1: Soft delete - mark as deleted but keep in cache for undo
+            const updates = {
+                deleted_at: new Date().toISOString(),
+                deleted_by_user_id: window.CURRENT_USER_ID || null
+            };
+
+            // Update task in cache with deleted_at
+            const updatedTask = { ...task, ...updates };
+            await this.cache.updateTask(taskId, updatedTask);
             
-            // Step 2: Delete from IndexedDB
-            await this.cache.deleteTask(taskId);
+            // Step 2: Remove from DOM immediately (but keep in cache)
+            this._removeTaskFromDOM(taskId);
             
             // Dispatch deletion event for haptics/animations
             window.dispatchEvent(new CustomEvent('task:deleted', {
-                detail: { taskId, task }
+                detail: { taskId, task: updatedTask }
             }));
             
             // Step 3: Queue event via OfflineQueueManager
             await this.cache.addEvent({
                 event_type: 'task_delete',
                 task_id: taskId,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                data: updates
             });
 
             // Use OfflineQueueManager for proper session tracking and replay
             let queueId = null;
             if (window.offlineQueue) {
                 queueId = await window.offlineQueue.queueOperation({
-                    type: 'task_delete',
+                    type: 'task_update',  // Use update, not delete
                     task_id: taskId,
+                    data: updates,
                     priority: 8,
-                    operation_id: opId  // Link queue entry to operation
+                    operation_id: opId
                 });
             }
 
-            // Step 4: Sync to server
+            // Step 4: Sync to server (as update with deleted_at, not hard delete)
             this.pendingOperations.set(opId, { 
-                type: 'delete', 
+                type: 'update',  // Changed from 'delete' 
                 taskId, 
-                task,  // Keep for rollback
-                queueId  // Store queue ID to remove on success
+                previous: task,  // Keep for rollback
+                updates,
+                data: updates,
+                queueId
             });
-            this._syncToServer(opId, 'delete', null, taskId);
+            this._syncToServer(opId, 'update', updates, taskId);
 
         } catch (error) {
             console.error('❌ Optimistic delete failed:', error);
             throw error;
         }
+    }
+
+    /**
+     * Archive task (soft delete for completed tasks)
+     * @param {number|string} taskId
+     * @returns {Promise<Object>}
+     */
+    async archiveTask(taskId) {
+        return this.updateTask(taskId, {
+            archived_at: new Date().toISOString(),
+            status: 'archived'
+        });
+    }
+
+    /**
+     * Unarchive task (restore from archive)
+     * @param {number|string} taskId
+     * @returns {Promise<Object>}
+     */
+    async unarchiveTask(taskId) {
+        return this.updateTask(taskId, {
+            archived_at: null,
+            status: 'todo'
+        });
+    }
+
+    /**
+     * Restore deleted task (undo soft delete within 15s window)
+     * @param {number|string} taskId
+     * @returns {Promise<Object>}
+     */
+    async restoreTask(taskId) {
+        // Clear deleted_at to restore
+        const result = await this.updateTask(taskId, {
+            deleted_at: null,
+            deleted_by_user_id: null
+        });
+
+        // Re-render the task in the UI (it was removed from DOM during delete)
+        const task = await this.cache.getTask(taskId);
+        if (task && window.taskBootstrap) {
+            // Trigger a re-render by dispatching custom event
+            window.dispatchEvent(new CustomEvent('task:restored', {
+                detail: { taskId, task }
+            }));
+
+            // Or directly call bootstrap to re-render tasks
+            const container = document.getElementById('tasks-list-container');
+            if (container) {
+                const tasks = await this.cache.getTasks();
+                // Filter out deleted and archived tasks
+                const activeTasks = tasks.filter(t => !t.deleted_at && !t.archived_at);
+                await window.taskBootstrap.renderTasks(activeTasks, { fromCache: true });
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Complete task (set status to completed, never uncomplete)
+     * Used for bulk operations to ensure proper event propagation
+     * @param {number|string} taskId
+     * @returns {Promise<Object>}
+     */
+    async completeTask(taskId) {
+        const task = await this.cache.getTask(taskId);
+        if (!task) return;
+
+        // Skip if already completed
+        if (task.status === 'completed') {
+            return task;
+        }
+
+        const updates = {
+            status: 'completed',
+            completed_at: new Date().toISOString()
+        };
+
+        const result = await this.updateTask(taskId, updates);
+
+        // Trigger celebration animation
+        if (window.emotionalAnimations) {
+            const card = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (card) {
+                window.emotionalAnimations.celebrate(card, ['burst', 'shimmer']);
+            }
+        }
+        
+        // Dispatch completion event for other listeners
+        window.dispatchEvent(new CustomEvent('task:completed', {
+            detail: { taskId, task: result }
+        }));
+
+        return result;
     }
 
     /**
@@ -678,14 +785,9 @@ class OptimisticUI {
             if (task.status === 'completed') {
                 console.log(`✅ Adding 'completed' class to task card ${taskId}`);
                 card.classList.add('completed');
-                if (titleEl) {
-                    titleEl.classList.add('completed');
-                    console.log(`✅ Added 'completed' class to title element`);
-                }
             } else {
                 console.log(`❌ Removing 'completed' class from task card ${taskId}`);
                 card.classList.remove('completed');
-                if (titleEl) titleEl.classList.remove('completed');
             }
         }
 

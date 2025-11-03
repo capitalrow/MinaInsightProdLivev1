@@ -15,6 +15,31 @@ if TYPE_CHECKING:
     from .user import User
 
 
+class TaskAssignee(Base):
+    """
+    Junction table for many-to-many relationship between tasks and users.
+    CROWN⁴.5: Enables multi-assignee support for collaborative task management.
+    """
+    __tablename__ = "task_assignees"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Metadata for assignee relationship
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    assigned_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    role: Mapped[str] = mapped_column(String(32), default="assignee")  # assignee, reviewer, collaborator
+    
+    # Composite unique constraint to prevent duplicate assignments
+    __table_args__ = (
+        Index('ix_task_assignees_composite', 'task_id', 'user_id', unique=True),
+    )
+
+    def __repr__(self):
+        return f'<TaskAssignee task_id={self.task_id} user_id={self.user_id}>'
+
+
 class Task(Base):
     """
     Task model for action items extracted from meetings with comprehensive task management.
@@ -53,6 +78,15 @@ class Task(Base):
     assigned_to_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     assigned_to: Mapped[Optional["User"]] = relationship(back_populates="assigned_tasks", foreign_keys=[assigned_to_id])
     
+    # CROWN⁴.5: Many-to-many assignees relationship for multi-assignee support
+    assignees: Mapped[list["User"]] = relationship(
+        secondary="task_assignees",
+        primaryjoin="Task.id==TaskAssignee.task_id",
+        secondaryjoin="User.id==TaskAssignee.user_id",
+        back_populates="tasks_assigned_multi",
+        lazy="selectin"  # Eager load assignees to avoid N+1 queries
+    )
+    
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_by: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by_id])
     
@@ -80,6 +114,9 @@ class Task(Base):
     actual_hours: Mapped[Optional[float]] = mapped_column(Float)
     tags: Mapped[Optional[list]] = mapped_column(JSON)  # Task tags (legacy)
     labels: Mapped[Optional[list]] = mapped_column(JSON)  # CROWN⁴.5: Task labels for organization
+    
+    # CROWN⁴.5 Phase 3: Task ordering/positioning for drag-drop
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # Display order (lower = higher priority)
     
     # Dependencies and relationships
     depends_on_task_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True)
@@ -113,6 +150,8 @@ class Task(Base):
         Index('ix_tasks_source', 'source'),
         # CROWN⁴.5 Phase 1: Index for soft delete filtering
         Index('ix_tasks_deleted_at', 'deleted_at'),
+        # CROWN⁴.5 Phase 3: Index for task ordering/positioning
+        Index('ix_tasks_position', 'position'),
     )
 
     def __repr__(self):
@@ -207,6 +246,7 @@ class Task(Base):
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'meeting_id': self.meeting_id,
             'assigned_to_id': self.assigned_to_id,
+            'assignee_ids': [user.id for user in self.assignees] if self.assignees else [],
             'created_by_id': self.created_by_id,
             'extracted_by_ai': self.extracted_by_ai,
             'confidence_score': self.confidence_score,
@@ -238,6 +278,17 @@ class Task(Base):
         if include_relationships:
             if self.assigned_to:
                 data['assigned_to'] = self.assigned_to.to_dict()
+            
+            # CROWN⁴.5: Multi-assignee support
+            if self.assignees:
+                data['assignees'] = [{
+                    'id': user.id,
+                    'username': user.username,
+                    'display_name': user.display_name,
+                    'full_name': user.full_name,
+                    'avatar_url': user.avatar_url
+                } for user in self.assignees]
+            
             if self.created_by:
                 data['created_by'] = self.created_by.to_dict()
             if self.meeting:

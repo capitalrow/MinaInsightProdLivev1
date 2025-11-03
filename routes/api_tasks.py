@@ -94,8 +94,10 @@ def list_tasks():
                     )
                 )
         
-        # Order by priority and due date
+        # Order by position (drag-drop), then priority and due date
+        # CROWN⁴.5 Phase 3: Position-based ordering for drag-drop reordering
         stmt = stmt.order_by(
+            Task.position.asc(),
             Task.priority.desc(),
             Task.due_date.asc().nullslast(),
             Task.created_at.desc()
@@ -184,6 +186,13 @@ def create_task():
             if not assignee:
                 return jsonify({'success': False, 'message': 'Invalid assignee'}), 400
         
+        # CROWN⁴.5 Phase 3: Calculate next position for drag-drop ordering
+        # Assign position = max(existing positions) + 1 to append new tasks at end
+        max_position = db.session.query(func.max(Task.position)).join(Meeting).filter(
+            Meeting.workspace_id == current_user.workspace_id,
+            Task.deleted_at.is_(None)
+        ).scalar() or -1
+        
         task = Task(
             title=data['title'].strip(),
             description=data.get('description', '').strip() or None,
@@ -194,10 +203,43 @@ def create_task():
             assigned_to_id=assigned_to_id,
             status='todo',
             created_by_id=current_user.id,
-            extracted_by_ai=False
+            extracted_by_ai=False,
+            position=max_position + 1
         )
         
         db.session.add(task)
+        db.session.flush()  # Flush to get task.id before commit
+        
+        # CROWN⁴.5: Multi-assignee support via assignee_ids array
+        if 'assignee_ids' in data:
+            from models.task import TaskAssignee
+            
+            assignee_ids = data['assignee_ids']
+            if isinstance(assignee_ids, list) and assignee_ids:
+                # Validate all assignees are in workspace
+                valid_users = db.session.query(User).filter(
+                    User.id.in_(assignee_ids),
+                    User.workspace_id == current_user.workspace_id,
+                    User.active == True
+                ).all()
+                
+                if len(valid_users) != len(set(assignee_ids)):
+                    db.session.rollback()
+                    return jsonify({'success': False, 'message': 'One or more invalid assignee IDs'}), 400
+                
+                # Create assignments
+                for user_id in assignee_ids:
+                    assignment = TaskAssignee(
+                        task_id=task.id,
+                        user_id=user_id,
+                        assigned_by_user_id=current_user.id,
+                        role='assignee'
+                    )
+                    db.session.add(assignment)
+                
+                # Update assigned_to_id for backward compatibility (first assignee)
+                task.assigned_to_id = assignee_ids[0]
+        
         db.session.commit()
         
         # Broadcast task_update event
@@ -284,6 +326,42 @@ def update_task(task_id):
                 if not assignee:
                     return jsonify({'success': False, 'message': 'Invalid assignee'}), 400
             task.assigned_to_id = assigned_to_id
+        
+        # CROWN⁴.5: Multi-assignee support via assignee_ids array
+        if 'assignee_ids' in data:
+            from models.task import TaskAssignee  # Import here to avoid circular dependency
+            
+            assignee_ids = data['assignee_ids']
+            if not isinstance(assignee_ids, list):
+                return jsonify({'success': False, 'message': 'assignee_ids must be an array'}), 400
+            
+            # Validate all assignees are in workspace
+            if assignee_ids:
+                valid_users = db.session.query(User).filter(
+                    User.id.in_(assignee_ids),
+                    User.workspace_id == current_user.workspace_id,
+                    User.active == True
+                ).all()
+                
+                if len(valid_users) != len(set(assignee_ids)):
+                    return jsonify({'success': False, 'message': 'One or more invalid assignee IDs'}), 400
+            
+            # Update junction table transactionally
+            # 1. Delete existing assignments
+            db.session.query(TaskAssignee).filter_by(task_id=task.id).delete()
+            
+            # 2. Add new assignments
+            for user_id in assignee_ids:
+                assignment = TaskAssignee(
+                    task_id=task.id,
+                    user_id=user_id,
+                    assigned_by_user_id=current_user.id,
+                    role='assignee'
+                )
+                db.session.add(assignment)
+            
+            # 3. Update assigned_to_id for backward compatibility (first assignee)
+            task.assigned_to_id = assignee_ids[0] if assignee_ids else None
         
         if 'labels' in data:
             labels = data['labels']
@@ -1470,6 +1548,113 @@ def update_summary_task(session_id, task_index):
         return jsonify({"success": False, "error": "Failed to update task"}), 500
 
 
+@api_tasks_bp.route('/workspace-users', methods=['GET'])
+@login_required
+def get_workspace_users():
+    """
+    Get list of users in current workspace for assignee selector.
+    Returns user id, name, avatar_url for display in UI.
+    """
+    try:
+        if not current_user.workspace_id:
+            return jsonify({
+                'success': False,
+                'message': 'User not in a workspace'
+            }), 400
+        
+        # Fetch all active users in the workspace
+        stmt = select(User).where(
+            User.workspace_id == current_user.workspace_id,
+            User.active == True
+        ).order_by(User.display_name.asc().nullslast(), User.username.asc())
+        
+        users = db.session.execute(stmt).scalars().all()
+        
+        # Format user data for frontend
+        user_list = []
+        for user in users:
+            user_list.append({
+                'id': user.id,
+                'username': user.username,
+                'display_name': user.display_name,
+                'full_name': user.full_name,
+                'avatar_url': user.avatar_url,
+                'is_current_user': user.id == current_user.id
+            })
+        
+        return jsonify({
+            'success': True,
+            'users': user_list,
+            'current_user_id': current_user.id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching workspace users: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# CROWN⁴.5 Phase 3: Reorder tasks via drag-and-drop
+@api_tasks_bp.route('/reorder', methods=['POST'])
+@login_required
+def reorder_tasks():
+    """
+    Update task positions after drag-and-drop reordering.
+    Accepts an array of {task_id, position} updates.
+    """
+    try:
+        data = request.get_json()
+        updates = data.get('updates', [])
+        
+        if not updates:
+            return jsonify({'success': False, 'message': 'No updates provided'}), 400
+        
+        # Validate that all task IDs belong to user's workspace
+        task_ids = [update['task_id'] for update in updates]
+        
+        stmt = select(Task).join(Meeting).where(
+            and_(
+                Task.id.in_(task_ids),
+                Meeting.workspace_id == current_user.workspace_id,
+                Task.deleted_at.is_(None)  # Cannot reorder deleted tasks
+            )
+        )
+        
+        tasks = db.session.execute(stmt).scalars().all()
+        
+        if len(tasks) != len(task_ids):
+            return jsonify({'success': False, 'message': 'One or more tasks not found'}), 404
+        
+        # Update task positions
+        updated_task_ids = []
+        for update in updates:
+            task_id = update['task_id']
+            new_position = update['position']
+            
+            task = next((t for t in tasks if t.id == task_id), None)
+            if task:
+                task.position = new_position
+                updated_task_ids.append(task_id)
+        
+        db.session.commit()
+        
+        logger.info(f"[REORDER] Updated positions for {len(updated_task_ids)} tasks by user {current_user.id}")
+        
+        # TODO: Broadcast reorder event to WebSocket clients
+        # EventBroadcaster.broadcast_task_reorder needs to be implemented
+        # For now, reordering works without real-time sync across tabs
+        
+        return jsonify({
+            'success': True,
+            'message': f'Updated positions for {len(updated_task_ids)} tasks',
+            'updated_task_ids': updated_task_ids
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"[REORDER] Error reordering tasks: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # CROWN⁴.5 Phase 1: Admin endpoint for purge job
 @api_tasks_bp.route('/admin/purge', methods=['POST'])
 @login_required
@@ -1513,4 +1698,144 @@ def admin_purge_deleted_tasks():
     #         'success': False,
     #         'error': str(e)
     #     }), 500
+
+
+# CROWN⁴.5 Phase 3 Task 10: AI Task Proposals with Streaming
+@api_tasks_bp.route('/ai-proposals/stream', methods=['POST'])
+@login_required
+def stream_ai_task_proposals():
+    """
+    Stream AI-generated task proposals based on meeting context.
+    Uses Server-Sent Events (SSE) for real-time streaming.
+    
+    Request Body:
+        {
+            "meeting_id": int,
+            "context": str (optional),
+            "max_proposals": int (default: 3)
+        }
+    
+    Returns:
+        Stream of JSON objects:
+        - data: {"type": "proposal", "task": {...}}
+        - data: {"type": "done"}
+        - data: {"type": "error", "message": str}
+    """
+    from flask import Response, stream_with_context
+    from services.openai_client_manager import get_openai_client
+    import json
+    
+    try:
+        data = request.get_json()
+        meeting_id = data.get('meeting_id')
+        custom_context = data.get('context', '')
+        max_proposals = data.get('max_proposals', 3)
+        
+        if not meeting_id:
+            return jsonify({'success': False, 'message': 'Meeting ID required'}), 400
+        
+        # Verify meeting access
+        meeting = db.session.query(Meeting).filter_by(
+            id=meeting_id,
+            workspace_id=current_user.workspace_id
+        ).first()
+        
+        if not meeting:
+            return jsonify({'success': False, 'message': 'Meeting not found'}), 404
+        
+        def generate_proposals():
+            """Generator function for SSE streaming."""
+            try:
+                # Get meeting context (summary, transcript snippets)
+                context_parts = [f"Meeting: {meeting.title}"]
+                
+                if meeting.summary:
+                    context_parts.append(f"Summary: {meeting.summary[:500]}")
+                
+                if custom_context:
+                    context_parts.append(f"Additional context: {custom_context}")
+                
+                # Get existing tasks to avoid duplicates
+                existing_tasks = db.session.query(Task).filter_by(
+                    meeting_id=meeting_id,
+                    deleted_at=None
+                ).all()
+                existing_titles = [t.title for t in existing_tasks]
+                
+                if existing_titles:
+                    context_parts.append(f"Existing tasks: {', '.join(existing_titles[:5])}")
+                
+                context = "\n\n".join(context_parts)
+                
+                # Build OpenAI prompt
+                system_prompt = """You are an AI assistant that suggests actionable tasks from meeting content.
+Generate practical, specific tasks that can be assigned and tracked.
+Return tasks as JSON array with: title, description, priority (low/medium/high), category.
+Avoid duplicating existing tasks. Focus on concrete next steps."""
+                
+                user_prompt = f"""{context}
+
+Based on this meeting, suggest {max_proposals} actionable tasks.
+Format as JSON array: [{{"title": "...", "description": "...", "priority": "medium", "category": "..."}}]"""
+                
+                # Stream from OpenAI
+                client = get_openai_client()
+                if not client:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'OpenAI client not available'})}\n\n"
+                    return
+                
+                stream = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    stream=True,
+                    temperature=0.7,
+                    max_tokens=800
+                )
+                
+                full_response = ""
+                for chunk in stream:
+                    if chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        full_response += content
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
+                
+                # Parse complete response
+                try:
+                    # Extract JSON from response (handle markdown code blocks)
+                    response_text = full_response.strip()
+                    if '```json' in response_text:
+                        response_text = response_text.split('```json')[1].split('```')[0].strip()
+                    elif '```' in response_text:
+                        response_text = response_text.split('```')[1].split('```')[0].strip()
+                    
+                    proposals = json.loads(response_text)
+                    
+                    # Send each proposal as separate event
+                    for proposal in proposals[:max_proposals]:
+                        yield f"data: {json.dumps({'type': 'proposal', 'task': proposal})}\n\n"
+                    
+                except json.JSONDecodeError:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Failed to parse AI response'})}\n\n"
+                
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                
+            except Exception as e:
+                logger.error(f"Stream error: {str(e)}", exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        
+        return Response(
+            stream_with_context(generate_proposals()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no'
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"AI proposals error: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
         

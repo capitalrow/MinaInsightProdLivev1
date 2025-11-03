@@ -295,7 +295,7 @@ class TaskClusteringManager {
         const allTasks = await window.taskCache.getAllTasks();
         
         // Get active filter
-        const viewState = await window.taskCache.getViewState();
+        const viewState = await window.taskCache.getViewState('tasks_page');
         const activeFilter = viewState?.activeFilter || 'all';
         
         // Apply filter

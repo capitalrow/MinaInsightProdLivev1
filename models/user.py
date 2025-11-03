@@ -15,7 +15,7 @@ from .base import Base
 if TYPE_CHECKING:
     from .workspace import Workspace
     from .meeting import Meeting
-    from .task import Task
+    from .task import Task, TaskAssignee
     from .marker import Marker
     from .comment import Comment
     from .session import Session
@@ -65,6 +65,14 @@ class User(UserMixin, Base):
     sessions: Mapped[list["Session"]] = relationship(back_populates="user", foreign_keys="Session.user_id")
     meetings: Mapped[list["Meeting"]] = relationship(back_populates="organizer", foreign_keys="Meeting.organizer_id")
     assigned_tasks: Mapped[list["Task"]] = relationship(back_populates="assigned_to", foreign_keys="Task.assigned_to_id")
+    # CROWN⁴.5: Many-to-many tasks assigned (multi-assignee support)
+    tasks_assigned_multi: Mapped[list["Task"]] = relationship(
+        secondary="task_assignees",
+        primaryjoin="User.id==foreign(TaskAssignee.user_id)",
+        secondaryjoin="Task.id==foreign(TaskAssignee.task_id)",
+        back_populates="assignees",
+        viewonly=True  # Prevent circular updates
+    )
     markers: Mapped[list["Marker"]] = relationship(back_populates="user")
     comments: Mapped[list["Comment"]] = relationship(back_populates="user")
     copilot_templates: Mapped[list["CopilotTemplate"]] = relationship(back_populates="user", foreign_keys="CopilotTemplate.user_id")

@@ -10,6 +10,7 @@ class TaskBootstrap {
         this.initialized = false;
         this.syncInProgress = false;
         this.lastSyncTimestamp = null;
+        this.currentState = null; // 'loading', 'empty', 'tasks', 'error'
         this.perf = {
             cache_load_start: 0,
             cache_load_end: 0,
@@ -20,6 +21,85 @@ class TaskBootstrap {
     }
 
     /**
+     * Show loading state with skeleton loaders
+     */
+    showLoadingState() {
+        console.log('📊 Showing loading state');
+        this.hideAllStates();
+        const loadingState = document.getElementById('tasks-loading-state');
+        if (loadingState) {
+            loadingState.style.display = 'flex';
+            this.currentState = 'loading';
+        }
+    }
+
+    /**
+     * Show empty state when no tasks exist
+     */
+    showEmptyState() {
+        console.log('📭 Showing empty state');
+        this.hideAllStates();
+        const emptyState = document.getElementById('tasks-empty-state');
+        if (emptyState) {
+            emptyState.style.display = 'block';
+            this.currentState = 'empty';
+        }
+    }
+
+    /**
+     * Show error state with retry option
+     * @param {string} errorMessage - Optional custom error message
+     */
+    showErrorState(errorMessage) {
+        console.log('❌ Showing error state:', errorMessage);
+        this.hideAllStates();
+        const errorState = document.getElementById('tasks-error-state');
+        if (errorState) {
+            // Update error message if provided
+            if (errorMessage) {
+                const messageEl = errorState.querySelector('.error-state-message');
+                if (messageEl) {
+                    messageEl.textContent = errorMessage;
+                }
+            }
+            errorState.style.display = 'block';
+            this.currentState = 'error';
+        }
+    }
+
+    /**
+     * Show tasks list (hide all state overlays)
+     */
+    showTasksList() {
+        console.log('✅ Showing tasks list');
+        this.hideAllStates();
+        const tasksContainer = document.getElementById('tasks-list-container');
+        if (tasksContainer) {
+            tasksContainer.style.display = 'flex';
+            this.currentState = 'tasks';
+        }
+    }
+
+    /**
+     * Hide all state containers (including tasks list)
+     */
+    hideAllStates() {
+        const states = [
+            'tasks-loading-state',
+            'tasks-empty-state',
+            'tasks-error-state',
+            'tasks-list-container'  // CROWN⁴.5: Also hide tasks list to prevent stale content
+        ];
+        
+        states.forEach(stateId => {
+            const el = document.getElementById(stateId);
+            if (el) {
+                el.style.display = 'none';
+            }
+        });
+    }
+
+    /**
      * Bootstrap tasks page with cache-first loading
      * Target: <200ms first paint
      * @returns {Promise<Object>} Bootstrap results
@@ -27,6 +107,9 @@ class TaskBootstrap {
     async bootstrap() {
         console.log('🚀 Starting CROWN⁴.5 cache-first bootstrap...');
         this.perf.cache_load_start = performance.now();
+
+        // CROWN⁴.5: Show loading state immediately for perceived performance
+        this.showLoadingState();
 
         try {
             // Step 1: Load from cache immediately (target: <50ms)
@@ -312,41 +395,33 @@ class TaskBootstrap {
      */
     async renderTasks(tasks, options = {}) {
         const container = document.getElementById('tasks-list-container');
-        const emptyState = document.getElementById('tasks-empty-state');
         
         if (!container) {
             console.warn('⚠️ Tasks container not found, skipping render');
             return;
         }
 
-        // Show empty state or task list
+        // CROWN⁴.5: Determine state based on task count
         if (!tasks || tasks.length === 0) {
-            // SAFETY: Only clear if we have NO server-rendered content
+            // SAFETY: Only show empty state if we have NO server-rendered content
             const hasServerContent = container.querySelectorAll('.task-card').length > 0;
             
             if (!hasServerContent) {
-                if (emptyState) {
-                    emptyState.style.display = 'block';
-                    emptyState.classList.add('fade-in');
-                }
-                if (container) {
-                    container.innerHTML = '';
-                }
+                this.showEmptyState();
+                container.innerHTML = '';
             } else {
                 console.warn('⚠️ Keeping server-rendered content (fallback protection)');
             }
             return;
         }
 
-        // Hide empty state
-        if (emptyState) {
-            emptyState.style.display = 'none';
-        }
-
         // Render tasks with error protection
         try {
             const tasksHTML = tasks.map((task, index) => this.renderTaskCard(task, index)).join('');
             container.innerHTML = tasksHTML;
+            
+            // Show tasks list (hides all state overlays)
+            this.showTasksList();
         } catch (renderError) {
             console.error('❌ renderTaskCard failed:', renderError);
             // Keep existing content on render error
@@ -358,6 +433,9 @@ class TaskBootstrap {
         cards.forEach((card, index) => {
             card.style.animationDelay = `${index * 0.05}s`;
         });
+
+        // Attach event listeners (checkbox toggle, etc.)
+        this._attachEventListeners();
 
         // Update counters
         this.updateCounters(tasks);
@@ -375,7 +453,7 @@ class TaskBootstrap {
     }
 
     /**
-     * Render single task card HTML
+     * Render single task card HTML (CROWN⁴.5 Phase 3: Compact 36-40px Design)
      * @param {Object} task
      * @param {number} index
      * @returns {string} HTML
@@ -386,92 +464,257 @@ class TaskBootstrap {
         const isCompleted = status === 'completed';
         const isSnoozed = task.snoozed_until && new Date(task.snoozed_until) > new Date();
         const isSyncing = task._is_syncing || (task.id && typeof task.id === 'string' && task.id.startsWith('temp_'));
+        const isDueSoon = task.due_date && this.isDueDateWithin(task.due_date, 1); // 1 day
+        const isOverdue = task.due_date && this.isDueDateOverdue(task.due_date) && !isCompleted;
+
+        // CROWN⁴.5: Multi-assignee display with overflow handling
+        const assigneeIds = task.assignee_ids || [];
+        const assignees = task.assignees || [];
+        const maxVisibleAssignees = 2;
+        
+        let assigneeHTML = '';
+        if (assigneeIds.length > 0) {
+            // Multi-assignee mode
+            const visibleAssignees = assignees.slice(0, maxVisibleAssignees);
+            const overflowCount = assigneeIds.length - maxVisibleAssignees;
+            
+            const assigneeNames = visibleAssignees
+                .map(a => a.display_name || a.username)
+                .filter(Boolean)
+                .join(', ');
+            
+            const fullList = assignees
+                .map(a => a.display_name || a.username)
+                .filter(Boolean)
+                .join(', ');
+            
+            assigneeHTML = `
+                <div class="task-assignees" 
+                     data-task-id="${task.id}"
+                     title="${this.escapeHtml(fullList || 'Click to change assignees')}">
+                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                    </svg>
+                    <span class="assignee-names">
+                        ${this.escapeHtml(assigneeNames || 'Assigned')}${overflowCount > 0 ? ` <span class="assignee-overflow">+${overflowCount}</span>` : ''}
+                    </span>
+                </div>
+            `;
+        } else {
+            // Legacy single assignee fallback
+            const assigneeText = task.assignee_name || (task.assignee ? 'Assigned' : null);
+            if (assigneeText) {
+                assigneeHTML = `
+                    <div class="task-assignees" 
+                         data-task-id="${task.id}"
+                         title="Click to change assignee">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                        </svg>
+                        <span class="assignee-names">${this.escapeHtml(assigneeText)}</span>
+                    </div>
+                `;
+            } else {
+                assigneeHTML = `
+                    <div class="task-assignees task-assignees-empty" 
+                         data-task-id="${task.id}"
+                         title="Click to assign">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                        </svg>
+                        <span class="assignee-names">Assign</span>
+                    </div>
+                `;
+            }
+        }
 
         return `
-            <div class="task-card ${isSyncing ? 'task-syncing' : ''}" 
+            <div class="task-card ${isCompleted ? 'completed' : ''} ${isSyncing ? 'task-syncing' : ''} ${isOverdue ? 'overdue' : ''}" 
                  data-task-id="${task.id}"
                  data-status="${status}"
                  data-priority="${priority}"
                  style="animation-delay: ${index * 0.05}s;">
-                <div class="task-card-header">
-                    <div class="task-checkbox-wrapper">
-                        <input type="checkbox" 
-                               class="task-checkbox" 
-                               ${isCompleted ? 'checked' : ''}
-                               ${isSyncing ? 'disabled title="Task is syncing with server..."' : ''}
-                               data-task-id="${task.id}">
-                    </div>
-                    <div class="task-content">
-                        <h3 class="task-title ${isCompleted ? 'completed' : ''}">
-                            ${this.escapeHtml(task.title || 'Untitled Task')}
-                        </h3>
-                        ${task.description ? `
-                            <p class="task-description">${this.escapeHtml(task.description)}</p>
-                        ` : ''}
-                        <div class="task-meta">
-                            ${isSyncing ? `
-                                <span class="syncing-badge">
-                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" class="spin-animation">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                    </svg>
-                                    Syncing...
+                
+                <!-- Checkbox (36x36px click area with 22x22px visual) -->
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" 
+                           class="task-checkbox" 
+                           ${isCompleted ? 'checked' : ''}
+                           ${isSyncing ? 'disabled title="Task is syncing with server..."' : ''}
+                           data-task-id="${task.id}"
+                           aria-label="Mark task as ${isCompleted ? 'incomplete' : 'complete'}">
+                </div>
+
+                <!-- Task Title (Inline Editable) -->
+                <div class="task-title ${isCompleted ? 'completed' : ''}" 
+                     data-task-id="${task.id}"
+                     role="button"
+                     tabindex="0"
+                     title="Click to edit task title">
+                    ${this.escapeHtml(task.title || 'Untitled Task')}
+                </div>
+
+                <!-- Task Metadata (Compact Inline) -->
+                <div class="task-metadata">
+                    <!-- Priority Badge (Inline Editable) -->
+                    <span class="priority-badge priority-${priority.toLowerCase()}" 
+                          data-task-id="${task.id}"
+                          title="Click to change priority (current: ${priority})">
+                        ${priority.charAt(0).toUpperCase() + priority.slice(1)}
+                    </span>
+
+                    ${assigneeHTML}
+
+                    ${task.due_date ? `
+                        <span class="due-date-badge ${isOverdue ? 'overdue' : ''} ${isDueSoon ? 'due-soon' : ''}" 
+                              data-task-id="${task.id}"
+                              data-iso-date="${task.due_date}"
+                              title="Click to change due date">
+                            ${this.formatDueDate(task.due_date)}
+                        </span>
+                    ` : `
+                        <span class="due-date-badge due-date-add" 
+                              data-task-id="${task.id}"
+                              title="Click to set due date">
+                            + Add due date
+                        </span>
+                    `}
+
+                    ${task.labels && task.labels.length > 0 ? `
+                        <div class="task-labels" data-task-id="${task.id}">
+                            ${task.labels.slice(0, 2).map(label => `
+                                <span class="task-label" data-label="${this.escapeHtml(label)}">
+                                    ${this.escapeHtml(label)}
+                                </span>
+                            `).join('')}
+                            ${task.labels.length > 2 ? `
+                                <span class="task-label task-label-count" title="${task.labels.slice(2).join(', ')}">
+                                    +${task.labels.length - 2}
                                 </span>
                             ` : ''}
-                            <span class="priority-badge priority-${priority.toLowerCase()}">
-                                ${priority}
-                            </span>
-                            ${task.due_date ? `
-                                <span class="due-date-badge ${this.isDueDateOverdue(task.due_date) ? 'overdue' : ''}">
-                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                    ${this.formatDueDate(task.due_date)}
-                                </span>
-                            ` : ''}
-                            ${isSnoozed ? `
-                                <span class="snoozed-badge">
-                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                    Snoozed
-                                </span>
-                            ` : ''}
-                            ${task.labels && task.labels.length > 0 ? `
-                                <div class="task-labels">
-                                    ${task.labels.slice(0, 3).map(label => `
-                                        <span class="label-badge" data-label="${this.escapeHtml(label)}">
-                                            ${this.escapeHtml(label)}
-                                            <button class="label-remove-btn" data-task-id="${task.id}" data-label="${this.escapeHtml(label)}" title="Remove label">
-                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <path d="M18 6L6 18M6 6l12 12"/>
-                                                </svg>
-                                            </button>
-                                        </span>
-                                    `).join('')}
-                                    ${task.labels.length > 3 ? `
-                                        <span class="label-badge label-count" title="${task.labels.slice(3).join(', ')}">+${task.labels.length - 3}</span>
-                                    ` : ''}
-                                    <button class="label-add-btn" data-task-id="${task.id}" title="Add label">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M12 5v14m-7-7h14"/>
-                                        </svg>
-                                    </button>
-                                </div>
-                            ` : `
-                                <div class="task-labels">
-                                    <button class="label-add-btn label-add-btn-empty" data-task-id="${task.id}" title="Add label">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                                        </svg>
-                                        Add label
-                                    </button>
-                                </div>
-                            `}
                         </div>
-                    </div>
+                    ` : `
+                        <div class="task-labels task-labels-empty" 
+                             data-task-id="${task.id}"
+                             title="Click to add labels">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                            </svg>
+                            Labels
+                        </div>
+                    `}
+
+                    ${isSyncing ? `
+                        <span class="syncing-badge">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" class="spin-animation">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            Syncing
+                        </span>
+                    ` : ''}
+                </div>
+
+                <!-- Task Actions (Hidden until hover) -->
+                <div class="task-actions">
+                    <!-- Priority Quick Selector -->
+                    <button class="task-action-btn priority-btn" 
+                            data-task-id="${task.id}"
+                            data-priority="${priority}"
+                            title="Change priority (${priority})"
+                            aria-label="Change priority">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                        </svg>
+                    </button>
+
+                    <!-- Archive (Complete → Archive → Delete lifecycle) -->
+                    ${isCompleted ? `
+                        <button class="task-action-btn archive-btn" 
+                                data-task-id="${task.id}"
+                                title="Archive completed task"
+                                aria-label="Archive task">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+                            </svg>
+                        </button>
+                    ` : ''}
+
+                    <!-- More Actions Menu -->
+                    <button class="task-menu-trigger" 
+                            data-task-id="${task.id}"
+                            title="More actions"
+                            aria-label="More actions"
+                            aria-haspopup="true">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="2"/>
+                            <circle cx="12" cy="5" r="2"/>
+                            <circle cx="12" cy="19" r="2"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
         `;
+    }
+
+    /**
+     * Attach event listeners to task cards
+     * Handles checkbox toggle, card clicks, and other interactions
+     */
+    _attachEventListeners() {
+        const container = document.getElementById('tasks-list-container');
+        if (!container) {
+            console.warn('[TaskBootstrap] tasks-list-container not found, cannot attach event listeners');
+            return;
+        }
+
+        // Checkbox toggle (with optimistic UI)
+        const checkboxes = container.querySelectorAll('.task-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', async (e) => {
+                const taskId = e.target.dataset.taskId;
+                
+                // Call optimistic UI handler
+                if (window.optimisticUI) {
+                    try {
+                        await window.optimisticUI.toggleTaskStatus(taskId);
+                        
+                        // Track telemetry
+                        if (window.CROWNTelemetry) {
+                            window.CROWNTelemetry.recordMetric('task_status_toggle', 1, {
+                                task_id: taskId,
+                                new_status: e.target.checked ? 'completed' : 'todo'
+                            });
+                        }
+                    } catch (error) {
+                        console.error('❌ Failed to toggle task status:', error);
+                        
+                        // Rollback checkbox state on error
+                        e.target.checked = !e.target.checked;
+                    }
+                }
+            });
+        });
+
+        // Task card clicks (for detail view - future implementation)
+        const cards = container.querySelectorAll('.task-card');
+        cards.forEach(card => {
+            card.addEventListener('click', (e) => {
+                // Ignore clicks on interactive elements
+                if (e.target.classList.contains('task-checkbox')) return;
+                if (e.target.classList.contains('task-title')) return;
+                if (e.target.closest('.task-actions')) return;
+                if (e.target.closest('.task-metadata')) return;
+                
+                const taskId = card.dataset.taskId;
+                
+                // Dispatch custom event for task detail view (future)
+                window.dispatchEvent(new CustomEvent('task:clicked', {
+                    detail: { task_id: taskId }
+                }));
+            });
+        });
+
+        console.log(`[TaskBootstrap] Attached event listeners to ${checkboxes.length} checkboxes and ${cards.length} cards`);
     }
 
     /**
@@ -646,6 +889,10 @@ class TaskBootstrap {
                 credentials: 'same-origin'
             });
 
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
             const data = await response.json();
             const tasks = data.tasks || [];
 
@@ -659,10 +906,30 @@ class TaskBootstrap {
             };
         } catch (error) {
             console.error('❌ Fallback failed:', error);
+            
+            // CROWN⁴.5: Show error state on complete failure
+            this.showErrorState(error.message || 'Unable to load tasks from server. Please check your connection.');
+            
             return {
                 success: false,
                 error: error.message
             };
+        }
+    }
+
+    /**
+     * Retry bootstrap after error
+     * @returns {Promise<void>}
+     */
+    async retryBootstrap() {
+        console.log('🔄 Retrying bootstrap...');
+        this.showLoadingState();
+        
+        try {
+            await this.bootstrap();
+        } catch (error) {
+            console.error('❌ Retry failed:', error);
+            this.showErrorState('Retry failed. Please try again or clear your cache.');
         }
     }
 
@@ -677,6 +944,22 @@ class TaskBootstrap {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         return due < today;
+    }
+
+    /**
+     * Check if due date is within N days
+     * @param {string} dueDate
+     * @param {number} days - Number of days
+     * @returns {boolean}
+     */
+    isDueDateWithin(dueDate, days) {
+        if (!dueDate) return false;
+        const due = new Date(dueDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + days);
+        return due >= today && due <= targetDate;
     }
 
     /**
