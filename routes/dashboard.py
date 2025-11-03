@@ -31,177 +31,168 @@ dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 @login_required
 def index():
     """Main dashboard page with overview of meetings, tasks, and analytics."""
-    try:
-        # Check if user has a workspace, if not create one
-        if not current_user.workspace_id:
-            from models import Workspace
-            try:
-                workspace_name = f"{current_user.first_name}'s Workspace" if current_user.first_name else f"{current_user.username}'s Workspace"
-                workspace = Workspace(
-                    name=workspace_name,
-                    slug=Workspace.generate_slug(workspace_name),
-                    owner_id=current_user.id
-                )
-                db.session.add(workspace)
-                db.session.flush()
-                current_user.workspace_id = workspace.id
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()
-                logger.error(f"Failed to create workspace for user {current_user.id}: {e}")
-                # Continue with None workspace - show empty dashboard
+    # Check if user has a workspace, if not create one
+    if not current_user.workspace_id:
+        from models import Workspace
+        try:
+            workspace_name = f"{current_user.first_name}'s Workspace" if current_user.first_name else f"{current_user.username}'s Workspace"
+            workspace = Workspace(
+                name=workspace_name,
+                slug=Workspace.generate_slug(workspace_name),
+                owner_id=current_user.id
+            )
+            db.session.add(workspace)
+            db.session.flush()
+            current_user.workspace_id = workspace.id
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            import logging
+            logging.error(f"Failed to create workspace for user {current_user.id}: {e}")
+            # Continue with None workspace - show empty dashboard
+    
+    # Get recent meetings (handle None workspace)
+    # ✨ CROWN⁴: Eager load session relationship for card navigation
+    # ✨ CROWN⁴ Phase 4: Exclude archived meetings from main view
+    if current_user.workspace_id:
+        recent_meetings = db.session.query(Meeting).options(
+            joinedload(Meeting.session)
+        ).filter_by(
+            workspace_id=current_user.workspace_id,
+            archived=False
+        ).order_by(desc(Meeting.created_at)).limit(5).all()
+    else:
+        recent_meetings = []
+    
+    # Get user's tasks
+    user_tasks = db.session.query(Task).filter_by(
+        assigned_to_id=current_user.id
+    ).filter(Task.status.in_(['todo', 'in_progress'])).limit(10).all()
+    
+    # Get workspace statistics using new meeting lifecycle service
+    if current_user.workspace_id:
+        from services.meeting_lifecycle_service import MeetingLifecycleService
         
-        # Get recent meetings (handle None workspace)
-        # ✨ CROWN⁴: Eager load session relationship for card navigation
-        # ✨ CROWN⁴ Phase 4: Exclude archived meetings from main view
-        if current_user.workspace_id:
-            recent_meetings = db.session.query(Meeting).options(
-                joinedload(Meeting.session)
-            ).filter_by(
-                workspace_id=current_user.workspace_id,
-                archived=False
-            ).order_by(desc(Meeting.created_at)).limit(5).all()
-        else:
-            recent_meetings = []
-        
-        # Get user's tasks (CROWN⁴.5 Phase 1: Exclude soft-deleted tasks)
-        user_tasks = db.session.query(Task).filter_by(
-            assigned_to_id=current_user.id,
-            deleted_at=None
-        ).filter(Task.status.in_(['todo', 'in_progress'])).limit(10).all()
-        
-        # Get workspace statistics using new meeting lifecycle service
-        if current_user.workspace_id:
-            from services.meeting_lifecycle_service import MeetingLifecycleService
-            
-            stats = MeetingLifecycleService.get_meeting_statistics(current_user.workspace_id, days=365)
-            total_meetings = stats['total_meetings']
-            total_tasks = stats['total_tasks']
-            completed_tasks = stats['completed_tasks']
-            total_duration_minutes = stats.get('total_duration_minutes', 0)
-            logger.debug(f"🎯 Dashboard stats: total_duration_minutes={total_duration_minutes}, total_tasks={total_tasks}")
-        else:
-            total_meetings = 0
-            total_tasks = 0
-            completed_tasks = 0
-            total_duration_minutes = 0
-        
-        # Calculate task completion rate
-        task_completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-        
-        # Calculate minutes saved (conservative hybrid formula):
-        # - 30% of meeting duration (admin overhead: notes, summaries, searching)
-        # - 2 minutes per action item (time to manually identify and document tasks)
-        minutes_saved = int(total_duration_minutes * 0.3) + (total_tasks * 2)
-        logger.debug(f"🎯 Dashboard calculated: minutes_saved={minutes_saved} from duration={total_duration_minutes}min + tasks={total_tasks}")
-        
-        # Get this week's meetings
-        week_start = datetime.now() - timedelta(days=datetime.now().weekday())
-        if current_user.workspace_id:
-            this_week_meetings = db.session.query(Meeting).filter_by(
-                workspace_id=current_user.workspace_id
-            ).filter(Meeting.created_at >= week_start).count()
-        else:
-            this_week_meetings = 0
-        
-        # Get today's meetings (meetings created today or scheduled for today)
-        # ✨ CROWN⁴: Eager load session relationship for card navigation
-        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_end = today_start + timedelta(days=1)
-        
-        if current_user.workspace_id:
-            todays_meetings = db.session.query(Meeting).options(
-                joinedload(Meeting.session)
-            ).filter_by(
-                workspace_id=current_user.workspace_id,
-                archived=False
-            ).filter(
-                and_(
-                    Meeting.created_at >= today_start,
-                    Meeting.created_at < today_end
-                )
-            ).order_by(desc(Meeting.created_at)).all()
-        else:
-            todays_meetings = []
-        
-        # Get follow-up items from recent meetings (last 7 days)
-        recent_cutoff = datetime.now() - timedelta(days=7)
-        
-        # Get recent markers (decisions, todos, risks)
-        recent_markers = db.session.query(Marker).filter_by(
-            user_id=current_user.id
-        ).filter(Marker.created_at >= recent_cutoff).order_by(desc(Marker.created_at)).limit(5).all()
-        
-        # Get urgent tasks (high priority or due soon) (CROWN⁴.5 Phase 1: Exclude soft-deleted tasks)
-        urgent_tasks = db.session.query(Task).filter_by(
-            assigned_to_id=current_user.id,
-            deleted_at=None
+        stats = MeetingLifecycleService.get_meeting_statistics(current_user.workspace_id, days=365)
+        total_meetings = stats['total_meetings']
+        total_tasks = stats['total_tasks']
+        completed_tasks = stats['completed_tasks']
+        total_duration_minutes = stats.get('total_duration_minutes', 0)
+        logger.debug(f"🎯 Dashboard stats: total_duration_minutes={total_duration_minutes}, total_tasks={total_tasks}")
+    else:
+        total_meetings = 0
+        total_tasks = 0
+        completed_tasks = 0
+        total_duration_minutes = 0
+    
+    # Calculate task completion rate
+    task_completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+    
+    # Calculate minutes saved (conservative hybrid formula):
+    # - 30% of meeting duration (admin overhead: notes, summaries, searching)
+    # - 2 minutes per action item (time to manually identify and document tasks)
+    minutes_saved = int(total_duration_minutes * 0.3) + (total_tasks * 2)
+    logger.debug(f"🎯 Dashboard calculated: minutes_saved={minutes_saved} from duration={total_duration_minutes}min + tasks={total_tasks}")
+    
+    # Get this week's meetings
+    week_start = datetime.now() - timedelta(days=datetime.now().weekday())
+    if current_user.workspace_id:
+        this_week_meetings = db.session.query(Meeting).filter_by(
+            workspace_id=current_user.workspace_id
+        ).filter(Meeting.created_at >= week_start).count()
+    else:
+        this_week_meetings = 0
+    
+    # Get today's meetings (meetings created today or scheduled for today)
+    # ✨ CROWN⁴: Eager load session relationship for card navigation
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+    
+    if current_user.workspace_id:
+        todays_meetings = db.session.query(Meeting).options(
+            joinedload(Meeting.session)
+        ).filter_by(
+            workspace_id=current_user.workspace_id,
+            archived=False
         ).filter(
-            Task.status.in_(['todo', 'in_progress'])
-        ).order_by(desc(Task.priority), Task.due_date).limit(5).all()
-        
-        # Create follow-up items combining markers and urgent tasks
-        follow_up_items = []
-        
-        # Add markers as follow-up items
-        for marker in recent_markers:
-            content_preview = str(marker.content)[:50] + ('...' if len(str(marker.content)) > 50 else '')
-            follow_up_items.append({
-                'type': 'marker',
-                'subtype': marker.type,
-                'title': f"{marker.type.title()}: {content_preview}",
-                'content': marker.content,
-                'timestamp': marker.created_at,
-                'speaker': marker.speaker,
-                'session_id': marker.session_id,
-                'id': marker.id
-            })
-        
-        # Add urgent tasks as follow-up items
-        for task in urgent_tasks:
-            follow_up_items.append({
-                'type': 'task',
-                'subtype': task.priority,
-                'title': task.title,
-                'content': task.description or '',
-                'timestamp': task.created_at,
-                'due_date': task.due_date,
-                'status': task.status,
-                'id': task.id
-            })
-        
-        # Sort follow-up items by timestamp (newest first)
-        follow_up_items.sort(key=lambda x: x['timestamp'], reverse=True)
-        follow_up_items = follow_up_items[:8]  # Limit to 8 items
-        
-        return render_template('dashboard/index.html',
-                             recent_meetings=recent_meetings,
-                             user_tasks=user_tasks,
-                             todays_meetings=todays_meetings,
-                             follow_up_items=follow_up_items,
-                             # Pass metrics as top-level variables for template display
-                             total_meetings=total_meetings,
-                             total_tasks=total_tasks,
-                             completed_tasks=completed_tasks,
-                             minutes_saved=minutes_saved,
-                             task_completion_rate=round(task_completion_rate, 1),
-                             # Also pass stats dict for WebSocket sync
-                             stats={
-                                 'total_meetings': total_meetings,
-                                 'total_tasks': total_tasks,
-                                 'completed_tasks': completed_tasks,
-                                 'task_completion_rate': round(task_completion_rate, 1),
-                                 'this_week_meetings': this_week_meetings,
-                                 'todays_meetings': len(todays_meetings),
-                                 'minutes_saved': minutes_saved
-                             })
-    except Exception as e:
-        logger.exception(f"Dashboard route error for user {current_user.id}: {e}")
-        return jsonify({
-            'error': 'server error',
-            'message': 'Failed to load dashboard. Please refresh the page.',
-            'request_id': request.environ.get('SENTRY_TRANSACTION_ID', 'N/A')
-        }), 500
+            and_(
+                Meeting.created_at >= today_start,
+                Meeting.created_at < today_end
+            )
+        ).order_by(desc(Meeting.created_at)).all()
+    else:
+        todays_meetings = []
+    
+    # Get follow-up items from recent meetings (last 7 days)
+    recent_cutoff = datetime.now() - timedelta(days=7)
+    
+    # Get recent markers (decisions, todos, risks)
+    recent_markers = db.session.query(Marker).filter_by(
+        user_id=current_user.id
+    ).filter(Marker.created_at >= recent_cutoff).order_by(desc(Marker.created_at)).limit(5).all()
+    
+    # Get urgent tasks (high priority or due soon)
+    urgent_tasks = db.session.query(Task).filter_by(
+        assigned_to_id=current_user.id
+    ).filter(
+        Task.status.in_(['todo', 'in_progress'])
+    ).order_by(desc(Task.priority), Task.due_date).limit(5).all()
+    
+    # Create follow-up items combining markers and urgent tasks
+    follow_up_items = []
+    
+    # Add markers as follow-up items
+    for marker in recent_markers:
+        content_preview = str(marker.content)[:50] + ('...' if len(str(marker.content)) > 50 else '')
+        follow_up_items.append({
+            'type': 'marker',
+            'subtype': marker.type,
+            'title': f"{marker.type.title()}: {content_preview}",
+            'content': marker.content,
+            'timestamp': marker.created_at,
+            'speaker': marker.speaker,
+            'session_id': marker.session_id,
+            'id': marker.id
+        })
+    
+    # Add urgent tasks as follow-up items
+    for task in urgent_tasks:
+        follow_up_items.append({
+            'type': 'task',
+            'subtype': task.priority,
+            'title': task.title,
+            'content': task.description or '',
+            'timestamp': task.created_at,
+            'due_date': task.due_date,
+            'status': task.status,
+            'id': task.id
+        })
+    
+    # Sort follow-up items by timestamp (newest first)
+    follow_up_items.sort(key=lambda x: x['timestamp'], reverse=True)
+    follow_up_items = follow_up_items[:8]  # Limit to 8 items
+    
+    return render_template('dashboard/index.html',
+                         recent_meetings=recent_meetings,
+                         user_tasks=user_tasks,
+                         todays_meetings=todays_meetings,
+                         follow_up_items=follow_up_items,
+                         # Pass metrics as top-level variables for template display
+                         total_meetings=total_meetings,
+                         total_tasks=total_tasks,
+                         completed_tasks=completed_tasks,
+                         minutes_saved=minutes_saved,
+                         task_completion_rate=round(task_completion_rate, 1),
+                         # Also pass stats dict for WebSocket sync
+                         stats={
+                             'total_meetings': total_meetings,
+                             'total_tasks': total_tasks,
+                             'completed_tasks': completed_tasks,
+                             'task_completion_rate': round(task_completion_rate, 1),
+                             'this_week_meetings': this_week_meetings,
+                             'todays_meetings': len(todays_meetings),
+                             'minutes_saved': minutes_saved
+                         })
 
 
 @dashboard_bp.route('/api/meetings')
@@ -287,41 +278,31 @@ def meetings():
 @login_required
 def tasks():
     """Tasks overview page with kanban board."""
-    try:
-        # Get all tasks for workspace (not just assigned to current user)
-        # CROWN⁴.5 Phase 1: Exclude soft-deleted tasks
-        if current_user.workspace_id:
-            # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
-            all_tasks = db.session.query(Task)\
-                .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
-                .outerjoin(Session, Task.session_id == Session.id)\
-                .filter(
-                    Task.deleted_at == None,
-                    or_(
-                        Meeting.workspace_id == current_user.workspace_id,
-                        Session.workspace_id == current_user.workspace_id
-                    )
-                ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
-        else:
-            all_tasks = []
+    # Get all tasks for workspace (not just assigned to current user)
+    if current_user.workspace_id:
+        # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
+        all_tasks = db.session.query(Task)\
+            .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
+            .outerjoin(Session, Task.session_id == Session.id)\
+            .filter(
+                or_(
+                    Meeting.workspace_id == current_user.workspace_id,
+                    Session.workspace_id == current_user.workspace_id
+                )
+            ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+    else:
+        all_tasks = []
     
-        # Get tasks by status
-        todo_tasks = [t for t in all_tasks if t.status == 'todo']
-        in_progress_tasks = [t for t in all_tasks if t.status == 'in_progress']
-        completed_tasks = [t for t in all_tasks if t.status == 'completed'][:10]
-        
-        return render_template('dashboard/tasks.html',
-                             tasks=all_tasks,
-                             todo_tasks=todo_tasks,
-                             in_progress_tasks=in_progress_tasks,
-                             completed_tasks=completed_tasks)
-    except Exception as e:
-        logger.exception(f"Tasks page error for user {current_user.id}: {e}")
-        return jsonify({
-            'error': 'server error',
-            'message': 'An unexpected error occurred',
-            'request_id': request.environ.get('SENTRY_TRANSACTION_ID', 'N/A')
-        }), 500
+    # Get tasks by status
+    todo_tasks = [t for t in all_tasks if t.status == 'todo']
+    in_progress_tasks = [t for t in all_tasks if t.status == 'in_progress']
+    completed_tasks = [t for t in all_tasks if t.status == 'completed'][:10]
+    
+    return render_template('dashboard/tasks.html',
+                         tasks=all_tasks,
+                         todo_tasks=todo_tasks,
+                         in_progress_tasks=in_progress_tasks,
+                         completed_tasks=completed_tasks)
 
 
 @dashboard_bp.route('/analytics')
@@ -358,15 +339,10 @@ def analytics():
     )
     meeting_ids = [row[0] for row in db.session.execute(meeting_ids_query)]
     
-    # CROWN⁴.5 Phase 1: Exclude soft-deleted tasks from analytics
-    total_tasks = db.session.query(Task).filter(
-        Task.meeting_id.in_(meeting_ids),
-        Task.deleted_at == None
-    ).count() if meeting_ids else 0
+    total_tasks = db.session.query(Task).filter(Task.meeting_id.in_(meeting_ids)).count() if meeting_ids else 0
     completed_tasks = db.session.query(Task).filter(
         Task.meeting_id.in_(meeting_ids),
-        Task.status == 'completed',
-        Task.deleted_at == None
+        Task.status == 'completed'
     ).count() if meeting_ids else 0
     
     task_completion_rate = round((completed_tasks / total_tasks * 100), 1) if total_tasks > 0 else 0
@@ -438,10 +414,9 @@ def api_recent_activity():
         workspace_id=current_user.workspace_id
     ).order_by(desc(Meeting.created_at)).limit(5).all()
     
-    # Get recent tasks (CROWN⁴.5 Phase 1: Exclude soft-deleted tasks)
+    # Get recent tasks
     recent_tasks = db.session.query(Task).join(Meeting).filter(
-        Meeting.workspace_id == current_user.workspace_id,
-        Task.deleted_at == None
+        Meeting.workspace_id == current_user.workspace_id
     ).order_by(desc(Task.created_at)).limit(5).all()
     
     # Combine and sort activities
@@ -483,21 +458,18 @@ def api_stats():
         status='live'
     ).count()
     
-    # Task stats (CROWN⁴.5 Phase 1: Exclude soft-deleted tasks)
+    # Task stats
     total_tasks = db.session.query(Task).join(Meeting).filter(
-        Meeting.workspace_id == current_user.workspace_id,
-        Task.deleted_at == None
+        Meeting.workspace_id == current_user.workspace_id
     ).count()
     completed_tasks = db.session.query(Task).join(Meeting).filter(
         Meeting.workspace_id == current_user.workspace_id,
-        Task.status == 'completed',
-        Task.deleted_at == None
+        Task.status == 'completed'
     ).count()
     overdue_tasks = db.session.query(Task).join(Meeting).filter(
         Meeting.workspace_id == current_user.workspace_id,
         Task.due_date < datetime.now().date(),
-        Task.status.in_(['todo', 'in_progress']),
-        Task.deleted_at == None
+        Task.status.in_(['todo', 'in_progress'])
     ).count()
     
     # This week's activity
@@ -508,8 +480,7 @@ def api_stats():
     
     this_week_tasks = db.session.query(Task).join(Meeting).filter(
         Meeting.workspace_id == current_user.workspace_id,
-        Task.created_at >= week_start,
-        Task.deleted_at == None
+        Task.created_at >= week_start
     ).count()
     
     return jsonify({
