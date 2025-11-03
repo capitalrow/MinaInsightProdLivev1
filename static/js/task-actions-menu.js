@@ -193,6 +193,9 @@ class TaskActionsMenu {
         this.closeMenu();
 
         switch (action) {
+            case 'view-details':
+                this.handleViewDetails(taskId);
+                break;
             case 'edit':
                 this.handleEdit(taskId);
                 break;
@@ -211,18 +214,36 @@ class TaskActionsMenu {
     }
 
     /**
-     * Handle edit action (placeholder for Task 18)
+     * Handle view details action - opens task detail modal (CROWN⁴.5 Task 7)
+     * @param {string|number} taskId - Task ID
+     */
+    handleViewDetails(taskId) {
+        console.log('[TaskActionsMenu] Opening task detail modal for:', taskId);
+        
+        if (window.openTaskDetail) {
+            window.openTaskDetail(taskId);
+        } else {
+            console.error('[TaskActionsMenu] Task detail modal not available');
+            if (window.showToast) {
+                window.showToast('Task detail modal not loaded', 'error');
+            }
+        }
+    }
+
+    /**
+     * Handle edit action (inline title editing)
      * @param {string|number} taskId - Task ID
      */
     handleEdit(taskId) {
-        // TODO: Task 18 - Open task detail modal
-        console.log('[TaskActionsMenu] Edit task:', taskId);
+        console.log('[TaskActionsMenu] Edit task title:', taskId);
         
-        // For now, show a toast notification
-        if (window.showToast) {
-            window.showToast('Task detail modal coming in Task 18', 'info');
-        } else {
-            alert('Task detail modal will be implemented in Task 18');
+        // Trigger inline editing for the task title
+        const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        if (taskCard) {
+            const titleEl = taskCard.querySelector('.task-title');
+            if (titleEl && window.taskInlineEditing) {
+                window.taskInlineEditing.startEditing(titleEl, taskId);
+            }
         }
     }
 
