@@ -520,39 +520,58 @@
     
     console.log('🚀 Initializing CROWN⁴.5 Tasks Page (Phase 2)...');
     
-    // Initialize CROWN Telemetry FIRST (before other modules)
+    // CROWN Telemetry is auto-initialized by crown-telemetry.js
+    // Just verify it's available
     if (window.CROWNTelemetry) {
-        const CROWNTelemetryClass = window.CROWNTelemetry;
-        const workspaceId = window.WORKSPACE_ID || 1;
-        window.crownTelemetry = new CROWNTelemetryClass(workspaceId);
-        await window.crownTelemetry.init();
-        console.log('📊 CROWN Telemetry initialized');
-        
-        // Replace class with instance for backwards compatibility
-        window.CROWNTelemetry = window.crownTelemetry;
+        window.crownTelemetry = window.CROWNTelemetry;
+        console.log('📊 CROWN Telemetry ready');
     } else {
-        console.warn('⚠️ CROWNTelemetry class not found');
+        console.warn('⚠️ CROWNTelemetry not available');
     }
     
     // Initialize WebSocket Manager with workspace and tasks namespace
     if (window.wsManager) {
         const workspaceId = window.WORKSPACE_ID || 1;
-        window.wsManager.init(workspaceId, ['tasks']);
+        await window.wsManager.init(workspaceId, ['tasks']);
         console.log('🔌 WebSocket Manager initialized for workspace', workspaceId);
     } else {
-        console.warn('⚠️ WebSocket Manager not found');
+        console.warn('⚠️ WebSocket Manager not available');
     }
     
-    // Wait for all modules to load
+    // Wait for all modules to load (with 5-second timeout)
     const waitForModules = () => {
         return new Promise((resolve) => {
+            const startTime = Date.now();
+            const timeout = 5000; // 5 seconds max wait
+            
             const check = () => {
-                if (window.taskCache && window.taskBootstrap && window.optimisticUI && 
+                const allModulesLoaded = window.taskCache && window.taskBootstrap && window.optimisticUI && 
                     window.offlineQueue && window.multiTabSync && window.idleSyncService && 
                     window.predictiveEngine && window.tasksWS && window.taskVirtualList && 
                     window.taskShortcuts && window.TaskInlineEditing && window.TaskActionsMenu &&
-                    window.TaskBulkOperations && window.TaskDragDrop) {
-                    resolve();
+                    window.TaskBulkOperations && window.TaskDragDrop;
+                
+                if (allModulesLoaded) {
+                    resolve(true);
+                } else if (Date.now() - startTime > timeout) {
+                    console.warn('⚠️ Module loading timeout - proceeding with available modules');
+                    console.warn('Missing modules:', {
+                        taskCache: !!window.taskCache,
+                        taskBootstrap: !!window.taskBootstrap,
+                        optimisticUI: !!window.optimisticUI,
+                        offlineQueue: !!window.offlineQueue,
+                        multiTabSync: !!window.multiTabSync,
+                        idleSyncService: !!window.idleSyncService,
+                        predictiveEngine: !!window.predictiveEngine,
+                        tasksWS: !!window.tasksWS,
+                        taskVirtualList: !!window.taskVirtualList,
+                        taskShortcuts: !!window.taskShortcuts,
+                        TaskInlineEditing: !!window.TaskInlineEditing,
+                        TaskActionsMenu: !!window.TaskActionsMenu,
+                        TaskBulkOperations: !!window.TaskBulkOperations,
+                        TaskDragDrop: !!window.TaskDragDrop
+                    });
+                    resolve(false);
                 } else {
                     setTimeout(check, 50);
                 }
@@ -561,48 +580,12 @@
         });
     };
     
-    await waitForModules();
-    console.log('✅ All CROWN⁴.5 modules loaded');
-    
-    // Initialize PredictiveEngine
-    await window.predictiveEngine.init();
-    console.log('🤖 PredictiveEngine initialized');
-    
-    window.taskInlineEditing = new window.TaskInlineEditing(window.optimisticUI);
-    console.log('✏️ Inline editing initialized');
-    
-    window.taskActionsMenu = new window.TaskActionsMenu(window.optimisticUI);
-    console.log('🎯 Task actions menu initialized');
-    
-    window.taskBulkOperations = new window.TaskBulkOperations(window.optimisticUI);
-    console.log('☑️ Bulk operations initialized');
-    
-    window.taskDragDrop = new window.TaskDragDrop(window.optimisticUI);
-    console.log('🔄 Drag-drop reordering initialized');
-    
-    window.taskProposalUI = new window.TaskProposalUI(window.optimisticUI);
-    console.log('✨ AI proposal UI initialized');
-    
-    // Initialize cache-first bootstrap
-    try {
-        const startTime = performance.now();
-        await window.taskBootstrap.bootstrap();
-        const bootstrapTime = performance.now() - startTime;
-        console.log(`⚡ Bootstrap completed in ${bootstrapTime.toFixed(2)}ms`);
-        
-        // Log performance metrics
-        if (bootstrapTime < 200) {
-            console.log('🎯 CROWN⁴.5 Target Met: <200ms first paint');
-        } else {
-            console.warn(`⚠️ Bootstrap slower than target: ${bootstrapTime.toFixed(2)}ms > 200ms`);
-        }
-    } catch (error) {
-        console.error('❌ Bootstrap failed:', error);
-    }
-    
     // ═══════════════════════════════════════════════════════════════════════
+    // CRITICAL: Setup basic UI FIRST (before waiting for advanced modules)
+    // This ensures filter tabs and modals work even if advanced features fail
+    // ═══════════════════════════════════════════════════════════════════════
+    
     // Filter Tabs Setup (All / Pending / Completed)
-    // ═══════════════════════════════════════════════════════════════════════
     function setupFilterTabs() {
         document.querySelectorAll('.filter-tab').forEach(tab => {
             tab.addEventListener('click', async () => {
@@ -611,7 +594,6 @@
                 }
                 
                 const filter = tab.dataset.filter;
-                
                 console.log(`🔍 Filter changed to: ${filter}`);
                 
                 // Update active tab visual state
@@ -622,7 +604,7 @@
                 });
                 tab.classList.add('active');
                 
-                // Update viewState in cache (persist filter preference)
+                // Update viewState in cache if available
                 if (window.taskCache) {
                     await window.taskCache.setViewState('tasks_page', { activeFilter: filter });
                 }
@@ -634,7 +616,12 @@
                     return;
                 }
                 
-                // Fetch filtered tasks from cache
+                // Fetch filtered tasks from cache if available
+                if (!window.taskCache) {
+                    console.warn('⚠️ TaskCache not available - filter tabs disabled');
+                    return;
+                }
+                
                 const allTasks = await window.taskCache.getAllTasks();
                 let filteredTasks = allTasks;
                 
@@ -657,9 +644,6 @@
         console.log('🔍 Filter tabs initialized');
     }
     
-    // Initialize filter tabs
-    setupFilterTabs();
-    
     // Modal elements
     const modalOverlay = document.getElementById('task-modal-overlay');
     const modalClose = document.getElementById('task-modal-close');
@@ -668,15 +652,19 @@
     
     // Open modal function
     function openTaskModal() {
-        modalOverlay.classList.add('active');
-        document.getElementById('task-title').focus();
-        // Reset form
-        taskForm.reset();
+        if (modalOverlay) {
+            modalOverlay.classList.add('active');
+            const titleInput = document.getElementById('task-title');
+            if (titleInput) titleInput.focus();
+            if (taskForm) taskForm.reset();
+        }
     }
     
     // Close modal function
     function closeTaskModal() {
-        modalOverlay.classList.remove('active');
+        if (modalOverlay) {
+            modalOverlay.classList.remove('active');
+        }
     }
     
     // Setup task creation buttons
@@ -697,6 +685,106 @@
         });
     }
     
+    // Close modal handlers
+    if (modalClose) {
+        modalClose.addEventListener('click', closeTaskModal);
+    }
+    if (modalCancel) {
+        modalCancel.addEventListener('click', closeTaskModal);
+    }
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) {
+                closeTaskModal();
+            }
+        });
+    }
+    
+    // Keyboard shortcut - ESC to close
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalOverlay && modalOverlay.classList.contains('active')) {
+            closeTaskModal();
+        }
+    });
+    
+    // Initialize filter tabs immediately
+    setupFilterTabs();
+    console.log('✅ Basic UI initialized (filter tabs, modals, buttons)');
+    
+    // Now wait for advanced modules (with timeout)
+    const modulesLoaded = await waitForModules();
+    
+    if (modulesLoaded) {
+        console.log('✅ All CROWN⁴.5 modules loaded');
+    } else {
+        console.warn('⚠️ Some modules failed to load - basic features still work');
+    }
+    
+    // Initialize PredictiveEngine if available
+    if (window.predictiveEngine) {
+        await window.predictiveEngine.init();
+        console.log('🤖 PredictiveEngine initialized');
+    } else {
+        console.warn('⚠️ PredictiveEngine not available');
+    }
+    
+    // Initialize task editing modules if available
+    if (window.TaskInlineEditing && window.optimisticUI) {
+        window.taskInlineEditing = new window.TaskInlineEditing(window.optimisticUI);
+        console.log('✏️ Inline editing initialized');
+    } else {
+        console.warn('⚠️ Inline editing not available');
+    }
+    
+    if (window.TaskActionsMenu && window.optimisticUI) {
+        window.taskActionsMenu = new window.TaskActionsMenu(window.optimisticUI);
+        console.log('🎯 Task actions menu initialized');
+    } else {
+        console.warn('⚠️ Task actions menu not available');
+    }
+    
+    if (window.TaskBulkOperations && window.optimisticUI) {
+        window.taskBulkOperations = new window.TaskBulkOperations(window.optimisticUI);
+        console.log('☑️ Bulk operations initialized');
+    } else {
+        console.warn('⚠️ Bulk operations not available');
+    }
+    
+    if (window.TaskDragDrop && window.optimisticUI) {
+        window.taskDragDrop = new window.TaskDragDrop(window.optimisticUI);
+        console.log('🔄 Drag-drop reordering initialized');
+    } else {
+        console.warn('⚠️ Drag-drop reordering not available');
+    }
+    
+    if (window.TaskProposalUI && window.optimisticUI) {
+        window.taskProposalUI = new window.TaskProposalUI(window.optimisticUI);
+        console.log('✨ AI proposal UI initialized');
+    } else {
+        console.warn('⚠️ AI proposal UI not available');
+    }
+    
+    // Initialize cache-first bootstrap
+    if (window.taskBootstrap) {
+        try {
+            const startTime = performance.now();
+            await window.taskBootstrap.bootstrap();
+            const bootstrapTime = performance.now() - startTime;
+            console.log(`⚡ Bootstrap completed in ${bootstrapTime.toFixed(2)}ms`);
+            
+            // Log performance metrics
+            if (bootstrapTime < 200) {
+                console.log('🎯 CROWN⁴.5 Target Met: <200ms first paint');
+            } else {
+                console.warn(`⚠️ Bootstrap slower than target: ${bootstrapTime.toFixed(2)}ms > 200ms`);
+            }
+        } catch (error) {
+            console.error('❌ Bootstrap failed:', error);
+        }
+    } else {
+        console.warn('⚠️ TaskBootstrap not available - page may have limited functionality');
+    }
+    
     // CROWN⁴.5: Error state retry button
     const retryBtn = document.getElementById('error-state-retry-btn');
     if (retryBtn) {
@@ -706,7 +794,9 @@
             retryBtn.textContent = 'Retrying...';
             
             try {
-                await window.taskBootstrap.retryBootstrap();
+                if (window.taskBootstrap) {
+                    await window.taskBootstrap.retryBootstrap();
+                }
             } finally {
                 retryBtn.disabled = false;
                 retryBtn.innerHTML = `
@@ -752,22 +842,6 @@
             }
         });
     }
-    
-    // Close modal handlers
-    modalClose.addEventListener('click', closeTaskModal);
-    modalCancel.addEventListener('click', closeTaskModal);
-    modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) {
-            closeTaskModal();
-        }
-    });
-    
-    // Keyboard shortcut - ESC to close
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modalOverlay.classList.contains('active')) {
-            closeTaskModal();
-        }
-    });
     
     // CROWN⁴.5 Predictive suggestions on task title/description input
     let predictionDebounceTimer = null;
