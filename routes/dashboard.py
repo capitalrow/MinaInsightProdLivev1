@@ -6,7 +6,7 @@ Main dashboard with meetings, tasks, analytics overview.
 from flask import Blueprint, render_template, request, jsonify, make_response
 from flask_login import login_required, current_user
 from models import db, Meeting, Task, Analytics, Session, Marker
-from sqlalchemy import desc, func, and_
+from sqlalchemy import desc, func, and_, or_
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta, date
 from services.event_broadcaster import event_broadcaster
@@ -278,14 +278,20 @@ def meetings():
 @login_required
 def tasks():
     """Tasks overview page with kanban board."""
-    # Get all tasks for workspace
-    # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
-    all_tasks = db.session.query(Task)\
-        .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
-        .outerjoin(Session, Task.session_id == Session.id)\
-        .filter(
-            (Meeting.workspace_id == current_user.workspace_id) | (Session.workspace_id == current_user.workspace_id)
-        ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+    # Get all tasks for workspace (not just assigned to current user)
+    if current_user.workspace_id:
+        # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
+        all_tasks = db.session.query(Task)\
+            .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
+            .outerjoin(Session, Task.session_id == Session.id)\
+            .filter(
+                or_(
+                    Meeting.workspace_id == current_user.workspace_id,
+                    Session.workspace_id == current_user.workspace_id
+                )
+            ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+    else:
+        all_tasks = []
     
     # Get tasks by status
     todo_tasks = [t for t in all_tasks if t.status == 'todo']
