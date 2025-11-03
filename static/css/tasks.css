@@ -1317,3 +1317,346 @@
     font-size: 0.85rem;
   }
 }
+
+/* ========================================
+   CROWN⁴.5 Task 10: AI Task Proposals
+   ======================================== */
+
+/* AI Proposals Section */
+.ai-proposals-section {
+  margin-bottom: var(--space-6);
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, 
+    rgba(139, 92, 246, 0.05) 0%,
+    rgba(99, 102, 241, 0.03) 100%);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.1);
+}
+
+.proposals-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.proposals-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  margin: 0;
+}
+
+.ai-icon {
+  color: rgb(139, 92, 246);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Streaming Indicator */
+.streaming-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.streaming-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.streaming-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(139, 92, 246);
+  animation: streaming-bounce 1.4s ease-in-out infinite;
+}
+
+.streaming-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.streaming-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes streaming-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+.streaming-text {
+  font-size: var(--font-size-sm);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Proposals Content Area */
+.proposals-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* AI Proposal Card */
+.task-card.ai-proposal {
+  position: relative;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15);
+}
+
+.task-card.ai-proposal::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%,
+    rgba(139, 92, 246, 0.6) 50%,
+    transparent 100%);
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* AI Proposal Badge */
+.ai-proposal-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, 
+    rgba(139, 92, 246, 0.2) 0%,
+    rgba(99, 102, 241, 0.15) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(167, 139, 250, 1);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ai-proposal-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Proposal Title (read-only) */
+.proposal-title {
+  background: transparent;
+  border: none;
+  cursor: default;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.proposal-title:focus {
+  outline: none;
+}
+
+/* Task Description in Proposals */
+.task-card.ai-proposal .task-description {
+  font-size: var(--font-size-sm);
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+  margin-top: var(--space-2);
+}
+
+/* Task Meta (priority, category) */
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.priority-badge {
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.priority-badge.priority-high {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.priority-badge.priority-medium {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fde68a;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.priority-badge.priority-low {
+  background: rgba(156, 163, 175, 0.15);
+  color: #d1d5db;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+.category-badge {
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  background: rgba(99, 102, 241, 0.15);
+  color: rgba(165, 180, 252, 1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+/* AI Proposal Actions */
+.ai-proposal-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.btn-accept-proposal,
+.btn-reject-proposal {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-accept-proposal {
+  background: linear-gradient(135deg, 
+    rgba(34, 197, 94, 0.2) 0%,
+    rgba(22, 163, 74, 0.15) 100%);
+  color: rgba(134, 239, 172, 1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.btn-accept-proposal:hover:not(:disabled) {
+  background: linear-gradient(135deg, 
+    rgba(34, 197, 94, 0.3) 0%,
+    rgba(22, 163, 74, 0.25) 100%);
+  border-color: rgba(34, 197, 94, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+}
+
+.btn-reject-proposal {
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-reject-proposal:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.btn-accept-proposal:disabled,
+.btn-reject-proposal:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Stop Stream Button */
+.btn-stop-stream {
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-stop-stream:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Proposal Entrance Animations */
+.proposal-enter {
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.proposal-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Error State */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.error-state svg {
+  color: rgba(239, 68, 68, 0.6);
+  margin-bottom: var(--space-3);
+}
+
+.error-state p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ai-proposals-section {
+    padding: var(--space-4);
+  }
+
+  .ai-proposal-actions {
+    flex-direction: column;
+  }
+
+  .btn-accept-proposal,
+  .btn-reject-proposal {
+    width: 100%;
+  }
+}
