@@ -359,6 +359,9 @@ class TaskBootstrap {
             card.style.animationDelay = `${index * 0.05}s`;
         });
 
+        // Attach event listeners (checkbox toggle, etc.)
+        this._attachEventListeners();
+
         // Update counters
         this.updateCounters(tasks);
 
@@ -534,6 +537,67 @@ class TaskBootstrap {
                 </div>
             </div>
         `;
+    }
+
+    /**
+     * Attach event listeners to task cards
+     * Handles checkbox toggle, card clicks, and other interactions
+     */
+    _attachEventListeners() {
+        const container = document.getElementById('tasks-list-container');
+        if (!container) {
+            console.warn('[TaskBootstrap] tasks-list-container not found, cannot attach event listeners');
+            return;
+        }
+
+        // Checkbox toggle (with optimistic UI)
+        const checkboxes = container.querySelectorAll('.task-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', async (e) => {
+                const taskId = e.target.dataset.taskId;
+                
+                // Call optimistic UI handler
+                if (window.optimisticUI) {
+                    try {
+                        await window.optimisticUI.toggleTaskStatus(taskId);
+                        
+                        // Track telemetry
+                        if (window.CROWNTelemetry) {
+                            window.CROWNTelemetry.recordMetric('task_status_toggle', 1, {
+                                task_id: taskId,
+                                new_status: e.target.checked ? 'completed' : 'todo'
+                            });
+                        }
+                    } catch (error) {
+                        console.error('❌ Failed to toggle task status:', error);
+                        
+                        // Rollback checkbox state on error
+                        e.target.checked = !e.target.checked;
+                    }
+                }
+            });
+        });
+
+        // Task card clicks (for detail view - future implementation)
+        const cards = container.querySelectorAll('.task-card');
+        cards.forEach(card => {
+            card.addEventListener('click', (e) => {
+                // Ignore clicks on interactive elements
+                if (e.target.classList.contains('task-checkbox')) return;
+                if (e.target.classList.contains('task-title')) return;
+                if (e.target.closest('.task-actions')) return;
+                if (e.target.closest('.task-metadata')) return;
+                
+                const taskId = card.dataset.taskId;
+                
+                // Dispatch custom event for task detail view (future)
+                window.dispatchEvent(new CustomEvent('task:clicked', {
+                    detail: { task_id: taskId }
+                }));
+            });
+        });
+
+        console.log(`[TaskBootstrap] Attached event listeners to ${checkboxes.length} checkboxes and ${cards.length} cards`);
     }
 
     /**
