@@ -67,18 +67,19 @@ class EventSequencer:
     @staticmethod
     def generate_checksum(payload: Dict[str, Any]) -> str:
         """
-        Generate MD5 checksum for event payload to detect tampering or corruption.
+        Generate SHA-256 checksum for event payload to detect tampering or corruption.
+        CROWN⁴.5: Uses SHA-256 (not MD5) for cryptographic security and frontend parity.
         
         Args:
             payload: Event payload dictionary
             
         Returns:
-            MD5 checksum hex string
+            SHA-256 checksum hex string
         """
         try:
-            # Sort keys for consistent hashing
+            # Sort keys for consistent hashing (matches frontend deterministicStringify)
             payload_str = json.dumps(payload, sort_keys=True, default=str)
-            return hashlib.md5(payload_str.encode()).hexdigest()
+            return hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
         except Exception as e:
             logger.warning(f"Failed to generate checksum: {e}")
             return ""
@@ -89,11 +90,17 @@ class EventSequencer:
         Get the next sequence number for event ordering.
         Thread-safe using database sequence.
         
+        NOTE: CROWN⁴.5 MVP LIMITATION
+        - Currently uses GLOBAL sequence numbers (not per-workspace)
+        - EventLedger schema lacks workspace_id field
+        - True per-workspace sequencing requires schema migration
+        - MVP compensates via reconciliation for zero-desync guarantee
+        
         Returns:
             Next sequence number
         """
         try:
-            # Get max sequence_num from database
+            # Get max sequence_num from database (global, not per-workspace)
             max_seq = db.session.scalar(
                 select(func.max(EventLedger.sequence_num))
             )
