@@ -73,13 +73,18 @@ def index():
         total_meetings = stats['total_meetings']
         total_tasks = stats['total_tasks']
         completed_tasks = stats['completed_tasks']
+        total_duration_hours = stats.get('total_duration_hours', 0)
     else:
         total_meetings = 0
         total_tasks = 0
         completed_tasks = 0
+        total_duration_hours = 0
     
     # Calculate task completion rate
     task_completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+    
+    # Calculate hours saved (estimate: 30% time savings from AI insights)
+    hours_saved = round(total_duration_hours * 0.3, 1) if total_duration_hours > 0 else 0
     
     # Get this week's meetings
     week_start = datetime.now() - timedelta(days=datetime.now().weekday())
@@ -164,13 +169,21 @@ def index():
                          user_tasks=user_tasks,
                          todays_meetings=todays_meetings,
                          follow_up_items=follow_up_items,
+                         # Pass metrics as top-level variables for template display
+                         total_meetings=total_meetings,
+                         total_tasks=total_tasks,
+                         completed_tasks=completed_tasks,
+                         hours_saved=hours_saved,
+                         task_completion_rate=round(task_completion_rate, 1),
+                         # Also pass stats dict for WebSocket sync
                          stats={
                              'total_meetings': total_meetings,
                              'total_tasks': total_tasks,
                              'completed_tasks': completed_tasks,
                              'task_completion_rate': round(task_completion_rate, 1),
                              'this_week_meetings': this_week_meetings,
-                             'todays_meetings': len(todays_meetings)
+                             'todays_meetings': len(todays_meetings),
+                             'hours_saved': hours_saved
                          })
 
 
