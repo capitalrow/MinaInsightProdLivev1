@@ -81,13 +81,14 @@ class TaskBootstrap {
     }
 
     /**
-     * Hide all state containers
+     * Hide all state containers (including tasks list)
      */
     hideAllStates() {
         const states = [
             'tasks-loading-state',
             'tasks-empty-state',
-            'tasks-error-state'
+            'tasks-error-state',
+            'tasks-list-container'  // CROWN⁴.5: Also hide tasks list to prevent stale content
         ];
         
         states.forEach(stateId => {
