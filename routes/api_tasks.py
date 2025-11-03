@@ -1470,6 +1470,51 @@ def update_summary_task(session_id, task_index):
         return jsonify({"success": False, "error": "Failed to update task"}), 500
 
 
+@api_tasks_bp.route('/workspace-users', methods=['GET'])
+@login_required
+def get_workspace_users():
+    """
+    Get list of users in current workspace for assignee selector.
+    Returns user id, name, avatar_url for display in UI.
+    """
+    try:
+        if not current_user.workspace_id:
+            return jsonify({
+                'success': False,
+                'message': 'User not in a workspace'
+            }), 400
+        
+        # Fetch all active users in the workspace
+        stmt = select(User).where(
+            User.workspace_id == current_user.workspace_id,
+            User.active == True
+        ).order_by(User.display_name.asc().nullslast(), User.username.asc())
+        
+        users = db.session.execute(stmt).scalars().all()
+        
+        # Format user data for frontend
+        user_list = []
+        for user in users:
+            user_list.append({
+                'id': user.id,
+                'username': user.username,
+                'display_name': user.display_name,
+                'full_name': user.full_name,
+                'avatar_url': user.avatar_url,
+                'is_current_user': user.id == current_user.id
+            })
+        
+        return jsonify({
+            'success': True,
+            'users': user_list,
+            'current_user_id': current_user.id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching workspace users: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # CROWN⁴.5 Phase 1: Admin endpoint for purge job
 @api_tasks_bp.route('/admin/purge', methods=['POST'])
 @login_required

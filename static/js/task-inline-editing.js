@@ -1,6 +1,8 @@
 class TaskInlineEditing {
     constructor(taskOptimisticUI) {
         this.taskUI = taskOptimisticUI;
+        this.workspaceUsers = null; // Cache for workspace users
+        this.fetchingUsers = null; // Promise for in-flight fetch
         this.init();
         console.log('[TaskInlineEditing] Initialized');
     }
@@ -18,6 +20,45 @@ class TaskInlineEditing {
                 this.editAssignee(e.target);
             }
         });
+    }
+
+    /**
+     * Fetch workspace users for assignee selector (with caching)
+     * @returns {Promise<Array>} Array of user objects
+     */
+    async fetchWorkspaceUsers() {
+        // Return cached users if available
+        if (this.workspaceUsers) {
+            return this.workspaceUsers;
+        }
+
+        // Return existing fetch promise if already in flight
+        if (this.fetchingUsers) {
+            return this.fetchingUsers;
+        }
+
+        // Fetch users from API
+        this.fetchingUsers = fetch('/api/tasks/workspace-users')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    this.workspaceUsers = data.users;
+                    return this.workspaceUsers;
+                } else {
+                    throw new Error(data.message || 'Failed to fetch workspace users');
+                }
+            })
+            .catch(err => {
+                console.error('[TaskInlineEditing] Error fetching workspace users:', err);
+                // Fallback to empty array
+                this.workspaceUsers = [];
+                return this.workspaceUsers;
+            })
+            .finally(() => {
+                this.fetchingUsers = null;
+            });
+
+        return this.fetchingUsers;
     }
 
     /**
@@ -321,7 +362,7 @@ class TaskInlineEditing {
         });
     }
 
-    editAssignee(badge) {
+    async editAssignee(badge) {
         const card = badge.closest('[data-task-id]');
         if (!card) return;
 
@@ -329,39 +370,46 @@ class TaskInlineEditing {
         const originalUserId = badge.dataset.userId;
         const originalHTML = badge.innerHTML;
         const originalClassName = badge.className;
-        const isAssignedToMe = originalUserId && String(originalUserId) === String(window.currentUserId);
-        const isUnassigned = badge.classList.contains('assignee-add');
 
+        // Show loading state while fetching users
+        const loadingSpan = document.createElement('span');
+        loadingSpan.className = 'assignee-badge assignee-loading';
+        loadingSpan.textContent = 'Loading...';
+        badge.replaceWith(loadingSpan);
+
+        // Fetch workspace users
+        const users = await this.fetchWorkspaceUsers();
+
+        // Create select dropdown
         const select = document.createElement('select');
         select.className = 'inline-edit-select assignee-select';
         
+        // Unassigned option
         const unassignedOption = document.createElement('option');
         unassignedOption.value = '';
         unassignedOption.textContent = 'Unassigned';
-        unassignedOption.selected = isUnassigned;
+        unassignedOption.selected = !originalUserId;
         select.appendChild(unassignedOption);
         
-        const meOption = document.createElement('option');
-        meOption.value = 'me';
-        meOption.textContent = 'Assign to me';
-        meOption.selected = isAssignedToMe;
-        select.appendChild(meOption);
-        
-        if (!isUnassigned && !isAssignedToMe) {
-            const otherOption = document.createElement('option');
-            otherOption.value = 'other';
-            otherOption.textContent = originalHTML;
-            otherOption.selected = true;
-            select.appendChild(otherOption);
-        }
+        // Add all workspace users
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = user.is_current_user ? 
+                `👤 ${user.full_name} (You)` : 
+                `👤 ${user.full_name}`;
+            option.selected = originalUserId && String(user.id) === String(originalUserId);
+            select.appendChild(option);
+        });
 
         const initialValue = select.value;
-        badge.replaceWith(select);
+        loadingSpan.replaceWith(select);
         select.focus();
 
         const save = async () => {
             const newValue = select.value;
             
+            // No change - restore original
             if (newValue === initialValue) {
                 const restoredBadge = document.createElement('span');
                 restoredBadge.className = originalClassName;
@@ -373,25 +421,30 @@ class TaskInlineEditing {
                 return;
             }
             
-            const newAssignedToId = newValue === 'me' ? window.currentUserId : null;
+            // Convert values for comparison
+            const newAssignedToId = newValue ? parseInt(newValue) : null;
             const oldAssignedToId = originalUserId ? parseInt(originalUserId) : null;
             
             if (newAssignedToId !== oldAssignedToId) {
                 try {
                     await this.taskUI.updateTask(taskId, { assigned_to_id: newAssignedToId });
                     
-                    if (newValue === 'me') {
-                        const newBadge = document.createElement('span');
+                    // Create new badge with updated assignee
+                    const newBadge = document.createElement('span');
+                    if (newAssignedToId) {
+                        const selectedUser = users.find(u => u.id === newAssignedToId);
                         newBadge.className = 'assignee-badge';
-                        newBadge.dataset.userId = window.currentUserId;
-                        newBadge.textContent = '👤 Me';
-                        select.replaceWith(newBadge);
+                        newBadge.dataset.userId = newAssignedToId;
+                        newBadge.title = 'Click to change assignee';
+                        newBadge.textContent = selectedUser ? 
+                            `👤 ${selectedUser.is_current_user ? 'Me' : selectedUser.full_name}` : 
+                            '👤 Assigned';
                     } else {
-                        const newBadge = document.createElement('span');
                         newBadge.className = 'assignee-badge assignee-add';
+                        newBadge.title = 'Click to assign';
                         newBadge.textContent = '+ Assign';
-                        select.replaceWith(newBadge);
                     }
+                    select.replaceWith(newBadge);
                     
                     if (window.CROWNTelemetry) {
                         window.CROWNTelemetry.recordMetric('inline_edit_success', 1, { field: 'assignee' });
@@ -399,6 +452,7 @@ class TaskInlineEditing {
                 } catch (error) {
                     console.error('Failed to update assignee:', error);
                     
+                    // Error rollback - restore original
                     const restoredBadge = document.createElement('span');
                     restoredBadge.className = originalClassName;
                     if (originalUserId) {
@@ -412,6 +466,7 @@ class TaskInlineEditing {
                     }
                 }
             } else {
+                // No effective change - restore original
                 const restoredBadge = document.createElement('span');
                 restoredBadge.className = originalClassName;
                 if (originalUserId) {
