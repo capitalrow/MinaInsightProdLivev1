@@ -2638,6 +2638,7 @@
   /* Remove line clamp on mobile to show full task titles */
   .task-title {
     -webkit-line-clamp: unset;
+    -webkit-box-orient: unset;
     display: block;
   }
   
