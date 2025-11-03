@@ -678,14 +678,9 @@ class OptimisticUI {
             if (task.status === 'completed') {
                 console.log(`✅ Adding 'completed' class to task card ${taskId}`);
                 card.classList.add('completed');
-                if (titleEl) {
-                    titleEl.classList.add('completed');
-                    console.log(`✅ Added 'completed' class to title element`);
-                }
             } else {
                 console.log(`❌ Removing 'completed' class from task card ${taskId}`);
                 card.classList.remove('completed');
-                if (titleEl) titleEl.classList.remove('completed');
             }
         }
 
