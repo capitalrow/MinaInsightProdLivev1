@@ -3180,3 +3180,227 @@
 .skeleton-width-random:nth-child(4) .skeleton-meta {
   width: 45%;
 }
+
+/* ========================================
+ * EMPTY/LOADING/ERROR STATES (CROWN+ Glassmorphism)
+ * ======================================== */
+
+/* Empty State - Inviting, Clean Design */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16) var(--space-8);
+  text-align: center;
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.4) 0%, rgba(31, 41, 55, 0.4) 100%);
+  backdrop-filter: blur(16px);
+  border-radius: var(--radius-2xl);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  min-height: 400px;
+  margin: var(--space-8) 0;
+}
+
+.empty-state-icon {
+  width: 80px;
+  height: 80px;
+  color: rgba(99, 102, 241, 0.6);
+  margin-bottom: var(--space-6);
+  filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.3));
+}
+
+.empty-state h3 {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.empty-state p {
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-8);
+  max-width: 400px;
+}
+
+.empty-state .btn {
+  min-width: 200px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-base);
+  padding: var(--space-3) var(--space-6);
+}
+
+/* Loading State - Animated Skeleton Loaders */
+.tasks-loading-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+}
+
+.task-skeleton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.4) 0%, rgba(31, 41, 55, 0.4) 100%);
+  backdrop-filter: blur(16px);
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  min-height: 72px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.skeleton-checkbox {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, 
+    rgba(99, 102, 241, 0.1) 0%, 
+    rgba(99, 102, 241, 0.2) 50%, 
+    rgba(99, 102, 241, 0.1) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.skeleton-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skeleton-title {
+  height: 20px;
+  width: 60%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, 
+    rgba(99, 102, 241, 0.15) 0%, 
+    rgba(99, 102, 241, 0.25) 50%, 
+    rgba(99, 102, 241, 0.15) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.skeleton-meta {
+  height: 16px;
+  width: 40%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, 
+    rgba(99, 102, 241, 0.1) 0%, 
+    rgba(99, 102, 241, 0.2) 50%, 
+    rgba(99, 102, 241, 0.1) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite 0.3s;
+}
+
+/* Error State - Clear, Actionable */
+.tasks-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16) var(--space-8);
+  text-align: center;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+  backdrop-filter: blur(16px);
+  border-radius: var(--radius-2xl);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  box-shadow: 0 8px 32px rgba(239, 68, 68, 0.2), 
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  min-height: 400px;
+  margin: var(--space-8) 0;
+}
+
+.error-state-icon {
+  width: 80px;
+  height: 80px;
+  color: rgba(239, 68, 68, 0.8);
+  margin-bottom: var(--space-6);
+  filter: drop-shadow(0 4px 12px rgba(239, 68, 68, 0.3));
+}
+
+.error-state-title {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.error-state-message {
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-8);
+  max-width: 400px;
+}
+
+.error-state-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.error-state-actions .btn {
+  min-width: 140px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Shimmer Animation for Skeleton Loaders */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulse-state {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Mobile Responsive for States */
+@media (max-width: 768px) {
+  .empty-state,
+  .tasks-error-state {
+    padding: var(--space-12) var(--space-6);
+    min-height: 320px;
+  }
+  
+  .empty-state-icon,
+  .error-state-icon {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .empty-state h3,
+  .error-state-title {
+    font-size: var(--font-size-xl);
+  }
+  
+  .task-skeleton {
+    min-height: 60px;
+  }
+  
+  .error-state-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .error-state-actions .btn {
+    width: 100%;
+  }
+}
