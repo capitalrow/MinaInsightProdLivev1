@@ -316,17 +316,21 @@ class MeetingLifecycleService:
                 total_tasks = 0
                 completed_tasks = 0
             
-            # Calculate total duration hours from all meetings
-            meetings = db.session.scalars(
-                select(Meeting).where(Meeting.workspace_id == workspace_id)
-            ).all()
+            # Calculate total duration hours from linked sessions
+            # Sessions have total_duration in seconds, which is more accurate for live transcriptions
+            from models.session import Session
             
-            total_duration_minutes = 0
-            for meeting in meetings:
-                if meeting.duration_minutes:
-                    total_duration_minutes += meeting.duration_minutes
+            total_duration_seconds = 0
+            if meeting_ids:
+                sessions = db.session.scalars(
+                    select(Session).where(Session.meeting_id.in_(meeting_ids))
+                ).all()
+                
+                for session in sessions:
+                    if session.total_duration:
+                        total_duration_seconds += session.total_duration
             
-            total_duration_hours = round(total_duration_minutes / 60, 2)
+            total_duration_hours = round(total_duration_seconds / 3600, 2)
             
             return {
                 'total_meetings': total_meetings,
