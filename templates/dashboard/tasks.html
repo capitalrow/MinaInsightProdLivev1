@@ -840,17 +840,23 @@
             const timeout = 5000; // 5 seconds max wait
             
             const check = () => {
-                const allModulesLoaded = window.taskCache && window.taskBootstrap && window.optimisticUI && 
+                // CROWN⁴.5: Core required modules (must load)
+                const coreModulesLoaded = window.taskCache && window.taskBootstrap && window.optimisticUI && 
                     window.offlineQueue && window.multiTabSync && window.idleSyncService && 
                     window.predictiveEngine && window.tasksWS && window.taskVirtualList && 
-                    window.taskShortcuts && window.TaskInlineEditing && window.TaskActionsMenu &&
-                    window.TaskBulkOperations && window.TaskDragDrop;
+                    window.taskShortcuts && window.TaskInlineEditing && window.TaskActionsMenu;
                 
-                if (allModulesLoaded) {
+                // CROWN⁴.5: Optional modules (nice-to-have, but not blocking)
+                const optionalModulesLoaded = window.TaskBulkOperations && window.TaskDragDrop;
+                
+                if (coreModulesLoaded) {
+                    if (!optionalModulesLoaded) {
+                        console.warn('⚠️ Some optional modules not loaded (bulk operations, drag-drop)');
+                    }
                     resolve(true);
                 } else if (Date.now() - startTime > timeout) {
                     console.warn('⚠️ Module loading timeout - proceeding with available modules');
-                    console.warn('Missing modules:', {
+                    console.warn('Missing core modules:', {
                         taskCache: !!window.taskCache,
                         taskBootstrap: !!window.taskBootstrap,
                         optimisticUI: !!window.optimisticUI,
@@ -862,7 +868,9 @@
                         taskVirtualList: !!window.taskVirtualList,
                         taskShortcuts: !!window.taskShortcuts,
                         TaskInlineEditing: !!window.TaskInlineEditing,
-                        TaskActionsMenu: !!window.TaskActionsMenu,
+                        TaskActionsMenu: !!window.TaskActionsMenu
+                    });
+                    console.info('Optional modules:', {
                         TaskBulkOperations: !!window.TaskBulkOperations,
                         TaskDragDrop: !!window.TaskDragDrop
                     });
