@@ -2640,6 +2640,8 @@
     -webkit-line-clamp: unset;
     -webkit-box-orient: unset;
     display: block;
+    word-wrap: normal;
+    overflow-wrap: normal;
   }
   
   .task-filters {
