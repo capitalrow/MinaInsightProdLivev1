@@ -1,6 +1,8 @@
 class TaskProposalUI {
     constructor(taskUI) {
         this.taskUI = taskUI;
+        this.currentStream = null;
+        this.proposalContainer = null;
         this.init();
         console.log('[TaskProposalUI] Initialized');
     }
@@ -13,8 +15,264 @@ class TaskProposalUI {
             } else if (e.target.classList.contains('btn-reject-proposal')) {
                 const taskId = e.target.dataset.taskId;
                 await this.rejectProposal(taskId, e.target);
+            } else if (e.target.classList.contains('btn-generate-proposals')) {
+                await this.startProposalStream(e.target);
+            } else if (e.target.classList.contains('btn-stop-stream')) {
+                this.stopStream();
             }
         });
+    }
+
+    async startProposalStream(button) {
+        const meetingId = button.dataset.meetingId;
+        if (!meetingId) {
+            console.error('[TaskProposalUI] No meeting ID found');
+            return;
+        }
+
+        // Disable button during generation
+        button.disabled = true;
+        const originalText = button.textContent;
+        button.textContent = 'Generating...';
+
+        try {
+            // Create or show proposal container
+            this.showProposalContainer();
+
+            // Show streaming indicator
+            this.showStreamingState();
+
+            // Start SSE stream
+            const response = await fetch('/api/tasks/ai-proposals/stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    meeting_id: parseInt(meetingId),
+                    max_proposals: 3
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            // Read SSE stream
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep incomplete line in buffer
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = JSON.parse(line.substring(6));
+                        this.handleStreamEvent(data);
+                    }
+                }
+            }
+
+            // Complete
+            this.hideStreamingState();
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('ai_proposals_generated', 1);
+            }
+
+        } catch (error) {
+            console.error('[TaskProposalUI] Stream error:', error);
+            this.showError('Failed to generate proposals. Please try again.');
+            
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('ai_proposals_error', 1);
+            }
+        } finally {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    }
+
+    stopStream() {
+        if (this.currentStream) {
+            this.currentStream.close();
+            this.currentStream = null;
+            this.hideStreamingState();
+        }
+    }
+
+    showProposalContainer() {
+        // Find or create proposal container in tasks page
+        let container = document.getElementById('ai-proposals-container');
+        
+        if (!container) {
+            const tasksPage = document.querySelector('.tasks-page-content');
+            if (tasksPage) {
+                container = document.createElement('div');
+                container.id = 'ai-proposals-container';
+                container.className = 'ai-proposals-section glass-card';
+                container.innerHTML = `
+                    <div class="proposals-header">
+                        <h3 class="proposals-title">
+                            <svg class="ai-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
+                                <polyline points="7.5 19.79 7.5 14.6 3 12"/>
+                                <polyline points="21 12 16.5 14.6 16.5 19.79"/>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                <line x1="12" y1="22.08" x2="12" y2="12"/>
+                            </svg>
+                            AI Suggestions
+                        </h3>
+                        <button class="btn-stop-stream btn-icon-sm" style="display: none;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="6" y="6" width="12" height="12" rx="2"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="proposals-content"></div>
+                    <div class="streaming-indicator" style="display: none;">
+                        <div class="streaming-dots">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <span class="streaming-text">Analyzing meeting content...</span>
+                    </div>
+                `;
+                tasksPage.insertBefore(container, tasksPage.firstChild);
+            }
+        }
+
+        this.proposalContainer = container;
+        container.style.display = 'block';
+    }
+
+    showStreamingState() {
+        if (!this.proposalContainer) return;
+        
+        const indicator = this.proposalContainer.querySelector('.streaming-indicator');
+        const stopBtn = this.proposalContainer.querySelector('.btn-stop-stream');
+        
+        if (indicator) indicator.style.display = 'flex';
+        if (stopBtn) stopBtn.style.display = 'block';
+
+        // Clear previous proposals
+        const content = this.proposalContainer.querySelector('.proposals-content');
+        if (content) content.innerHTML = '';
+    }
+
+    hideStreamingState() {
+        if (!this.proposalContainer) return;
+        
+        const indicator = this.proposalContainer.querySelector('.streaming-indicator');
+        const stopBtn = this.proposalContainer.querySelector('.btn-stop-stream');
+        
+        if (indicator) indicator.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'none';
+    }
+
+    handleStreamEvent(data) {
+        switch (data.type) {
+            case 'chunk':
+                // Update streaming text (optional: show live text accumulation)
+                break;
+            
+            case 'proposal':
+                this.renderProposal(data.task);
+                break;
+            
+            case 'done':
+                this.hideStreamingState();
+                break;
+            
+            case 'error':
+                this.showError(data.message);
+                this.hideStreamingState();
+                break;
+        }
+    }
+
+    renderProposal(task) {
+        if (!this.proposalContainer) return;
+
+        const content = this.proposalContainer.querySelector('.proposals-content');
+        if (!content) return;
+
+        const proposalCard = document.createElement('div');
+        proposalCard.className = 'task-card ai-proposal proposal-enter';
+        proposalCard.innerHTML = `
+            <div class="ai-proposal-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                </svg>
+                AI
+            </div>
+            <div class="task-content">
+                <input type="text" 
+                       class="task-title-input proposal-title" 
+                       value="${this.escapeHtml(task.title)}" 
+                       readonly>
+                ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
+                <div class="task-meta">
+                    <span class="priority-badge priority-${task.priority || 'medium'}">
+                        ${task.priority || 'medium'}
+                    </span>
+                    ${task.category ? `<span class="category-badge">${this.escapeHtml(task.category)}</span>` : ''}
+                </div>
+            </div>
+            <div class="ai-proposal-actions">
+                <button class="btn-accept-proposal btn-sm btn-primary" data-proposal='${JSON.stringify(task)}'>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    Accept
+                </button>
+                <button class="btn-reject-proposal btn-sm btn-ghost" data-proposal='${JSON.stringify(task)}'>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Reject
+                </button>
+            </div>
+        `;
+
+        content.appendChild(proposalCard);
+
+        // Trigger entrance animation
+        setTimeout(() => proposalCard.classList.add('proposal-visible'), 50);
+
+        if (window.EmotionalAnimations) {
+            window.EmotionalAnimations.playAnimation(proposalCard, 'slide', 'positive');
+        }
+    }
+
+    showError(message) {
+        if (!this.proposalContainer) return;
+
+        const content = this.proposalContainer.querySelector('.proposals-content');
+        if (!content) return;
+
+        content.innerHTML = `
+            <div class="error-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <p>${this.escapeHtml(message)}</p>
+            </div>
+        `;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     async acceptProposal(taskId, button) {
@@ -26,14 +284,36 @@ class TaskProposalUI {
         button.textContent = 'Accepting...';
 
         try {
-            const response = await fetch(`/api/tasks/${taskId}/accept`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
+            // Check if this is a new proposal (no taskId)
+            const proposalData = button.dataset.proposal;
+            let result;
 
-            const result = await response.json();
+            if (taskId) {
+                // Existing task - just accept
+                const response = await fetch(`/api/tasks/${taskId}/accept`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                result = await response.json();
+            } else if (proposalData) {
+                // New proposal - create task
+                const proposal = JSON.parse(proposalData);
+                const response = await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: proposal.title,
+                        description: proposal.description || '',
+                        priority: proposal.priority || 'medium',
+                        category: proposal.category || '',
+                        status: 'todo',
+                        meeting_id: this.getCurrentMeetingId()
+                    })
+                });
+                result = await response.json();
+            } else {
+                throw new Error('No task ID or proposal data');
+            }
 
             if (result.success) {
                 if (window.EmotionalAnimations) {
@@ -44,27 +324,26 @@ class TaskProposalUI {
                     window.CROWNTelemetry.recordMetric('task_proposal_accepted', 1);
                 }
 
+                // Remove card from proposals section
                 setTimeout(() => {
-                    card.classList.remove('ai-proposal');
-                    card.dataset.emotionalState = 'accepted';
-                    
-                    const badge = card.querySelector('.ai-proposal-badge');
-                    if (badge) {
-                        const checkboxWrapper = document.createElement('div');
-                        checkboxWrapper.className = 'task-checkbox-wrapper';
-                        checkboxWrapper.innerHTML = `
-                            <input type="checkbox" 
-                                   class="task-checkbox" 
-                                   data-task-id="${taskId}">
-                        `;
-                        badge.replaceWith(checkboxWrapper);
-                    }
-
-                    const actions = card.querySelector('.ai-proposal-actions');
-                    if (actions) {
-                        actions.remove();
-                    }
+                    card.style.opacity = '0';
+                    setTimeout(() => {
+                        card.remove();
+                        
+                        // Check if proposals section is empty
+                        if (this.proposalContainer) {
+                            const content = this.proposalContainer.querySelector('.proposals-content');
+                            if (content && content.children.length === 0) {
+                                this.proposalContainer.style.display = 'none';
+                            }
+                        }
+                    }, 300);
                 }, 500);
+
+                // Show toast notification
+                if (window.ToastNotifications) {
+                    window.ToastNotifications.show('Task added successfully', 'success');
+                }
             } else {
                 throw new Error(result.message || 'Failed to accept proposal');
             }
@@ -77,7 +356,11 @@ class TaskProposalUI {
                 window.CROWNTelemetry.recordMetric('task_proposal_accept_failure', 1);
             }
 
-            alert('Failed to accept task proposal. Please try again.');
+            if (window.ToastNotifications) {
+                window.ToastNotifications.show('Failed to add task', 'error');
+            } else {
+                alert('Failed to accept task proposal. Please try again.');
+            }
         }
     }
 
@@ -90,14 +373,23 @@ class TaskProposalUI {
         button.textContent = 'Rejecting...';
 
         try {
-            const response = await fetch(`/api/tasks/${taskId}/reject`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
+            // Check if this is a new proposal (no taskId)
+            const proposalData = button.dataset.proposal;
+            let result;
 
-            const result = await response.json();
+            if (taskId) {
+                // Existing task - reject via API
+                const response = await fetch(`/api/tasks/${taskId}/reject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                result = await response.json();
+            } else if (proposalData) {
+                // New proposal - just remove from UI
+                result = { success: true };
+            } else {
+                throw new Error('No task ID or proposal data');
+            }
 
             if (result.success) {
                 if (window.EmotionalAnimations) {
@@ -112,6 +404,14 @@ class TaskProposalUI {
                     card.style.opacity = '0';
                     setTimeout(() => {
                         card.remove();
+                        
+                        // Check if proposals section is empty
+                        if (this.proposalContainer) {
+                            const content = this.proposalContainer.querySelector('.proposals-content');
+                            if (content && content.children.length === 0) {
+                                this.proposalContainer.style.display = 'none';
+                            }
+                        }
                     }, 300);
                 }, 500);
             } else {
@@ -128,6 +428,12 @@ class TaskProposalUI {
 
             alert('Failed to reject task proposal. Please try again.');
         }
+    }
+
+    getCurrentMeetingId() {
+        // Extract meeting ID from page context or button dataset
+        const button = document.querySelector('.btn-generate-proposals');
+        return button ? parseInt(button.dataset.meetingId) : null;
     }
 }
 
