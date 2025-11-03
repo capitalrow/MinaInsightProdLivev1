@@ -130,7 +130,7 @@ class TaskInlineEditing {
         const taskId = card.dataset.taskId;
         const currentPriority = badge.textContent.trim().toLowerCase();
 
-        const priorities = ['low', 'medium', 'high', 'urgent'];
+        const priorities = ['low', 'medium', 'high', 'critical'];
         const select = document.createElement('select');
         select.className = 'inline-edit-select priority-select';
         
@@ -142,8 +142,12 @@ class TaskInlineEditing {
             select.appendChild(option);
         });
 
+        // Save all original attributes for restoration
         const originalHTML = badge.innerHTML;
         const originalClassName = badge.className;
+        const originalTitle = badge.title || `Click to change priority (current: ${currentPriority})`;
+        const originalDataTaskId = badge.dataset.taskId || taskId;
+        
         badge.replaceWith(select);
         select.focus();
 
@@ -156,6 +160,8 @@ class TaskInlineEditing {
                     
                     const newBadge = document.createElement('span');
                     newBadge.className = `priority-badge priority-${newPriority}`;
+                    newBadge.dataset.taskId = taskId;
+                    newBadge.title = `Click to change priority (current: ${newPriority})`;
                     newBadge.textContent = newPriority.charAt(0).toUpperCase() + newPriority.slice(1);
                     select.replaceWith(newBadge);
                     
@@ -165,8 +171,11 @@ class TaskInlineEditing {
                 } catch (error) {
                     console.error('Failed to update priority:', error);
                     
+                    // Rollback with all attributes
                     const restoredBadge = document.createElement('span');
                     restoredBadge.className = originalClassName;
+                    restoredBadge.dataset.taskId = originalDataTaskId;
+                    restoredBadge.title = originalTitle;
                     restoredBadge.innerHTML = originalHTML;
                     select.replaceWith(restoredBadge);
                     
@@ -175,16 +184,22 @@ class TaskInlineEditing {
                     }
                 }
             } else {
+                // No change - restore with all attributes
                 const newBadge = document.createElement('span');
                 newBadge.className = originalClassName;
+                newBadge.dataset.taskId = originalDataTaskId;
+                newBadge.title = originalTitle;
                 newBadge.innerHTML = originalHTML;
                 select.replaceWith(newBadge);
             }
         };
 
         const cancel = () => {
+            // Cancel - restore with all attributes
             const newBadge = document.createElement('span');
             newBadge.className = originalClassName;
+            newBadge.dataset.taskId = originalDataTaskId;
+            newBadge.title = originalTitle;
             newBadge.innerHTML = originalHTML;
             select.replaceWith(newBadge);
         };

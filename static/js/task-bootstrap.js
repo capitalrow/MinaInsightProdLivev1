@@ -423,6 +423,13 @@ class TaskBootstrap {
 
                 <!-- Task Metadata (Compact Inline) -->
                 <div class="task-metadata">
+                    <!-- Priority Badge (Inline Editable) -->
+                    <span class="priority-badge priority-${priority.toLowerCase()}" 
+                          data-task-id="${task.id}"
+                          title="Click to change priority (current: ${priority})">
+                        ${priority.charAt(0).toUpperCase() + priority.slice(1)}
+                    </span>
+
                     ${assigneeText ? `
                         <div class="task-assignee" 
                              data-task-id="${task.id}"
