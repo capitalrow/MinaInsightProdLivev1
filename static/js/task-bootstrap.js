@@ -10,6 +10,7 @@ class TaskBootstrap {
         this.initialized = false;
         this.syncInProgress = false;
         this.lastSyncTimestamp = null;
+        this.currentState = null; // 'loading', 'empty', 'tasks', 'error'
         this.perf = {
             cache_load_start: 0,
             cache_load_end: 0,
@@ -20,6 +21,84 @@ class TaskBootstrap {
     }
 
     /**
+     * Show loading state with skeleton loaders
+     */
+    showLoadingState() {
+        console.log('📊 Showing loading state');
+        this.hideAllStates();
+        const loadingState = document.getElementById('tasks-loading-state');
+        if (loadingState) {
+            loadingState.style.display = 'flex';
+            this.currentState = 'loading';
+        }
+    }
+
+    /**
+     * Show empty state when no tasks exist
+     */
+    showEmptyState() {
+        console.log('📭 Showing empty state');
+        this.hideAllStates();
+        const emptyState = document.getElementById('tasks-empty-state');
+        if (emptyState) {
+            emptyState.style.display = 'block';
+            this.currentState = 'empty';
+        }
+    }
+
+    /**
+     * Show error state with retry option
+     * @param {string} errorMessage - Optional custom error message
+     */
+    showErrorState(errorMessage) {
+        console.log('❌ Showing error state:', errorMessage);
+        this.hideAllStates();
+        const errorState = document.getElementById('tasks-error-state');
+        if (errorState) {
+            // Update error message if provided
+            if (errorMessage) {
+                const messageEl = errorState.querySelector('.error-state-message');
+                if (messageEl) {
+                    messageEl.textContent = errorMessage;
+                }
+            }
+            errorState.style.display = 'block';
+            this.currentState = 'error';
+        }
+    }
+
+    /**
+     * Show tasks list (hide all state overlays)
+     */
+    showTasksList() {
+        console.log('✅ Showing tasks list');
+        this.hideAllStates();
+        const tasksContainer = document.getElementById('tasks-list-container');
+        if (tasksContainer) {
+            tasksContainer.style.display = 'flex';
+            this.currentState = 'tasks';
+        }
+    }
+
+    /**
+     * Hide all state containers
+     */
+    hideAllStates() {
+        const states = [
+            'tasks-loading-state',
+            'tasks-empty-state',
+            'tasks-error-state'
+        ];
+        
+        states.forEach(stateId => {
+            const el = document.getElementById(stateId);
+            if (el) {
+                el.style.display = 'none';
+            }
+        });
+    }
+
+    /**
      * Bootstrap tasks page with cache-first loading
      * Target: <200ms first paint
      * @returns {Promise<Object>} Bootstrap results
@@ -27,6 +106,9 @@ class TaskBootstrap {
     async bootstrap() {
         console.log('🚀 Starting CROWN⁴.5 cache-first bootstrap...');
         this.perf.cache_load_start = performance.now();
+
+        // CROWN⁴.5: Show loading state immediately for perceived performance
+        this.showLoadingState();
 
         try {
             // Step 1: Load from cache immediately (target: <50ms)
@@ -312,41 +394,33 @@ class TaskBootstrap {
      */
     async renderTasks(tasks, options = {}) {
         const container = document.getElementById('tasks-list-container');
-        const emptyState = document.getElementById('tasks-empty-state');
         
         if (!container) {
             console.warn('⚠️ Tasks container not found, skipping render');
             return;
         }
 
-        // Show empty state or task list
+        // CROWN⁴.5: Determine state based on task count
         if (!tasks || tasks.length === 0) {
-            // SAFETY: Only clear if we have NO server-rendered content
+            // SAFETY: Only show empty state if we have NO server-rendered content
             const hasServerContent = container.querySelectorAll('.task-card').length > 0;
             
             if (!hasServerContent) {
-                if (emptyState) {
-                    emptyState.style.display = 'block';
-                    emptyState.classList.add('fade-in');
-                }
-                if (container) {
-                    container.innerHTML = '';
-                }
+                this.showEmptyState();
+                container.innerHTML = '';
             } else {
                 console.warn('⚠️ Keeping server-rendered content (fallback protection)');
             }
             return;
         }
 
-        // Hide empty state
-        if (emptyState) {
-            emptyState.style.display = 'none';
-        }
-
         // Render tasks with error protection
         try {
             const tasksHTML = tasks.map((task, index) => this.renderTaskCard(task, index)).join('');
             container.innerHTML = tasksHTML;
+            
+            // Show tasks list (hides all state overlays)
+            this.showTasksList();
         } catch (renderError) {
             console.error('❌ renderTaskCard failed:', renderError);
             // Keep existing content on render error
@@ -814,6 +888,10 @@ class TaskBootstrap {
                 credentials: 'same-origin'
             });
 
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
             const data = await response.json();
             const tasks = data.tasks || [];
 
@@ -827,10 +905,30 @@ class TaskBootstrap {
             };
         } catch (error) {
             console.error('❌ Fallback failed:', error);
+            
+            // CROWN⁴.5: Show error state on complete failure
+            this.showErrorState(error.message || 'Unable to load tasks from server. Please check your connection.');
+            
             return {
                 success: false,
                 error: error.message
             };
+        }
+    }
+
+    /**
+     * Retry bootstrap after error
+     * @returns {Promise<void>}
+     */
+    async retryBootstrap() {
+        console.log('🔄 Retrying bootstrap...');
+        this.showLoadingState();
+        
+        try {
+            await this.bootstrap();
+        } catch (error) {
+            console.error('❌ Retry failed:', error);
+            this.showErrorState('Retry failed. Please try again or clear your cache.');
         }
     }
 
