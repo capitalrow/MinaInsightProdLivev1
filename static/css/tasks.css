@@ -265,14 +265,28 @@
   color: #fde68a;
 }
 
-/* Assignees (CROWN⁴.5 Multi-Assignee) */
+/* ========================================
+ * ASSIGNEE BADGES
+ * ======================================== */
+
 .task-assignees {
-  background: rgba(147, 197, 253, 0.08);
-  border-color: rgba(147, 197, 253, 0.15);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(147, 197, 253, 0.1);
+  border: 1px solid rgba(147, 197, 253, 0.2);
   color: #93c5fd;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.task-assignees:hover {
+  background: rgba(147, 197, 253, 0.15);
+  border-color: rgba(147, 197, 253, 0.3);
 }
 
 .task-assignees svg {
@@ -286,6 +300,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 500;
 }
 
 .task-assignees .assignee-overflow {
@@ -294,16 +309,145 @@
   font-size: 0.9em;
 }
 
+/* Empty state - subtle, not dotted */
 .task-assignees-empty {
-  background: rgba(148, 163, 184, 0.05);
-  border-color: rgba(148, 163, 184, 0.1);
-  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  color: rgba(148, 163, 184, 0.6);
+  opacity: 0.7;
 }
 
 .task-assignees-empty:hover {
-  background: rgba(148, 163, 184, 0.1);
-  border-color: rgba(148, 163, 184, 0.2);
-  color: var(--color-text-secondary);
+  background: rgba(148, 163, 184, 0.05);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: rgba(148, 163, 184, 0.9);
+  opacity: 1;
+}
+
+/* ========================================
+ * DUE DATE BADGES
+ * ======================================== */
+
+.due-date-badge {
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: rgba(156, 163, 175, 0.1);
+  border: 1px solid rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+}
+
+.due-date-badge:hover {
+  background: rgba(156, 163, 175, 0.15);
+  border-color: rgba(156, 163, 175, 0.3);
+}
+
+.due-date-badge.overdue {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.due-date-badge.due-soon {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: #fde68a;
+}
+
+/* Empty state - hide by default, show on card hover */
+.due-date-add {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  color: rgba(148, 163, 184, 0.5);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.task-card:hover .due-date-add {
+  opacity: 0.7;
+}
+
+.due-date-add:hover {
+  background: rgba(148, 163, 184, 0.05);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: rgba(148, 163, 184, 0.9);
+  opacity: 1 !important;
+}
+
+/* ========================================
+ * LABELS
+ * ======================================== */
+
+.task-labels {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.task-label {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.task-labels-empty {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  color: rgba(148, 163, 184, 0.5);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  opacity: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.task-card:hover .task-labels-empty {
+  opacity: 0.7;
+}
+
+.task-labels-empty:hover {
+  background: rgba(148, 163, 184, 0.05);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: rgba(148, 163, 184, 0.9);
+  opacity: 1 !important;
+}
+
+/* ========================================
+ * MEETING SOURCE - Hide "Unknown meeting"
+ * ======================================== */
+
+.task-meeting-source {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: rgba(165, 180, 252, 0.9);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* Hide "Unknown meeting" completely */
+.task-meeting-source:has([data-meeting="unknown"]),
+.task-meeting-source[data-meeting="unknown"],
+.task-metadata .meeting-badge:empty,
+.task-metadata .meeting-badge:contains("Unknown") {
+  display: none !important;
 }
 
 /* CROWN⁴.5: Multi-Assignee Selector */
