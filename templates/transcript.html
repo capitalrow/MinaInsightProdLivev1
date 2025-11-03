@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Transcript Viewer – Mina{% endblock %}
+{% block extra_css %}
+<style>
+.transcript-workspace{width:clamp(960px,90vw,1440px);margin:0 auto;padding:var(--space-8)var(--space-6);}
+.transcript-header{margin-bottom:var(--space-6);animation:fadeInUp .6s ease-out;}
+.transcript-title{font-size:var(--font-size-4xl);font-weight:var(--font-weight-bold);
+background:var(--gradient-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+background-clip:text;margin-bottom:var(--space-2);}
+.transcript-search{display:flex;gap:var(--space-3);margin-bottom:var(--space-6);}
+.transcript-section{background:var(--glass-bg);backdrop-filter:var(--backdrop-blur);
+border:1px solid var(--glass-border);border-radius:var(--radius-xl);
+padding:var(--space-6);animation:fadeInUp .6s ease-out;}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--space-4);}
+.summary-card{background:var(--glass-bg);border:1px solid var(--glass-border);
+border-radius:var(--radius-lg);padding:var(--space-4);}
+.summary-card h3{font-size:1rem;font-weight:600;margin-bottom:.25rem;color:var(--color-primary);}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="transcript-workspace">
+  <div class="transcript-header">
+    <h1 class="transcript-title">Transcript Viewer</h1>
+    <div class="transcript-search">
+      <input type="text" placeholder="Search transcript…" class="input" style="flex:1;">
+      <button class="btn btn-outline">Search</button>
+      <button class="btn btn-outline">Copy</button>
+      <button class="btn btn-primary">Export</button>
+    </div>
+  </div>
+
+  <div class="transcript-section">
+    <p class="text-secondary mb-6">{{ transcript|default("No transcript loaded.") }}</p>
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <h3>Summary</h3>
+        <p>{{ summary|default("—") }}</p>
+      </div>
+      <div class="summary-card">
+        <h3>Actions</h3>
+        <ul>{% for a in actions or [] %}<li>{{ a }}</li>{% endfor %}</ul>
+      </div>
+      <div class="summary-card">
+        <h3>Decisions</h3>
+        <ul>{% for d in decisions or [] %}<li>{{ d }}</li>{% endfor %}</ul>
+      </div>
+      <div class="summary-card">
+        <h3>Risks</h3>
+        <ul>{% for r in risks or [] %}<li>{{ r }}</li>{% endfor %}</ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -13,6 +13,23 @@ def dashboard():
     except TemplateNotFound:
         abort(404)
 
+@ui_bp.route('/transcript')
+def transcript():
+    try:
+        sample_transcript = "This is a sample transcript. Say hi to Mina!"
+        return render_template(
+            'transcript.html',
+            title='Transcript Viewer',
+            session_id=1,
+            transcript=sample_transcript,
+            summary="Demo summary",
+            actions=["Follow up with client", "Prepare proposal"],
+            decisions=["Proceed with MVP"],
+            risks=["Tight deadline"]
+        )
+    except TemplateNotFound:
+        abort(404)
+
 @ui_bp.route('/admin/flags')
 def admin_flags():
     try:
