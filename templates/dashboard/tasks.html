@@ -2681,6 +2681,7 @@
 <script src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-inline-editing.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-actions-menu.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-bulk-operations.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-idle-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -2739,7 +2740,8 @@
                 if (window.taskCache && window.taskBootstrap && window.optimisticUI && 
                     window.offlineQueue && window.multiTabSync && window.idleSyncService && 
                     window.predictiveEngine && window.tasksWS && window.taskVirtualList && 
-                    window.taskShortcuts && window.TaskInlineEditing && window.TaskActionsMenu) {
+                    window.taskShortcuts && window.TaskInlineEditing && window.TaskActionsMenu &&
+                    window.TaskBulkOperations) {
                     resolve();
                 } else {
                     setTimeout(check, 50);
@@ -2761,6 +2763,9 @@
     
     window.taskActionsMenu = new window.TaskActionsMenu(window.optimisticUI);
     console.log('🎯 Task actions menu initialized');
+    
+    window.taskBulkOperations = new window.TaskBulkOperations(window.optimisticUI);
+    console.log('☑️ Bulk operations initialized');
     
     window.taskProposalUI = new window.TaskProposalUI(window.optimisticUI);
     console.log('✨ AI proposal UI initialized');
