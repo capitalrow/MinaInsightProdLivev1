@@ -89,6 +89,11 @@ class Task(Base):
     is_collaborative: Mapped[bool] = mapped_column(Boolean, default=False)
     watchers: Mapped[Optional[list]] = mapped_column(JSON)  # User IDs watching this task
     
+    # CROWN⁴.5 Phase 1: Soft delete fields
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deleted_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    deleted_by: Mapped[Optional["User"]] = relationship(foreign_keys=[deleted_by_user_id])
+    
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -106,6 +111,8 @@ class Task(Base):
         Index('ix_tasks_reconciliation', 'reconciliation_status'),
         # CROWN⁴.5: Index for source filtering
         Index('ix_tasks_source', 'source'),
+        # CROWN⁴.5 Phase 1: Index for soft delete filtering
+        Index('ix_tasks_deleted_at', 'deleted_at'),
     )
 
     def __repr__(self):
@@ -224,6 +231,8 @@ class Task(Base):
             'reconciliation_status': self.reconciliation_status,
             'transcript_span': self.transcript_span,
             'emotional_state': self.emotional_state,
+            'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None,
+            'deleted_by_user_id': self.deleted_by_user_id,
         }
         
         if include_relationships:
