@@ -36,6 +36,7 @@ from models.task_view_state import TaskViewState
 from models.task_counters import TaskCounters
 from models.event_ledger import EventLedger, EventType, EventStatus
 from services.event_sequencer import event_sequencer
+from services.cache_validator import cache_validator
 from services.deduper import deduper
 from services.prefetch_controller import prefetch_controller
 from services.quiet_state_manager import quiet_state_manager, AnimationPriority
@@ -78,6 +79,63 @@ class TaskEventHandler:
             'errors': 0,
             'conflicts_resolved': 0
         }
+    
+    def _enhance_response_with_crown_metadata(
+        self,
+        response: Dict[str, Any],
+        user_id: int,
+        event_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Enhance event response with CROWN⁴.5 metadata (event_id, checksum).
+        
+        Args:
+            response: Original event response
+            user_id: User ID
+            event_id: Event ID from sequencer (optional, will be included if provided)
+            
+        Returns:
+            Enhanced response with event_id (if provided) and checksum
+        """
+        try:
+            # Compute checksum of affected data
+            # For tasks: checksum includes all tasks + counters for this user
+            tasks = list(db.session.scalars(
+                select(Task).where(Task.created_by_id == user_id)
+            ).all())
+            
+            counters = db.session.scalar(
+                select(TaskCounters).where(TaskCounters.user_id == user_id)
+            )
+            
+            # Convert to list of dicts for checksum computation
+            task_dicts = [t.to_dict() for t in tasks]
+            
+            # Compute checksum on tasks list
+            checksum = cache_validator.compute_cache_checksum(
+                task_dicts,
+                id_field='id'
+            )
+            
+            # Enhance response with CROWN⁴.5 metadata
+            if event_id is not None:
+                response['event_id'] = event_id
+            response['checksum'] = checksum
+            response['timestamp'] = datetime.utcnow().isoformat()
+            
+            # Include counter data for frontend validation
+            if counters:
+                response['counters_checksum'] = cache_validator.compute_cache_checksum(
+                    [counters.to_dict()],
+                    id_field='user_id'
+                )
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Failed to enhance response with CROWN metadata: {e}", exc_info=True)
+            # Return original response if enhancement fails (graceful degradation)
+            return response
     
     @staticmethod
     def validate_task_id(task_id: Any) -> Dict[str, Any]:
