@@ -7,7 +7,7 @@ This is the critical bridge that fixes the broken data pipeline.
 import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
-from sqlalchemy import select
+from sqlalchemy import select, update
 from models import db
 from models.session import Session
 from models.meeting import Meeting
@@ -96,6 +96,16 @@ class MeetingLifecycleService:
             
             # Link session to meeting
             session.meeting_id = meeting.id
+            
+            # 🔒 CROWN¹⁰ Fix: Backfill meeting_id on existing tasks
+            # Tasks created during post-processing have session_id but no meeting_id
+            # Update them now that the meeting exists
+            task_update_count = db.session.execute(
+                update(Task).where(Task.session_id == session_id).values(meeting_id=meeting.id)
+            ).rowcount
+            
+            if task_update_count > 0:
+                logger.info(f"✅ Updated {task_update_count} tasks with meeting_id={meeting.id}")
             
             # Create basic Analytics record
             analytics = Analytics(
