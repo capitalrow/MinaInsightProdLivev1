@@ -7,7 +7,10 @@ class TaskInlineEditing {
 
     init() {
         document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('priority-badge')) {
+            // Task title inline editing
+            if (e.target.classList.contains('task-title') && !e.target.classList.contains('completed')) {
+                this.editTitle(e.target);
+            } else if (e.target.classList.contains('priority-badge')) {
                 this.editPriority(e.target);
             } else if (e.target.classList.contains('due-date-badge')) {
                 this.editDueDate(e.target);
@@ -15,6 +18,109 @@ class TaskInlineEditing {
                 this.editAssignee(e.target);
             }
         });
+    }
+
+    /**
+     * Inline editing for task title using contenteditable
+     * @param {HTMLElement} titleElement - The task title div
+     */
+    editTitle(titleElement) {
+        // Prevent multiple edit sessions
+        if (titleElement.hasAttribute('contenteditable')) {
+            return;
+        }
+
+        const card = titleElement.closest('[data-task-id]');
+        if (!card) return;
+
+        const taskId = card.dataset.taskId;
+        const originalText = titleElement.textContent.trim();
+
+        // Enable contenteditable
+        titleElement.setAttribute('contenteditable', 'true');
+        titleElement.classList.add('editing');
+        titleElement.focus();
+
+        // Select all text
+        const range = document.createRange();
+        range.selectNodeContents(titleElement);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        const save = async () => {
+            const newText = titleElement.textContent.trim();
+
+            // Remove listeners
+            titleElement.removeEventListener('blur', save);
+            titleElement.removeEventListener('keydown', handleKeydown);
+
+            // Remove contenteditable
+            titleElement.removeAttribute('contenteditable');
+            titleElement.classList.remove('editing');
+
+            // If text changed, update task
+            if (newText && newText !== originalText) {
+                try {
+                    // Show saving state
+                    titleElement.classList.add('saving');
+
+                    // Update task via optimistic UI
+                    await this.taskUI.updateTask(taskId, { title: newText });
+
+                    // Show saved state briefly
+                    titleElement.classList.remove('saving');
+                    titleElement.classList.add('saved');
+                    setTimeout(() => {
+                        titleElement.classList.remove('saved');
+                    }, 2000);
+
+                    if (window.CROWNTelemetry) {
+                        window.CROWNTelemetry.recordMetric('inline_edit_success', 1, { field: 'title' });
+                    }
+                } catch (error) {
+                    console.error('Failed to update title:', error);
+
+                    // Rollback to original text
+                    titleElement.textContent = originalText;
+                    titleElement.classList.remove('saving');
+
+                    if (window.CROWNTelemetry) {
+                        window.CROWNTelemetry.recordMetric('inline_edit_failure', 1, { field: 'title' });
+                    }
+                }
+            } else if (!newText) {
+                // Don't allow empty titles
+                titleElement.textContent = originalText;
+            }
+        };
+
+        const cancel = () => {
+            // Remove listeners
+            titleElement.removeEventListener('blur', save);
+            titleElement.removeEventListener('keydown', handleKeydown);
+
+            titleElement.textContent = originalText;
+            titleElement.removeAttribute('contenteditable');
+            titleElement.classList.remove('editing');
+        };
+
+        // Handle keyboard shortcuts - persistent listener
+        const handleKeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                titleElement.blur(); // Triggers save
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancel();
+            }
+        };
+
+        // Save on blur
+        titleElement.addEventListener('blur', save);
+
+        // Handle keyboard shortcuts
+        titleElement.addEventListener('keydown', handleKeydown);
     }
 
     editPriority(badge) {
