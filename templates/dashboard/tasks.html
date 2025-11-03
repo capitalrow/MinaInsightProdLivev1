@@ -2035,7 +2035,7 @@
 })();
 </script>
 
-<!-- CROWN⁴.5 Frontend Modules (crown-telemetry loaded in base.html) -->
+<!-- CROWN⁴.5 Frontend Modules (crown-telemetry and websocket-manager loaded in base.html) -->
 <script src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -2077,6 +2077,15 @@
         window.CROWNTelemetry = window.crownTelemetry;
     } else {
         console.warn('⚠️ CROWNTelemetry class not found');
+    }
+    
+    // Initialize WebSocket Manager with workspace and tasks namespace
+    if (window.wsManager) {
+        const workspaceId = window.WORKSPACE_ID || 1;
+        window.wsManager.init(workspaceId, ['tasks']);
+        console.log('🔌 WebSocket Manager initialized for workspace', workspaceId);
+    } else {
+        console.warn('⚠️ WebSocket Manager not found');
     }
     
     // Wait for all modules to load
