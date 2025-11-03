@@ -475,6 +475,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
+    margin-left: auto;
 }
 
 .task-action-btn {
@@ -494,6 +495,122 @@
     background: rgba(99, 102, 241, 0.1);
     color: var(--color-primary);
     transform: scale(1.1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Task Menu (Three-Dot Overflow Menu)
+   Premium glassmorphic dropdown with calm luxury aesthetic
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.task-menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.task-menu-trigger:hover {
+    background: rgba(99, 102, 241, 0.08);
+    color: var(--color-text-primary);
+    transform: scale(1.05);
+}
+
+.task-menu-trigger:active {
+    transform: scale(0.98);
+}
+
+.task-menu-trigger[aria-expanded="true"] {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-primary);
+}
+
+.task-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    min-width: 200px;
+    background: rgba(20, 22, 35, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: var(--radius-lg);
+    backdrop-filter: blur(16px) saturate(160%);
+    box-shadow: 
+        0 4px 24px rgba(0, 0, 0, 0.4),
+        inset 0 1px 1px rgba(255, 255, 255, 0.08);
+    padding: 4px;
+    z-index: 1000;
+    opacity: 0;
+    transform: scale(0.98) translateY(-4px);
+    transition: opacity 120ms ease, transform 160ms cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+.task-menu[data-state="open"] {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    pointer-events: auto;
+}
+
+.task-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: left;
+    width: 100%;
+}
+
+.task-menu-item:hover {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-primary);
+}
+
+.task-menu-item svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.task-menu-item:hover svg {
+    opacity: 1;
+}
+
+.task-menu-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 4px 8px;
+}
+
+.task-menu-item.destructive {
+    color: #ef4444;
+}
+
+.task-menu-item.destructive:hover {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+}
+
+.task-menu-item:focus {
+    outline: none;
+    background: rgba(99, 102, 241, 0.12);
 }
 
 .jump-to-transcript svg {
@@ -1492,19 +1609,22 @@
                     </div>
                 </div>
                 <div class="task-actions">
-                    {% if task.transcript_span and task.session_id %}
-                    <button class="task-action-btn jump-to-transcript" 
-                            data-session-id="{{ task.session_id }}"
-                            data-transcript-span="{{ task.transcript_span|tojson|escape }}"
-                            title="View in transcript">
-                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M9 5v2h6.59L4 18.59 5.41 20 17 8.41V15h2V5z"/>
-                        </svg>
-                    </button>
-                    {% endif %}
                     <span class="priority-badge priority-{{ task.priority|default('medium')|lower }}">
                         {{ task.priority|default('medium') }}
                     </span>
+                    <button class="task-menu-trigger" 
+                            data-task-id="{{ task.id }}"
+                            role="button"
+                            aria-haspopup="menu"
+                            aria-expanded="false"
+                            aria-label="Task actions menu"
+                            title="More actions">
+                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="5" r="2"/>
+                            <circle cx="12" cy="12" r="2"/>
+                            <circle cx="12" cy="19" r="2"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
             {% endfor %}
@@ -1623,6 +1743,74 @@
             </div>
         </form>
     </div>
+</div>
+
+<!-- Reusable Task Menu (Glassmorphic Dropdown) -->
+<div id="task-menu" class="task-menu" role="menu" data-state="closed">
+    <button class="task-menu-item" data-action="edit" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        <span>Edit title</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="toggle-status" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span>Mark complete</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="priority" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+        </svg>
+        <span>Change priority</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="due-date" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span>Set due date</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="assign" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+        <span>Assign to...</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="labels" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+        </svg>
+        <span>Edit labels</span>
+    </button>
+    
+    <button class="task-menu-item" data-action="jump-to-transcript" role="menuitem" style="display: none;">
+        <svg fill="currentColor" viewBox="0 0 24 24">
+            <path d="M9 5v2h6.59L4 18.59 5.41 20 17 8.41V15h2V5z"/>
+        </svg>
+        <span>Jump to transcript</span>
+    </button>
+    
+    <div class="task-menu-divider"></div>
+    
+    <button class="task-menu-item" data-action="archive" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+        </svg>
+        <span>Archive</span>
+    </button>
+    
+    <button class="task-menu-item destructive" data-action="delete" role="menuitem">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+        <span>Delete</span>
+    </button>
 </div>
 
 <!-- Snooze Duration Picker Modal -->
@@ -2037,13 +2225,280 @@
         return div.innerHTML;
     }
     
+    // ═══════════════════════════════════════════════════════════════════════
+    // Task Menu Controller (Three-Dot Overflow Menu)
+    // Premium glassmorphic dropdown with CROWN⁴.5 optimistic UI integration
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    class TaskMenuController {
+        constructor() {
+            this.menu = document.getElementById('task-menu');
+            this.currentTaskId = null;
+            this.currentTrigger = null;
+            this.isOpen = false;
+            
+            this._setupEventListeners();
+        }
+        
+        _setupEventListeners() {
+            // Event delegation for menu triggers
+            document.addEventListener('click', (e) => {
+                const trigger = e.target.closest('.task-menu-trigger');
+                if (trigger) {
+                    e.stopPropagation();
+                    this.toggle(trigger);
+                    return;
+                }
+                
+                // Close menu if clicking outside
+                if (this.isOpen && !e.target.closest('.task-menu')) {
+                    this.close();
+                }
+            });
+            
+            // Menu item clicks
+            this.menu.addEventListener('click', async (e) => {
+                const item = e.target.closest('.task-menu-item');
+                if (!item) return;
+                
+                const action = item.dataset.action;
+                await this.handleAction(action);
+                this.close();
+            });
+            
+            // Keyboard navigation
+            document.addEventListener('keydown', (e) => {
+                if (!this.isOpen) return;
+                
+                if (e.key === 'Escape') {
+                    this.close();
+                    this.currentTrigger?.focus();
+                } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    this._navigateMenu(e.key === 'ArrowDown' ? 1 : -1);
+                } else if (e.key === 'Enter' && document.activeElement.classList.contains('task-menu-item')) {
+                    e.preventDefault();
+                    document.activeElement.click();
+                }
+            });
+        }
+        
+        toggle(trigger) {
+            if (this.isOpen && this.currentTrigger === trigger) {
+                this.close();
+            } else {
+                this.open(trigger);
+            }
+        }
+        
+        async open(trigger) {
+            const taskId = trigger.dataset.taskId;
+            if (!taskId) return;
+            
+            this.currentTaskId = taskId;
+            this.currentTrigger = trigger;
+            
+            // Get task data to customize menu
+            const task = await window.taskCache?.getTask(taskId);
+            if (!task) return;
+            
+            // Position menu near trigger
+            const rect = trigger.getBoundingClientRect();
+            const taskCard = trigger.closest('.task-card');
+            
+            // Append menu to task card for proper positioning
+            if (taskCard) {
+                taskCard.style.position = 'relative';
+                taskCard.appendChild(this.menu);
+            }
+            
+            // Update menu items based on task state
+            const toggleStatusItem = this.menu.querySelector('[data-action="toggle-status"]');
+            if (toggleStatusItem) {
+                const isCompleted = task.status === 'completed';
+                toggleStatusItem.querySelector('span').textContent = isCompleted ? 'Mark incomplete' : 'Mark complete';
+            }
+            
+            // Show/hide "Jump to transcript" based on transcript availability
+            const jumpItem = this.menu.querySelector('[data-action="jump-to-transcript"]');
+            if (jumpItem) {
+                jumpItem.style.display = task.transcript_span && task.session_id ? 'flex' : 'none';
+            }
+            
+            // Open menu with animation
+            this.menu.dataset.state = 'open';
+            this.isOpen = true;
+            trigger.setAttribute('aria-expanded', 'true');
+            
+            // Focus first menu item
+            requestAnimationFrame(() => {
+                const firstItem = this.menu.querySelector('.task-menu-item:not([style*="display: none"])');
+                firstItem?.focus();
+            });
+            
+            // Dispatch event for CROWN⁴.5 tracking
+            window.dispatchEvent(new CustomEvent('menu:open', {
+                detail: { taskId, trigger }
+            }));
+        }
+        
+        close() {
+            if (!this.isOpen) return;
+            
+            this.menu.dataset.state = 'closed';
+            this.isOpen = false;
+            
+            if (this.currentTrigger) {
+                this.currentTrigger.setAttribute('aria-expanded', 'false');
+            }
+            
+            // Move menu back to body after animation
+            setTimeout(() => {
+                document.body.appendChild(this.menu);
+            }, 200);
+            
+            // Dispatch event for CROWN⁴.5 tracking
+            window.dispatchEvent(new CustomEvent('menu:close', {
+                detail: { taskId: this.currentTaskId }
+            }));
+            
+            this.currentTaskId = null;
+            this.currentTrigger = null;
+        }
+        
+        _navigateMenu(direction) {
+            const items = Array.from(this.menu.querySelectorAll('.task-menu-item:not([style*="display: none"])'));
+            const currentIndex = items.indexOf(document.activeElement);
+            
+            let nextIndex = currentIndex + direction;
+            if (nextIndex < 0) nextIndex = items.length - 1;
+            if (nextIndex >= items.length) nextIndex = 0;
+            
+            items[nextIndex]?.focus();
+        }
+        
+        async handleAction(action) {
+            if (!this.currentTaskId || !window.optimisticUI) return;
+            
+            const taskId = this.currentTaskId;
+            
+            switch (action) {
+                case 'edit':
+                    await this._handleEdit(taskId);
+                    break;
+                case 'toggle-status':
+                    await window.optimisticUI.toggleTaskStatus(taskId);
+                    break;
+                case 'priority':
+                    await this._handlePriority(taskId);
+                    break;
+                case 'due-date':
+                    await this._handleDueDate(taskId);
+                    break;
+                case 'assign':
+                    await this._handleAssign(taskId);
+                    break;
+                case 'labels':
+                    await this._handleLabels(taskId);
+                    break;
+                case 'jump-to-transcript':
+                    await this._handleJumpToTranscript(taskId);
+                    break;
+                case 'archive':
+                    await this._handleArchive(taskId);
+                    break;
+                case 'delete':
+                    await this._handleDelete(taskId);
+                    break;
+            }
+        }
+        
+        async _handleEdit(taskId) {
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const titleEl = taskCard?.querySelector('.task-title');
+            if (!titleEl) return;
+            
+            const currentTitle = titleEl.textContent;
+            const newTitle = prompt('Edit task title:', currentTitle);
+            
+            if (newTitle && newTitle !== currentTitle) {
+                await window.optimisticUI.updateTask(taskId, { title: newTitle });
+            }
+        }
+        
+        async _handlePriority(taskId) {
+            const priorities = ['low', 'medium', 'high', 'urgent'];
+            const task = await window.taskCache?.getTask(taskId);
+            const currentPriority = task?.priority || 'medium';
+            
+            const newPriority = prompt(`Change priority (${priorities.join(', ')}):`, currentPriority);
+            
+            if (newPriority && priorities.includes(newPriority.toLowerCase())) {
+                await window.optimisticUI.updateTask(taskId, { priority: newPriority.toLowerCase() });
+            }
+        }
+        
+        async _handleDueDate(taskId) {
+            const newDate = prompt('Set due date (YYYY-MM-DD):');
+            if (newDate) {
+                await window.optimisticUI.updateTask(taskId, { due_date: newDate });
+            }
+        }
+        
+        async _handleAssign(taskId) {
+            const assignee = prompt('Assign to (username or email):');
+            if (assignee) {
+                await window.optimisticUI.updateTask(taskId, { assigned_to: assignee });
+            }
+        }
+        
+        async _handleLabels(taskId) {
+            const labels = prompt('Add labels (comma-separated):');
+            if (labels) {
+                const labelArray = labels.split(',').map(l => l.trim()).filter(Boolean);
+                await window.optimisticUI.updateTask(taskId, { labels: labelArray });
+            }
+        }
+        
+        async _handleJumpToTranscript(taskId) {
+            const task = await window.taskCache?.getTask(taskId);
+            if (task?.session_id && task?.transcript_span) {
+                window.location.href = `/sessions/${task.session_id}/refined?span=${encodeURIComponent(JSON.stringify(task.transcript_span))}`;
+            }
+        }
+        
+        async _handleArchive(taskId) {
+            if (confirm('Archive this task?')) {
+                await window.optimisticUI.updateTask(taskId, { archived_at: new Date().toISOString() });
+                if (window.showToast) {
+                    window.showToast('Task archived', 'success');
+                }
+            }
+        }
+        
+        async _handleDelete(taskId) {
+            const task = await window.taskCache?.getTask(taskId);
+            if (confirm(`Delete task: "${task?.title || task?.description}"?`)) {
+                await window.optimisticUI.deleteTask(taskId);
+                if (window.showToast) {
+                    window.showToast('Task deleted', 'success');
+                }
+            }
+        }
+    }
+    
+    // Initialize menu controller
+    let taskMenuController;
+    
     // Initialize on DOM ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
+            taskMenuController = new TaskMenuController();
             initTasksWebSocket();
             setupFilterTabs();
         });
     } else {
+        taskMenuController = new TaskMenuController();
         initTasksWebSocket();
         setupFilterTabs();
     }
