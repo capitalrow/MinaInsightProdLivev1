@@ -843,15 +843,19 @@ def bulk_delete_tasks():
         # Fetch all tasks and verify ownership
         tasks = db.session.query(Task).join(Meeting).filter(
             Task.id.in_(task_ids),
-            Meeting.workspace_id == current_user.workspace_id
+            Meeting.workspace_id == current_user.workspace_id,
+            Task.deleted_at.is_(None)  # Only non-deleted tasks
         ).all()
         
         if len(tasks) != len(task_ids):
-            return jsonify({'success': False, 'message': 'Some tasks not found'}), 404
+            return jsonify({'success': False, 'message': 'Some tasks not found or already deleted'}), 404
         
-        # Delete all tasks
+        # CROWN⁴.5: Soft delete all tasks (consistent with single delete)
+        deleted_timestamp = datetime.now()
         for task in tasks:
-            db.session.delete(task)
+            task.deleted_at = deleted_timestamp
+            task.deleted_by_user_id = current_user.id
+            task.updated_at = deleted_timestamp
         
         db.session.commit()
         
@@ -862,7 +866,8 @@ def bulk_delete_tasks():
                 'event_type': 'task_multiselect:bulk',
                 'action': 'bulk_delete',
                 'task_ids': task_ids,
-                'count': len(task_ids)
+                'count': len(task_ids),
+                'undo_window_seconds': 15  # CROWN⁴.5: 15-second undo window
             },
             meeting_id=None,
             workspace_id=current_user.workspace_id,
@@ -871,8 +876,9 @@ def bulk_delete_tasks():
         
         return jsonify({
             'success': True,
-            'message': f'{len(tasks)} tasks deleted',
-            'count': len(tasks)
+            'message': f'{len(tasks)} tasks deleted (15s undo window)',
+            'count': len(tasks),
+            'undo_window_seconds': 15
         })
         
     except Exception as e:
