@@ -227,10 +227,14 @@ class TaskInlineEditing {
             input.value = existingDate.split('T')[0];
         }
 
+        // Save all original attributes for restoration
         const originalHTML = badge.innerHTML;
         const originalIsoDate = badge.dataset.isoDate;
         const originalClassName = badge.className;
+        const originalTitle = badge.title || 'Click to change due date';
+        const originalDataTaskId = badge.dataset.taskId || taskId;
         const isAddMode = badge.classList.contains('due-date-add');
+        
         badge.replaceWith(input);
         input.focus();
 
@@ -239,24 +243,37 @@ class TaskInlineEditing {
             
             try {
                 if (newDate) {
+                    // Set due date
                     const isoDate = new Date(newDate).toISOString();
                     await this.taskUI.updateTask(taskId, { due_date: isoDate });
                     
+                    // Calculate overdue/due-soon status
+                    const isOverdue = this.isDueDateOverdue(isoDate);
+                    const isDueSoon = !isOverdue && this.isDueDateWithin(isoDate, 1); // 1 day
+                    
                     const newBadge = document.createElement('span');
-                    newBadge.className = 'due-date-badge';
+                    newBadge.className = `due-date-badge${isOverdue ? ' overdue' : ''}${isDueSoon ? ' due-soon' : ''}`;
                     newBadge.dataset.isoDate = isoDate;
-                    newBadge.textContent = window.taskVirtualList?._formatDueDate(isoDate) || this.formatDueDate(newDate);
+                    newBadge.dataset.taskId = originalDataTaskId;
+                    newBadge.title = 'Click to change due date';
+                    newBadge.textContent = window.taskVirtualList?._formatDueDate(isoDate) || this.formatDueDate(isoDate);
                     input.replaceWith(newBadge);
                 } else if (existingDate) {
+                    // Clear due date
                     await this.taskUI.updateTask(taskId, { due_date: null });
                     
                     const addBadge = document.createElement('span');
                     addBadge.className = 'due-date-badge due-date-add';
+                    addBadge.dataset.taskId = originalDataTaskId;
+                    addBadge.title = 'Click to set due date';
                     addBadge.textContent = '+ Add due date';
                     input.replaceWith(addBadge);
                 } else {
+                    // No change (was already empty)
                     const addBadge = document.createElement('span');
                     addBadge.className = 'due-date-badge due-date-add';
+                    addBadge.dataset.taskId = originalDataTaskId;
+                    addBadge.title = 'Click to set due date';
                     addBadge.textContent = '+ Add due date';
                     input.replaceWith(addBadge);
                 }
@@ -267,8 +284,11 @@ class TaskInlineEditing {
             } catch (error) {
                 console.error('Failed to update due date:', error);
                 
+                // Rollback with all attributes
                 const restoredBadge = document.createElement('span');
                 restoredBadge.className = originalClassName;
+                restoredBadge.dataset.taskId = originalDataTaskId;
+                restoredBadge.title = originalTitle;
                 if (originalIsoDate) {
                     restoredBadge.dataset.isoDate = originalIsoDate;
                 }
@@ -282,8 +302,11 @@ class TaskInlineEditing {
         };
 
         const cancel = () => {
+            // Cancel - restore with all attributes
             const restoredBadge = document.createElement('span');
             restoredBadge.className = originalClassName;
+            restoredBadge.dataset.taskId = originalDataTaskId;
+            restoredBadge.title = originalTitle;
             if (originalIsoDate) {
                 restoredBadge.dataset.isoDate = originalIsoDate;
             }
@@ -434,6 +457,35 @@ class TaskInlineEditing {
         } else {
             return `Due ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
         }
+    }
+
+    /**
+     * Check if due date is overdue (in the past)
+     * @param {string} dueDateStr - ISO date string
+     * @returns {boolean}
+     */
+    isDueDateOverdue(dueDateStr) {
+        if (!dueDateStr) return false;
+        const dueDate = new Date(dueDateStr);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0); // Start of today
+        return dueDate < now;
+    }
+
+    /**
+     * Check if due date is within specified days
+     * @param {string} dueDateStr - ISO date string
+     * @param {number} days - Number of days to check
+     * @returns {boolean}
+     */
+    isDueDateWithin(dueDateStr, days) {
+        if (!dueDateStr) return false;
+        const dueDate = new Date(dueDateStr);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const targetDate = new Date(now);
+        targetDate.setDate(now.getDate() + days);
+        return dueDate >= now && dueDate <= targetDate;
     }
 }
 
