@@ -288,3 +288,139 @@ class CacheValidator:
                    f"{results['stale_in_cache']} stale")
         
         return results
+    
+    # =========================================================================
+    # CROWN⁴.5: Automatic Silent Reconciliation
+    # =========================================================================
+    
+    @staticmethod
+    def auto_reconcile_batch(
+        cached_items: List[Dict[str, Any]], 
+        server_items: List[Dict[str, Any]],
+        id_field: str = 'id',
+        strategy: str = 'server_wins'
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """
+        Automatically reconcile cache drift and return reconciled items (CROWN⁴.5).
+        
+        This is the silent reconciliation method called during bootstrap and idle sync.
+        Guarantees cache matches server truth.
+        
+        Args:
+            cached_items: List of items from IndexedDB
+            server_items: List of items from server
+            id_field: Field to use for matching items
+            strategy: Reconciliation strategy (default: 'server_wins')
+            
+        Returns:
+            Tuple of (reconciled_items, reconciliation_stats)
+            - reconciled_items: List of items after reconciliation
+            - reconciliation_stats: Dictionary with reconciliation metrics
+        """
+        # Run validation to detect drift
+        validation_results = CacheValidator.validate_cache_batch(
+            cached_items, server_items, id_field
+        )
+        
+        # Build reconciled dataset
+        reconciled_items = []
+        
+        # Start with server items (server_wins strategy ensures server truth)
+        server_map = {item[id_field]: item for item in server_items if id_field in item}
+        reconciled_items = list(server_map.values())
+        
+        # Track reconciliation actions
+        stats = {
+            'total_items': len(reconciled_items),
+            'items_added': validation_results['missing_from_cache'],
+            'items_updated': validation_results['drifted_items'],
+            'items_removed': validation_results['stale_in_cache'],
+            'cache_hit_rate': (validation_results['valid_items'] / max(len(cached_items), 1)) * 100,
+            'drift_detected': validation_results['drifted_items'] > 0,
+            'reconciliation_strategy': strategy,
+            'reconciled_at': datetime.utcnow().isoformat()
+        }
+        
+        # Log reconciliation summary
+        if stats['drift_detected']:
+            logger.info(
+                f"🔄 Cache reconciliation completed: "
+                f"+{stats['items_added']} added, "
+                f"~{stats['items_updated']} updated, "
+                f"-{stats['items_removed']} removed, "
+                f"cache_hit_rate={stats['cache_hit_rate']:.1f}%"
+            )
+        else:
+            logger.debug(
+                f"✅ Cache validated: no drift detected, "
+                f"cache_hit_rate={stats['cache_hit_rate']:.1f}%"
+            )
+        
+        return reconciled_items, stats
+    
+    @staticmethod
+    def compute_cache_checksum(items: List[Dict[str, Any]], id_field: str = 'id') -> str:
+        """
+        Compute aggregate checksum for entire cache dataset (CROWN⁴.5).
+        
+        Used for fast drift detection: if aggregate checksum matches,
+        no individual item validation needed.
+        
+        Args:
+            items: List of cache items
+            id_field: Field to use for stable ordering
+            
+        Returns:
+            SHA-256 checksum of entire dataset
+        """
+        # Sort items by ID for stable ordering
+        sorted_items = sorted(items, key=lambda x: x.get(id_field, 0))
+        
+        # Generate checksum for each item
+        item_checksums = []
+        for item in sorted_items:
+            checksum = CacheValidator.generate_checksum(item)
+            item_checksums.append(checksum)
+        
+        # Compute aggregate checksum
+        aggregate_data = ''.join(item_checksums)
+        aggregate_checksum = hashlib.sha256(aggregate_data.encode('utf-8')).hexdigest()
+        
+        return aggregate_checksum
+    
+    @staticmethod
+    def validate_aggregate_checksum(
+        cached_items: List[Dict[str, Any]], 
+        server_checksum: str,
+        id_field: str = 'id'
+    ) -> bool:
+        """
+        Fast drift detection using aggregate checksum (CROWN⁴.5).
+        
+        If checksums match, skip individual item validation.
+        If mismatch, perform full batch validation.
+        
+        Args:
+            cached_items: List of items from IndexedDB
+            server_checksum: Aggregate checksum from server
+            id_field: Field to use for stable ordering
+            
+        Returns:
+            True if cache matches server (no drift), False otherwise
+        """
+        cached_checksum = CacheValidator.compute_cache_checksum(cached_items, id_field)
+        matches = cached_checksum == server_checksum
+        
+        if matches:
+            logger.debug("✅ Aggregate checksum matches - cache is valid")
+        else:
+            logger.warning(
+                f"⚠️ Aggregate checksum mismatch - cache drift detected. "
+                f"cached={cached_checksum[:8]}..., server={server_checksum[:8]}..."
+            )
+        
+        return matches
+
+
+# Singleton instance
+cache_validator = CacheValidator()
