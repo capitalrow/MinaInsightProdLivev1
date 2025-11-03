@@ -1731,39 +1731,74 @@ def stream_ai_task_proposals():
         custom_context = data.get('context', '')
         max_proposals = data.get('max_proposals', 3)
         
-        if not meeting_id:
-            return jsonify({'success': False, 'message': 'Meeting ID required'}), 400
-        
-        # Verify meeting access
-        meeting = db.session.query(Meeting).filter_by(
-            id=meeting_id,
-            workspace_id=current_user.workspace_id
-        ).first()
-        
-        if not meeting:
-            return jsonify({'success': False, 'message': 'Meeting not found'}), 404
+        # Meeting ID is now optional - use workspace context if not provided
+        meeting = None
+        if meeting_id:
+            # Verify meeting access
+            meeting = db.session.query(Meeting).filter_by(
+                id=meeting_id,
+                workspace_id=current_user.workspace_id
+            ).first()
+            
+            if not meeting:
+                return jsonify({'success': False, 'message': 'Meeting not found'}), 404
         
         def generate_proposals():
             """Generator function for SSE streaming."""
             try:
-                # Get meeting context (summary, transcript snippets)
-                context_parts = [f"Meeting: {meeting.title}"]
+                # Build context from meeting OR workspace
+                context_parts = []
                 
-                if meeting.summary:
-                    context_parts.append(f"Summary: {meeting.summary[:500]}")
+                if meeting:
+                    # Single meeting context
+                    context_parts.append(f"Meeting: {meeting.title}")
+                    
+                    # Try to get summary from session
+                    if meeting.session and hasattr(meeting.session, 'summary'):
+                        context_parts.append(f"Summary: {meeting.session.summary[:500]}")
+                    elif meeting.description:
+                        context_parts.append(f"Description: {meeting.description[:300]}")
+                else:
+                    # Workspace-wide context - use recent meetings
+                    recent_meetings = db.session.query(Meeting).filter_by(
+                        workspace_id=current_user.workspace_id
+                    ).order_by(Meeting.created_at.desc()).limit(3).all()
+                    
+                    if recent_meetings:
+                        meeting_summaries = []
+                        for m in recent_meetings:
+                            summary_text = None
+                            if m.session and hasattr(m.session, 'summary'):
+                                summary_text = m.session.summary[:200]
+                            elif m.description:
+                                summary_text = m.description[:200]
+                            
+                            if summary_text:
+                                meeting_summaries.append(f"- {m.title}: {summary_text}")
+                        
+                        if meeting_summaries:
+                            context_parts.append("Recent meetings:\n" + "\n".join(meeting_summaries))
                 
                 if custom_context:
                     context_parts.append(f"Additional context: {custom_context}")
                 
                 # Get existing tasks to avoid duplicates
-                existing_tasks = db.session.query(Task).filter_by(
-                    meeting_id=meeting_id,
-                    deleted_at=None
-                ).all()
+                if meeting_id:
+                    existing_tasks = db.session.query(Task).filter_by(
+                        meeting_id=meeting_id,
+                        deleted_at=None
+                    ).all()
+                else:
+                    # Get all workspace tasks
+                    existing_tasks = db.session.query(Task).filter_by(
+                        workspace_id=current_user.workspace_id,
+                        deleted_at=None
+                    ).order_by(Task.created_at.desc()).limit(20).all()
+                
                 existing_titles = [t.title for t in existing_tasks]
                 
                 if existing_titles:
-                    context_parts.append(f"Existing tasks: {', '.join(existing_titles[:5])}")
+                    context_parts.append(f"Existing tasks (avoid duplicates): {', '.join(existing_titles[:10])}")
                 
                 context = "\n\n".join(context_parts)
                 
@@ -1773,9 +1808,10 @@ Generate practical, specific tasks that can be assigned and tracked.
 Return tasks as JSON array with: title, description, priority (low/medium/high), category.
 Avoid duplicating existing tasks. Focus on concrete next steps."""
                 
+                context_source = "meeting content" if meeting else "recent workspace meetings"
                 user_prompt = f"""{context}
 
-Based on this meeting, suggest {max_proposals} actionable tasks.
+Based on this {context_source}, suggest {max_proposals} actionable tasks.
 Format as JSON array: [{{"title": "...", "description": "...", "priority": "medium", "category": "..."}}]"""
                 
                 # Stream from OpenAI
