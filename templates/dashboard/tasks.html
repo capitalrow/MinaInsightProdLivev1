@@ -1855,9 +1855,16 @@
      * Handle task completed
      * @param {Object} taskData - Task data
      */
-    function handleTaskCompleted(taskData) {
+    async function handleTaskCompleted(taskData) {
         const task = taskData.task || taskData;
         const taskCard = document.querySelector(`[data-task-id="${task.id}"]`);
+        
+        // Update IndexedDB cache with new status
+        if (window.taskCache) {
+            const status = task.completed ? 'completed' : 'todo';
+            await window.taskCache.updateTaskStatus(task.id, status);
+            console.log(`💾 Updated cache: Task ${task.id} → ${status}`);
+        }
         
         if (taskCard) {
             const checkbox = taskCard.querySelector('.task-checkbox');
@@ -3607,6 +3614,31 @@
                 
                 const result = await response.json();
                 console.log('✅ Bulk complete successful:', result);
+                
+                // CRITICAL FIX: Update IndexedDB cache for all completed tasks
+                if (window.taskCache) {
+                    for (const taskId of taskIds) {
+                        await window.taskCache.updateTaskStatus(taskId, 'completed');
+                    }
+                    console.log(`💾 Updated cache for ${taskIds.length} tasks → completed`);
+                }
+                
+                // Re-apply active filter to hide completed tasks from Pending view
+                const viewState = await window.taskCache?.getViewState();
+                const activeFilter = viewState?.activeFilter || 'all';
+                
+                if (activeFilter === 'pending') {
+                    console.log('🔄 Re-applying Pending filter to hide completed tasks');
+                    // Fetch all tasks and filter
+                    const allTasks = await window.taskCache.getAllTasks();
+                    const pendingTasks = allTasks.filter(t => t.status === 'todo' || t.status === 'in_progress');
+                    
+                    // Re-render filtered view
+                    if (window.taskBootstrap) {
+                        await window.taskBootstrap.renderTasks(pendingTasks);
+                        await window.taskBootstrap.updateCounters(pendingTasks);
+                    }
+                }
                 
                 // Exit selection mode
                 exitSelectionMode();
