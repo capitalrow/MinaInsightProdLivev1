@@ -1930,7 +1930,7 @@
                 
                 console.log(`🔍 Filter changed to: ${filter}`);
                 
-                // Update active tab visual state FIRST
+                // Update active tab visual state
                 document.querySelectorAll('.filter-tab').forEach(t => {
                     if (!t.classList.contains('cluster-toggle')) {
                         t.classList.remove('active');
@@ -1943,17 +1943,9 @@
                     await window.taskCache.setViewState({ activeFilter: filter });
                 }
                 
-                // CRITICAL FIX: Disable clustering mode when switching to filter tabs
+                // If clustering is enabled, exit cluster mode (showNormalView handles disable internally)
                 if (window.taskClusteringManager && window.taskClusteringManager.enabled) {
-                    console.log('📋 Disabling clustering mode (switching to filter view)');
-                    window.taskClusteringManager.enabled = false;
-                    
-                    const clusterToggle = document.querySelector('.cluster-toggle');
-                    if (clusterToggle) {
-                        clusterToggle.classList.remove('active');
-                    }
-                    
-                    // Re-render flat list view (respects active filter set above)
+                    console.log('📋 Exiting clustering mode (switching to filter view)');
                     await window.taskClusteringManager.showNormalView();
                     return;
                 }

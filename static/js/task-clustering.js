@@ -282,6 +282,15 @@ class TaskClusteringManager {
     }
 
     async showNormalView() {
+        // Disable clustering mode to prevent event loop
+        this.enabled = false;
+        
+        // Update UI state
+        const toggleBtn = document.querySelector('.cluster-toggle');
+        if (toggleBtn) {
+            toggleBtn.classList.remove('active');
+        }
+        
         // Re-render normal flat task list
         const allTasks = await window.taskCache.getAllTasks();
         
