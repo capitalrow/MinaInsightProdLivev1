@@ -15,6 +15,31 @@ if TYPE_CHECKING:
     from .user import User
 
 
+class TaskAssignee(Base):
+    """
+    Junction table for many-to-many relationship between tasks and users.
+    CROWN⁴.5: Enables multi-assignee support for collaborative task management.
+    """
+    __tablename__ = "task_assignees"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Metadata for assignee relationship
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    assigned_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    role: Mapped[str] = mapped_column(String(32), default="assignee")  # assignee, reviewer, collaborator
+    
+    # Composite unique constraint to prevent duplicate assignments
+    __table_args__ = (
+        Index('ix_task_assignees_composite', 'task_id', 'user_id', unique=True),
+    )
+
+    def __repr__(self):
+        return f'<TaskAssignee task_id={self.task_id} user_id={self.user_id}>'
+
+
 class Task(Base):
     """
     Task model for action items extracted from meetings with comprehensive task management.
@@ -52,6 +77,15 @@ class Task(Base):
     
     assigned_to_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     assigned_to: Mapped[Optional["User"]] = relationship(back_populates="assigned_tasks", foreign_keys=[assigned_to_id])
+    
+    # CROWN⁴.5: Many-to-many assignees relationship for multi-assignee support
+    assignees: Mapped[list["User"]] = relationship(
+        secondary="task_assignees",
+        primaryjoin="Task.id==TaskAssignee.task_id",
+        secondaryjoin="User.id==TaskAssignee.user_id",
+        back_populates="tasks_assigned_multi",
+        lazy="selectin"  # Eager load assignees to avoid N+1 queries
+    )
     
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_by: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by_id])
