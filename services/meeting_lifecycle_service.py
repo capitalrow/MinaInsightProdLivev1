@@ -316,13 +316,26 @@ class MeetingLifecycleService:
                 total_tasks = 0
                 completed_tasks = 0
             
+            # Calculate total duration hours from all meetings
+            meetings = db.session.scalars(
+                select(Meeting).where(Meeting.workspace_id == workspace_id)
+            ).all()
+            
+            total_duration_minutes = 0
+            for meeting in meetings:
+                if meeting.duration_minutes:
+                    total_duration_minutes += meeting.duration_minutes
+            
+            total_duration_hours = round(total_duration_minutes / 60, 2)
+            
             return {
                 'total_meetings': total_meetings,
                 'recent_meetings': recent_meetings,
                 'completed_meetings': completed_meetings,
                 'total_tasks': total_tasks,
                 'completed_tasks': completed_tasks,
-                'task_completion_rate': (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+                'task_completion_rate': (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0,
+                'total_duration_hours': total_duration_hours
             }
             
         except Exception as e:
@@ -333,5 +346,6 @@ class MeetingLifecycleService:
                 'completed_meetings': 0,
                 'total_tasks': 0,
                 'completed_tasks': 0,
-                'task_completion_rate': 0
+                'task_completion_rate': 0,
+                'total_duration_hours': 0
             }
