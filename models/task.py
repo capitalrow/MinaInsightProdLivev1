@@ -241,6 +241,7 @@ class Task(Base):
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'meeting_id': self.meeting_id,
             'assigned_to_id': self.assigned_to_id,
+            'assignee_ids': [user.id for user in self.assignees] if self.assignees else [],
             'created_by_id': self.created_by_id,
             'extracted_by_ai': self.extracted_by_ai,
             'confidence_score': self.confidence_score,
@@ -272,6 +273,17 @@ class Task(Base):
         if include_relationships:
             if self.assigned_to:
                 data['assigned_to'] = self.assigned_to.to_dict()
+            
+            # CROWN⁴.5: Multi-assignee support
+            if self.assignees:
+                data['assignees'] = [{
+                    'id': user.id,
+                    'username': user.username,
+                    'display_name': user.display_name,
+                    'full_name': user.full_name,
+                    'avatar_url': user.avatar_url
+                } for user in self.assignees]
+            
             if self.created_by:
                 data['created_by'] = self.created_by.to_dict()
             if self.meeting:
