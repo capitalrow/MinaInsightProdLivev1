@@ -198,6 +198,38 @@ def create_task():
         )
         
         db.session.add(task)
+        db.session.flush()  # Flush to get task.id before commit
+        
+        # CROWN⁴.5: Multi-assignee support via assignee_ids array
+        if 'assignee_ids' in data:
+            from models.task import TaskAssignee
+            
+            assignee_ids = data['assignee_ids']
+            if isinstance(assignee_ids, list) and assignee_ids:
+                # Validate all assignees are in workspace
+                valid_users = db.session.query(User).filter(
+                    User.id.in_(assignee_ids),
+                    User.workspace_id == current_user.workspace_id,
+                    User.active == True
+                ).all()
+                
+                if len(valid_users) != len(set(assignee_ids)):
+                    db.session.rollback()
+                    return jsonify({'success': False, 'message': 'One or more invalid assignee IDs'}), 400
+                
+                # Create assignments
+                for user_id in assignee_ids:
+                    assignment = TaskAssignee(
+                        task_id=task.id,
+                        user_id=user_id,
+                        assigned_by_user_id=current_user.id,
+                        role='assignee'
+                    )
+                    db.session.add(assignment)
+                
+                # Update assigned_to_id for backward compatibility (first assignee)
+                task.assigned_to_id = assignee_ids[0]
+        
         db.session.commit()
         
         # Broadcast task_update event
@@ -284,6 +316,42 @@ def update_task(task_id):
                 if not assignee:
                     return jsonify({'success': False, 'message': 'Invalid assignee'}), 400
             task.assigned_to_id = assigned_to_id
+        
+        # CROWN⁴.5: Multi-assignee support via assignee_ids array
+        if 'assignee_ids' in data:
+            from models.task import TaskAssignee  # Import here to avoid circular dependency
+            
+            assignee_ids = data['assignee_ids']
+            if not isinstance(assignee_ids, list):
+                return jsonify({'success': False, 'message': 'assignee_ids must be an array'}), 400
+            
+            # Validate all assignees are in workspace
+            if assignee_ids:
+                valid_users = db.session.query(User).filter(
+                    User.id.in_(assignee_ids),
+                    User.workspace_id == current_user.workspace_id,
+                    User.active == True
+                ).all()
+                
+                if len(valid_users) != len(set(assignee_ids)):
+                    return jsonify({'success': False, 'message': 'One or more invalid assignee IDs'}), 400
+            
+            # Update junction table transactionally
+            # 1. Delete existing assignments
+            db.session.query(TaskAssignee).filter_by(task_id=task.id).delete()
+            
+            # 2. Add new assignments
+            for user_id in assignee_ids:
+                assignment = TaskAssignee(
+                    task_id=task.id,
+                    user_id=user_id,
+                    assigned_by_user_id=current_user.id,
+                    role='assignee'
+                )
+                db.session.add(assignment)
+            
+            # 3. Update assigned_to_id for backward compatibility (first assignee)
+            task.assigned_to_id = assignee_ids[0] if assignee_ids else None
         
         if 'labels' in data:
             labels = data['labels']
