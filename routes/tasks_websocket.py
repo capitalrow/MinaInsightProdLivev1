@@ -237,14 +237,21 @@ def register_tasks_namespace(socketio):
                         user_id=user_id,
                         session_id=session_id
                     ))
-                    results.append(result)
+                    
+                    # CROWN⁴.5: Enhance response with event_id and checksum
+                    enhanced_result = task_event_handler._enhance_response_with_crown_metadata(
+                        response=result,
+                        user_id=user_id,
+                        event_id=event['event_id']
+                    )
+                    results.append(enhanced_result)
                     
                     # Broadcast each successful event
-                    if result.get('success'):
+                    if enhanced_result.get('success'):
                         emit('task_updated', {
                             'event_type': event['event_type'],
                             'event_id': event['event_id'],
-                            'data': result
+                            'data': enhanced_result
                         }, to=f"workspace_{workspace_id}")
                 
                 # Return combined result
@@ -270,10 +277,17 @@ def register_tasks_namespace(socketio):
                     session_id=session_id
                 ))
                 
+                # CROWN⁴.5: Enhance response with checksum (no event_id for legacy path)
+                enhanced_result = task_event_handler._enhance_response_with_crown_metadata(
+                    response=result,
+                    user_id=user_id,
+                    event_id=None  # No event_id in legacy path
+                )
+                
                 # Create response
                 response = {
                     'event_type': event_type,
-                    'result': result,
+                    'result': enhanced_result,
                     'trace_id': data.get('trace_id'),
                     'sequenced': False  # Indicate this bypassed sequencer
                 }
@@ -282,11 +296,11 @@ def register_tasks_namespace(socketio):
                 emit('task_event_result', response)
                 
                 # Broadcast to workspace room if successful
-                if result.get('success'):
+                if enhanced_result.get('success'):
                     if workspace_id:
                         emit('task_updated', {
                             'event_type': event_type,
-                            'data': result
+                            'data': enhanced_result
                         }, to=f"workspace_{workspace_id}")
                 
                 # Return result for Socket.IO acknowledgment callback
