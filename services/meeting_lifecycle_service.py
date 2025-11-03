@@ -316,17 +316,24 @@ class MeetingLifecycleService:
                 total_tasks = 0
                 completed_tasks = 0
             
-            # Calculate total duration hours from all meetings
-            meetings = db.session.scalars(
-                select(Meeting).where(Meeting.workspace_id == workspace_id)
-            ).all()
+            # Calculate total duration hours from linked sessions
+            # Sessions have total_duration in seconds, which is more accurate for live transcriptions
+            from models.session import Session
             
-            total_duration_minutes = 0
-            for meeting in meetings:
-                if meeting.duration_minutes:
-                    total_duration_minutes += meeting.duration_minutes
+            total_duration_seconds = 0
+            if meeting_ids:
+                sessions = db.session.scalars(
+                    select(Session).where(Session.meeting_id.in_(meeting_ids))
+                ).all()
+                
+                logger.debug(f"📊 Found {len(sessions)} sessions for {len(meeting_ids)} meetings")
+                for session in sessions:
+                    if session.total_duration:
+                        logger.debug(f"  Session {session.external_id}: {session.total_duration} seconds")
+                        total_duration_seconds += session.total_duration
             
-            total_duration_hours = round(total_duration_minutes / 60, 2)
+            total_duration_minutes = round(total_duration_seconds / 60, 1)
+            logger.debug(f"📊 Total duration: {total_duration_seconds} seconds = {total_duration_minutes} minutes")
             
             return {
                 'total_meetings': total_meetings,
@@ -335,7 +342,7 @@ class MeetingLifecycleService:
                 'total_tasks': total_tasks,
                 'completed_tasks': completed_tasks,
                 'task_completion_rate': (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0,
-                'total_duration_hours': total_duration_hours
+                'total_duration_minutes': total_duration_minutes
             }
             
         except Exception as e:
@@ -347,5 +354,5 @@ class MeetingLifecycleService:
                 'total_tasks': 0,
                 'completed_tasks': 0,
                 'task_completion_rate': 0,
-                'total_duration_hours': 0
+                'total_duration_minutes': 0
             }

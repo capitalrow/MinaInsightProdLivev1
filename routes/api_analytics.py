@@ -486,7 +486,7 @@ def get_communication_analytics():
             participant_stats[name]['talk_time'] += participant.talk_time_seconds or 0
             participant_stats[name]['word_count'] += participant.word_count or 0
             participant_stats[name]['question_count'] += participant.question_count or 0
-            participant_stats[name]['segment_count'] += participant.segment_count or 0
+            participant_stats[name]['segment_count'] += 0  # segment_count not tracked in Participant model
             participant_stats[name]['meeting_count'] += 1
         
         # Sort by total talk time
@@ -653,7 +653,7 @@ def get_action_items_completion(meeting_id):
                 'title': task.title,
                 'status': status,
                 'priority': task.priority,
-                'assignee': task.assignee,
+                'assignee': task.assigned_to.username if task.assigned_to else None,
                 'due_date': task.due_date.isoformat() if task.due_date else None,
                 'created_at': task.created_at.isoformat() if task.created_at else None
             })

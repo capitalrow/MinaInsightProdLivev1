@@ -40,17 +40,25 @@ def _session_to_meeting_card(session: Session, meeting: Optional[Meeting]) -> Di
         status = 'recording'
     elif session.post_transcription_status == 'processing':
         status = 'processing'
-    elif meeting and meeting.archived:
+    elif meeting and getattr(meeting, 'archived', False):
         status = 'archived'
     else:
         status = 'ready'
     
-    # Get task and highlight counts
-    task_count = meeting.task_count if meeting else 0
+    # Get task and highlight counts (safely handle lazy load failures)
+    try:
+        task_count = meeting.task_count if meeting else 0
+    except Exception:
+        task_count = 0
+    
     highlight_count = 0  # TODO: Implement highlights tracking
     
     # Calculate session etag
-    updated_at = meeting.updated_at if meeting else session.started_at
+    try:
+        updated_at = meeting.updated_at if meeting else session.started_at
+    except Exception:
+        updated_at = session.started_at
+    
     etag_source = f"{session.id}:{updated_at.isoformat()}"
     etag = hashlib.md5(etag_source.encode()).hexdigest()[:16]
     

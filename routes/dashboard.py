@@ -6,10 +6,11 @@ Main dashboard with meetings, tasks, analytics overview.
 from flask import Blueprint, render_template, request, jsonify, make_response
 from flask_login import login_required, current_user
 from models import db, Meeting, Task, Analytics, Session, Marker
-from sqlalchemy import desc, func, and_
+from sqlalchemy import desc, func, and_, or_
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta, date
 from services.event_broadcaster import event_broadcaster
+import logging
 
 try:
     from services.uptime_monitoring import uptime_monitor
@@ -20,6 +21,8 @@ except ImportError:
     uptime_monitor = None
     performance_monitor = None
 
+# Module-level logger
+logger = logging.getLogger(__name__)
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
@@ -69,22 +72,27 @@ def index():
     # Get workspace statistics using new meeting lifecycle service
     if current_user.workspace_id:
         from services.meeting_lifecycle_service import MeetingLifecycleService
+        
         stats = MeetingLifecycleService.get_meeting_statistics(current_user.workspace_id, days=365)
         total_meetings = stats['total_meetings']
         total_tasks = stats['total_tasks']
         completed_tasks = stats['completed_tasks']
-        total_duration_hours = stats.get('total_duration_hours', 0)
+        total_duration_minutes = stats.get('total_duration_minutes', 0)
+        logger.debug(f"🎯 Dashboard stats: total_duration_minutes={total_duration_minutes}, total_tasks={total_tasks}")
     else:
         total_meetings = 0
         total_tasks = 0
         completed_tasks = 0
-        total_duration_hours = 0
+        total_duration_minutes = 0
     
     # Calculate task completion rate
     task_completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
     
-    # Calculate hours saved (estimate: 30% time savings from AI insights)
-    hours_saved = round(total_duration_hours * 0.3, 1) if total_duration_hours > 0 else 0
+    # Calculate minutes saved (conservative hybrid formula):
+    # - 30% of meeting duration (admin overhead: notes, summaries, searching)
+    # - 2 minutes per action item (time to manually identify and document tasks)
+    minutes_saved = int(total_duration_minutes * 0.3) + (total_tasks * 2)
+    logger.debug(f"🎯 Dashboard calculated: minutes_saved={minutes_saved} from duration={total_duration_minutes}min + tasks={total_tasks}")
     
     # Get this week's meetings
     week_start = datetime.now() - timedelta(days=datetime.now().weekday())
@@ -173,7 +181,7 @@ def index():
                          total_meetings=total_meetings,
                          total_tasks=total_tasks,
                          completed_tasks=completed_tasks,
-                         hours_saved=hours_saved,
+                         minutes_saved=minutes_saved,
                          task_completion_rate=round(task_completion_rate, 1),
                          # Also pass stats dict for WebSocket sync
                          stats={
@@ -183,7 +191,7 @@ def index():
                              'task_completion_rate': round(task_completion_rate, 1),
                              'this_week_meetings': this_week_meetings,
                              'todays_meetings': len(todays_meetings),
-                             'hours_saved': hours_saved
+                             'minutes_saved': minutes_saved
                          })
 
 
@@ -270,14 +278,20 @@ def meetings():
 @login_required
 def tasks():
     """Tasks overview page with kanban board."""
-    # Get all tasks for workspace
-    # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
-    all_tasks = db.session.query(Task)\
-        .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
-        .outerjoin(Session, Task.session_id == Session.id)\
-        .filter(
-            (Meeting.workspace_id == current_user.workspace_id) | (Session.workspace_id == current_user.workspace_id)
-        ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+    # Get all tasks for workspace (not just assigned to current user)
+    if current_user.workspace_id:
+        # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
+        all_tasks = db.session.query(Task)\
+            .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
+            .outerjoin(Session, Task.session_id == Session.id)\
+            .filter(
+                or_(
+                    Meeting.workspace_id == current_user.workspace_id,
+                    Session.workspace_id == current_user.workspace_id
+                )
+            ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+    else:
+        all_tasks = []
     
     # Get tasks by status
     todo_tasks = [t for t in all_tasks if t.status == 'todo']
