@@ -265,11 +265,45 @@
   color: #fde68a;
 }
 
-/* Assignee */
-.task-assignee {
+/* Assignees (CROWN⁴.5 Multi-Assignee) */
+.task-assignees {
   background: rgba(147, 197, 253, 0.08);
   border-color: rgba(147, 197, 253, 0.15);
   color: #93c5fd;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.task-assignees svg {
+  flex-shrink: 0;
+}
+
+.task-assignees .assignee-names {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-assignees .assignee-overflow {
+  font-weight: 600;
+  opacity: 0.7;
+  font-size: 0.9em;
+}
+
+.task-assignees-empty {
+  background: rgba(148, 163, 184, 0.05);
+  border-color: rgba(148, 163, 184, 0.1);
+  color: var(--color-text-muted);
+}
+
+.task-assignees-empty:hover {
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: var(--color-text-secondary);
 }
 
 /* Category */

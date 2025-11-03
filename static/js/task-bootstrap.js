@@ -392,8 +392,66 @@ class TaskBootstrap {
         const isDueSoon = task.due_date && this.isDueDateWithin(task.due_date, 1); // 1 day
         const isOverdue = task.due_date && this.isDueDateOverdue(task.due_date) && !isCompleted;
 
-        // Assignee display
-        const assigneeText = task.assignee_name || (task.assignee ? 'Assigned' : null);
+        // CROWN⁴.5: Multi-assignee display with overflow handling
+        const assigneeIds = task.assignee_ids || [];
+        const assignees = task.assignees || [];
+        const maxVisibleAssignees = 2;
+        
+        let assigneeHTML = '';
+        if (assigneeIds.length > 0) {
+            // Multi-assignee mode
+            const visibleAssignees = assignees.slice(0, maxVisibleAssignees);
+            const overflowCount = assigneeIds.length - maxVisibleAssignees;
+            
+            const assigneeNames = visibleAssignees
+                .map(a => a.display_name || a.username)
+                .filter(Boolean)
+                .join(', ');
+            
+            const fullList = assignees
+                .map(a => a.display_name || a.username)
+                .filter(Boolean)
+                .join(', ');
+            
+            assigneeHTML = `
+                <div class="task-assignees" 
+                     data-task-id="${task.id}"
+                     title="${this.escapeHtml(fullList || 'Click to change assignees')}">
+                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                    </svg>
+                    <span class="assignee-names">
+                        ${this.escapeHtml(assigneeNames || 'Assigned')}${overflowCount > 0 ? ` <span class="assignee-overflow">+${overflowCount}</span>` : ''}
+                    </span>
+                </div>
+            `;
+        } else {
+            // Legacy single assignee fallback
+            const assigneeText = task.assignee_name || (task.assignee ? 'Assigned' : null);
+            if (assigneeText) {
+                assigneeHTML = `
+                    <div class="task-assignees" 
+                         data-task-id="${task.id}"
+                         title="Click to change assignee">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                        </svg>
+                        <span class="assignee-names">${this.escapeHtml(assigneeText)}</span>
+                    </div>
+                `;
+            } else {
+                assigneeHTML = `
+                    <div class="task-assignees task-assignees-empty" 
+                         data-task-id="${task.id}"
+                         title="Click to assign">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                        </svg>
+                        <span class="assignee-names">Assign</span>
+                    </div>
+                `;
+            }
+        }
 
         return `
             <div class="task-card ${isCompleted ? 'completed' : ''} ${isSyncing ? 'task-syncing' : ''} ${isOverdue ? 'overdue' : ''}" 
@@ -430,25 +488,7 @@ class TaskBootstrap {
                         ${priority.charAt(0).toUpperCase() + priority.slice(1)}
                     </span>
 
-                    ${assigneeText ? `
-                        <div class="task-assignee" 
-                             data-task-id="${task.id}"
-                             title="Click to change assignee">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                            </svg>
-                            ${this.escapeHtml(assigneeText)}
-                        </div>
-                    ` : `
-                        <div class="task-assignee task-assignee-empty" 
-                             data-task-id="${task.id}"
-                             title="Click to assign">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-                            </svg>
-                            Assign
-                        </div>
-                    `}
+                    ${assigneeHTML}
 
                     ${task.due_date ? `
                         <span class="due-date-badge ${isOverdue ? 'overdue' : ''} ${isDueSoon ? 'due-soon' : ''}" 
