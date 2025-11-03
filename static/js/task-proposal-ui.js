@@ -2,6 +2,7 @@ class TaskProposalUI {
     constructor(taskUI) {
         this.taskUI = taskUI;
         this.currentStream = null;
+        this.currentAbortController = null;
         this.proposalContainer = null;
         this.init();
         console.log('[TaskProposalUI] Initialized');
@@ -42,6 +43,9 @@ class TaskProposalUI {
             // Show streaming indicator
             this.showStreamingState();
 
+            // Create AbortController for cancellation
+            this.currentAbortController = new AbortController();
+
             // Start SSE stream
             const response = await fetch('/api/tasks/ai-proposals/stream', {
                 method: 'POST',
@@ -51,7 +55,8 @@ class TaskProposalUI {
                 body: JSON.stringify({
                     meeting_id: parseInt(meetingId),
                     max_proposals: 3
-                })
+                }),
+                signal: this.currentAbortController.signal
             });
 
             if (!response.ok) {
@@ -60,6 +65,7 @@ class TaskProposalUI {
 
             // Read SSE stream
             const reader = response.body.getReader();
+            this.currentStream = reader;
             const decoder = new TextDecoder();
             let buffer = '';
 
@@ -86,24 +92,55 @@ class TaskProposalUI {
             }
 
         } catch (error) {
-            console.error('[TaskProposalUI] Stream error:', error);
-            this.showError('Failed to generate proposals. Please try again.');
-            
-            if (window.CROWNTelemetry) {
-                window.CROWNTelemetry.recordMetric('ai_proposals_error', 1);
+            // Handle abort gracefully
+            if (error.name === 'AbortError') {
+                console.log('[TaskProposalUI] Stream cancelled by user');
+                this.hideStreamingState();
+                if (window.CROWNTelemetry) {
+                    window.CROWNTelemetry.recordMetric('ai_proposals_cancelled', 1);
+                }
+            } else {
+                console.error('[TaskProposalUI] Stream error:', error);
+                this.showError('Failed to generate proposals. Please try again.');
+                
+                if (window.CROWNTelemetry) {
+                    window.CROWNTelemetry.recordMetric('ai_proposals_error', 1);
+                }
             }
         } finally {
+            // Clean up state
+            this.currentAbortController = null;
+            this.currentStream = null;
             button.disabled = false;
             button.textContent = originalText;
         }
     }
 
     stopStream() {
-        if (this.currentStream) {
-            this.currentStream.close();
-            this.currentStream = null;
-            this.hideStreamingState();
+        console.log('[TaskProposalUI] Stopping stream');
+        
+        // Abort the fetch request
+        if (this.currentAbortController) {
+            this.currentAbortController.abort();
+            this.currentAbortController = null;
         }
+        
+        // Cancel the reader
+        if (this.currentStream) {
+            this.currentStream.cancel().catch(err => {
+                console.warn('[TaskProposalUI] Reader cancel error:', err);
+            });
+            this.currentStream = null;
+        }
+        
+        // Clean up UI
+        this.hideStreamingState();
+        
+        if (window.CROWNTelemetry) {
+            window.CROWNTelemetry.recordMetric('ai_proposals_cancelled', 1);
+        }
+        
+        console.log('[TaskProposalUI] Stream stopped successfully');
     }
 
     showProposalContainer() {
