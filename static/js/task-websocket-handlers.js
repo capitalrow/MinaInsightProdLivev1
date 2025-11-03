@@ -155,6 +155,84 @@ class TaskWebSocketHandlers {
     // Event Handlers
 
     /**
+     * CROWN⁴.5: Process event metadata (event_id, checksum, timestamp)
+     * Tracks sequence numbers and stores checksum for drift detection
+     * Automatically triggers reconciliation on forward gaps to maintain ordering guarantees
+     * BLOCKS stale events (regressions) from being applied to cache
+     * @param {Object} data - Event data with CROWN metadata
+     * @returns {Promise<{shouldProcess: boolean, reason: string}>} Whether handler should proceed
+     */
+    async _processCROWNMetadata(data) {
+        if (!data) return { shouldProcess: true, reason: 'no_metadata' };
+
+        // Extract CROWN⁴.5 metadata
+        const { event_id, checksum, timestamp, counters_checksum } = data;
+
+        // Track event sequence and detect gaps/regressions
+        if (event_id !== undefined && event_id !== null) {
+            const sequenceResult = await window.taskCache.trackEventSequence(event_id);
+            
+            // BLOCK stale events (regressions) from being applied
+            if (sequenceResult.gap_type === 'regression') {
+                console.warn(`🚫 BLOCKING stale event: event_id=${event_id} < last_event_id=${sequenceResult.expected} (regression ignored)`);
+                return { shouldProcess: false, reason: 'regression_blocked' };
+            }
+            
+            // ALLOW duplicates (idempotent replay is safe)
+            if (sequenceResult.gap_type === 'duplicate') {
+                console.log(`✅ Allowing duplicate event_id=${event_id} (idempotent)`);
+                return { shouldProcess: true, reason: 'duplicate_allowed' };
+            }
+            
+            // FORWARD GAP: Trigger reconciliation but allow event to proceed
+            if (sequenceResult.gap_detected && sequenceResult.gap_type === 'forward') {
+                const gap_size = sequenceResult.gap_size || 0;
+                console.warn(`⚠️ Forward gap detected (${gap_size} missing events) - triggering reconciliation`);
+                
+                // Trigger reconciliation for forward gaps to maintain ordering guarantees
+                // For small gaps (1-5 events), trigger immediate bootstrap
+                // For large gaps (>5 events), trigger full reconciliation
+                if (gap_size <= 5) {
+                    console.log('🔄 Small gap detected - requesting bootstrap');
+                    this._emitBootstrap();
+                } else {
+                    console.warn('🚨 Large gap detected - requesting full reconciliation');
+                    // Trigger full reconciliation via TaskBootstrap
+                    if (window.taskBootstrap) {
+                        await window.taskBootstrap.reconcile();
+                    } else {
+                        // Fallback to bootstrap if reconcile not available
+                        this._emitBootstrap();
+                    }
+                }
+                
+                // Record reconciliation trigger
+                if (window.CROWNTelemetry) {
+                    window.CROWNTelemetry.recordEvent('reconciliation_triggered', {
+                        reason: 'forward_gap',
+                        gap_size
+                    });
+                }
+            }
+        }
+
+        // Store latest checksum for drift detection
+        if (checksum) {
+            await window.taskCache.setMetadata('last_checksum', checksum);
+        }
+
+        if (counters_checksum) {
+            await window.taskCache.setMetadata('last_counters_checksum', counters_checksum);
+        }
+
+        if (timestamp) {
+            await window.taskCache.setMetadata('last_event_timestamp', timestamp);
+        }
+        
+        return { shouldProcess: true, reason: 'sequential' };
+    }
+
+    /**
      * Emit bootstrap request
      */
     _emitBootstrap() {
@@ -169,6 +247,13 @@ class TaskWebSocketHandlers {
      */
     async _handleBootstrap(data) {
         console.log('📦 Bootstrap data received:', data);
+        
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale bootstrap event');
+            return;
+        }
         
         if (data.tasks) {
             await window.taskCache.saveTasks(data.tasks);
@@ -188,6 +273,13 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskCreated(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task_created event');
+            return;
+        }
+        
         const task = data.task || data;
         console.log('✨ Task created:', task.id);
         
@@ -207,6 +299,13 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskUpdated(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task_updated event');
+            return;
+        }
+        
         const task = data.task || data;
         console.log('📝 Task updated:', task.id);
         
@@ -226,10 +325,27 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskStatusToggled(data) {
+        // Process CROWN⁴.5 metadata (check shouldProcess before any mutations)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task_status_toggled event');
+            return;
+        }
+        
         const task = data.task || data;
         console.log(`✅ Task status toggled: ${task.id} → ${task.status}`);
         
-        await this._handleTaskUpdated(data);
+        // Save to cache
+        await window.taskCache.saveTask(task);
+        
+        // Update DOM
+        if (window.optimisticUI) {
+            window.optimisticUI._updateTaskInDOM(task.id, task);
+        }
+        
+        if (window.multiTabSync) {
+            window.multiTabSync.broadcastTaskUpdated(task);
+        }
         
         // Animate status change
         const card = document.querySelector(`[data-task-id="${task.id}"]`);
@@ -244,10 +360,27 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskPriorityChanged(data) {
+        // Process CROWN⁴.5 metadata (check shouldProcess before any mutations)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task_priority_changed event');
+            return;
+        }
+        
         const task = data.task || data;
         console.log(`🎯 Task priority changed: ${task.id} → ${task.priority}`);
         
-        await this._handleTaskUpdated(data);
+        // Save to cache
+        await window.taskCache.saveTask(task);
+        
+        // Update DOM
+        if (window.optimisticUI) {
+            window.optimisticUI._updateTaskInDOM(task.id, task);
+        }
+        
+        if (window.multiTabSync) {
+            window.multiTabSync.broadcastTaskUpdated(task);
+        }
     }
 
     /**
@@ -255,10 +388,27 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskLabelsUpdated(data) {
+        // Process CROWN⁴.5 metadata (check shouldProcess before any mutations)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task_labels_updated event');
+            return;
+        }
+        
         const task = data.task || data;
         console.log('🏷️ Task labels updated:', task.id);
         
-        await this._handleTaskUpdated(data);
+        // Save to cache
+        await window.taskCache.saveTask(task);
+        
+        // Update DOM
+        if (window.optimisticUI) {
+            window.optimisticUI._updateTaskInDOM(task.id, task);
+        }
+        
+        if (window.multiTabSync) {
+            window.multiTabSync.broadcastTaskUpdated(task);
+        }
     }
 
     /**
@@ -266,10 +416,27 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskSnoozed(data) {
+        // Process CROWN⁴.5 metadata (check shouldProcess before any mutations)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task_snoozed event');
+            return;
+        }
+        
         const task = data.task || data;
         console.log(`⏰ Task snoozed: ${task.id} until ${task.snoozed_until}`);
         
-        await this._handleTaskUpdated(data);
+        // Save to cache
+        await window.taskCache.saveTask(task);
+        
+        // Update DOM
+        if (window.optimisticUI) {
+            window.optimisticUI._updateTaskInDOM(task.id, task);
+        }
+        
+        if (window.multiTabSync) {
+            window.multiTabSync.broadcastTaskUpdated(task);
+        }
         
         // Optionally hide snoozed task
         const card = document.querySelector(`[data-task-id="${task.id}"]`);
@@ -283,6 +450,13 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTasksMerged(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale tasks_merged event');
+            return;
+        }
+        
         console.log('🔀 Tasks merged:', data);
         
         const { primary_task, merged_task_ids } = data;
@@ -308,7 +482,14 @@ class TaskWebSocketHandlers {
      * Handle transcript jump
      * @param {Object} data
      */
-    _handleTranscriptJump(data) {
+    async _handleTranscriptJump(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale transcript_jump event');
+            return;
+        }
+        
         console.log('🎯 Transcript jump:', data);
         
         const { task_id, transcript_span } = data;
@@ -329,6 +510,13 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleFilterChanged(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale filter_changed event');
+            return;
+        }
+        
         console.log('🔍 Filter changed:', data.filter);
         
         await window.taskCache.setViewState('tasks_page', data.filter);
@@ -348,6 +536,13 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTasksRefreshed(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale tasks_refreshed event');
+            return;
+        }
+        
         console.log('🔄 Tasks refreshed');
         
         if (data.tasks) {
@@ -364,6 +559,13 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleIdleSyncComplete(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale idle_sync_complete event');
+            return;
+        }
+        
         console.log('💤 Idle sync complete:', data);
         
         await window.taskCache.setMetadata('last_idle_sync', Date.now());
@@ -374,6 +576,13 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleOfflineQueueReplayed(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale offline_queue_replayed event');
+            return;
+        }
+        
         console.log('📥 Offline queue replayed:', data);
         
         const { success_count, failed_count, conflicts } = data;
@@ -394,6 +603,13 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskDeleted(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task_deleted event');
+            return;
+        }
+        
         const taskId = data.task_id || data.id;
         console.log('🗑️ Task deleted:', taskId);
         
@@ -413,6 +629,13 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTasksBulkUpdated(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale tasks_bulk_updated event');
+            return;
+        }
+        
         console.log('📦 Tasks bulk updated:', data.task_ids.length);
         
         if (data.tasks) {
