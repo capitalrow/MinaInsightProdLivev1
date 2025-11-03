@@ -94,8 +94,10 @@ def list_tasks():
                     )
                 )
         
-        # Order by priority and due date
+        # Order by position (drag-drop), then priority and due date
+        # CROWN⁴.5 Phase 3: Position-based ordering for drag-drop reordering
         stmt = stmt.order_by(
+            Task.position.asc(),
             Task.priority.desc(),
             Task.due_date.asc().nullslast(),
             Task.created_at.desc()
@@ -184,6 +186,13 @@ def create_task():
             if not assignee:
                 return jsonify({'success': False, 'message': 'Invalid assignee'}), 400
         
+        # CROWN⁴.5 Phase 3: Calculate next position for drag-drop ordering
+        # Assign position = max(existing positions) + 1 to append new tasks at end
+        max_position = db.session.query(func.max(Task.position)).join(Meeting).filter(
+            Meeting.workspace_id == current_user.workspace_id,
+            Task.deleted_at.is_(None)
+        ).scalar() or -1
+        
         task = Task(
             title=data['title'].strip(),
             description=data.get('description', '').strip() or None,
@@ -194,7 +203,8 @@ def create_task():
             assigned_to_id=assigned_to_id,
             status='todo',
             created_by_id=current_user.id,
-            extracted_by_ai=False
+            extracted_by_ai=False,
+            position=max_position + 1
         )
         
         db.session.add(task)
@@ -1580,6 +1590,68 @@ def get_workspace_users():
         
     except Exception as e:
         logger.error(f"Error fetching workspace users: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# CROWN⁴.5 Phase 3: Reorder tasks via drag-and-drop
+@api_tasks_bp.route('/reorder', methods=['POST'])
+@login_required
+def reorder_tasks():
+    """
+    Update task positions after drag-and-drop reordering.
+    Accepts an array of {task_id, position} updates.
+    """
+    try:
+        data = request.get_json()
+        updates = data.get('updates', [])
+        
+        if not updates:
+            return jsonify({'success': False, 'message': 'No updates provided'}), 400
+        
+        # Validate that all task IDs belong to user's workspace
+        task_ids = [update['task_id'] for update in updates]
+        
+        stmt = select(Task).join(Meeting).where(
+            and_(
+                Task.id.in_(task_ids),
+                Meeting.workspace_id == current_user.workspace_id,
+                Task.deleted_at.is_(None)  # Cannot reorder deleted tasks
+            )
+        )
+        
+        tasks = db.session.execute(stmt).scalars().all()
+        
+        if len(tasks) != len(task_ids):
+            return jsonify({'success': False, 'message': 'One or more tasks not found'}), 404
+        
+        # Update task positions
+        updated_task_ids = []
+        for update in updates:
+            task_id = update['task_id']
+            new_position = update['position']
+            
+            task = next((t for t in tasks if t.id == task_id), None)
+            if task:
+                task.position = new_position
+                updated_task_ids.append(task_id)
+        
+        db.session.commit()
+        
+        logger.info(f"[REORDER] Updated positions for {len(updated_task_ids)} tasks by user {current_user.id}")
+        
+        # TODO: Broadcast reorder event to WebSocket clients
+        # EventBroadcaster.broadcast_task_reorder needs to be implemented
+        # For now, reordering works without real-time sync across tabs
+        
+        return jsonify({
+            'success': True,
+            'message': f'Updated positions for {len(updated_task_ids)} tasks',
+            'updated_task_ids': updated_task_ids
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"[REORDER] Error reordering tasks: {e}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
 
 

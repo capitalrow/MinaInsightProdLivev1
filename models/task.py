@@ -115,6 +115,9 @@ class Task(Base):
     tags: Mapped[Optional[list]] = mapped_column(JSON)  # Task tags (legacy)
     labels: Mapped[Optional[list]] = mapped_column(JSON)  # CROWN⁴.5: Task labels for organization
     
+    # CROWN⁴.5 Phase 3: Task ordering/positioning for drag-drop
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # Display order (lower = higher priority)
+    
     # Dependencies and relationships
     depends_on_task_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True)
     depends_on_task: Mapped[Optional["Task"]] = relationship(remote_side="Task.id")
@@ -147,6 +150,8 @@ class Task(Base):
         Index('ix_tasks_source', 'source'),
         # CROWN⁴.5 Phase 1: Index for soft delete filtering
         Index('ix_tasks_deleted_at', 'deleted_at'),
+        # CROWN⁴.5 Phase 3: Index for task ordering/positioning
+        Index('ix_tasks_position', 'position'),
     )
 
     def __repr__(self):
