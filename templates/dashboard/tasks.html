@@ -2626,6 +2626,12 @@
 <script src="{{ url_for('static', filename='js/task-keyboard-shortcuts.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
+<!-- CROWN⁴.5 Phase 2: Cache-First Architecture -->
+<script src="{{ url_for('static', filename='js/indexeddb-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/cache-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-store.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/temporal-recovery-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
+
 <script nonce="{{ g.csp_nonce }}">
 /**
  * CROWN⁴.5 Tasks Page Initialization
@@ -2634,7 +2640,7 @@
 (async function() {
     'use strict';
     
-    console.log('🚀 Initializing CROWN⁴.5 Tasks Page...');
+    console.log('🚀 Initializing CROWN⁴.5 Tasks Page (Phase 2)...');
     
     // Initialize CROWN Telemetry FIRST (before other modules)
     if (window.CROWNTelemetry) {
