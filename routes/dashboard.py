@@ -69,11 +69,15 @@ def index():
     # Get workspace statistics using new meeting lifecycle service
     if current_user.workspace_id:
         from services.meeting_lifecycle_service import MeetingLifecycleService
+        import logging
+        logger = logging.getLogger(__name__)
+        
         stats = MeetingLifecycleService.get_meeting_statistics(current_user.workspace_id, days=365)
         total_meetings = stats['total_meetings']
         total_tasks = stats['total_tasks']
         completed_tasks = stats['completed_tasks']
         total_duration_hours = stats.get('total_duration_hours', 0)
+        logger.debug(f"🎯 Dashboard stats: total_duration_hours={total_duration_hours}")
     else:
         total_meetings = 0
         total_tasks = 0
@@ -85,6 +89,7 @@ def index():
     
     # Calculate hours saved (estimate: 30% time savings from AI insights)
     hours_saved = round(total_duration_hours * 0.3, 1) if total_duration_hours > 0 else 0
+    logger.debug(f"🎯 Dashboard calculated: hours_saved={hours_saved} from total_duration_hours={total_duration_hours}")
     
     # Get this week's meetings
     week_start = datetime.now() - timedelta(days=datetime.now().weekday())
