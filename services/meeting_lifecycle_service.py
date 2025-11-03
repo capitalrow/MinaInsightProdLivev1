@@ -332,8 +332,8 @@ class MeetingLifecycleService:
                         logger.debug(f"  Session {session.external_id}: {session.total_duration} seconds")
                         total_duration_seconds += session.total_duration
             
-            total_duration_hours = round(total_duration_seconds / 3600, 2)
-            logger.debug(f"📊 Total duration: {total_duration_seconds} seconds = {total_duration_hours} hours")
+            total_duration_minutes = round(total_duration_seconds / 60, 1)
+            logger.debug(f"📊 Total duration: {total_duration_seconds} seconds = {total_duration_minutes} minutes")
             
             return {
                 'total_meetings': total_meetings,
@@ -342,7 +342,7 @@ class MeetingLifecycleService:
                 'total_tasks': total_tasks,
                 'completed_tasks': completed_tasks,
                 'task_completion_rate': (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0,
-                'total_duration_hours': total_duration_hours
+                'total_duration_minutes': total_duration_minutes
             }
             
         except Exception as e:
@@ -354,5 +354,5 @@ class MeetingLifecycleService:
                 'total_tasks': 0,
                 'completed_tasks': 0,
                 'task_completion_rate': 0,
-                'total_duration_hours': 0
+                'total_duration_minutes': 0
             }

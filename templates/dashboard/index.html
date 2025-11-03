@@ -352,8 +352,8 @@
                 </svg>
             </div>
             <div class="stat-content">
-                <p class="stat-label">Hours Saved</p>
-                <p class="stat-value">{{ hours_saved|default(0) }}</p>
+                <p class="stat-label">Minutes Saved</p>
+                <p class="stat-value">{{ minutes_saved|default(0) }}</p>
             </div>
         </div>
     </div>
@@ -1027,8 +1027,8 @@ window.initMorphTransitions = function() {
         if (data.total_tasks !== undefined && statElements.actionItems) {
             statElements.actionItems.textContent = data.total_tasks;
         }
-        if (data.hours_saved !== undefined && statElements.hoursSaved) {
-            statElements.hoursSaved.textContent = data.hours_saved;
+        if (data.minutes_saved !== undefined && statElements.hoursSaved) {
+            statElements.hoursSaved.textContent = data.minutes_saved;
         }
     }
     
@@ -1044,7 +1044,7 @@ window.initMorphTransitions = function() {
             const serverStats = {
                 total_meetings: {{ stats.total_meetings|default(0) }},
                 total_tasks: {{ stats.total_tasks|default(0) }},
-                hours_saved: {{ stats.get('hours_saved', 0) }}
+                minutes_saved: {{ stats.get('minutes_saved', 0) }}
             };
             
             // Get cached data for validation
@@ -1108,7 +1108,7 @@ window.initMorphTransitions = function() {
             const serverStats = {
                 total_meetings: parseInt(statElements.totalMeetings?.textContent || '0'),
                 total_tasks: parseInt(statElements.actionItems?.textContent || '0'),
-                hours_saved: parseInt(statElements.hoursSaved?.textContent || '0')
+                minutes_saved: parseInt(statElements.hoursSaved?.textContent || '0')
             };
             
             // Get cached analytics
@@ -1140,8 +1140,8 @@ window.initMorphTransitions = function() {
                 if (cachedData.total_tasks !== serverStats.total_tasks) {
                     changes.push(`tasks: ${cachedData.total_tasks} → ${serverStats.total_tasks}`);
                 }
-                if (cachedData.hours_saved !== serverStats.hours_saved) {
-                    changes.push(`hours: ${cachedData.hours_saved} → ${serverStats.hours_saved}`);
+                if (cachedData.minutes_saved !== serverStats.minutes_saved) {
+                    changes.push(`minutes: ${cachedData.minutes_saved} → ${serverStats.minutes_saved}`);
                 }
                 
                 console.log('📊 Changes detected:', changes.join(', '));
@@ -1256,8 +1256,8 @@ window.initMorphTransitions = function() {
         if (stats.total_tasks !== undefined) {
             updateCounter(statElements.actionItems, stats.total_tasks, 'set');
         }
-        if (stats.hours_saved !== undefined) {
-            updateCounter(statElements.hoursSaved, stats.hours_saved, 'set');
+        if (stats.minutes_saved !== undefined) {
+            updateCounter(statElements.hoursSaved, stats.minutes_saved, 'set');
         }
         
         // Update cache with fresh statistics
