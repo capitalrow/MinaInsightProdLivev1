@@ -70,12 +70,14 @@ class EventBroadcaster:
                 'event_id': event.id,
                 'event_type': event.event_type.value,
                 'event_name': event.event_name,
-                'sequence_num': event.sequence_num,
+                'sequence_num': event.sequence_num,  # Global sequence
+                'workspace_id': event.workspace_id,  # CROWN⁴.5: Workspace isolation
+                'workspace_sequence_num': event.workspace_sequence_num,  # CROWN⁴.5: Per-workspace sequence
                 'last_applied': event.last_applied_id,  # CROWN⁴: Idempotency token
                 'vector_clock': event.vector_clock,  # CROWN⁴.5: Distributed ordering
                 'timestamp': event.created_at.isoformat() if event.created_at else None,
                 'data': event.payload or {},
-                'checksum': event.checksum
+                'checksum': event.checksum  # SHA-256 payload integrity
             }
             
             # Emit to specific room or broadcast to all
@@ -148,7 +150,8 @@ class EventBroadcaster:
                     'workspace_id': workspace_id
                 },
                 session_id=session_id,
-                trace_id=str(session_id)
+                trace_id=str(session_id),
+                workspace_id=str(workspace_id)  # CROWN⁴.5: Per-workspace sequencing
             )
             
             # Broadcast to dashboard namespace with workspace room
@@ -214,7 +217,8 @@ class EventBroadcaster:
                 },
                 trace_id=f"task_{task_id}",
                 client_id=f"user_{user_id}" if user_id else f"server_{workspace_id}",  # CROWN⁴.5: Real client ID
-                previous_clock=previous_clock
+                previous_clock=previous_clock,
+                workspace_id=str(workspace_id)  # CROWN⁴.5: Per-workspace sequencing
             )
             
             # Broadcast to both dashboard and tasks namespaces

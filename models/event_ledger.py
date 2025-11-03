@@ -132,9 +132,13 @@ class EventLedger(Base):
     
     # CROWN⁴ Event Sequencing fields
     sequence_num: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)  # Global event ordering
-    checksum: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # MD5 hash for data integrity
+    checksum: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # SHA-256 hash for data integrity
     broadcast_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)  # pending|sent|failed
     last_applied_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Last processed event ID for idempotency
+    
+    # CROWN⁴.5 Per-Workspace Sequencing fields
+    workspace_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)  # Workspace UUID
+    workspace_sequence_num: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)  # Per-workspace monotonic counter
     
     # CROWN⁴.5: Vector clock for distributed conflict resolution
     vector_clock: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)  # {client_id: timestamp, ...}
