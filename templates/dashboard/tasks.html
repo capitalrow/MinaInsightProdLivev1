@@ -1947,7 +1947,7 @@
                 
                 // Update viewState in cache (persist filter preference)
                 if (window.taskCache) {
-                    await window.taskCache.setViewState({ activeFilter: filter });
+                    await window.taskCache.setViewState('tasks_page', { activeFilter: filter });
                 }
                 
                 // If clustering is enabled, exit cluster mode (showNormalView handles disable internally)
@@ -2403,30 +2403,16 @@
         }
     });
     
-    // Wire up task checkboxes for status toggle (using event delegation)
+    // ═════════════════════════════════════════════════════════════════════════
+    // REMOVED: Duplicate checkbox handler
+    // The CROWN⁴.5 centralized handler (line 3066) handles checkboxes globally
+    // with proper selection mode support. This duplicate handler was causing 
+    // double-toggle bug (todo→completed→todo instantly).
+    // ═════════════════════════════════════════════════════════════════════════
+    
+    // Wire up delete buttons (using event delegation)
     const tasksListContainer = document.getElementById('tasks-list-container');
     if (tasksListContainer) {
-        tasksListContainer.addEventListener('change', async (e) => {
-            if (e.target.classList.contains('task-checkbox')) {
-                const taskCard = e.target.closest('.task-card');
-                const taskId = taskCard.dataset.taskId;
-                const isCompleted = e.target.checked;
-                
-                console.log(`📝 Toggling task ${taskId} to ${isCompleted ? 'completed' : 'todo'}`);
-                
-                try {
-                    // Use toggleTaskStatus for proper status toggle
-                    await window.optimisticUI.toggleTaskStatus(taskId);
-                    console.log('✅ Task status updated');
-                } catch (error) {
-                    console.error('❌ Failed to update task:', error);
-                    // Revert checkbox on error
-                    e.target.checked = !isCompleted;
-                    alert('Failed to update task. Please try again.');
-                }
-            }
-        });
-        
         // Wire up delete buttons (using event delegation)
         tasksListContainer.addEventListener('click', async (e) => {
             const deleteBtn = e.target.closest('.task-delete-btn');
