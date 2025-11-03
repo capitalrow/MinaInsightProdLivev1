@@ -451,23 +451,18 @@ class TaskBootstrap {
                     `}
 
                     ${task.due_date ? `
-                        <div class="task-due-date ${isOverdue ? 'overdue' : ''} ${isDueSoon ? 'due-soon' : ''}" 
-                             data-task-id="${task.id}"
-                             title="Click to change due date">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                            </svg>
+                        <span class="due-date-badge ${isOverdue ? 'overdue' : ''} ${isDueSoon ? 'due-soon' : ''}" 
+                              data-task-id="${task.id}"
+                              data-iso-date="${task.due_date}"
+                              title="Click to change due date">
                             ${this.formatDueDate(task.due_date)}
-                        </div>
+                        </span>
                     ` : `
-                        <div class="task-due-date task-due-date-empty" 
-                             data-task-id="${task.id}"
-                             title="Click to set due date">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                            </svg>
-                            Due date
-                        </div>
+                        <span class="due-date-badge due-date-add" 
+                              data-task-id="${task.id}"
+                              title="Click to set due date">
+                            + Add due date
+                        </span>
                     `}
 
                     ${task.labels && task.labels.length > 0 ? `
