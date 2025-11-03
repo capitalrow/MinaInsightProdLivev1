@@ -22,7 +22,7 @@ window.IndexedDBCache = class IndexedDBCache {
     constructor(workspaceId) {
         this.workspaceId = workspaceId;
         this.dbName = `mina_cache_${workspaceId}`;
-        this.version = 2;
+        this.version = 3;  // CROWN⁴.5: Bumped for view_state and counters stores
         this.db = null;
         
         // Store names
@@ -32,7 +32,10 @@ window.IndexedDBCache = class IndexedDBCache {
             TASKS: 'tasks',
             SESSIONS: 'sessions',
             METADATA: 'metadata',
-            OFFLINE_QUEUE: 'offline_queue'
+            OFFLINE_QUEUE: 'offline_queue',
+            VIEW_STATE: 'view_state',  // CROWN⁴.5: User-specific view state
+            COUNTERS: 'counters',  // CROWN⁴.5: Cached task counts
+            SESSION_CONTEXT: 'session_context'  // CROWN⁴.5: Transcript linkage context
         };
     }
     
@@ -116,6 +119,36 @@ window.IndexedDBCache = class IndexedDBCache {
                     queueStore.createIndex('event_type', 'event_type', { unique: false });
                     queueStore.createIndex('status', 'status', { unique: false });
                     console.log('📮 Created offline queue store');
+                }
+                
+                // CROWN⁴.5: Create view_state store (user-specific view preferences)
+                if (!db.objectStoreNames.contains(this.STORES.VIEW_STATE)) {
+                    const viewStateStore = db.createObjectStore(this.STORES.VIEW_STATE, { 
+                        keyPath: 'user_id' 
+                    });
+                    viewStateStore.createIndex('last_event_id', 'last_event_id', { unique: false });
+                    viewStateStore.createIndex('updated_at', 'updated_at', { unique: false });
+                    console.log('🎨 Created view_state store (CROWN⁴.5)');
+                }
+                
+                // CROWN⁴.5: Create counters store (cached task counts)
+                if (!db.objectStoreNames.contains(this.STORES.COUNTERS)) {
+                    const countersStore = db.createObjectStore(this.STORES.COUNTERS, { 
+                        keyPath: 'user_id' 
+                    });
+                    countersStore.createIndex('checksum', 'checksum', { unique: false });
+                    countersStore.createIndex('updated_at', 'updated_at', { unique: false });
+                    console.log('🔢 Created counters store (CROWN⁴.5)');
+                }
+                
+                // CROWN⁴.5: Create session_context store (transcript linkage)
+                if (!db.objectStoreNames.contains(this.STORES.SESSION_CONTEXT)) {
+                    const sessionContextStore = db.createObjectStore(this.STORES.SESSION_CONTEXT, { 
+                        keyPath: 'session_id' 
+                    });
+                    sessionContextStore.createIndex('origin_hash', 'origin_hash', { unique: false });
+                    sessionContextStore.createIndex('updated_at', 'updated_at', { unique: false });
+                    console.log('🔗 Created session_context store (CROWN⁴.5)');
                 }
                 
                 console.log('🎉 IndexedDB schema upgrade complete');
@@ -536,6 +569,141 @@ window.IndexedDBCache = class IndexedDBCache {
                 reject(transaction.error);
             };
         });
+    }
+    
+    /**
+     * CROWN⁴.5 View State Methods
+     */
+    
+    /**
+     * Get view state for user
+     */
+    async getViewState(userId) {
+        return await this.get(this.STORES.VIEW_STATE, userId);
+    }
+    
+    /**
+     * Update view state for user
+     */
+    async updateViewState(userId, viewState) {
+        const existing = await this.getViewState(userId) || {};
+        const updated = {
+            ...existing,
+            ...viewState,
+            user_id: userId,
+            updated_at: new Date().toISOString()
+        };
+        await this.put(this.STORES.VIEW_STATE, updated);
+        console.log(`🎨 Updated view state for user ${userId}`);
+        return updated;
+    }
+    
+    /**
+     * CROWN⁴.5 Counters Methods
+     */
+    
+    /**
+     * Get counters for user
+     */
+    async getCounters(userId) {
+        return await this.get(this.STORES.COUNTERS, userId);
+    }
+    
+    /**
+     * Update counters for user
+     */
+    async updateCounters(userId, counters) {
+        const updated = {
+            ...counters,
+            user_id: userId,
+            updated_at: new Date().toISOString()
+        };
+        await this.put(this.STORES.COUNTERS, updated);
+        console.log(`🔢 Updated counters for user ${userId}`);
+        return updated;
+    }
+    
+    /**
+     * CROWN⁴.5 Session Context Methods
+     */
+    
+    /**
+     * Get session context
+     */
+    async getSessionContext(sessionId) {
+        return await this.get(this.STORES.SESSION_CONTEXT, sessionId);
+    }
+    
+    /**
+     * Update session context (transcript linkage)
+     */
+    async updateSessionContext(sessionId, context) {
+        const updated = {
+            session_id: sessionId,
+            transcript_span: context.transcript_span || null,
+            origin_message: context.origin_message || null,
+            context_confidence: context.context_confidence || null,
+            derived_entities: context.derived_entities || [],
+            origin_hash: context.origin_hash || null,
+            updated_at: new Date().toISOString()
+        };
+        await this.put(this.STORES.SESSION_CONTEXT, updated);
+        console.log(`🔗 Updated session context for session ${sessionId}`);
+        return updated;
+    }
+    
+    /**
+     * CROWN⁴.5 Task Cache Methods with Checksum Validation
+     */
+    
+    /**
+     * Cache tasks with checksum for drift detection
+     */
+    async cacheTasksWithChecksum(tasks, checksum, lastEventId = null) {
+        await this.putBatch(this.STORES.TASKS, tasks);
+        await this.setMetadata('tasks_checksum', checksum);
+        await this.setMetadata('tasks_cached_at', new Date().toISOString());
+        if (lastEventId) {
+            await this.setMetadata('tasks_last_event_id', lastEventId);
+        }
+        console.log(`💾 Cached ${tasks.length} tasks with checksum ${checksum?.substring(0, 8)}...`);
+    }
+    
+    /**
+     * Get all tasks with checksum for validation
+     */
+    async getCachedTasksWithChecksum() {
+        const tasks = await this.getAll(this.STORES.TASKS);
+        const checksumData = await this.getMetadata('tasks_checksum');
+        const cachedAtData = await this.getMetadata('tasks_cached_at');
+        const lastEventIdData = await this.getMetadata('tasks_last_event_id');
+        
+        return {
+            data: tasks,
+            checksum: checksumData?.value,
+            cached_at: cachedAtData?.value,
+            last_event_id: lastEventIdData?.value,
+            count: tasks.length
+        };
+    }
+    
+    /**
+     * Update single task optimistically
+     */
+    async updateTask(taskId, updates) {
+        const task = await this.get(this.STORES.TASKS, taskId);
+        if (task) {
+            const updated = {
+                ...task,
+                ...updates,
+                _optimistic_update: true,
+                _updated_at: new Date().toISOString()
+            };
+            await this.put(this.STORES.TASKS, updated);
+            console.log(`✏️  Optimistically updated task ${taskId}`);
+            return updated;
+        }
+        return null;
     }
     
     /**
