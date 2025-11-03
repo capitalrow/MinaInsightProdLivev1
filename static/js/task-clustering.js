@@ -237,7 +237,9 @@ class TaskClusteringManager {
                  data-task-id="${task.id}" 
                  data-status="${status}"
                  style="margin: 0;">
-                <input type="checkbox" ${isCompleted ? 'checked' : ''} class="task-checkbox" data-task-id="${task.id}">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" ${isCompleted ? 'checked' : ''} class="task-checkbox" data-task-id="${task.id}">
+                </div>
                 <h3 class="task-title">${this.escapeHtml(task.title || task.description || 'Untitled Task')}</h3>
                 <span class="priority-badge priority-${priority.toLowerCase()}">
                     ${priority}
@@ -279,9 +281,27 @@ class TaskClusteringManager {
         });
     }
 
-    showNormalView() {
-        // Trigger re-render of normal task list
-        window.dispatchEvent(new CustomEvent('tasks:refresh-view'));
+    async showNormalView() {
+        // Re-render normal flat task list
+        const allTasks = await window.taskCache.getAllTasks();
+        
+        // Get active filter
+        const viewState = await window.taskCache.getViewState();
+        const activeFilter = viewState?.activeFilter || 'all';
+        
+        // Apply filter
+        let filteredTasks = allTasks;
+        if (activeFilter === 'pending') {
+            filteredTasks = allTasks.filter(t => t.status === 'todo' || t.status === 'in_progress');
+        } else if (activeFilter === 'completed') {
+            filteredTasks = allTasks.filter(t => t.status === 'completed' || t.status === 'done');
+        }
+        
+        // Re-render flat list
+        if (window.taskBootstrap) {
+            await window.taskBootstrap.renderTasks(filteredTasks);
+            await window.taskBootstrap.updateCounters(filteredTasks);
+        }
         
         // Restore selection state after view switches back
         setTimeout(() => {
@@ -289,6 +309,8 @@ class TaskClusteringManager {
                 window.selectionManager.restoreSelectionUI();
             }
         }, 100);
+        
+        console.log(`✅ Restored normal view with ${filteredTasks.length} tasks (filter: ${activeFilter})`);
     }
 
     showLoadingState() {
