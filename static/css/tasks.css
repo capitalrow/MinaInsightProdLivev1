@@ -1198,3 +1198,122 @@
     transform: rotate(360deg);
   }
 }
+
+/* ========================================
+ * DRAG-AND-DROP REORDERING (Phase 3 Task 9)
+ * ======================================== */
+
+/* Draggable cursor */
+.task-card[draggable="true"],
+.task-item-enhanced[draggable="true"] {
+  cursor: grab;
+}
+
+.task-card[draggable="true"]:active,
+.task-item-enhanced[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* Dragging state */
+.task-card.task-dragging,
+.task-item-enhanced.task-dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+  cursor: grabbing;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+/* Drop zone indicator */
+.task-card.task-drag-over,
+.task-item-enhanced.task-drag-over {
+  border-color: rgba(59, 130, 246, 0.6);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
+}
+
+/* Drag placeholder */
+.task-drag-placeholder {
+  height: 40px;
+  margin: var(--space-2) 0;
+  border: 2px dashed rgba(59, 130, 246, 0.5);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(37, 99, 235, 0.02) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  animation: placeholder-pulse 2s ease-in-out infinite;
+}
+
+.placeholder-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: rgba(59, 130, 246, 0.7);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.placeholder-content i {
+  width: 16px;
+  height: 16px;
+}
+
+/* Placeholder pulse animation */
+@keyframes placeholder-pulse {
+  0%, 100% {
+    border-color: rgba(59, 130, 246, 0.3);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.03) 0%, rgba(37, 99, 235, 0.01) 100%);
+  }
+  50% {
+    border-color: rgba(59, 130, 246, 0.6);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(37, 99, 235, 0.04) 100%);
+  }
+}
+
+/* Disable text selection during drag */
+.task-card.task-dragging *,
+.task-item-enhanced.task-dragging * {
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Drag handle indicator (optional visual cue) */
+.task-card::before,
+.task-item-enhanced::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 16px;
+  background: linear-gradient(to bottom, 
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 100%);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.task-card:hover::before,
+.task-item-enhanced:hover::before {
+  opacity: 0.6;
+}
+
+.task-card.task-dragging::before,
+.task-item-enhanced.task-dragging::before {
+  opacity: 1;
+}
+
+/* Responsive drag-drop */
+@media (max-width: 768px) {
+  .task-drag-placeholder {
+    height: 50px;
+  }
+  
+  .placeholder-content {
+    font-size: 0.85rem;
+  }
+}

@@ -8,6 +8,7 @@ import re
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta, date
 from dataclasses import dataclass
+from sqlalchemy import func
 from models import db, Task, Meeting, Segment
 from services.openai_client_manager import get_openai_client
 
@@ -287,6 +288,19 @@ class TaskExtractionService:
         """Create Task objects in database from extracted tasks."""
         created_tasks = []
         
+        # CROWN⁴.5 Phase 3: Calculate next position for drag-drop ordering
+        # Get meeting to determine workspace, then find max position
+        meeting = db.session.query(Meeting).filter_by(id=meeting_id).first()
+        if not meeting:
+            return []
+        
+        max_position = db.session.query(func.max(Task.position)).join(Meeting).filter(
+            Meeting.workspace_id == meeting.workspace_id,
+            Task.deleted_at.is_(None)
+        ).scalar() or -1
+        
+        current_position = max_position + 1
+        
         for extracted_task in extracted_tasks:
             try:
                 # Parse due date if mentioned
@@ -305,11 +319,13 @@ class TaskExtractionService:
                     assigned_to_id=assigned_to_id,
                     extracted_by_ai=True,
                     confidence_score=extracted_task.confidence,
-                    extraction_context=extracted_task.context
+                    extraction_context=extracted_task.context,
+                    position=current_position
                 )
                 
                 db.session.add(task)
                 created_tasks.append(task)
+                current_position += 1  # Increment for next task
                 
             except Exception as e:
                 print(f"Failed to create task: {e}")
