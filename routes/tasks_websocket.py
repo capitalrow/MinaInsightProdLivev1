@@ -45,13 +45,13 @@ def get_socket_sid() -> str:
 
 
 def run_async(coro):
-    """Helper to run async functions in sync context."""
+    """Helper to run async functions in sync context with eventlet compatibility."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop.run_until_complete(coro)
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 logger = logging.getLogger(__name__)
 
