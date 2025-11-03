@@ -246,10 +246,10 @@
     min-width: 0;
     margin: 0;
     cursor: text;
+    position: relative;
     padding: 4px 8px;
     border-radius: var(--radius-sm);
     transition: all var(--transition-base);
-    position: relative;
 }
 
 .task-title:hover {
@@ -1958,6 +1958,9 @@
                     if (clusterToggle) {
                         clusterToggle.classList.remove('active');
                     }
+                    
+                    // Re-render flat list view
+                    await window.taskClusteringManager.showNormalView();
                 }
                 
                 // Update active tab visual state
