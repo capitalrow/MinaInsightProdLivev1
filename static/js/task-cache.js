@@ -822,6 +822,85 @@ class TaskCache {
     }
 
     /**
+     * CROWN⁴.5: Track event sequence number and detect gaps
+     * MONOTONIC: Only accepts non-decreasing event_ids to prevent backwards rollback
+     * @param {number} event_id - Event ID from server
+     * @returns {Promise<{gap_detected: boolean, gap_type: string, expected: number, received: number}>}
+     */
+    async trackEventSequence(event_id) {
+        if (!event_id) {
+            return { gap_detected: false, gap_type: 'none' };
+        }
+
+        const lastEventId = await this.getMetadata('last_event_id');
+        
+        // First event received
+        if (lastEventId === null || lastEventId === undefined) {
+            await this.setMetadata('last_event_id', event_id);
+            console.log(`📊 Sequence tracking initialized: event_id=${event_id}`);
+            return { gap_detected: false, gap_type: 'init', expected: null, received: event_id };
+        }
+
+        const expected = lastEventId + 1;
+        
+        // DUPLICATE: Received same event_id again (idempotent replay)
+        if (event_id === lastEventId) {
+            console.log(`🔁 Duplicate event_id=${event_id} (already processed)`);
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordEvent('sequence_duplicate', {
+                    event_id,
+                    last_event_id: lastEventId
+                });
+            }
+            return { gap_detected: false, gap_type: 'duplicate', expected, received: event_id };
+        }
+
+        // REGRESSION: Received event_id < last_event_id (stale/replayed event)
+        if (event_id < lastEventId) {
+            console.warn(`⏪ Regression detected: event_id=${event_id} < last_event_id=${lastEventId} (ignoring stale event)`);
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordEvent('sequence_regression', {
+                    expected: lastEventId,
+                    received: event_id,
+                    regression_size: lastEventId - event_id
+                });
+            }
+            // DO NOT update last_event_id - prevent backwards rollback
+            return { gap_detected: true, gap_type: 'regression', expected: lastEventId, received: event_id };
+        }
+
+        // FORWARD GAP: Received event_id > expected (missing events)
+        if (event_id > expected) {
+            const gap_size = event_id - expected;
+            console.warn(`⚠️ Forward gap detected! Expected event_id=${expected}, received=${event_id} (missing ${gap_size} events)`);
+            
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordEvent('sequence_gap_forward', {
+                    expected,
+                    received: event_id,
+                    gap_size
+                });
+            }
+            
+            // Update to new event_id (move forward despite gap)
+            await this.setMetadata('last_event_id', event_id);
+            return { gap_detected: true, gap_type: 'forward', expected, received: event_id, gap_size };
+        }
+
+        // SEQUENTIAL: event_id === expected (normal case)
+        await this.setMetadata('last_event_id', event_id);
+        return { gap_detected: false, gap_type: 'sequential', expected, received: event_id };
+    }
+
+    /**
+     * CROWN⁴.5: Get last tracked event ID
+     * @returns {Promise<number|null>}
+     */
+    async getLastEventId() {
+        return await this.getMetadata('last_event_id');
+    }
+
+    /**
      * Get view state (filters, sort, scroll position)
      * @param {string} key
      * @returns {Promise<any>}
