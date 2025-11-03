@@ -15,7 +15,7 @@ from .base import Base
 if TYPE_CHECKING:
     from .workspace import Workspace
     from .meeting import Meeting
-    from .task import Task
+    from .task import Task, TaskAssignee
     from .marker import Marker
     from .comment import Comment
     from .session import Session
@@ -68,6 +68,8 @@ class User(UserMixin, Base):
     # CROWN⁴.5: Many-to-many tasks assigned (multi-assignee support)
     tasks_assigned_multi: Mapped[list["Task"]] = relationship(
         secondary="task_assignees",
+        primaryjoin="User.id==foreign(TaskAssignee.user_id)",
+        secondaryjoin="Task.id==foreign(TaskAssignee.task_id)",
         back_populates="assignees",
         viewonly=True  # Prevent circular updates
     )
