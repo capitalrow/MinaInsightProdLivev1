@@ -34,6 +34,14 @@ from flask_socketio import emit, join_room, leave_room
 from flask_login import current_user
 from services.event_broadcaster import event_broadcaster
 from services.task_event_handler import task_event_handler
+from services.event_sequencer import event_sequencer
+
+
+# Type annotation helper for Flask-SocketIO request.sid
+# Flask-SocketIO enhances Flask's request object with 'sid' attribute at runtime
+def get_socket_sid() -> str:
+    """Get Socket.IO session ID from request context."""
+    return request.sid  # type: ignore[attr-defined]
 
 
 def run_async(coro):
@@ -64,7 +72,7 @@ def register_tasks_namespace(socketio):
     def handle_tasks_connect():
         """Handle client connection to tasks namespace."""
         try:
-            client_id = request.sid
+            client_id = get_socket_sid()
             logger.info(f"Tasks client connected: {client_id}")
             
             emit('connected', {
@@ -80,7 +88,7 @@ def register_tasks_namespace(socketio):
     def handle_tasks_disconnect():
         """Handle client disconnection from tasks namespace."""
         try:
-            client_id = request.sid
+            client_id = get_socket_sid()
             logger.info(f"Tasks client disconnected: {client_id}")
             
         except Exception as e:
@@ -103,7 +111,7 @@ def register_tasks_namespace(socketio):
             room = f"workspace_{workspace_id}"
             join_room(room)
             
-            logger.info(f"Client {request.sid} joined tasks room: {room}")
+            logger.info(f"Client {get_socket_sid()} joined tasks room: {room}")
             
             emit('joined_workspace', {
                 'workspace_id': workspace_id,
@@ -131,7 +139,7 @@ def register_tasks_namespace(socketio):
             room = f"meeting_{meeting_id}"
             join_room(room)
             
-            logger.info(f"Client {request.sid} subscribed to meeting {meeting_id} tasks")
+            logger.info(f"Client {get_socket_sid()} subscribed to meeting {meeting_id} tasks")
             
             emit('subscribed_meeting', {
                 'meeting_id': meeting_id,
@@ -149,9 +157,12 @@ def register_tasks_namespace(socketio):
         """
         Universal handler for all 20 CROWN⁴.5 task events.
         
+        CROWN⁴.5: Integrated with EventSequencer for deterministic ordering.
+        
         Args:
             data: {
                 'event_type': str,  # e.g., 'task_create:manual'
+                'event_id': int,    # Sequence number for ordering
                 'payload': dict,    # Event-specific data
                 'vector_clock': dict (optional),  # Vector clock for offline support
                 'trace_id': str (optional)  # Trace ID for telemetry
@@ -159,6 +170,7 @@ def register_tasks_namespace(socketio):
         """
         try:
             event_type = data.get('event_type')
+            event_id = data.get('event_id')
             payload = data.get('payload', {})
             
             if not event_type:
@@ -169,6 +181,7 @@ def register_tasks_namespace(socketio):
             # Get user ID (from authenticated session)
             user_id = payload.get('user_id') or (current_user.is_authenticated and current_user.id)
             session_id = payload.get('session_id')
+            workspace_id = payload.get('workspace_id', 1)  # Default to workspace 1 if not specified
             
             if not user_id:
                 error_response = {'success': False, 'message': 'user_id required'}
@@ -179,32 +192,105 @@ def register_tasks_namespace(socketio):
             if 'vector_clock' in data:
                 payload['vector_clock'] = data['vector_clock']
             
-            # Process event (run async handler in sync context)
-            result = run_async(task_event_handler.handle_event(
-                event_type=event_type,
-                payload=payload,
-                user_id=user_id,
-                session_id=session_id
-            ))
+            # CROWN⁴.5: Validate and sequence event (gap buffering + temporal recovery)
+            if event_id:
+                # Build event data for sequencer
+                event_data = {
+                    'event_id': event_id,
+                    'event_type': event_type,
+                    'payload': payload,
+                    'vector_clock': data.get('vector_clock', {}),
+                    'trace_id': data.get('trace_id')
+                }
+                
+                # Validate and sequence
+                is_valid, ready_events, error_msg = event_sequencer.validate_and_sequence_event(
+                    workspace_id=workspace_id,
+                    event_data=event_data
+                )
+                
+                if not is_valid:
+                    error_response = {
+                        'success': False,
+                        'message': f'Event sequencing failed: {error_msg}',
+                        'event_id': event_id
+                    }
+                    emit('error', error_response)
+                    return error_response
+                
+                # If event is buffered (no ready events), acknowledge and return
+                if not ready_events:
+                    logger.debug(f"Event {event_id} buffered, waiting for gap to fill")
+                    return {
+                        'success': True,
+                        'buffered': True,
+                        'event_id': event_id,
+                        'message': 'Event buffered, waiting for sequence gap to fill'
+                    }
+                
+                # Process all ready events in order
+                results = []
+                for event in ready_events:
+                    result = run_async(task_event_handler.handle_event(
+                        event_type=event['event_type'],
+                        payload=event['payload'],
+                        user_id=user_id,
+                        session_id=session_id
+                    ))
+                    results.append(result)
+                    
+                    # Broadcast each successful event
+                    if result.get('success'):
+                        emit('task_updated', {
+                            'event_type': event['event_type'],
+                            'event_id': event['event_id'],
+                            'data': result
+                        }, to=f"workspace_{workspace_id}")
+                
+                # Return combined result
+                final_result = {
+                    'success': all(r.get('success', False) for r in results),
+                    'events_processed': len(results),
+                    'results': results,
+                    'trace_id': data.get('trace_id')
+                }
+                
+                emit('task_event_result', final_result)
+                return final_result
             
-            # Emit result back to client
-            emit('task_event_result', {
-                'event_type': event_type,
-                'result': result,
-                'trace_id': data.get('trace_id')
-            })
-            
-            # Broadcast to workspace room if successful
-            if result.get('success'):
-                workspace_id = payload.get('workspace_id')
-                if workspace_id:
-                    emit('task_updated', {
-                        'event_type': event_type,
-                        'data': result
-                    }, room=f"workspace_{workspace_id}")
-            
-            # Return result for Socket.IO acknowledgment callback
-            return result
+            else:
+                # Legacy path: No event_id (backward compatibility)
+                logger.warning(f"Event {event_type} received without event_id, bypassing sequencer")
+                
+                # Process event without sequencing
+                result = run_async(task_event_handler.handle_event(
+                    event_type=event_type,
+                    payload=payload,
+                    user_id=user_id,
+                    session_id=session_id
+                ))
+                
+                # Create response
+                response = {
+                    'event_type': event_type,
+                    'result': result,
+                    'trace_id': data.get('trace_id'),
+                    'sequenced': False  # Indicate this bypassed sequencer
+                }
+                
+                # Emit result back to client
+                emit('task_event_result', response)
+                
+                # Broadcast to workspace room if successful
+                if result.get('success'):
+                    if workspace_id:
+                        emit('task_updated', {
+                            'event_type': event_type,
+                            'data': result
+                        }, to=f"workspace_{workspace_id}")
+                
+                # Return result for Socket.IO acknowledgment callback
+                return response
             
         except Exception as e:
             logger.error(f"Task event error: {e}", exc_info=True)
