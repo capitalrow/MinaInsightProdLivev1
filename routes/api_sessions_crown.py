@@ -6,7 +6,7 @@ REST API for meetings page with incremental updates via event sourcing.
 import logging
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from sqlalchemy import select, func, and_, or_, desc
+from sqlalchemy import select, func, and_, or_, desc, cast, String
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -87,7 +87,7 @@ def _compute_global_etag(workspace_id: int, range_filter: Optional[datetime], sh
             EventType.SESSION_ARCHIVE,
             EventType.SESSION_FINALIZED
         ]))
-        .where(EventLedger.payload['workspace_id'].astext == str(workspace_id))
+        .where(cast(EventLedger.payload['workspace_id'], String) == str(workspace_id))
         .order_by(desc(EventLedger.id))
         .limit(1)
     )
@@ -155,7 +155,7 @@ def get_sessions_header():
         # Get latest event_id for this workspace
         last_event = db.session.scalar(
             select(EventLedger.id)
-            .where(EventLedger.payload['workspace_id'].astext == str(workspace_id))
+            .where(cast(EventLedger.payload['workspace_id'], String) == str(workspace_id))
             .order_by(desc(EventLedger.id))
             .limit(1)
         )
@@ -235,7 +235,7 @@ def get_sessions_diff():
         # Get latest event_id for response
         last_event = db.session.scalar(
             select(EventLedger.id)
-            .where(EventLedger.payload['workspace_id'].astext == str(workspace_id))
+            .where(cast(EventLedger.payload['workspace_id'], String) == str(workspace_id))
             .order_by(desc(EventLedger.id))
             .limit(1)
         )
