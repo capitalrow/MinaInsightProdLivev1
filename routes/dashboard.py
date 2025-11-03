@@ -258,9 +258,13 @@ def meetings():
 def tasks():
     """Tasks overview page with kanban board."""
     # Get all tasks for workspace
-    all_tasks = db.session.query(Task).join(Meeting).filter(
-        Meeting.workspace_id == current_user.workspace_id
-    ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+    # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
+    all_tasks = db.session.query(Task)\
+        .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
+        .outerjoin(Session, Task.session_id == Session.id)\
+        .filter(
+            (Meeting.workspace_id == current_user.workspace_id) | (Session.workspace_id == current_user.workspace_id)
+        ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
     
     # Get tasks by status
     todo_tasks = [t for t in all_tasks if t.status == 'todo']
