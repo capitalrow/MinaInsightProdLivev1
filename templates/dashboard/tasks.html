@@ -476,763 +476,6 @@
     </div>
 </div>
 
-<script nonce="{{ g.csp_nonce }}">
-/**
- * Tasks Page - Real-time WebSocket Integration
- * CROWN⁴ Event Handling for Live Task Updates
- */
-
-(function() {
-    'use strict';
-    
-    // Get user context for WebSocket authentication
-    window.CURRENT_USER_ID = {{ current_user.id if current_user.is_authenticated else 'null' }};
-    window.WORKSPACE_ID = {{ current_user.workspace_id if current_user.workspace_id else 'null' }};
-    window.CURRENT_SESSION_ID = null; // Will be set dynamically when session is active
-    
-    const WORKSPACE_ID = window.WORKSPACE_ID;
-    
-    // Cache DOM elements
-    const filterCounts = {
-        all: document.querySelector('.filter-tab[data-filter="all"] .px-2'),
-        pending: document.querySelector('.filter-tab[data-filter="pending"] .px-2'),
-        completed: document.querySelector('.filter-tab[data-filter="completed"] .px-2')
-    };
-    
-    const tasksContainer = document.querySelector('.tasks-container > div:last-of-type');
-    const emptyStateEl = document.querySelector('.empty-state');
-    
-    /**
-     * Initialize WebSocket connection for tasks page
-     */
-    function initTasksWebSocket() {
-        console.log('🚀 Initializing tasks WebSocket...');
-        
-        // Initialize WebSocket manager with tasks namespace
-        if (!window.wsManager) {
-            console.error('❌ WebSocket manager not found');
-            return;
-        }
-        
-        // Connect to tasks namespace
-        window.wsManager.connect('tasks');
-        
-        // Listen for task_update events
-        window.wsManager.on('task_update', handleTaskUpdate);
-        
-        console.log('📡 Tasks WebSocket listeners registered');
-    }
-    
-    /**
-     * Handle task update event
-     * @param {Object} data - Event data with task information
-     */
-    function handleTaskUpdate(data) {
-        console.log('✅ Task update event received:', data);
-        
-        const taskData = data.data || data;
-        const action = taskData.action; // 'created', 'updated', 'deleted', 'completed'
-        
-        switch (action) {
-            case 'created':
-                handleTaskCreated(taskData);
-                break;
-            case 'updated':
-                handleTaskUpdated(taskData);
-                break;
-            case 'deleted':
-                handleTaskDeleted(taskData);
-                break;
-            case 'completed':
-                handleTaskCompleted(taskData);
-                break;
-        }
-    }
-    
-    /**
-     * Handle new task created
-     * @param {Object} taskData - Task data
-     */
-    function handleTaskCreated(taskData) {
-        const task = taskData.task || taskData;
-        
-        // Remove empty state if present
-        if (emptyStateEl && emptyStateEl.style.display !== 'none') {
-            emptyStateEl.style.opacity = '0';
-            setTimeout(() => {
-                emptyStateEl.style.display = 'none';
-            }, 300);
-        }
-        
-        // Create task card HTML
-        const cardHTML = createTaskCardHTML(task);
-        
-        // Insert at top of list
-        if (tasksContainer && !emptyStateEl.parentElement.contains(emptyStateEl)) {
-            tasksContainer.insertAdjacentHTML('afterbegin', cardHTML);
-        }
-        
-        // Show notification
-        showNotification('New task created', task.title || 'A new task has been added');
-    }
-    
-    /**
-     * Handle task updated
-     * @param {Object} taskData - Task data
-     */
-    function handleTaskUpdated(taskData) {
-        const task = taskData.task || taskData;
-        const taskCard = document.querySelector(`[data-task-id="${task.id}"]`);
-        
-        if (taskCard) {
-            // Update task title
-            const titleEl = taskCard.querySelector('.task-title');
-            if (titleEl) titleEl.textContent = task.title || 'Untitled Task';
-            
-            // Update priority badge
-            const priorityBadge = taskCard.querySelector('.priority-badge');
-            if (priorityBadge && task.priority) {
-                priorityBadge.className = `priority-badge priority-${task.priority.toLowerCase()}`;
-                priorityBadge.textContent = task.priority;
-            }
-            
-            // Add update animation
-            taskCard.style.animation = 'taskUpdate 0.5s ease-out';
-            setTimeout(() => {
-                taskCard.style.animation = '';
-            }, 500);
-        }
-    }
-    
-    /**
-     * Handle task deleted
-     * @param {Object} taskData - Task data
-     */
-    function handleTaskDeleted(taskData) {
-        const task = taskData.task || taskData;
-        const taskCard = document.querySelector(`[data-task-id="${task.id}"]`);
-        
-        if (taskCard) {
-            // Fade out and remove
-            taskCard.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
-            taskCard.style.opacity = '0';
-            taskCard.style.transform = 'translateX(-20px)';
-            
-            setTimeout(() => {
-                taskCard.remove();
-                
-                // Show empty state if no tasks left
-                const remainingTasks = document.querySelectorAll('.task-card').length;
-                if (remainingTasks === 0 && emptyStateEl) {
-                    emptyStateEl.style.display = 'block';
-                    emptyStateEl.style.opacity = '1';
-                }
-            }, 300);
-        }
-    }
-    
-    /**
-     * Handle task completed
-     * @param {Object} taskData - Task data
-     */
-    async function handleTaskCompleted(taskData) {
-        const task = taskData.task || taskData;
-        const taskCard = document.querySelector(`[data-task-id="${task.id}"]`);
-        
-        // Update IndexedDB cache with new status
-        if (window.taskCache) {
-            const status = task.completed ? 'completed' : 'todo';
-            await window.taskCache.updateTaskStatus(task.id, status);
-            console.log(`💾 Updated cache: Task ${task.id} → ${status}`);
-        }
-        
-        if (taskCard) {
-            const checkbox = taskCard.querySelector('.task-checkbox');
-            
-            if (task.completed) {
-                taskCard.classList.add('completed');
-                taskCard.dataset.status = 'completed';
-                if (checkbox) checkbox.checked = true;
-            } else {
-                taskCard.classList.remove('completed');
-                taskCard.dataset.status = 'pending';
-                if (checkbox) checkbox.checked = false;
-            }
-            
-            // Add completion animation
-            if (task.completed) {
-                taskCard.style.animation = 'taskComplete 0.5s ease-out';
-                setTimeout(() => {
-                    taskCard.style.animation = '';
-                }, 500);
-            }
-        }
-    }
-    
-    /**
-     * Create task card HTML
-     * @param {Object} task - Task data
-     * @returns {string} HTML string
-     */
-    function createTaskCardHTML(task) {
-        const priority = task.priority || 'medium';
-        const completed = task.status === 'completed' || task.completed || false;
-        const status = task.status || (completed ? 'completed' : 'todo');
-        const dueDate = task.due_date || null;
-        const meetingTitle = task.meeting_title || 'Unknown meeting';
-        const assignedTo = task.assigned_to || null;
-        const labels = task.labels || [];
-        
-        return `
-            <div class="task-card ${completed ? 'completed' : ''}" 
-                 data-status="${status}" 
-                 data-task-id="${task.id}"
-                 data-priority="${priority}"
-                 style="animation: slideInFromTop 0.4s ease-out;">
-                <div class="checkbox-wrapper">
-                    <input type="checkbox" 
-                           ${completed ? 'checked' : ''} 
-                           class="task-checkbox" 
-                           data-task-id="${task.id}"
-                           aria-label="Mark task complete">
-                </div>
-                <div class="task-content">
-                    <h3 class="task-title">${escapeHtml(task.title || task.description || 'Untitled Task')}</h3>
-                    <div class="task-metadata">
-                        <span class="task-assignee" data-field="assignee" title="Click to assign">
-                            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                            ${assignedTo ? escapeHtml(assignedTo.display_name || assignedTo.username || assignedTo) : 'Unassigned'}
-                        </span>
-                        <span class="task-due-date" data-field="due_date" title="Click to set due date">
-                            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
-                            ${dueDate ? escapeHtml(dueDate) : 'No due date'}
-                        </span>
-                        ${labels && labels.length > 0 ? `
-                            <div class="task-labels" data-field="labels" title="Click to edit labels">
-                                ${labels.map(label => `<span class="task-label">${escapeHtml(label)}</span>`).join('')}
-                            </div>
-                        ` : `
-                            <span class="task-labels-empty" data-field="labels" title="Click to add labels">
-                                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z"/></svg>
-                                Add labels
-                            </span>
-                        `}
-                    </div>
-                </div>
-                <div class="task-actions">
-                    <span class="priority-badge priority-${priority.toLowerCase()}">
-                        ${priority}
-                    </span>
-                    <button class="task-menu-trigger" 
-                            data-task-id="${task.id}"
-                            role="button"
-                            aria-haspopup="menu"
-                            aria-expanded="false"
-                            aria-label="Task actions menu"
-                            title="More actions">
-                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                            <circle cx="12" cy="5" r="2"/>
-                            <circle cx="12" cy="12" r="2"/>
-                            <circle cx="12" cy="19" r="2"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-    
-    /**
-     * Setup filter tab handlers (CROWN⁴.5 Architecture)
-     * Proper implementation: Update viewState → Fetch filtered tasks → Re-render
-     * CRITICAL FIX: Disable clustering mode when switching filter tabs
-     */
-    function setupFilterTabs() {
-        document.querySelectorAll('.filter-tab').forEach(tab => {
-            tab.addEventListener('click', async () => {
-                if (tab.classList.contains('cluster-toggle')) {
-                    return;
-                }
-                
-                const filter = tab.dataset.filter;
-                
-                console.log(`🔍 Filter changed to: ${filter}`);
-                
-                // Update active tab visual state
-                document.querySelectorAll('.filter-tab').forEach(t => {
-                    if (!t.classList.contains('cluster-toggle')) {
-                        t.classList.remove('active');
-                    }
-                });
-                tab.classList.add('active');
-                
-                // Update viewState in cache (persist filter preference)
-                if (window.taskCache) {
-                    await window.taskCache.setViewState('tasks_page', { activeFilter: filter });
-                }
-                
-                // If clustering is enabled, exit cluster mode (showNormalView handles disable internally)
-                if (window.taskClusteringManager && window.taskClusteringManager.enabled) {
-                    console.log('📋 Exiting clustering mode (switching to filter view)');
-                    await window.taskClusteringManager.showNormalView();
-                    return;
-                }
-                
-                // Fetch filtered tasks from cache
-                const allTasks = await window.taskCache.getAllTasks();
-                let filteredTasks = allTasks;
-                
-                if (filter === 'pending') {
-                    filteredTasks = allTasks.filter(t => t.status === 'todo' || t.status === 'in_progress');
-                } else if (filter === 'completed') {
-                    filteredTasks = allTasks.filter(t => t.status === 'completed' || t.status === 'done');
-                }
-                
-                console.log(`📊 Rendering ${filteredTasks.length} of ${allTasks.length} tasks (filter: ${filter})`);
-                
-                // Re-render with filtered tasks using TaskBootstrap
-                if (window.taskBootstrap) {
-                    await window.taskBootstrap.renderTasks(filteredTasks);
-                    
-                    // Update counters (always uses ALL tasks from cache)
-                    await window.taskBootstrap.updateCounters(filteredTasks);
-                }
-            });
-        });
-    }
-    
-    /**
-     * Show notification toast
-     * @param {string} title - Notification title
-     * @param {string} message - Notification message
-     */
-    function showNotification(title, message) {
-        const notification = document.createElement('div');
-        notification.className = 'notification-toast';
-        notification.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            max-width: 400px;
-            padding: 16px;
-            background: var(--glass-bg);
-            backdrop-filter: var(--backdrop-blur);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-xl);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
-            animation: slideInFromRight 0.3s ease-out;
-        `;
-        
-        notification.innerHTML = `
-            <div style="display: flex; gap: 12px; align-items: start;">
-                <div style="flex-shrink: 0; width: 40px; height: 40px; background: var(--gradient-primary); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                    <svg width="20" height="20" fill="white" viewBox="0 0 24 24">
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                </div>
-                <div style="flex: 1;">
-                    <p style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(title)}</p>
-                    <p style="font-size: 14px; color: var(--color-text-secondary);">${escapeHtml(message)}</p>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(notification);
-        
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            notification.style.animation = 'slideOutToRight 0.3s ease-out';
-            setTimeout(() => notification.remove(), 300);
-        }, 5000);
-    }
-    
-    /**
-     * Escape HTML to prevent XSS
-     * @param {string} text - Text to escape
-     * @returns {string} Escaped text
-     */
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    // ═══════════════════════════════════════════════════════════════════════
-    // Task Menu Controller (Three-Dot Overflow Menu)
-    // Premium glassmorphic dropdown with CROWN⁴.5 optimistic UI integration
-    // ═══════════════════════════════════════════════════════════════════════
-    
-    class TaskMenuController {
-        constructor() {
-            this.menu = document.getElementById('task-menu');
-            this.currentTaskId = null;
-            this.currentTrigger = null;
-            this.isOpen = false;
-            
-            this._setupEventListeners();
-        }
-        
-        _setupEventListeners() {
-            // Event delegation for menu triggers
-            document.addEventListener('click', (e) => {
-                const trigger = e.target.closest('.task-menu-trigger');
-                if (trigger) {
-                    e.stopPropagation();
-                    this.toggle(trigger);
-                    return;
-                }
-                
-                // Close menu if clicking outside
-                if (this.isOpen && !e.target.closest('.task-menu')) {
-                    this.close();
-                }
-            });
-            
-            // Menu item clicks
-            this.menu.addEventListener('click', async (e) => {
-                const item = e.target.closest('.task-menu-item');
-                if (!item) return;
-                
-                const action = item.dataset.action;
-                await this.handleAction(action);
-                this.close();
-            });
-            
-            // Keyboard navigation
-            document.addEventListener('keydown', (e) => {
-                if (!this.isOpen) return;
-                
-                if (e.key === 'Escape') {
-                    this.close();
-                    this.currentTrigger?.focus();
-                } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    this._navigateMenu(e.key === 'ArrowDown' ? 1 : -1);
-                } else if (e.key === 'Enter' && document.activeElement.classList.contains('task-menu-item')) {
-                    e.preventDefault();
-                    document.activeElement.click();
-                }
-            });
-        }
-        
-        toggle(trigger) {
-            if (this.isOpen && this.currentTrigger === trigger) {
-                this.close();
-            } else {
-                this.open(trigger);
-            }
-        }
-        
-        async open(trigger) {
-            const taskId = trigger.dataset.taskId;
-            if (!taskId) return;
-            
-            this.currentTaskId = taskId;
-            this.currentTrigger = trigger;
-            
-            // Get task data to customize menu
-            const task = await window.taskCache?.getTask(taskId);
-            if (!task) return;
-            
-            // Position menu near trigger
-            const rect = trigger.getBoundingClientRect();
-            const taskCard = trigger.closest('.task-card');
-            
-            // Append menu to task card for proper positioning
-            if (taskCard) {
-                taskCard.style.position = 'relative';
-                taskCard.appendChild(this.menu);
-            }
-            
-            // Update menu items based on task state
-            const toggleStatusItem = this.menu.querySelector('[data-action="toggle-status"]');
-            if (toggleStatusItem) {
-                const isCompleted = task.status === 'completed';
-                toggleStatusItem.querySelector('span').textContent = isCompleted ? 'Mark incomplete' : 'Mark complete';
-            }
-            
-            // Show/hide "Jump to transcript" based on transcript availability
-            const jumpItem = this.menu.querySelector('[data-action="jump-to-transcript"]');
-            if (jumpItem) {
-                jumpItem.style.display = task.transcript_span && task.session_id ? 'flex' : 'none';
-            }
-            
-            // Open menu with animation
-            this.menu.dataset.state = 'open';
-            this.isOpen = true;
-            trigger.setAttribute('aria-expanded', 'true');
-            
-            // Focus first menu item
-            requestAnimationFrame(() => {
-                const firstItem = this.menu.querySelector('.task-menu-item:not([style*="display: none"])');
-                firstItem?.focus();
-            });
-            
-            // Dispatch event for CROWN⁴.5 tracking
-            window.dispatchEvent(new CustomEvent('menu:open', {
-                detail: { taskId, trigger }
-            }));
-        }
-        
-        close() {
-            if (!this.isOpen) return;
-            
-            this.menu.dataset.state = 'closed';
-            this.isOpen = false;
-            
-            if (this.currentTrigger) {
-                this.currentTrigger.setAttribute('aria-expanded', 'false');
-            }
-            
-            // Move menu back to body after animation
-            setTimeout(() => {
-                document.body.appendChild(this.menu);
-            }, 200);
-            
-            // Dispatch event for CROWN⁴.5 tracking
-            window.dispatchEvent(new CustomEvent('menu:close', {
-                detail: { taskId: this.currentTaskId }
-            }));
-            
-            this.currentTaskId = null;
-            this.currentTrigger = null;
-        }
-        
-        _navigateMenu(direction) {
-            const items = Array.from(this.menu.querySelectorAll('.task-menu-item:not([style*="display: none"])'));
-            const currentIndex = items.indexOf(document.activeElement);
-            
-            let nextIndex = currentIndex + direction;
-            if (nextIndex < 0) nextIndex = items.length - 1;
-            if (nextIndex >= items.length) nextIndex = 0;
-            
-            items[nextIndex]?.focus();
-        }
-        
-        async handleAction(action) {
-            if (!this.currentTaskId || !window.optimisticUI) return;
-            
-            const taskId = this.currentTaskId;
-            
-            switch (action) {
-                case 'edit':
-                    await this._handleEdit(taskId);
-                    break;
-                case 'toggle-status':
-                    await window.optimisticUI.toggleTaskStatus(taskId);
-                    break;
-                case 'priority':
-                    await this._handlePriority(taskId);
-                    break;
-                case 'due-date':
-                    await this._handleDueDate(taskId);
-                    break;
-                case 'assign':
-                    await this._handleAssign(taskId);
-                    break;
-                case 'labels':
-                    await this._handleLabels(taskId);
-                    break;
-                case 'jump-to-transcript':
-                    await this._handleJumpToTranscript(taskId);
-                    break;
-                case 'archive':
-                    await this._handleArchive(taskId);
-                    break;
-                case 'delete':
-                    await this._handleDelete(taskId);
-                    break;
-            }
-        }
-        
-        async _handleEdit(taskId) {
-            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-            const titleEl = taskCard?.querySelector('.task-title');
-            if (!titleEl) return;
-            
-            const currentTitle = titleEl.textContent;
-            const newTitle = prompt('Edit task title:', currentTitle);
-            
-            if (newTitle && newTitle !== currentTitle) {
-                await window.optimisticUI.updateTask(taskId, { title: newTitle });
-            }
-        }
-        
-        async _handlePriority(taskId) {
-            const priorities = ['low', 'medium', 'high', 'urgent'];
-            const task = await window.taskCache?.getTask(taskId);
-            const currentPriority = task?.priority || 'medium';
-            
-            const newPriority = prompt(`Change priority (${priorities.join(', ')}):`, currentPriority);
-            
-            if (newPriority && priorities.includes(newPriority.toLowerCase())) {
-                await window.optimisticUI.updateTask(taskId, { priority: newPriority.toLowerCase() });
-            }
-        }
-        
-        async _handleDueDate(taskId) {
-            const newDate = prompt('Set due date (YYYY-MM-DD):');
-            if (newDate) {
-                await window.optimisticUI.updateTask(taskId, { due_date: newDate });
-            }
-        }
-        
-        async _handleAssign(taskId) {
-            const assignee = prompt('Assign to (username or email):');
-            if (assignee) {
-                await window.optimisticUI.updateTask(taskId, { assigned_to: assignee });
-            }
-        }
-        
-        async _handleLabels(taskId) {
-            const labels = prompt('Add labels (comma-separated):');
-            if (labels) {
-                const labelArray = labels.split(',').map(l => l.trim()).filter(Boolean);
-                await window.optimisticUI.updateTask(taskId, { labels: labelArray });
-            }
-        }
-        
-        async _handleJumpToTranscript(taskId) {
-            const task = await window.taskCache?.getTask(taskId);
-            if (task?.session_id && task?.transcript_span) {
-                window.location.href = `/sessions/${task.session_id}/refined?span=${encodeURIComponent(JSON.stringify(task.transcript_span))}`;
-            }
-        }
-        
-        async _handleArchive(taskId) {
-            if (confirm('Archive this task?')) {
-                await window.optimisticUI.updateTask(taskId, { archived_at: new Date().toISOString() });
-                if (window.showToast) {
-                    window.showToast('Task archived', 'success');
-                }
-            }
-        }
-        
-        async _handleDelete(taskId) {
-            const task = await window.taskCache?.getTask(taskId);
-            if (confirm(`Delete task: "${task?.title || task?.description}"?`)) {
-                await window.optimisticUI.deleteTask(taskId);
-                if (window.showToast) {
-                    window.showToast('Task deleted', 'success');
-                }
-            }
-        }
-    }
-    
-    // Initialize menu controller
-    let taskMenuController;
-    
-    // Initialize on DOM ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            taskMenuController = new TaskMenuController();
-            initTasksWebSocket();
-            setupFilterTabs();
-            initAIProposals();
-        });
-    } else {
-        taskMenuController = new TaskMenuController();
-        initTasksWebSocket();
-        setupFilterTabs();
-        initAIProposals();
-    }
-    
-    // Initialize AI Proposals UI
-    function initAIProposals() {
-        if (!window.TaskProposalUI) {
-            console.warn('TaskProposalUI not loaded');
-            return;
-        }
-        
-        const proposalUI = new window.TaskProposalUI('ai-proposals-container');
-        const generateButton = document.querySelector('.btn-generate-proposals');
-        
-        if (generateButton) {
-            generateButton.addEventListener('click', async () => {
-                const meetingId = generateButton.dataset.meetingId;
-                if (!meetingId) {
-                    if (window.showToast) {
-                        window.showToast('Please select a meeting first', 'warning');
-                    } else {
-                        alert('Please select a meeting first');
-                    }
-                    return;
-                }
-                
-                try {
-                    await proposalUI.streamProposals(meetingId);
-                } catch (error) {
-                    console.error('Failed to generate proposals:', error);
-                    if (window.showToast) {
-                        window.showToast('Failed to generate proposals', 'error');
-                    }
-                }
-            });
-        }
-    }
-    
-    // Add CSS for animations
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideInFromTop {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        @keyframes slideInFromRight {
-            from {
-                opacity: 0;
-                transform: translateX(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-        
-        @keyframes slideOutToRight {
-            from {
-                opacity: 1;
-                transform: translateX(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateX(20px);
-            }
-        }
-        
-        @keyframes taskUpdate {
-            0%, 100% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(1.02);
-                box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
-            }
-        }
-        
-        @keyframes taskComplete {
-            0% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(0.98);
-            }
-            100% {
-                transform: scale(1);
-            }
-        }
-    `;
-    document.head.appendChild(style);
-    
-})();
-</script>
 
 <!-- CROWN⁴.5 Frontend Modules (crown-telemetry and websocket-manager loaded in base.html) -->
 <script src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -1269,6 +512,11 @@
  */
 (async function() {
     'use strict';
+    
+    // Set user context for WebSocket authentication and CROWN⁴.5 modules
+    window.CURRENT_USER_ID = {{ current_user.id if current_user.is_authenticated else 'null' }};
+    window.WORKSPACE_ID = {{ current_user.workspace_id if current_user.workspace_id else 'null' }};
+    window.CURRENT_SESSION_ID = null;
     
     console.log('🚀 Initializing CROWN⁴.5 Tasks Page (Phase 2)...');
     
@@ -1351,6 +599,66 @@
     } catch (error) {
         console.error('❌ Bootstrap failed:', error);
     }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // Filter Tabs Setup (All / Pending / Completed)
+    // ═══════════════════════════════════════════════════════════════════════
+    function setupFilterTabs() {
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', async () => {
+                if (tab.classList.contains('cluster-toggle')) {
+                    return;
+                }
+                
+                const filter = tab.dataset.filter;
+                
+                console.log(`🔍 Filter changed to: ${filter}`);
+                
+                // Update active tab visual state
+                document.querySelectorAll('.filter-tab').forEach(t => {
+                    if (!t.classList.contains('cluster-toggle')) {
+                        t.classList.remove('active');
+                    }
+                });
+                tab.classList.add('active');
+                
+                // Update viewState in cache (persist filter preference)
+                if (window.taskCache) {
+                    await window.taskCache.setViewState('tasks_page', { activeFilter: filter });
+                }
+                
+                // If clustering is enabled, exit cluster mode
+                if (window.taskClusteringManager && window.taskClusteringManager.enabled) {
+                    console.log('📋 Exiting clustering mode (switching to filter view)');
+                    await window.taskClusteringManager.showNormalView();
+                    return;
+                }
+                
+                // Fetch filtered tasks from cache
+                const allTasks = await window.taskCache.getAllTasks();
+                let filteredTasks = allTasks;
+                
+                if (filter === 'pending') {
+                    filteredTasks = allTasks.filter(t => t.status === 'todo' || t.status === 'in_progress');
+                } else if (filter === 'completed') {
+                    filteredTasks = allTasks.filter(t => t.status === 'completed' || t.status === 'done');
+                }
+                
+                console.log(`📊 Rendering ${filteredTasks.length} of ${allTasks.length} tasks (filter: ${filter})`);
+                
+                // Re-render with filtered tasks using TaskBootstrap
+                if (window.taskBootstrap) {
+                    await window.taskBootstrap.renderTasks(filteredTasks);
+                    await window.taskBootstrap.updateCounters(filteredTasks);
+                }
+            });
+        });
+        
+        console.log('🔍 Filter tabs initialized');
+    }
+    
+    // Initialize filter tabs
+    setupFilterTabs();
     
     // Modal elements
     const modalOverlay = document.getElementById('task-modal-overlay');
