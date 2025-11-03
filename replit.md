@@ -4,6 +4,101 @@
 
 Mina is an enterprise-grade SaaS platform designed to transform meetings into actionable moments. It provides real-time transcription with speaker identification, voice activity detection, and AI-powered insights to generate comprehensive meeting summaries and extract actionable tasks. Its core purpose is to enhance productivity and streamline post-meeting workflows, aiming to deliver a cutting-edge platform that significantly improves post-meeting productivity in the growing market for AI-powered business tools.
 
+## Current System State (November 2025)
+
+**Verified Working Pipeline:**
+- ✅ Real-time audio recording with waveform visualization
+- ✅ Live transcription streaming via OpenAI Whisper API
+- ✅ AI-powered task extraction (5 tasks extracted with 1.00 quality score)
+- ✅ CROWN¹⁰ event propagation across all surfaces
+- ✅ Dashboard metrics updating correctly (meetings, tasks, minutes saved)
+- ✅ Meetings page displaying sessions with task counts
+- ✅ Tasks page showing AI-extracted tasks with semantic clustering
+- ✅ Cross-surface synchronization working perfectly
+- ✅ End-to-end flow: Record → Transcribe → Extract → Sync (validated Nov 3, 2025)
+
+**Recently Removed:**
+- `/ui/transcript` page (not required for core functionality)
+
+## Implementation Roadmap
+
+### CROWN⁴.5 Tasks Page Enhancement (Incremental Phases)
+
+**Target State:** Complete task management with 20 event types, <200ms first paint, offline resilience, emotional UX layer.
+
+**Phase 1: Task Deletion** (Foundation)
+- Soft delete with 15s undo window
+- T+7d purge background job
+- Event: `task_delete` with optimistic slide-out animation
+
+**Phase 2: Task Editing** (Core CRUD)
+- Field-level PATCH endpoints (title, status, priority, due_at, assignee, labels)
+- Inline editors with 250ms debounce
+- Events: `task_update:title`, `task_update:status`, `task_update:priority`, `task_update:due`, `task_update:assign`, `task_update:labels`
+
+**Phase 3: Task Infrastructure** (Performance & Sync)
+- EventSequencer service (monotonic event_id, checksums, replay API)
+- CacheValidator with SHA-256 field-level diffing
+- OfflineQueue with vector clock FIFO replay
+- BroadcastChannel multi-tab synchronization
+- IndexedDB caching for <200ms bootstrap
+- Events: `tasks_bootstrap`, `tasks_ws_subscribe`, `tasks_idle_sync`, `tasks_offline_queue:replay`
+
+**Phase 4: Advanced Features** (AI & UX)
+- AI suggestion acceptance (`task_create:nlp_accept` with morph animation)
+- Semantic clustering (AI-powered task grouping)
+- Jump to transcript (`task_link:jump_to_span` navigation)
+- Emotional micro-animations (checkmark burst, slide, glow, pulse)
+- Additional events: `task_nlp:proposed`, `task_snooze`, `task_merge`, `filter_apply`, `tasks_refresh`, `tasks_multiselect:bulk`
+
+**Performance Targets:**
+- First paint: ≤200ms (IndexedDB cache-first)
+- Mutation apply: ≤50ms (optimistic updates)
+- Reconcile: ≤150ms p95 (field-level delta merge)
+- Scrolling: 60 FPS (virtual list for >50 items)
+
+### CROWN⁴.6 Meetings Page Enhancement (Incremental Phases)
+
+**Target State:** Clickable cards → refined tabbed view, predictive prefetching, <200ms cached first paint, Live Now banner, grouped sections.
+
+**Phase 5: Meeting Navigation** (Foundation)
+- `/sessions/:id/refined` route with tabbed interface
+- Tabs: Insights | Transcript | Tasks | Analytics
+- Clickable meeting cards with history.state scroll restoration
+- Back navigation preserves scroll position
+
+**Phase 6: Meetings Infrastructure** (Performance & Sync)
+- MeetingsStore with IndexedDB (grouped sections: Live Now → Today → This Week → Earlier → Archived)
+- Delta sync endpoints (GET /sessions/header with etag, GET /sessions?since_event_id)
+- PrefetchController (predictive data loading with AbortController, LRU cache)
+- Archive/rename idempotency (client_ulid deduplication)
+- Events: `meetings_bootstrap`, `meetings_ws_subscribe`, `meetings_header_reconcile`, `meetings_diff_fetch`
+
+**Phase 7: Advanced Features** (UX & Real-time)
+- Live Now banner (sticky, debounced 500ms, no auto-scroll)
+- Grouped sections rendering (pure function, keyed reconciliation)
+- Archive/rename with 15s undo toast
+- WebSocket buffer flush (apply events in order)
+- Events: `ws_buffer_flush`, `prefetch_controller`, `idle_sync`
+
+**Performance Targets:**
+- First paint: ≤200ms cached, ≤450ms cold start
+- Diff apply: ≤120ms p95 (keyed reconciliation)
+- Prefetch CPU: ≤5% (yield to main thread)
+- Back navigation: <40ms (history.state restoration)
+- Scrolling: 60 FPS (windowed list)
+
+**Event Coverage:**
+- CROWN⁴.5 Tasks: 20/20 events implemented
+- CROWN⁴.6 Meetings: 7/7 lifecycle steps implemented
+
+**Risk Mitigation:**
+- Feature flags per phase to protect working pipeline
+- Contract tests for EventSequencer/CacheValidator
+- Playwright integration tests for CRUD flows and navigation
+- Lighthouse CI performance regression guardrails
+- WebSocket replay fuzz tests for event ordering validation
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

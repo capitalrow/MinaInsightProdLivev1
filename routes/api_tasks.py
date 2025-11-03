@@ -36,10 +36,16 @@ def list_tasks():
         search = request.args.get('search', None)
         due_date_filter = request.args.get('due_date', None)  # today, overdue, this_week
         
-        # Base query - tasks from meetings in user's workspace
+        # Base query - tasks from meetings in user's workspace (exclude soft-deleted by default)
+        include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
+        
         stmt = select(Task).join(Meeting).where(
             Meeting.workspace_id == current_user.workspace_id
         )
+        
+        # CROWN⁴.5 Phase 1: Filter out soft-deleted tasks by default
+        if not include_deleted:
+            stmt = stmt.where(Task.deleted_at.is_(None))
         
         # Apply filters
         if status:
@@ -356,7 +362,7 @@ def update_task(task_id):
 @api_tasks_bp.route('/<int:task_id>', methods=['DELETE'])
 @login_required
 def delete_task(task_id):
-    """Delete a task."""
+    """Soft delete a task (CROWN⁴.5 Phase 1: 15s undo window)."""
     try:
         task = db.session.query(Task).join(Meeting).filter(
             Task.id == task_id,
@@ -366,22 +372,31 @@ def delete_task(task_id):
         if not task:
             return jsonify({'success': False, 'message': 'Task not found'}), 404
         
-        # Store task info before deletion
-        task_id = task.id
+        # Check if already deleted
+        if task.deleted_at is not None:
+            return jsonify({'success': False, 'message': 'Task already deleted'}), 400
+        
+        # CROWN⁴.5 Phase 1: Soft delete instead of hard delete
+        task.deleted_at = datetime.now()
+        task.deleted_by_user_id = current_user.id
+        task.updated_at = datetime.now()
+        
+        # Store task info for broadcast
         task_dict = task.to_dict()
         task_dict['action'] = 'deleted'
+        task_dict['event_type'] = 'task_delete'
+        task_dict['undo_window_seconds'] = 15  # 15-second undo window
         meeting = task.meeting
         meeting_title = meeting.title if meeting else 'Unknown'
         meeting_id = meeting.id if meeting else None
         task_dict['meeting_title'] = meeting_title
         workspace_id = current_user.workspace_id
         
-        db.session.delete(task)
         db.session.commit()
         
-        # Broadcast task_update event
+        # Broadcast task_delete event
         event_broadcaster.broadcast_task_update(
-            task_id=task_id,
+            task_id=task.id,
             task_data=task_dict,
             meeting_id=meeting_id,
             workspace_id=workspace_id
@@ -389,7 +404,66 @@ def delete_task(task_id):
         
         return jsonify({
             'success': True,
-            'message': 'Task deleted successfully'
+            'message': 'Task deleted successfully (15s undo window)',
+            'task_id': task.id,
+            'undo_window_seconds': 15
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_tasks_bp.route('/<int:task_id>/undo-delete', methods=['POST'])
+@login_required
+def undo_delete_task(task_id):
+    """Restore a soft-deleted task (CROWN⁴.5 Phase 1: undo within 15s window)."""
+    try:
+        task = db.session.query(Task).join(Meeting).filter(
+            Task.id == task_id,
+            Meeting.workspace_id == current_user.workspace_id
+        ).first()
+        
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # Check if task is deleted
+        if task.deleted_at is None:
+            return jsonify({'success': False, 'message': 'Task is not deleted'}), 400
+        
+        # Check if undo window (15 seconds) has expired
+        undo_deadline = task.deleted_at + timedelta(seconds=15)
+        if datetime.now() > undo_deadline:
+            return jsonify({
+                'success': False, 
+                'message': 'Undo window expired (15s limit)'
+            }), 410  # 410 Gone
+        
+        # Restore task
+        task.deleted_at = None
+        task.deleted_by_user_id = None
+        task.updated_at = datetime.now()
+        
+        task_dict = task.to_dict()
+        task_dict['action'] = 'restored'
+        task_dict['event_type'] = 'task_restore'
+        meeting = task.meeting
+        task_dict['meeting_title'] = meeting.title if meeting else 'Unknown'
+        
+        db.session.commit()
+        
+        # Broadcast task_restore event
+        event_broadcaster.broadcast_task_update(
+            task_id=task.id,
+            task_data=task_dict,
+            meeting_id=meeting.id if meeting else None,
+            workspace_id=current_user.workspace_id
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Task restored successfully',
+            'task': task.to_dict()
         })
         
     except Exception as e:
@@ -1394,4 +1468,49 @@ def update_summary_task(session_id, task_index):
         logger.error(f"Error updating task {task_index} in session {session_id}: {e}")
         db.session.rollback()
         return jsonify({"success": False, "error": "Failed to update task"}), 500
+
+
+# CROWN⁴.5 Phase 1: Admin endpoint for purge job
+@api_tasks_bp.route('/admin/purge', methods=['POST'])
+@login_required
+def admin_purge_deleted_tasks():
+    """
+    Admin endpoint to manually trigger purge of soft-deleted tasks (T+7d).
+    Useful for testing and manual cleanup.
+    SECURITY: Admin-only access required.
+    """
+    from services.task_purge_job import purge_deleted_tasks, get_purgeable_task_count
+    
+    # SECURITY FIX: Check if user is admin/superuser
+    # For now, we'll comment this out and remove the endpoint from production
+    # In production, this should be a cron job, not an API endpoint
+    return jsonify({
+        'success': False,
+        'error': 'This endpoint is disabled. Use scheduled background job instead.'
+    }), 403
+    
+    # Uncomment below for development testing only (with proper admin check)
+    # try:
+    #     # Check purgeable count first
+    #     purgeable_count = get_purgeable_task_count()
+    #     
+    #     if purgeable_count == 0:
+    #         return jsonify({
+    #             'success': True,
+    #             'message': 'No tasks to purge',
+    #             'purgeable_count': 0,
+    #             'purged_count': 0
+    #         })
+    #     
+    #     # Trigger purge job
+    #     result = purge_deleted_tasks()
+    #     
+    #     return jsonify(result)
+    #     
+    # except Exception as e:
+    #     logger.error(f"[ADMIN_PURGE] Error: {str(e)}", exc_info=True)
+    #     return jsonify({
+    #         'success': False,
+    #         'error': str(e)
+    #     }), 500
         
