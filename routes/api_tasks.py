@@ -1698,4 +1698,144 @@ def admin_purge_deleted_tasks():
     #         'success': False,
     #         'error': str(e)
     #     }), 500
+
+
+# CROWN⁴.5 Phase 3 Task 10: AI Task Proposals with Streaming
+@api_tasks_bp.route('/ai-proposals/stream', methods=['POST'])
+@login_required
+def stream_ai_task_proposals():
+    """
+    Stream AI-generated task proposals based on meeting context.
+    Uses Server-Sent Events (SSE) for real-time streaming.
+    
+    Request Body:
+        {
+            "meeting_id": int,
+            "context": str (optional),
+            "max_proposals": int (default: 3)
+        }
+    
+    Returns:
+        Stream of JSON objects:
+        - data: {"type": "proposal", "task": {...}}
+        - data: {"type": "done"}
+        - data: {"type": "error", "message": str}
+    """
+    from flask import Response, stream_with_context
+    from services.openai_client_manager import get_openai_client
+    import json
+    
+    try:
+        data = request.get_json()
+        meeting_id = data.get('meeting_id')
+        custom_context = data.get('context', '')
+        max_proposals = data.get('max_proposals', 3)
+        
+        if not meeting_id:
+            return jsonify({'success': False, 'message': 'Meeting ID required'}), 400
+        
+        # Verify meeting access
+        meeting = db.session.query(Meeting).filter_by(
+            id=meeting_id,
+            workspace_id=current_user.workspace_id
+        ).first()
+        
+        if not meeting:
+            return jsonify({'success': False, 'message': 'Meeting not found'}), 404
+        
+        def generate_proposals():
+            """Generator function for SSE streaming."""
+            try:
+                # Get meeting context (summary, transcript snippets)
+                context_parts = [f"Meeting: {meeting.title}"]
+                
+                if meeting.summary:
+                    context_parts.append(f"Summary: {meeting.summary[:500]}")
+                
+                if custom_context:
+                    context_parts.append(f"Additional context: {custom_context}")
+                
+                # Get existing tasks to avoid duplicates
+                existing_tasks = db.session.query(Task).filter_by(
+                    meeting_id=meeting_id,
+                    deleted_at=None
+                ).all()
+                existing_titles = [t.title for t in existing_tasks]
+                
+                if existing_titles:
+                    context_parts.append(f"Existing tasks: {', '.join(existing_titles[:5])}")
+                
+                context = "\n\n".join(context_parts)
+                
+                # Build OpenAI prompt
+                system_prompt = """You are an AI assistant that suggests actionable tasks from meeting content.
+Generate practical, specific tasks that can be assigned and tracked.
+Return tasks as JSON array with: title, description, priority (low/medium/high), category.
+Avoid duplicating existing tasks. Focus on concrete next steps."""
+                
+                user_prompt = f"""{context}
+
+Based on this meeting, suggest {max_proposals} actionable tasks.
+Format as JSON array: [{{"title": "...", "description": "...", "priority": "medium", "category": "..."}}]"""
+                
+                # Stream from OpenAI
+                client = get_openai_client()
+                if not client:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'OpenAI client not available'})}\n\n"
+                    return
+                
+                stream = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    stream=True,
+                    temperature=0.7,
+                    max_tokens=800
+                )
+                
+                full_response = ""
+                for chunk in stream:
+                    if chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        full_response += content
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
+                
+                # Parse complete response
+                try:
+                    # Extract JSON from response (handle markdown code blocks)
+                    response_text = full_response.strip()
+                    if '```json' in response_text:
+                        response_text = response_text.split('```json')[1].split('```')[0].strip()
+                    elif '```' in response_text:
+                        response_text = response_text.split('```')[1].split('```')[0].strip()
+                    
+                    proposals = json.loads(response_text)
+                    
+                    # Send each proposal as separate event
+                    for proposal in proposals[:max_proposals]:
+                        yield f"data: {json.dumps({'type': 'proposal', 'task': proposal})}\n\n"
+                    
+                except json.JSONDecodeError:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Failed to parse AI response'})}\n\n"
+                
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                
+            except Exception as e:
+                logger.error(f"Stream error: {str(e)}", exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        
+        return Response(
+            stream_with_context(generate_proposals()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no'
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"AI proposals error: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
         
