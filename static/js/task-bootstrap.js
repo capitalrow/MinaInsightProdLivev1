@@ -36,7 +36,15 @@ class TaskBootstrap {
             const cacheLoadTime = this.perf.cache_load_end - this.perf.cache_load_start;
             console.log(`📦 Cache loaded in ${cacheLoadTime.toFixed(2)}ms (${cachedTasks.length} tasks)`);
 
-            // Step 2: Render UI immediately (target: <200ms total)
+            // Step 2: CROWN⁴.5 - Validate cache checksum
+            const checksumValid = await this.validateCacheChecksum(cachedTasks);
+            if (!checksumValid) {
+                console.warn('⚠️ Cache checksum validation failed - triggering reconciliation');
+                // Continue with cached data but mark for reconciliation
+                this.needsReconciliation = true;
+            }
+
+            // Step 3: Render UI immediately (target: <200ms total)
             await this.renderTasks(cachedTasks, { fromCache: true });
             this.perf.first_paint = performance.now();
             
@@ -47,9 +55,10 @@ class TaskBootstrap {
             if (window.CROWNTelemetry) {
                 window.CROWNTelemetry.recordMetric('first_paint_ms', firstPaintTime);
                 window.CROWNTelemetry.recordMetric('cache_load_ms', cacheLoadTime);
+                window.CROWNTelemetry.recordMetric('checksum_valid', checksumValid ? 1 : 0);
             }
 
-            // Step 3: Start background sync
+            // Step 4: Start background sync (with reconciliation if needed)
             this.syncInBackground();
 
             this.initialized = true;
@@ -59,6 +68,7 @@ class TaskBootstrap {
                 cached_tasks: cachedTasks.length,
                 cache_load_ms: cacheLoadTime,
                 first_paint_ms: firstPaintTime,
+                checksum_valid: checksumValid,
                 meets_target: firstPaintTime < 200
             };
         } catch (error) {
@@ -67,6 +77,131 @@ class TaskBootstrap {
             
             // Fallback: Load from server directly
             return this.fallbackToServer();
+        }
+    }
+
+    /**
+     * CROWN⁴.5: Validate cache checksum against server
+     * @param {Array} cachedTasks - Cached tasks
+     * @returns {Promise<boolean>} Whether checksum is valid
+     */
+    async validateCacheChecksum(cachedTasks) {
+        try {
+            // Get stored checksum from metadata
+            const storedChecksum = await this.cache.getMetadata('last_checksum');
+            if (!storedChecksum) {
+                console.log('📊 No stored checksum found - first load');
+                return true; // First load, no checksum to validate
+            }
+
+            // Compute current checksum of cached data (AWAIT the Promise!)
+            const currentChecksum = await this.computeChecksum(cachedTasks);
+
+            // Compare checksums
+            const isValid = storedChecksum === currentChecksum;
+            
+            if (isValid) {
+                console.log('✅ Cache checksum valid:', currentChecksum.substring(0, 8));
+            } else {
+                console.warn('❌ Cache checksum mismatch!');
+                console.warn('  Expected:', storedChecksum.substring(0, 8));
+                console.warn('  Got:', currentChecksum.substring(0, 8));
+            }
+
+            return isValid;
+        } catch (error) {
+            console.error('❌ Checksum validation failed:', error);
+            return false; // Assume invalid on error, trigger reconciliation
+        }
+    }
+
+    /**
+     * Deterministic JSON serialization with deep key sorting
+     * Matches Python's json.dumps(sort_keys=True) behavior EXACTLY (including spacing)
+     * @param {any} obj - Object to serialize
+     * @returns {string} JSON string with sorted keys at all levels
+     */
+    deterministicStringify(obj) {
+        if (obj === null || obj === undefined) {
+            return JSON.stringify(obj);
+        }
+        
+        if (typeof obj !== 'object') {
+            return JSON.stringify(obj);
+        }
+        
+        if (Array.isArray(obj)) {
+            // Arrays: serialize each element deterministically
+            // Python uses ', ' separator (comma + space)
+            return '[' + obj.map(item => this.deterministicStringify(item)).join(', ') + ']';
+        }
+        
+        // Objects: sort keys and serialize recursively
+        const sortedKeys = Object.keys(obj).sort();
+        const pairs = sortedKeys.map(key => {
+            const value = obj[key];
+            const serializedKey = JSON.stringify(key);
+            const serializedValue = this.deterministicStringify(value);
+            // Python uses ': ' separator (colon + space)
+            return `${serializedKey}: ${serializedValue}`;
+        });
+        
+        // Python uses ', ' separator (comma + space)
+        return '{' + pairs.join(', ') + '}';
+    }
+
+    /**
+     * Compute SHA-256 checksum of task data (matches backend cache_validator exactly)
+     * Algorithm: Sort tasks → SHA-256 each task → concatenate → SHA-256 aggregate
+     * @param {Array} tasks - Task list
+     * @returns {Promise<string>} SHA-256 checksum (hex string)
+     */
+    async computeChecksum(tasks) {
+        try {
+            // Step 1: Sort tasks by ID for deterministic checksum (matches backend)
+            const sorted = [...tasks].sort((a, b) => {
+                const aId = parseInt(a.id, 10) || 0;
+                const bId = parseInt(b.id, 10) || 0;
+                return aId - bId;
+            });
+
+            // Step 2: Generate individual checksums for each task (matches backend generate_checksum)
+            const individualChecksums = [];
+            const encoder = new TextEncoder();
+            
+            for (const task of sorted) {
+                // Remove excluded fields (matches backend exclude_fields)
+                const cleanTask = {...task};
+                delete cleanTask.checksum;
+                delete cleanTask.last_validated;
+                delete cleanTask._cached_at;
+                
+                // JSON serialize with sorted keys (matches backend json.dumps(sort_keys=True))
+                const taskJson = this.deterministicStringify(cleanTask);
+                
+                // SHA-256 hash
+                const taskData = encoder.encode(taskJson);
+                const taskHashBuffer = await crypto.subtle.digest('SHA-256', taskData);
+                const taskHashArray = Array.from(new Uint8Array(taskHashBuffer));
+                const taskHashHex = taskHashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                individualChecksums.push(taskHashHex);
+            }
+            
+            // Step 3: Concatenate individual checksums (matches backend ''.join(item_checksums))
+            const aggregateData = individualChecksums.join('');
+            
+            // Step 4: Compute final aggregate checksum (matches backend hashlib.sha256(aggregate_data.encode))
+            const finalData = encoder.encode(aggregateData);
+            const finalHashBuffer = await crypto.subtle.digest('SHA-256', finalData);
+            const finalHashArray = Array.from(new Uint8Array(finalHashBuffer));
+            const finalHashHex = finalHashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            return finalHashHex;
+        } catch (error) {
+            console.error('❌ Checksum computation failed:', error);
+            // Fallback to empty checksum if crypto.subtle not available
+            return '0000000000000000000000000000000000000000000000000000000000000000';
         }
     }
 
@@ -430,6 +565,7 @@ class TaskBootstrap {
 
             const data = await response.json();
             const serverTasks = data.tasks || [];
+            const serverChecksum = data.checksum; // CROWN⁴.5: Server sends checksum
 
             this.perf.sync_end = performance.now();
             const syncTime = this.perf.sync_end - this.perf.sync_start;
@@ -438,12 +574,22 @@ class TaskBootstrap {
             // Update cache with server data
             await this.cache.saveTasks(serverTasks);
             
+            // CROWN⁴.5: Store server checksum for future validation
+            if (serverChecksum) {
+                await this.cache.setMetadata('last_checksum', serverChecksum);
+                console.log('📊 Stored server checksum:', serverChecksum.substring(0, 8));
+            }
+            
             // Update last sync timestamp
             this.lastSyncTimestamp = Date.now();
             await this.cache.setMetadata('last_sync_timestamp', this.lastSyncTimestamp);
 
-            // Re-render with fresh data
-            await this.renderTasks(serverTasks, { fromCache: false });
+            // CROWN⁴.5: If reconciliation was needed, re-render with server data
+            if (this.needsReconciliation) {
+                console.log('🔄 Reconciliation complete - re-rendering with server data');
+                await this.renderTasks(serverTasks, { fromCache: false });
+                this.needsReconciliation = false;
+            }
 
             // Emit sync success event
             window.dispatchEvent(new CustomEvent('tasks:sync:success', {
