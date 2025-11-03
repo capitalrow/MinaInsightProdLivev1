@@ -401,6 +401,44 @@ class OptimisticUI {
     }
 
     /**
+     * Complete task (set status to completed, never uncomplete)
+     * Used for bulk operations to ensure proper event propagation
+     * @param {number|string} taskId
+     * @returns {Promise<Object>}
+     */
+    async completeTask(taskId) {
+        const task = await this.cache.getTask(taskId);
+        if (!task) return;
+
+        // Skip if already completed
+        if (task.status === 'completed') {
+            return task;
+        }
+
+        const updates = {
+            status: 'completed',
+            completed_at: new Date().toISOString()
+        };
+
+        const result = await this.updateTask(taskId, updates);
+
+        // Trigger celebration animation
+        if (window.emotionalAnimations) {
+            const card = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (card) {
+                window.emotionalAnimations.celebrate(card, ['burst', 'shimmer']);
+            }
+        }
+        
+        // Dispatch completion event for other listeners
+        window.dispatchEvent(new CustomEvent('task:completed', {
+            detail: { taskId, task: result }
+        }));
+
+        return result;
+    }
+
+    /**
      * Toggle task status optimistically
      * @param {number|string} taskId
      * @returns {Promise<Object>}
