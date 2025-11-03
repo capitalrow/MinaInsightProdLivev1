@@ -10,6 +10,7 @@ from sqlalchemy import desc, func, and_
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta, date
 from services.event_broadcaster import event_broadcaster
+import logging
 
 try:
     from services.uptime_monitoring import uptime_monitor
@@ -20,6 +21,8 @@ except ImportError:
     uptime_monitor = None
     performance_monitor = None
 
+# Module-level logger
+logger = logging.getLogger(__name__)
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
@@ -69,8 +72,6 @@ def index():
     # Get workspace statistics using new meeting lifecycle service
     if current_user.workspace_id:
         from services.meeting_lifecycle_service import MeetingLifecycleService
-        import logging
-        logger = logging.getLogger(__name__)
         
         stats = MeetingLifecycleService.get_meeting_statistics(current_user.workspace_id, days=365)
         total_meetings = stats['total_meetings']
