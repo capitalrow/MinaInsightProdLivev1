@@ -223,10 +223,10 @@ def create_task():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@api_tasks_bp.route('/<int:task_id>', methods=['PUT'])
+@api_tasks_bp.route('/<int:task_id>', methods=['PUT', 'PATCH'])
 @login_required
 def update_task(task_id):
-    """Update task information."""
+    """Update task information (field-level updates)."""
     try:
         task = db.session.query(Task).join(Meeting).filter(
             Task.id == task_id,
