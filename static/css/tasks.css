@@ -752,15 +752,7 @@
   justify-content: space-between;
 }
 
-.task-title {
-  flex: 1;
-  font-size: var(--font-size-base);
-  line-height: 1.5;
-  color: var(--color-text-primary);
-  font-weight: 500;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-}
+/* Removed duplicate .task-title definition - now using mobile-first version at line ~2371 */
 
 /* High priority tasks get larger font */
 .task-priority-high .task-title {
