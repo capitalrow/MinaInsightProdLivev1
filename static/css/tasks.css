@@ -2359,26 +2359,45 @@
   padding-top: 2px;  /* Optical alignment with checkbox */
 }
 
-/* Task Title - Mobile-first, Desktop 3-line clamp */
+/* Task Title - Mobile-first with EXPLICIT resets, Desktop 3-line clamp */
 .task-title {
-  flex: 1;  /* Take up available space in flex row */
+  /* Explicit display reset for mobile - NO webkit-box on mobile */
+  display: block !important;
+  
+  /* Flex child in horizontal card layout */
+  flex: 1;
+  
+  /* Text display - explicit normal values */
+  white-space: normal !important;
+  word-break: normal !important;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  
+  /* Typography */
   font-size: 15px;
   line-height: 1.4;
   color: var(--color-text-primary);
   font-weight: 600;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  
+  /* Layout */
   margin: 0;
+  padding: 0;
+  
+  /* Interaction */
   cursor: pointer;
   transition: color 0.2s ease;
+  
+  /* Explicitly remove any webkit-box properties on mobile */
+  -webkit-line-clamp: unset !important;
+  -webkit-box-orient: unset !important;
 }
 
 /* Desktop only: Apply 3-line clamp to prevent overflow */
 @media (min-width: 769px) {
   .task-title {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 3 !important;
+    -webkit-box-orient: vertical !important;
     overflow: hidden;
     text-overflow: ellipsis;
   }
