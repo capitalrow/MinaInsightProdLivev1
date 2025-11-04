@@ -328,7 +328,7 @@ class MinaDashboard {
         container.innerHTML = allTasks.map(task => `
             <div class="task-item" data-task-id="${task.id}">
                 <div class="task-content">
-                    <div class="task-title">${this.escapeHtml(task.title)}</div>
+                    <h3 class="task-title">${this.escapeHtml(task.title)}</h3>
                     <div class="task-meta">
                         <span class="task-status status-${task.status}">
                             ${this.capitalizeFirst(task.status)}

@@ -26,9 +26,17 @@ class TaskProposalUI {
 
     async startProposalStream(button) {
         const meetingId = button.dataset.meetingId;
-        if (!meetingId) {
-            console.error('[TaskProposalUI] No meeting ID found');
-            return;
+        
+        // Meeting ID is optional - if not provided, uses workspace context
+        const requestBody = {
+            max_proposals: 3
+        };
+        
+        if (meetingId && meetingId.trim() !== '') {
+            requestBody.meeting_id = parseInt(meetingId);
+            console.log('[TaskProposalUI] Generating proposals for meeting:', meetingId);
+        } else {
+            console.log('[TaskProposalUI] Generating proposals from workspace context');
         }
 
         // Disable button during generation
@@ -52,10 +60,7 @@ class TaskProposalUI {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    meeting_id: parseInt(meetingId),
-                    max_proposals: 3
-                }),
+                body: JSON.stringify(requestBody),
                 signal: this.currentAbortController.signal
             });
 

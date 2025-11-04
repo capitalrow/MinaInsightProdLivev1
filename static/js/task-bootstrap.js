@@ -546,13 +546,13 @@ class TaskBootstrap {
                 </div>
 
                 <!-- Task Title (Inline Editable) -->
-                <div class="task-title ${isCompleted ? 'completed' : ''}" 
-                     data-task-id="${task.id}"
-                     role="button"
-                     tabindex="0"
-                     title="Click to edit task title">
+                <h3 class="task-title ${isCompleted ? 'completed' : ''}" 
+                    data-task-id="${task.id}"
+                    role="button"
+                    tabindex="0"
+                    title="Click to edit task title">
                     ${this.escapeHtml(task.title || 'Untitled Task')}
-                </div>
+                </h3>
 
                 <!-- Task Metadata (Compact Inline) -->
                 <div class="task-metadata">
@@ -1001,3 +1001,87 @@ class TaskBootstrap {
 window.taskBootstrap = new TaskBootstrap();
 
 console.log('🚀 CROWN⁴.5 TaskBootstrap loaded');
+
+// ========================================
+// CROWN⁴.5 Empty/Loading/Error State Event Handlers
+// ========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Empty State - "Create your first task" button
+    const emptyStateCreateBtn = document.getElementById('empty-state-create-btn');
+    if (emptyStateCreateBtn) {
+        emptyStateCreateBtn.addEventListener('click', () => {
+            console.log('📝 Empty state create button clicked');
+            // Open the task modal (same as "New Task" button)
+            const newTaskBtn = document.querySelector('[data-action="new-task"], #create-task-btn');
+            if (newTaskBtn) {
+                newTaskBtn.click();
+            } else {
+                // Fallback: directly open modal
+                const modal = document.getElementById('task-modal-overlay');
+                if (modal) {
+                    modal.classList.remove('hidden');
+                    const titleInput = document.getElementById('task-title');
+                    if (titleInput) titleInput.focus();
+                }
+            }
+        });
+    }
+
+    // Error State - "Retry" button
+    const errorStateRetryBtn = document.getElementById('error-state-retry-btn');
+    if (errorStateRetryBtn) {
+        errorStateRetryBtn.addEventListener('click', async () => {
+            console.log('🔄 Error state retry clicked');
+            if (window.taskBootstrap) {
+                // Show loading state
+                window.taskBootstrap.showLoadingState();
+                
+                // Attempt to re-bootstrap
+                try {
+                    await window.taskBootstrap.bootstrap();
+                } catch (error) {
+                    console.error('❌ Retry failed:', error);
+                    window.taskBootstrap.showErrorState('Still unable to load tasks. Please try again later.');
+                }
+            } else {
+                // Fallback: reload page
+                window.location.reload();
+            }
+        });
+    }
+
+    // Error State - "Clear Cache" button
+    const errorStateClearCacheBtn = document.getElementById('error-state-clear-cache-btn');
+    if (errorStateClearCacheBtn) {
+        errorStateClearCacheBtn.addEventListener('click', async () => {
+            console.log('🗑️ Clear cache button clicked');
+            
+            if (window.taskCache) {
+                try {
+                    // Clear the IndexedDB cache
+                    await window.taskCache.clear();
+                    console.log('✅ Cache cleared successfully');
+                    
+                    // Show loading state
+                    if (window.taskBootstrap) {
+                        window.taskBootstrap.showLoadingState();
+                    }
+                    
+                    // Reload the page to fetch fresh data
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                } catch (error) {
+                    console.error('❌ Failed to clear cache:', error);
+                    alert('Failed to clear cache. Please refresh the page manually.');
+                }
+            } else {
+                // Fallback: just reload
+                window.location.reload();
+            }
+        });
+    }
+});
+
+console.log('✅ Empty/Loading/Error state handlers initialized');

@@ -5,7 +5,7 @@ REST API endpoints for task management, CRUD operations, and status updates.
 
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from models import db, Task, Meeting, User, Session, Workspace
+from models import db, Task, Meeting, User, Session, Workspace, TaskComment, EventLedger, EventType
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_, select
 from utils.etag_helper import with_etag, compute_collection_etag
@@ -843,15 +843,19 @@ def bulk_delete_tasks():
         # Fetch all tasks and verify ownership
         tasks = db.session.query(Task).join(Meeting).filter(
             Task.id.in_(task_ids),
-            Meeting.workspace_id == current_user.workspace_id
+            Meeting.workspace_id == current_user.workspace_id,
+            Task.deleted_at.is_(None)  # Only non-deleted tasks
         ).all()
         
         if len(tasks) != len(task_ids):
-            return jsonify({'success': False, 'message': 'Some tasks not found'}), 404
+            return jsonify({'success': False, 'message': 'Some tasks not found or already deleted'}), 404
         
-        # Delete all tasks
+        # CROWN⁴.5: Soft delete all tasks (consistent with single delete)
+        deleted_timestamp = datetime.now()
         for task in tasks:
-            db.session.delete(task)
+            task.deleted_at = deleted_timestamp
+            task.deleted_by_user_id = current_user.id
+            task.updated_at = deleted_timestamp
         
         db.session.commit()
         
@@ -862,7 +866,8 @@ def bulk_delete_tasks():
                 'event_type': 'task_multiselect:bulk',
                 'action': 'bulk_delete',
                 'task_ids': task_ids,
-                'count': len(task_ids)
+                'count': len(task_ids),
+                'undo_window_seconds': 15  # CROWN⁴.5: 15-second undo window
             },
             meeting_id=None,
             workspace_id=current_user.workspace_id,
@@ -871,8 +876,9 @@ def bulk_delete_tasks():
         
         return jsonify({
             'success': True,
-            'message': f'{len(tasks)} tasks deleted',
-            'count': len(tasks)
+            'message': f'{len(tasks)} tasks deleted (15s undo window)',
+            'count': len(tasks),
+            'undo_window_seconds': 15
         })
         
     except Exception as e:
@@ -1731,39 +1737,74 @@ def stream_ai_task_proposals():
         custom_context = data.get('context', '')
         max_proposals = data.get('max_proposals', 3)
         
-        if not meeting_id:
-            return jsonify({'success': False, 'message': 'Meeting ID required'}), 400
-        
-        # Verify meeting access
-        meeting = db.session.query(Meeting).filter_by(
-            id=meeting_id,
-            workspace_id=current_user.workspace_id
-        ).first()
-        
-        if not meeting:
-            return jsonify({'success': False, 'message': 'Meeting not found'}), 404
+        # Meeting ID is now optional - use workspace context if not provided
+        meeting = None
+        if meeting_id:
+            # Verify meeting access
+            meeting = db.session.query(Meeting).filter_by(
+                id=meeting_id,
+                workspace_id=current_user.workspace_id
+            ).first()
+            
+            if not meeting:
+                return jsonify({'success': False, 'message': 'Meeting not found'}), 404
         
         def generate_proposals():
             """Generator function for SSE streaming."""
             try:
-                # Get meeting context (summary, transcript snippets)
-                context_parts = [f"Meeting: {meeting.title}"]
+                # Build context from meeting OR workspace
+                context_parts = []
                 
-                if meeting.summary:
-                    context_parts.append(f"Summary: {meeting.summary[:500]}")
+                if meeting:
+                    # Single meeting context
+                    context_parts.append(f"Meeting: {meeting.title}")
+                    
+                    # Try to get summary from session
+                    if meeting.session and hasattr(meeting.session, 'summary'):
+                        context_parts.append(f"Summary: {meeting.session.summary[:500]}")
+                    elif meeting.description:
+                        context_parts.append(f"Description: {meeting.description[:300]}")
+                else:
+                    # Workspace-wide context - use recent meetings
+                    recent_meetings = db.session.query(Meeting).filter_by(
+                        workspace_id=current_user.workspace_id
+                    ).order_by(Meeting.created_at.desc()).limit(3).all()
+                    
+                    if recent_meetings:
+                        meeting_summaries = []
+                        for m in recent_meetings:
+                            summary_text = None
+                            if m.session and hasattr(m.session, 'summary'):
+                                summary_text = m.session.summary[:200]
+                            elif m.description:
+                                summary_text = m.description[:200]
+                            
+                            if summary_text:
+                                meeting_summaries.append(f"- {m.title}: {summary_text}")
+                        
+                        if meeting_summaries:
+                            context_parts.append("Recent meetings:\n" + "\n".join(meeting_summaries))
                 
                 if custom_context:
                     context_parts.append(f"Additional context: {custom_context}")
                 
                 # Get existing tasks to avoid duplicates
-                existing_tasks = db.session.query(Task).filter_by(
-                    meeting_id=meeting_id,
-                    deleted_at=None
-                ).all()
+                if meeting_id:
+                    existing_tasks = db.session.query(Task).filter_by(
+                        meeting_id=meeting_id,
+                        deleted_at=None
+                    ).all()
+                else:
+                    # Get all workspace tasks
+                    existing_tasks = db.session.query(Task).filter_by(
+                        workspace_id=current_user.workspace_id,
+                        deleted_at=None
+                    ).order_by(Task.created_at.desc()).limit(20).all()
+                
                 existing_titles = [t.title for t in existing_tasks]
                 
                 if existing_titles:
-                    context_parts.append(f"Existing tasks: {', '.join(existing_titles[:5])}")
+                    context_parts.append(f"Existing tasks (avoid duplicates): {', '.join(existing_titles[:10])}")
                 
                 context = "\n\n".join(context_parts)
                 
@@ -1773,9 +1814,10 @@ Generate practical, specific tasks that can be assigned and tracked.
 Return tasks as JSON array with: title, description, priority (low/medium/high), category.
 Avoid duplicating existing tasks. Focus on concrete next steps."""
                 
+                context_source = "meeting content" if meeting else "recent workspace meetings"
                 user_prompt = f"""{context}
 
-Based on this meeting, suggest {max_proposals} actionable tasks.
+Based on this {context_source}, suggest {max_proposals} actionable tasks.
 Format as JSON array: [{{"title": "...", "description": "...", "priority": "medium", "category": "..."}}]"""
                 
                 # Stream from OpenAI
@@ -1838,4 +1880,186 @@ Format as JSON array: [{{"title": "...", "description": "...", "priority": "medi
     except Exception as e:
         logger.error(f"AI proposals error: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_tasks_bp.route('/<int:task_id>/comments', methods=['GET'])
+@login_required
+def get_task_comments(task_id):
+    """Get comments for a specific task (CROWN⁴.5 Task 7)."""
+    try:
+        # Verify task exists and user has access
+        task = db.session.get(Task, task_id)
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # Verify workspace access
+        meeting = db.session.get(Meeting, task.meeting_id)
+        if not meeting or meeting.workspace_id != current_user.workspace_id:
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Query comments (exclude soft-deleted)
+        stmt = select(TaskComment).where(
+            and_(
+                TaskComment.task_id == task_id,
+                TaskComment.deleted_at.is_(None)
+            )
+        ).order_by(TaskComment.created_at.asc())
+        
+        comment_records = db.session.execute(stmt).scalars().all()
+        
+        # Build response with user info
+        comments = []
+        for comment in comment_records:
+            user = db.session.get(User, comment.user_id)
+            comments.append({
+                'id': comment.id,
+                'text': comment.text,
+                'author': user.username if user else 'Unknown',
+                'created_at': comment.created_at.isoformat() if comment.created_at else None,
+                'updated_at': comment.updated_at.isoformat() if comment.updated_at else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'comments': comments
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading comments for task {task_id}: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+
+@api_tasks_bp.route('/<int:task_id>/comments', methods=['POST'])
+@login_required
+def add_task_comment(task_id):
+    """Add a comment to a task (CROWN⁴.5 Task 7)."""
+    try:
+        # Verify task exists and user has access
+        task = db.session.get(Task, task_id)
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # Verify workspace access
+        meeting = db.session.get(Meeting, task.meeting_id)
+        if not meeting or meeting.workspace_id != current_user.workspace_id:
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        data = request.get_json()
+        comment_text = data.get('text', '').strip()
+        
+        if not comment_text:
+            return jsonify({'success': False, 'message': 'Comment text required'}), 400
+        
+        # Create new comment
+        comment = TaskComment(
+            task_id=task_id,
+            user_id=current_user.id,
+            text=comment_text
+        )
+        
+        db.session.add(comment)
+        db.session.commit()
+        
+        logger.info(f"Comment {comment.id} added to task {task_id} by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Comment added successfully',
+            'comment': {
+                'id': comment.id,
+                'text': comment.text,
+                'author': current_user.username,
+                'created_at': comment.created_at.isoformat() if comment.created_at else None
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error adding comment to task {task_id}: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+
+@api_tasks_bp.route('/<int:task_id>/history', methods=['GET'])
+@login_required
+def get_task_history(task_id):
+    """Get history/audit trail for a specific task (CROWN⁴.5 Task 7)."""
+    try:
+        # Verify task exists and user has access
+        task = db.session.get(Task, task_id)
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # Verify workspace access
+        meeting = db.session.get(Meeting, task.meeting_id)
+        if not meeting or meeting.workspace_id != current_user.workspace_id:
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Build history from task data and EventLedger
+        history = []
+        
+        # Add creation event
+        history.append({
+            'id': 'created',
+            'action': 'created',
+            'timestamp': task.created_at.isoformat() if task.created_at else datetime.utcnow().isoformat(),
+            'details': f'Task created from {task.source or "manual entry"}'
+        })
+        
+        # Query EventLedger for task-related events
+        # Look for TASK_UPDATE events in the task's payload
+        stmt = select(EventLedger).where(
+            and_(
+                EventLedger.event_type == EventType.TASK_UPDATE,
+                EventLedger.workspace_id == str(current_user.workspace_id)
+            )
+        ).order_by(EventLedger.created_at.asc())
+        
+        events = db.session.execute(stmt).scalars().all()
+        
+        # Filter events related to this specific task
+        for event in events:
+            if event.payload and event.payload.get('task_id') == task_id:
+                action = event.payload.get('action', 'updated')
+                details = event.payload.get('details', '')
+                
+                # Add event details if available
+                if event.payload.get('old_value') and event.payload.get('new_value'):
+                    old_val = event.payload.get('old_value')
+                    new_val = event.payload.get('new_value')
+                    history.append({
+                        'id': f'event-{event.id}',
+                        'action': action,
+                        'timestamp': event.created_at.isoformat(),
+                        'details': details or f'Updated',
+                        'old_value': old_val,
+                        'new_value': new_val
+                    })
+                else:
+                    history.append({
+                        'id': f'event-{event.id}',
+                        'action': action,
+                        'timestamp': event.created_at.isoformat(),
+                        'details': details or event.event_name
+                    })
+        
+        # Add status-based events from task data
+        if task.status == 'completed':
+            history.append({
+                'id': 'completed',
+                'action': 'completed',
+                'timestamp': task.updated_at.isoformat() if task.updated_at else datetime.utcnow().isoformat(),
+                'details': 'Task marked as completed'
+            })
+        
+        # Sort by timestamp
+        history.sort(key=lambda x: x['timestamp'])
+        
+        return jsonify({
+            'success': True,
+            'history': history
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading history for task {task_id}: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
         
