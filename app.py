@@ -493,6 +493,15 @@ def create_app() -> Flask:
         if app.config.get('ENV') == 'production':
             resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
         return resp
+    
+    # Cache control for static CSS files - force no-cache for development
+    @app.after_request
+    def add_cache_control_headers(resp):
+        if request.path.endswith('.css'):
+            resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+            resp.headers["Pragma"] = "no-cache"
+            resp.headers["Expires"] = "0"
+        return resp
 
     # ensure metrics directories
     metrics_dir = getattr(Config, "METRICS_DIR", "./metrics")
