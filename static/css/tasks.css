@@ -2637,14 +2637,14 @@
   
   /* Remove line clamp on mobile to show full task titles */
   .task-card .task-title {
-    display: block;
-    -webkit-line-clamp: unset;
-    -webkit-box-orient: unset;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    word-break: normal;
-    overflow-wrap: normal;
+    display: block !important;
+    -webkit-line-clamp: unset !important;
+    -webkit-box-orient: unset !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
   }
   
   .task-filters {
