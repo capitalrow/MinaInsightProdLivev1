@@ -546,13 +546,13 @@ class TaskBootstrap {
                 </div>
 
                 <!-- Task Title (Inline Editable) -->
-                <div class="task-title ${isCompleted ? 'completed' : ''}" 
-                     data-task-id="${task.id}"
-                     role="button"
-                     tabindex="0"
-                     title="Click to edit task title">
+                <h3 class="task-title ${isCompleted ? 'completed' : ''}" 
+                    data-task-id="${task.id}"
+                    role="button"
+                    tabindex="0"
+                    title="Click to edit task title">
                     ${this.escapeHtml(task.title || 'Untitled Task')}
-                </div>
+                </h3>
 
                 <!-- Task Metadata (Compact Inline) -->
                 <div class="task-metadata">
