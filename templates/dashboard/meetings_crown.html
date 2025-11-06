@@ -397,86 +397,123 @@ function groupMeetings(meetings) {
 
 // Render meetings with grouping
 function renderMeetings() {
-    const meetings = currentTab === 'active' ? activeMeetings : archivedMeetings;
-    const container = document.getElementById(currentTab === 'active' ? 'meetings-content' : 'archive-content');
-    const loading = document.getElementById(currentTab === 'active' ? 'loading-active' : 'loading-archive');
-    
-    loading.style.display = 'none';
-    container.style.display = 'block';
-    
-    if (meetings.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <div style="font-size: 4rem; opacity: 0.3; margin-bottom: 1rem;">📋</div>
-                <h2 style="font-size: var(--font-size-2xl); margin-bottom: 1rem;">No ${currentTab} meetings</h2>
-                <p style="color: var(--color-text-secondary);">
-                    ${currentTab === 'active' ? 'Start recording your first meeting!' : 'Archived meetings will appear here'}
-                </p>
-            </div>
-        `;
-        return;
-    }
-    
-    const groups = groupMeetings(meetings);
-    let html = '';
-    
-    if (groups.today.length > 0) {
-        html += '<h2 class="section-header">Today</h2>';
-        html += groups.today.map(renderMeetingCard).join('');
-    }
-    
-    if (groups.thisWeek.length > 0) {
-        html += '<h2 class="section-header">This Week</h2>';
-        html += groups.thisWeek.map(renderMeetingCard).join('');
-    }
-    
-    if (groups.earlier.length > 0) {
-        html += '<h2 class="section-header">Earlier</h2>';
-        html += groups.earlier.map(renderMeetingCard).join('');
-    }
-    
-    container.innerHTML = html;
+  const meetings = currentTab === 'active' ? activeMeetings : archivedMeetings;
+  const container = document.getElementById(currentTab === 'active' ? 'meetings-content' : 'archive-content');
+  const loading = document.getElementById(currentTab === 'active' ? 'loading-active' : 'loading-archive');
+
+  loading.style.display = 'none';
+  container.style.display = 'block';
+
+  if (meetings.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div style="font-size: 4rem; opacity: 0.3; margin-bottom: 1rem;">📋</div>
+        <h2 style="font-size: var(--font-size-2xl); margin-bottom: 1rem;">No ${currentTab} meetings</h2>
+        <p style="color: var(--color-text-secondary);">
+          ${currentTab === 'active' ? 'Start recording your first meeting!' : 'Archived meetings will appear here'}
+        </p>
+      </div>
+    `;
+    // attach once
+    if (!container.dataset.navInit) initMeetingsDelegation(container);
+    return;
+  }
+
+  const groups = groupMeetings(meetings);
+  let html = '';
+
+  if (groups.today.length > 0) {
+    html += '<h2 class="section-header">Today</h2>';
+    html += groups.today.map(renderMeetingCard).join('');
+  }
+  if (groups.thisWeek.length > 0) {
+    html += '<h2 class="section-header">This Week</h2>';
+    html += groups.thisWeek.map(renderMeetingCard).join('');
+  }
+  if (groups.earlier.length > 0) {
+    html += '<h2 class="section-header">Earlier</h2>';
+    html += groups.earlier.map(renderMeetingCard).join('');
+  }
+
+  container.innerHTML = html;
+
+  // ✅ attach once per container to remain idempotent across re-renders
+  if (!container.dataset.navInit) initMeetingsDelegation(container);
+}
+
+function initMeetingsDelegation(container) {
+  // mark as initialized
+  container.dataset.navInit = '1';
+
+  container.addEventListener('click', (e) => {
+    const target = e.target;
+
+    // ignore clicks from actionable controls
+    if (target.closest('[data-stop-propagation]')) return;
+
+    const card = target.closest('[data-meeting-card]');
+    if (!card) return;
+
+    const sessionId = card.getAttribute('data-session-id');
+    if (!sessionId) return;
+
+    // mirror dashboard route; adjust if your refined URL differs
+    window.location.assign(`/sessions/${sessionId}`);
+  }, { passive: true });
+
+  // keyboard activation
+  container.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest && e.target.closest('[data-meeting-card]');
+    if (!card) return;
+    const sessionId = card.getAttribute('data-session-id');
+    if (!sessionId) return;
+    e.preventDefault();
+    window.location.assign(`/sessions/${sessionId}`);
+  });
 }
 
 // Render individual meeting card
 function renderMeetingCard(meeting) {
-    const date = new Date(meeting.started_at);
-    const sessionId = meeting.session_id;
-    
-    return `
-        <div class="meeting-card" onclick="navigateToMeeting('${sessionId}')" data-session-id="${sessionId}">
-            <div class="flex justify-between items-start gap-4">
-                <div class="flex gap-4 flex-1">
-                    <div class="meeting-icon">
-                        <svg width="28" height="28" fill="white" viewBox="0 0 24 24">
-                            <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
-                        </svg>
-                    </div>
-                    <div class="flex-1">
-                        <h3 class="meeting-title">${meeting.title || 'Untitled Meeting'}</h3>
-                        <p class="meeting-date">${formatDate(date)}</p>
-                        ${meeting.summary ? `<p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-top: 0.5rem;">${meeting.summary.substring(0, 150)}...</p>` : ''}
-                        <div class="meeting-meta">
-                            ${meeting.duration_s ? `<span class="meta-item">⏱️ ${Math.round(meeting.duration_s / 60)} min</span>` : ''}
-                            ${meeting.tasks ? `<span class="meta-item">✅ ${meeting.tasks} tasks</span>` : ''}
-                            ${meeting.highlights ? `<span class="meta-item">⭐ ${meeting.highlights} highlights</span>` : ''}
-                        </div>
-                    </div>
-                </div>
-                <div class="meeting-actions" onclick="event.stopPropagation()">
-                    ${currentTab === 'active' ? 
-                        `<button class="btn btn-sm" onclick="archiveMeeting('${sessionId}')">Archive</button>` :
-                        `<button class="btn btn-sm" onclick="restoreMeeting('${sessionId}')">Restore</button>`
-                    }
-                </div>
-            </div>
-        </div>
-    `;
-}
+  const date = new Date(meeting.started_at);
+  const sessionId = meeting.session_id;
 
+  return `
+    <div class="meeting-card"
+         data-meeting-card
+         data-session-id="${sessionId}"
+         role="link"
+         tabindex="0"
+         aria-label="Open meeting ${meeting.title || 'Untitled Meeting'}">
+      <div class="flex justify-between items-start gap-4">
+        <div class="flex gap-4 flex-1">
+          <div class="meeting-icon"> … </div>
+          <div class="flex-1">
+            <h3 class="meeting-title">${meeting.title || 'Untitled Meeting'}</h3>
+            <p class="meeting-date">${formatDate(date)}</p>
+            ${meeting.summary ? `<p class="meeting-summary">${meeting.summary.substring(0, 150)}...</p>` : ''}
+            <div class="meeting-meta">
+              ${meeting.duration_s ? `<span class="meta-item">⏱️ ${Math.round(meeting.duration_s / 60)} min</span>` : ''}
+              ${meeting.tasks ? `<span class="meta-item">✅ ${meeting.tasks} tasks</span>` : ''}
+              ${meeting.highlights ? `<span class="meta-item">⭐ ${meeting.highlights} highlights</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="meeting-actions" data-stop-propagation>
+          ${currentTab === 'active'
+            ? `<button class="btn btn-sm" data-stop-propagation data-action="archive" data-session-id="${sessionId}">Archive</button>`
+            : `<button class="btn btn-sm" data-stop-propagation data-action="restore" data-session-id="${sessionId}">Restore</button>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+}
+    
 // Navigate to meeting detail
 function navigateToMeeting(sessionId) {
-    window.location.href = `/sessions/${sessionId}`;
+    // Use assign() to trigger full navigation to the refined session page
+    window.location.assign(`/sessions/${sessionId}`);
 }
 
 // Format date

@@ -370,7 +370,12 @@
         {% if meetings %}
         <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-4);">
             {% for meeting in meetings %}
-            <div class="meeting-card" data-meeting-id="{{ meeting.id }}" onclick="window.location='{{ url_for('sessions.get_session_detail', session_identifier=meeting.id) }}'">
+            <div class="meeting-card {% if not meeting.session or not meeting.session.external_id %}meeting-card-processing{% endif %}"
+                 data-meeting-id="{{ meeting.id }}"
+                 data-meeting-title="{{ meeting.title or 'Untitled Meeting' }}"
+                 {% if meeting.session and meeting.session.external_id %}
+                   data-session-id="{{ meeting.session.external_id }}"
+                 {% endif %}>
                 <div class="flex justify-between items-start gap-4">
                     <div class="flex gap-4 flex-1">
                         <div class="meeting-icon">
@@ -720,15 +725,31 @@ function createArchivedMeetingCard(meeting, index) {
                 </div>
             </div>
             <div class="meeting-actions">
-                <button class="btn-restore" onclick="event.stopPropagation(); restoreMeeting(${meeting.id});" title="Restore meeting">
+  <!-- Archive Button -->
+  <button
+    class="btn-archive"
+    data-action="archive"
+    data-meeting-id="{{ meeting.id }}"
+    aria-label="Archive meeting"
+    title="Archive meeting">
                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
                     Restore
                 </button>
-            </div>
-        </div>
-    `;
+                <!-- Share Button -->
+                  <button
+                    class="btn-icon"
+                    data-action="share"
+                    data-meeting-id="{{ meeting.id }}"
+                    aria-label="Share meeting"
+                    title="Share meeting">
+                    <!-- Optional SVG icon -->
+                    Share
+                  </button>
+                </div> 
+                </div>
+                `;
     
     return card;
 }
@@ -775,8 +796,12 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         }
     });
 });
+</script>
 
+<-- Include global JS dependencies -->
+<script src="{{ url_for('static', filename='js/prefetch-controller.js') }}"></script>
+<script src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}"></script>
+<script src="{{ url_for('static', filename='js/meetings-page.js', v='20251106') }}"></script>
 // CROWN⁴ Event tracking now handled by ui-event-tracker.js
 // Includes: search debouncing (1s), filter tracking, tab switches, event batching
-</script>
 {% endblock %}
