@@ -295,7 +295,7 @@
     .stats-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .welcome-title {
         font-size: var(--font-size-3xl);
     }
@@ -492,22 +492,22 @@ window.handleCardHover = function(event) {
     const card = event.currentTarget;
     const sessionId = card.dataset.sessionId;
     const meetingTitle = card.dataset.meetingTitle;
-    
+
     // Skip if no session ID (meeting without linked session)
     if (!sessionId) {
         return;
     }
-    
+
     // Skip if already prefetched
     if (prefetchedSessions.has(sessionId)) {
         return;
     }
-    
+
     // Mark as prefetched
     prefetchedSessions.add(sessionId);
-    
+
     console.log('🔮 Prefetching session:', sessionId);
-    
+
     // CROWN⁴ Event #6: Log session_prefetch event to EventLedger (non-blocking)
     fetch('/dashboard/api/events/prefetch', {
         method: 'POST',
@@ -528,7 +528,7 @@ window.handleCardHover = function(event) {
     }).catch(err => {
         console.warn('⚠️ Failed to log prefetch event:', err);
     });
-    
+
     // Broadcast session_prefetch event
     try {
         if (window.wsManager) {
@@ -541,7 +541,7 @@ window.handleCardHover = function(event) {
     } catch (e) {
         console.warn('Failed to broadcast session_prefetch:', e);
     }
-    
+
     // Prefetch session data via PrefetchController
     if (prefetchController) {
         prefetchController.prefetch(sessionId, { priority: 1 })
@@ -572,32 +572,32 @@ window.handleCardHover = function(event) {
 window.handleCardClick = function(event) {
     event.preventDefault();
     event.stopPropagation();
-    
+
     const card = event.currentTarget;
     const meetingId = card.dataset.meetingId;
     const meetingTitle = card.dataset.meetingTitle;
     const sessionId = card.dataset.sessionId;
-    
+
     console.log('🖱️ Card clicked:', { meetingId, sessionId, meetingTitle });
-    
+
     // If no session ID, show friendly message and skip
     if (!sessionId) {
         console.warn('⚠️ Meeting has no session ID, skipping navigation:', meetingId);
-        
+
         // Show toast notification (if toast system exists)
         if (window.showToast) {
             window.showToast('This meeting is still being processed. Please try again in a moment.', 'info');
         }
         return;
     }
-    
+
     // CRITICAL: Navigate immediately if GSAP not available (fallback)
     if (typeof gsap === 'undefined') {
         console.log('🔄 GSAP not available, navigating directly');
         window.location.href = `/sessions/${sessionId}/refined`;
         return;
     }
-    
+
     // CROWN⁴ Optimization: Abort stale prefetches (user navigating to specific session)
     if (prefetchController) {
         // Get active requests and abort any that aren't for this session
@@ -610,9 +610,9 @@ window.handleCardClick = function(event) {
             }
         }
     }
-    
+
     console.log('🎬 Starting morph transition for session:', sessionId);
-    
+
     // CROWN⁴ Event #7: Log session_card_click event (non-blocking)
     fetch('/dashboard/api/events/card-click', {
         method: 'POST',
@@ -633,11 +633,11 @@ window.handleCardClick = function(event) {
     }).catch(err => {
         console.warn('⚠️ Failed to log card click event:', err);
     });
-    
+
     // Create clone for animation
     const clone = card.cloneNode(true);
     const rect = card.getBoundingClientRect();
-    
+
     // Style clone as fixed overlay
     Object.assign(clone.style, {
         position: 'fixed',
@@ -649,15 +649,15 @@ window.handleCardClick = function(event) {
         zIndex: '9999',
         pointerEvents: 'none'
     });
-    
+
     document.body.appendChild(clone);
-    
+
     // Hide original card
     gsap.to(card, {
         opacity: 0,
         duration: 0.3
     });
-    
+
     // Create overlay backdrop
     const overlay = document.createElement('div');
     Object.assign(overlay.style, {
@@ -671,13 +671,13 @@ window.handleCardClick = function(event) {
         pointerEvents: 'none'
     });
     document.body.appendChild(overlay);
-    
+
     // Animate backdrop fade in
     gsap.to(overlay, {
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         duration: 0.4
     });
-    
+
     // Create loading overlay
     const loadingOverlay = document.createElement('div');
     Object.assign(loadingOverlay.style, {
@@ -690,7 +690,7 @@ window.handleCardClick = function(event) {
         pointerEvents: 'none',
         opacity: '0'
     });
-    
+
     loadingOverlay.innerHTML = `
         <div style="
             background: linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%);
@@ -725,22 +725,22 @@ window.handleCardClick = function(event) {
             }
         </style>
     `;
-    
+
     document.body.appendChild(loadingOverlay);
-    
+
     // Fade in loading overlay
     gsap.to(loadingOverlay, {
         opacity: 1,
         duration: 0.3,
         delay: 0.2
     });
-    
+
     // Calculate target dimensions
     const targetWidth = Math.min(window.innerWidth - 64, 1200);
     const targetHeight = window.innerHeight - 128;
     const targetLeft = (window.innerWidth - targetWidth) / 2;
     const targetTop = 64;
-    
+
     // Cinematic morph animation with error handling
     try {
         const timeline = gsap.timeline({
@@ -748,7 +748,7 @@ window.handleCardClick = function(event) {
                 window.location.href = `/sessions/${sessionId}/refined`;
             }
         });
-        
+
         timeline
             .to(clone, {
                 top: targetTop,
@@ -767,7 +767,7 @@ window.handleCardClick = function(event) {
         console.warn('⚠️ Animation failed, navigating directly:', animError);
         window.location.href = `/sessions/${sessionId}/refined`;
     }
-    
+
     // Store transition data
     try {
         sessionStorage.setItem('morphTransition', JSON.stringify({
@@ -785,27 +785,27 @@ window.initMorphTransitions = function() {
     console.log('🔍 initMorphTransitions() called');
     const meetingCards = document.querySelectorAll('.meeting-card');
     console.log(`🔍 Found ${meetingCards.length} meeting cards`);
-    
+
     if (meetingCards.length === 0) {
         console.warn('⚠️ No meeting cards found to attach handlers!');
         return;
     }
-    
+
     meetingCards.forEach((card, index) => {
         const sessionId = card.dataset.sessionId;
         const meetingId = card.dataset.meetingId;
         console.log(`🔍 Card ${index}: meeting=${meetingId}, session=${sessionId}`);
-        
+
         // Remove existing listeners to prevent duplicates
         card.removeEventListener('click', window.handleCardClick);
         card.removeEventListener('mouseenter', window.handleCardHover);
-        
+
         // Add fresh listeners
         card.addEventListener('click', window.handleCardClick);
         card.addEventListener('mouseenter', window.handleCardHover);
         card.style.cursor = 'pointer';
     });
-    
+
     console.log(`✅ Initialized morph transitions for ${meetingCards.length} meeting cards`);
 };
 
@@ -816,25 +816,25 @@ window.initMorphTransitions = function() {
 
 (function() {
     'use strict';
-    
+
     // Get workspace ID from user context
     const WORKSPACE_ID = {{ current_user.workspace_id }};
-    
+
     // DOM elements - will be initialized after DOM ready
     let statElements = {
         totalMeetings: null,
         actionItems: null,
         hoursSaved: null
     };
-    
+
     let meetingsListEl = null;
     let emptyStateEl = null;
-    
+
     // Track bootstrap performance
     const bootstrapStart = performance.now();
     let cacheLoadTime = 0;
     let serverLoadTime = 0;
-    
+
     /**
      * Initialize DOM references after DOM is ready
      * CRITICAL: Must be called after DOMContentLoaded to prevent null querySelector errors
@@ -846,10 +846,10 @@ window.initMorphTransitions = function() {
             actionItems: document.querySelector('.stat-card:nth-child(2) .stat-value'),
             hoursSaved: document.querySelector('.stat-card:nth-child(3) .stat-value')
         };
-        
+
         meetingsListEl = document.querySelector('.meetings-list');
         emptyStateEl = document.querySelector('.empty-state');
-        
+
         console.log('📍 DOM references initialized:', {
             totalMeetings: !!statElements.totalMeetings,
             actionItems: !!statElements.actionItems,
@@ -857,7 +857,7 @@ window.initMorphTransitions = function() {
             meetingsListEl: !!meetingsListEl,
             emptyStateEl: !!emptyStateEl
         });
-        
+
         // CRITICAL: Initialize meeting card click handlers immediately
         // This ensures cards are clickable even if stats don't exist
         if (window.initMorphTransitions) {
@@ -867,46 +867,46 @@ window.initMorphTransitions = function() {
             console.warn('⚠️ initMorphTransitions not available');
         }
     }
-    
+
     /**
      * Bootstrap dashboard with cache-first strategy
      * CROWN⁴ requirement: Load from IndexedDB in <200ms, then sync with server
      */
     async function bootstrapDashboard() {
         console.log('⚡ Starting dashboard bootstrap...');
-        
+
         try {
             // Initialize cache manager
             await window.cacheManager.init();
-            
+
             // ALWAYS load from cache first (even if stale) for instant TTI
             console.log('💾 Loading from cache (stale-acceptable)...');
             const cacheStart = performance.now();
-            
+
             // Load from cache in parallel
             const [cachedMeetings, cachedAnalytics] = await Promise.all([
                 window.cacheManager.getCachedMeetings(WORKSPACE_ID),
                 window.cacheManager.getCachedAnalytics(WORKSPACE_ID)
             ]);
-            
+
             cacheLoadTime = Math.round(performance.now() - cacheStart);
-            
+
             // Render cached data immediately (even if stale)
             let cacheHit = false;
             if (cachedMeetings && cachedMeetings.length > 0) {
                 renderCachedMeetings(cachedMeetings.slice(0, 5));
                 cacheHit = true;
             }
-            
+
             if (cachedAnalytics && cachedAnalytics.data) {
                 updateStatsFromCache(cachedAnalytics.data);
                 cacheHit = true;
             }
-            
+
             if (cacheHit) {
                 const totalBootstrapTime = Math.round(performance.now() - bootstrapStart);
                 console.log(`🚀 Dashboard rendered from cache in ${totalBootstrapTime}ms`);
-                
+
                 if (totalBootstrapTime > 200) {
                     console.warn(`⚠️ Cache load exceeded 200ms target: ${totalBootstrapTime}ms`);
                 } else {
@@ -915,7 +915,7 @@ window.initMorphTransitions = function() {
             } else {
                 console.log('⏳ No cache available, using server-rendered data');
             }
-            
+
             // Log dashboard_bootstrap event to EventLedger (CROWN⁴ Event #1)
             try {
                 const totalBootstrapTime = Math.round(performance.now() - bootstrapStart);
@@ -931,7 +931,7 @@ window.initMorphTransitions = function() {
                         cache_hit: cacheHit
                     })
                 });
-                
+
                 if (response.ok) {
                     const result = await response.json();
                     console.log(`📊 dashboard_bootstrap event logged (event_id=${result.event_id}, sub_200ms=${result.sub_200ms})`);
@@ -942,10 +942,10 @@ window.initMorphTransitions = function() {
                 console.warn('⚠️ Failed to log dashboard_bootstrap event:', error);
                 // Non-blocking - continue even if event logging fails
             }
-            
+
             // Always sync with server in background (validate even if fresh)
             syncWithServer();
-            
+
             // Initialize morph transitions for all cards (server-rendered + cache-rendered)
             // This ensures event listeners are attached regardless of card source
             console.log('🎯 Attaching event listeners to all meeting cards...');
@@ -954,7 +954,7 @@ window.initMorphTransitions = function() {
             } else {
                 console.error('❌ initMorphTransitions not available!');
             }
-            
+
         } catch (error) {
             console.error('❌ Bootstrap failed:', error);
             // Graceful degradation: page will use server-rendered data
@@ -964,22 +964,22 @@ window.initMorphTransitions = function() {
             }
         }
     }
-    
+
     /**
      * Render cached meetings to the DOM
      * @param {Array} meetings - Cached meeting records
      */
     function renderCachedMeetings(meetings) {
         if (!meetingsListEl || meetings.length === 0) return;
-        
+
         // Clear existing content
         meetingsListEl.innerHTML = '';
-        
+
         // Hide empty state
         if (emptyStateEl) {
             emptyStateEl.style.display = 'none';
         }
-        
+
         // Render each meeting
         meetings.forEach((meeting, index) => {
             const sessionId = meeting.session_id || meeting.external_id || null;
@@ -1004,23 +1004,23 @@ window.initMorphTransitions = function() {
                     </div>
                 </div>
             `;
-            
+
             meetingsListEl.insertAdjacentHTML('beforeend', cardHTML);
         });
-        
+
         // Initialize morph transitions for newly rendered cards
         if (window.initMorphTransitions) {
             window.initMorphTransitions();
         }
     }
-    
+
     /**
      * Update statistics from cached data
      * @param {Object} data - Cached analytics data
      */
     function updateStatsFromCache(data) {
         if (!data) return;
-        
+
         if (data.total_meetings !== undefined && statElements.totalMeetings) {
             statElements.totalMeetings.textContent = data.total_meetings;
         }
@@ -1031,14 +1031,14 @@ window.initMorphTransitions = function() {
             statElements.hoursSaved.textContent = data.minutes_saved;
         }
     }
-    
+
     /**
      * Sync with server in background and validate cache
      */
     async function syncWithServer() {
         console.log('🔄 Starting background server sync...');
         const serverStart = performance.now();
-        
+
         try {
             // Fetch fresh data from server (use existing stats from page)
             const serverStats = {
@@ -1046,13 +1046,13 @@ window.initMorphTransitions = function() {
                 total_tasks: {{ stats.total_tasks|default(0) }},
                 minutes_saved: {{ stats.get('minutes_saved', 0) }}
             };
-            
+
             // Get cached data for validation
             const [cachedMeetings, cachedAnalytics] = await Promise.all([
                 window.cacheManager.getCachedMeetings(WORKSPACE_ID),
                 window.cacheManager.getCachedAnalytics(WORKSPACE_ID)
             ]);
-            
+
             // Validate analytics
             if (cachedAnalytics) {
                 const validation = await window.cacheValidator.validate({
@@ -1060,7 +1060,7 @@ window.initMorphTransitions = function() {
                     serverData: serverStats,
                     key: `analytics_${WORKSPACE_ID}`
                 });
-                
+
                 if (validation.drift) {
                     console.log('⚠️ Analytics drift detected, updating from server');
                     updateStatsFromCache(serverStats);
@@ -1070,22 +1070,22 @@ window.initMorphTransitions = function() {
                 // No cache, store server data
                 await window.cacheManager.cacheAnalyticsSnapshot(serverStats, WORKSPACE_ID);
             }
-            
+
             serverLoadTime = Math.round(performance.now() - serverStart);
             console.log(`✅ Server sync complete in ${serverLoadTime}ms`);
-            
+
         } catch (error) {
             console.error('❌ Server sync failed:', error);
         }
     }
-    
+
     /**
      * Start idle sync timer for background validation
      * Runs checksum validation every 30 seconds
      */
     function startIdleSync() {
         console.log('⏰ Starting idle sync timer (30s interval)...');
-        
+
         setInterval(async () => {
             try {
                 await performIdleSync();
@@ -1094,7 +1094,7 @@ window.initMorphTransitions = function() {
             }
         }, 30000); // 30 seconds
     }
-    
+
     /**
      * Perform idle sync validation
      * Check cache freshness and sync if needed
@@ -1102,7 +1102,7 @@ window.initMorphTransitions = function() {
     async function performIdleSync() {
         console.log('🔍 Running idle sync validation...');
         const syncStart = performance.now();
-        
+
         try {
             // Get current server stats from DOM
             const serverStats = {
@@ -1110,30 +1110,30 @@ window.initMorphTransitions = function() {
                 total_tasks: parseInt(statElements.actionItems?.textContent || '0'),
                 minutes_saved: parseInt(statElements.hoursSaved?.textContent || '0')
             };
-            
+
             // Get cached analytics
             const cachedAnalytics = await window.cacheManager.getCachedAnalytics(WORKSPACE_ID);
-            
+
             if (!cachedAnalytics) {
                 console.log('💾 No cache found, caching current state...');
                 await window.cacheManager.cacheAnalyticsSnapshot(serverStats, WORKSPACE_ID);
                 return;
             }
-            
+
             // Validate cache against current state
             const validation = await window.cacheValidator.validate({
                 cachedData: cachedAnalytics.data,
                 serverData: serverStats,
                 key: `analytics_${WORKSPACE_ID}`
             });
-            
+
             if (validation.drift) {
                 console.warn('⚠️ Cache drift detected during idle sync');
-                
+
                 // Calculate delta
                 const cachedData = cachedAnalytics.data;
                 const changes = [];
-                
+
                 if (cachedData.total_meetings !== serverStats.total_meetings) {
                     changes.push(`meetings: ${cachedData.total_meetings} → ${serverStats.total_meetings}`);
                 }
@@ -1143,33 +1143,33 @@ window.initMorphTransitions = function() {
                 if (cachedData.minutes_saved !== serverStats.minutes_saved) {
                     changes.push(`minutes: ${cachedData.minutes_saved} → ${serverStats.minutes_saved}`);
                 }
-                
+
                 console.log('📊 Changes detected:', changes.join(', '));
-                
+
                 // Update cache with current state
                 await window.cacheManager.cacheAnalyticsSnapshot(serverStats, WORKSPACE_ID);
                 console.log('💾 Cache synchronized');
             } else {
                 console.log('✅ Cache valid, no sync needed');
             }
-            
+
             const syncTime = Math.round(performance.now() - syncStart);
             console.log(`⏱️ Idle sync completed in ${syncTime}ms`);
-            
+
         } catch (error) {
             console.error('❌ Idle sync error:', error);
         }
     }
-    
+
     /**
      * Initialize WebSocket connection
      */
     function initWebSocket() {
         console.log('🚀 Initializing dashboard WebSocket...');
-        
+
         // Initialize WebSocket manager with dashboard namespace
         window.wsManager.init(WORKSPACE_ID, ['dashboard']);
-        
+
         // Listen for connection status changes
         window.wsManager.on('connection_status', (data) => {
             if (data.connected && data.namespace === 'dashboard') {
@@ -1180,26 +1180,26 @@ window.initMorphTransitions = function() {
                 showConnectionStatus('disconnected');
             }
         });
-        
+
         // Listen for session_update:created events
         window.wsManager.on('session_update:created', handleNewSession);
-        
+
         // Listen for dashboard_refresh events
         window.wsManager.on('dashboard_refresh', handleDashboardRefresh);
-        
+
         // Listen for task_update events (for action items counter)
         window.wsManager.on('task_update', handleTaskUpdate);
-        
+
         console.log('📡 Dashboard WebSocket listeners registered');
     }
-    
+
     /**
      * Handle new session created event
      * @param {Object} data - Event data containing session/meeting info
      */
     function handleNewSession(data) {
         console.log('📬 New session created event received:', data);
-        
+
         // Safety check: Ensure DOM is ready before accessing elements
         if (!statElements) {
             console.warn('⚠️ statElements not initialized yet, deferring handleNewSession');
@@ -1209,15 +1209,15 @@ window.initMorphTransitions = function() {
             }
             return;
         }
-        
+
         const sessionData = data.data || data;
-        
+
         // Update total meetings counter with animation
         updateCounter(statElements.totalMeetings, 1, 'increment');
-        
+
         // Insert new meeting card at top of list
         insertMeetingCard(sessionData);
-        
+
         // Remove empty state if present
         if (emptyStateEl) {
             emptyStateEl.style.opacity = '0';
@@ -1225,18 +1225,18 @@ window.initMorphTransitions = function() {
                 emptyStateEl.style.display = 'none';
             }, 300);
         }
-        
+
         // Show notification
         showNotification('New meeting recorded', 'A new meeting has been added to your dashboard');
     }
-    
+
     /**
      * Handle dashboard refresh event
      * @param {Object} data - Event data with updated statistics
      */
     async function handleDashboardRefresh(data) {
         console.log('🔄 Dashboard refresh event received:', data);
-        
+
         // Safety check: Ensure DOM is ready before accessing elements
         if (!statElements) {
             console.warn('⚠️ statElements not initialized yet, deferring handleDashboardRefresh');
@@ -1246,9 +1246,9 @@ window.initMorphTransitions = function() {
             }
             return;
         }
-        
+
         const stats = data.data || data;
-        
+
         // Update all counters
         if (stats.total_meetings !== undefined) {
             updateCounter(statElements.totalMeetings, stats.total_meetings, 'set');
@@ -1259,7 +1259,7 @@ window.initMorphTransitions = function() {
         if (stats.minutes_saved !== undefined) {
             updateCounter(statElements.hoursSaved, stats.minutes_saved, 'set');
         }
-        
+
         // Update cache with fresh statistics
         try {
             await window.cacheManager.cacheAnalyticsSnapshot(stats, WORKSPACE_ID);
@@ -1268,14 +1268,14 @@ window.initMorphTransitions = function() {
             console.error('❌ Failed to update cache:', error);
         }
     }
-    
+
     /**
      * Handle task update event
      * @param {Object} data - Event data with task information
      */
     function handleTaskUpdate(data) {
         console.log('✅ Task update event received:', data);
-        
+
         // Safety check: Ensure DOM is ready before accessing elements
         if (!statElements) {
             console.warn('⚠️ statElements not initialized yet, deferring handleTaskUpdate');
@@ -1285,9 +1285,9 @@ window.initMorphTransitions = function() {
             }
             return;
         }
-        
+
         const taskData = data.data || data;
-        
+
         // Update action items counter based on task action
         if (taskData.action === 'created') {
             updateCounter(statElements.actionItems, 1, 'increment');
@@ -1295,7 +1295,7 @@ window.initMorphTransitions = function() {
             updateCounter(statElements.actionItems, -1, 'increment');
         }
     }
-    
+
     /**
      * Update counter with animation
      * @param {HTMLElement} element - Counter element
@@ -1307,10 +1307,10 @@ window.initMorphTransitions = function() {
             console.warn('⚠️ updateCounter called with null element, skipping');
             return;
         }
-        
+
         const currentValue = parseInt(element.textContent) || 0;
         let newValue;
-        
+
         if (mode === 'set') {
             newValue = value;
         } else if (mode === 'increment') {
@@ -1318,19 +1318,19 @@ window.initMorphTransitions = function() {
         } else if (mode === 'decrement') {
             newValue = currentValue - value;
         }
-        
+
         // Add shimmer animation
         element.parentElement.parentElement.classList.add('stat-card-shimmer');
-        
+
         // Animate counter change
         animateCounter(element, currentValue, newValue, 500);
-        
+
         // Remove shimmer after animation
         setTimeout(() => {
             element.parentElement.parentElement.classList.remove('stat-card-shimmer');
         }, 1000);
     }
-    
+
     /**
      * Animate counter from current to new value
      * @param {HTMLElement} element - Counter element
@@ -1341,25 +1341,25 @@ window.initMorphTransitions = function() {
     function animateCounter(element, start, end, duration) {
         const startTime = Date.now();
         const difference = end - start;
-        
+
         function update() {
             const elapsed = Date.now() - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            
+
             // Easing function (ease-out cubic)
             const eased = 1 - Math.pow(1 - progress, 3);
             const current = Math.round(start + (difference * eased));
-            
+
             element.textContent = current;
-            
+
             if (progress < 1) {
                 requestAnimationFrame(update);
             }
         }
-        
+
         update();
     }
-    
+
     /**
      * Insert new meeting card at top of list
      * @param {Object} meetingData - Meeting data from event
@@ -1368,16 +1368,16 @@ window.initMorphTransitions = function() {
         if (!meetingsListEl) {
             // If meetings list doesn't exist, create it
             createMeetingsList();
-            
+
             // If still null after creation attempt, bail out
             if (!meetingsListEl) {
                 console.warn('⚠️ Cannot insert meeting card: meetings list element not found');
                 return;
             }
         }
-        
+
         const meeting = meetingData.meeting || meetingData;
-        
+
         // Create meeting card HTML (with session ID support for morph transitions)
         const sessionId = meeting.session_id || meeting.external_id || null;
         const cardHTML = `
@@ -1402,22 +1402,22 @@ window.initMorphTransitions = function() {
                 </div>
             </div>
         `;
-        
+
         // Insert at top of list
         meetingsListEl.insertAdjacentHTML('afterbegin', cardHTML);
-        
+
         // Initialize morph transitions for all cards (including the new one)
         if (window.initMorphTransitions) {
             window.initMorphTransitions();
         }
-        
+
         // Get the newly inserted card for additional styling
         try {
             const newCard = meetingsListEl.querySelector('.new-card');
             if (newCard) {
                 // Apply pulse glow animation to the entire card
                 newCard.style.animation += ', pulseGlow 2s ease-in-out 2';
-                
+
                 // Remove new badge after 5 seconds
                 setTimeout(() => {
                     const newBadge = newCard.querySelector('.badge-success');
@@ -1428,7 +1428,7 @@ window.initMorphTransitions = function() {
                         setTimeout(() => newBadge.remove(), 300);
                     }
                 }, 5000);
-                
+
                 // Remove new-card class after animation
                 setTimeout(() => {
                     newCard.classList.remove('new-card');
@@ -1438,7 +1438,7 @@ window.initMorphTransitions = function() {
             console.warn('⚠️ Failed to style new card:', error);
         }
     }
-    
+
     /**
      * Create meetings list if it doesn't exist
      */
@@ -1446,7 +1446,7 @@ window.initMorphTransitions = function() {
         try {
             const container = document.querySelector('.dashboard-container');
             const sectionHeader = document.querySelector('.section-header');
-            
+
             if (sectionHeader && !meetingsListEl) {
                 const listHTML = '<div class="meetings-list"></div>';
                 sectionHeader.insertAdjacentHTML('afterend', listHTML);
@@ -1457,7 +1457,7 @@ window.initMorphTransitions = function() {
             console.warn('⚠️ Failed to create meetings list:', error);
         }
     }
-    
+
     /**
      * Show connection status indicator
      * @param {string} status - 'connected' or 'disconnected'
@@ -1479,16 +1479,16 @@ window.initMorphTransitions = function() {
             ${status === 'connected' ? 'background: #10b981; color: white;' : 'background: #ef4444; color: white;'}
         `;
         indicator.textContent = status === 'connected' ? '🟢 Live' : '🔴 Offline';
-        
+
         document.body.appendChild(indicator);
-        
+
         // Auto-remove after 3 seconds
         setTimeout(() => {
             indicator.style.opacity = '0';
             setTimeout(() => indicator.remove(), 300);
         }, 3000);
     }
-    
+
     /**
      * Show notification toast
      * @param {string} title - Notification title
@@ -1511,7 +1511,7 @@ window.initMorphTransitions = function() {
             z-index: 1000;
             animation: slideInFromRight 0.3s ease-out;
         `;
-        
+
         notification.innerHTML = `
             <div style="display: flex; gap: 12px; align-items: start;">
                 <div style="flex-shrink: 0; width: 40px; height: 40px; background: var(--gradient-primary); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
@@ -1525,16 +1525,16 @@ window.initMorphTransitions = function() {
                 </div>
             </div>
         `;
-        
+
         document.body.appendChild(notification);
-        
+
         // Auto-remove after 5 seconds
         setTimeout(() => {
             notification.style.animation = 'slideOutToRight 0.3s ease-out';
             setTimeout(() => notification.remove(), 300);
         }, 5000);
     }
-    
+
     /**
      * Format date to readable string
      * @param {string|Date} date - Date to format
@@ -1551,7 +1551,7 @@ window.initMorphTransitions = function() {
             hour12: true
         });
     }
-    
+
     /**
      * Escape HTML to prevent XSS
      * @param {string} text - Text to escape
@@ -1562,9 +1562,9 @@ window.initMorphTransitions = function() {
         div.textContent = text;
         return div.innerHTML;
     }
-    
+
     // REMOVED: Duplicate initialization - using initializeDashboard() below instead
-    
+
     // Add CSS for new animations
     const style = document.createElement('style');
     style.textContent = `
@@ -1578,7 +1578,7 @@ window.initMorphTransitions = function() {
                 transform: translateY(0);
             }
         }
-        
+
         @keyframes slideInFromRight {
             from {
                 opacity: 0;
@@ -1589,7 +1589,7 @@ window.initMorphTransitions = function() {
                 transform: translateX(0);
             }
         }
-        
+
         @keyframes slideOutToRight {
             from {
                 opacity: 1;
@@ -1600,7 +1600,7 @@ window.initMorphTransitions = function() {
                 transform: translateX(20px);
             }
         }
-        
+
         @keyframes fadeInUp {
             from {
                 opacity: 0;
@@ -1611,7 +1611,7 @@ window.initMorphTransitions = function() {
                 transform: translateY(0);
             }
         }
-        
+
         @keyframes pulseGlow {
             0% {
                 box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7);
@@ -1626,7 +1626,7 @@ window.initMorphTransitions = function() {
                 transform: scale(1);
             }
         }
-        
+
         @keyframes bounceIn {
             0% {
                 opacity: 0;
@@ -1644,7 +1644,7 @@ window.initMorphTransitions = function() {
                 transform: scale(1);
             }
         }
-        
+
         @keyframes shimmer {
             0% {
                 background-position: -200% center;
@@ -1653,7 +1653,7 @@ window.initMorphTransitions = function() {
                 background-position: 200% center;
             }
         }
-        
+
         .stat-card-shimmer::after {
             content: '';
             position: absolute;
@@ -1666,27 +1666,27 @@ window.initMorphTransitions = function() {
             animation: shimmer 1s ease-in-out;
             pointer-events: none;
         }
-        
+
         /* Enhanced hover effects for meeting cards */
         .meeting-card {
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-        
+
         .meeting-card:hover {
             transform: translateY(-4px);
             box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
         }
-        
+
         /* Smooth transitions for stat cards */
         .stat-card {
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
-        
+
         .stat-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
         }
-        
+
         /* Loading skeleton pulse */
         @keyframes skeletonPulse {
             0%, 100% {
@@ -1696,7 +1696,7 @@ window.initMorphTransitions = function() {
                 opacity: 0.5;
             }
         }
-        
+
         .skeleton {
             animation: skeletonPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
             background: linear-gradient(90deg, 
@@ -1708,7 +1708,7 @@ window.initMorphTransitions = function() {
         }
     `;
     document.head.appendChild(style);
-    
+
     /**
      * Initialize Dashboard - CROWN⁴ Event Sequencing Entry Point
      * Event #1: dashboard_bootstrap
@@ -1716,23 +1716,23 @@ window.initMorphTransitions = function() {
     function initializeDashboard() {
         console.log('🌟 CROWN⁴ Dashboard Initialization Starting...');
         console.log('📋 Event Sequence: dashboard_bootstrap → session_prefetch → session_card_click');
-        
+
         // Step 0: Initialize DOM references FIRST (prevent querySelector errors)
         initDOMReferences();
-        
+
         // Step 1: Bootstrap cache-first rendering
         bootstrapDashboard()
             .then(() => {
                 console.log('✅ Bootstrap complete - cache loaded, cards rendered, listeners attached');
-                
+
                 // Step 2: Initialize WebSocket for real-time updates (Event #2: session_update:created)
                 console.log('🔌 Initializing WebSocket connection...');
                 initWebSocket();
-                
+
                 // Step 3: Start background idle sync (Event #13: dashboard_idle_sync)
                 console.log('⏰ Starting idle sync timer...');
                 startIdleSync();
-                
+
                 console.log('🎉 CROWN⁴ Dashboard fully initialized - ready for user interaction!');
             })
             .catch(error => {
@@ -1742,7 +1742,7 @@ window.initMorphTransitions = function() {
                 startIdleSync();
             });
     }
-    
+
     // Trigger initialization when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initializeDashboard);
@@ -1750,7 +1750,7 @@ window.initMorphTransitions = function() {
         // DOM already loaded, execute immediately
         initializeDashboard();
     }
-    
+
 })();
 </script>
 
