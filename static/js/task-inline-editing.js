@@ -115,6 +115,15 @@ class TaskInlineEditing {
                     // Update task via optimistic UI
                     await this.taskUI.updateTask(taskId, { title: newText });
 
+                    // Emit task updated event for CognitiveSynchronizer
+                    document.dispatchEvent(new CustomEvent('task:updated', {
+                        detail: {
+                            taskId: parseInt(taskId),
+                            updates: { title: newText },
+                            previousValues: { title: originalText }
+                        }
+                    }));
+
                     // Show saved state briefly
                     titleElement.classList.remove('saving');
                     titleElement.classList.add('saved');
