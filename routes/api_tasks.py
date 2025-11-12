@@ -14,6 +14,7 @@ import logging
 from app import db
 from models.summary import Summary
 from services.event_broadcaster import EventBroadcaster
+from services.deduper import deduper
 
 logger = logging.getLogger(__name__)
 event_broadcaster = EventBroadcaster()
@@ -262,6 +263,99 @@ def create_task():
         
     except Exception as e:
         db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_tasks_bp.route('/check-duplicate', methods=['POST'])
+@login_required
+def check_duplicate():
+    """
+    Check if a task is a duplicate before creation.
+    CROWN⁴.5 Phase 1.3: Deduper active workflows with origin_hash matching.
+    Security: Only returns duplicates within user's workspace, no cross-tenant leakage.
+    """
+    try:
+        data = request.get_json()
+        
+        if not data.get('title'):
+            return jsonify({'success': False, 'message': 'Title is required'}), 400
+        
+        title = data['title'].strip()
+        description = data.get('description', '').strip() or None
+        assigned_to_id = data.get('assigned_to_id')
+        meeting_id = data.get('meeting_id')
+        session_id = data.get('session_id')
+        
+        if meeting_id:
+            meeting = db.session.query(Meeting).filter_by(
+                id=meeting_id,
+                workspace_id=current_user.workspace_id
+            ).first()
+            
+            if not meeting:
+                return jsonify({'success': False, 'message': 'Invalid meeting ID'}), 403
+        
+        duplicate_check = deduper.check_duplicate(
+            title=title,
+            description=description,
+            assigned_to_id=assigned_to_id,
+            meeting_id=meeting_id,
+            session_id=session_id,
+            use_fuzzy_matching=True
+        )
+        
+        has_workspace_duplicate = False
+        workspace_existing_task = None
+        workspace_similar_tasks = []
+        
+        if duplicate_check['existing_task']:
+            existing_task = duplicate_check['existing_task']
+            if existing_task.meeting and existing_task.meeting.workspace_id == current_user.workspace_id:
+                has_workspace_duplicate = True
+                workspace_existing_task = existing_task.to_dict()
+        
+        if duplicate_check['similar_tasks']:
+            for task, similarity in duplicate_check['similar_tasks']:
+                if task.meeting and task.meeting.workspace_id == current_user.workspace_id:
+                    task_dict = task.to_dict()
+                    task_dict['similarity'] = similarity
+                    workspace_similar_tasks.append(task_dict)
+                    has_workspace_duplicate = True
+        
+        if has_workspace_duplicate:
+            response_data = {
+                'success': True,
+                'is_duplicate': True,
+                'duplicate_type': duplicate_check['duplicate_type'],
+                'confidence': duplicate_check['confidence'],
+                'origin_hash': duplicate_check['origin_hash'],
+                'recommendation': duplicate_check['recommendation']
+            }
+            
+            if workspace_existing_task:
+                response_data['existing_task'] = workspace_existing_task
+            
+            if workspace_similar_tasks:
+                response_data['similar_tasks'] = workspace_similar_tasks
+        else:
+            response_data = {
+                'success': True,
+                'is_duplicate': False,
+                'duplicate_type': 'none',
+                'confidence': 0.0,
+                'origin_hash': duplicate_check['origin_hash'],
+                'recommendation': 'OK to create - no duplicates detected in workspace'
+            }
+        
+        logger.info(
+            f"Duplicate check (workspace {current_user.workspace_id}): "
+            f"{response_data['duplicate_type']} (confidence: {response_data['confidence']:.2f})"
+        )
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logger.error(f"Failed to check duplicate: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 

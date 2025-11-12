@@ -461,20 +461,134 @@ class TaskWebSocketHandlers {
         
         const { primary_task, merged_task_ids } = data;
         
-        // Update primary task
+        // CROWN⁴.5 Event #13: task_merge animation (duplicate collapse + badge)
+        const primaryTaskCard = document.querySelector(`[data-task-id="${primary_task.id}"]`);
+        
+        if (primaryTaskCard && merged_task_ids && merged_task_ids.length > 0 && window.quietStateManager) {
+            // Animate merged tasks collapsing into primary task
+            for (const mergedTaskId of merged_task_ids) {
+                const mergedCard = document.querySelector(`[data-task-id="${mergedTaskId}"]`);
+                if (mergedCard) {
+                    try {
+                        await window.quietStateManager.queueAnimation((setCancelHandler) => {
+                            return new Promise((resolve) => {
+                                const rect1 = mergedCard.getBoundingClientRect();
+                                const rect2 = primaryTaskCard.getBoundingClientRect();
+                                
+                                const deltaX = rect2.left - rect1.left;
+                                const deltaY = rect2.top - rect1.top;
+                                
+                                // Collapse animation: shrink and move to primary task
+                                mergedCard.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+                                mergedCard.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0)`;
+                                mergedCard.style.opacity = '0';
+                                
+                                setTimeout(() => {
+                                    if (mergedCard.parentNode) {
+                                        mergedCard.remove();
+                                    }
+                                    resolve();
+                                }, 500);
+                                
+                                setCancelHandler(() => {
+                                    if (mergedCard.parentNode) {
+                                        mergedCard.remove();
+                                    }
+                                    resolve();
+                                });
+                            });
+                        }, { priority: 8, type: 'task_merge', entityId: mergedTaskId });
+                    } catch (error) {
+                        console.error('Failed to animate merge collapse:', error);
+                        if (mergedCard.parentNode) {
+                            mergedCard.remove();
+                        }
+                    }
+                }
+            }
+            
+            // Add merge badge to primary task (awaited to respect queue)
+            try {
+                await window.quietStateManager.queueAnimation((setCancelHandler) => {
+                    return new Promise((resolve) => {
+                        const badge = document.createElement('div');
+                        badge.className = 'task-merge-badge';
+                        badge.textContent = `+${merged_task_ids.length} merged`;
+                        badge.style.cssText = `
+                            position: absolute;
+                            top: 0.5rem;
+                            right: 0.5rem;
+                            padding: 0.25rem 0.5rem;
+                            background: var(--color-primary);
+                            color: white;
+                            border-radius: var(--radius-full);
+                            font-size: 0.75rem;
+                            font-weight: 600;
+                            z-index: 10;
+                            opacity: 0;
+                            transform: scale(0.5);
+                            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                        `;
+                        
+                        primaryTaskCard.style.position = 'relative';
+                        primaryTaskCard.appendChild(badge);
+                        
+                        // Animate badge in
+                        setTimeout(() => {
+                            badge.style.opacity = '1';
+                            badge.style.transform = 'scale(1)';
+                        }, 50);
+                        
+                        // Auto-remove badge after 3 seconds
+                        setTimeout(() => {
+                            badge.style.opacity = '0';
+                            badge.style.transform = 'scale(0.5)';
+                            setTimeout(() => {
+                                if (badge.parentNode) {
+                                    badge.remove();
+                                }
+                                resolve();
+                            }, 300);
+                        }, 3000);
+                        
+                        setCancelHandler(() => {
+                            if (badge.parentNode) {
+                                badge.remove();
+                            }
+                            resolve();
+                        });
+                    });
+                }, { priority: 7, type: 'merge_badge', entityId: primary_task.id });
+            } catch (error) {
+                console.error('Failed to animate merge badge:', error);
+            }
+        } else if (merged_task_ids && merged_task_ids.length > 0) {
+            // Fallback: Remove merged cards without animation if QuietStateManager unavailable
+            for (const mergedTaskId of merged_task_ids) {
+                const mergedCard = document.querySelector(`[data-task-id="${mergedTaskId}"]`);
+                if (mergedCard && mergedCard.parentNode) {
+                    mergedCard.remove();
+                }
+            }
+        }
+        
+        // Update cache and DOM
         await window.taskCache.saveTask(primary_task);
         
-        // Remove merged tasks
+        // Remove merged tasks from cache
         for (const taskId of merged_task_ids) {
             await window.taskCache.deleteTask(taskId);
-            if (window.optimisticUI) {
-                window.optimisticUI._removeTaskFromDOM(taskId);
-            }
         }
         
         // Update primary task in DOM
         if (window.optimisticUI) {
             window.optimisticUI._updateTaskInDOM(primary_task.id, primary_task);
+        }
+        
+        // Record telemetry
+        if (window.CROWNTelemetry) {
+            window.CROWNTelemetry.recordMetric('task_merge_event', 1);
+            window.CROWNTelemetry.recordMetric('tasks_merged_count', merged_task_ids.length);
         }
     }
 
