@@ -1379,6 +1379,16 @@ def update_task_status(task_id):
             return jsonify({'success': False, 'message': 'Invalid status'}), 400
         
         old_status = task.status
+        old_completed_at = task.completed_at  # Capture for completion timestamp diff
+        
+        # Early return if status unchanged (prevent spurious events and unnecessary commits)
+        if old_status == new_status:
+            return jsonify({
+                'success': True,
+                'message': 'Task status unchanged',
+                'task': task.to_dict()
+            })
+        
         task.status = new_status
         
         # Update completion fields
@@ -1390,28 +1400,29 @@ def update_task_status(task_id):
         task.updated_at = datetime.now()
         db.session.commit()
         
-        # CROWN⁴.5 Phase 2 Batch 2: Emit TASK_STATUS_CHANGED event
-        if old_status != task.status:
-            try:
-                meeting = task.meeting
-                event = event_sequencer.create_event(
-                    event_type=EventType.TASK_STATUS_CHANGED,
-                    event_name=f"Task status changed: {task.title}",
-                    payload={
-                        'task_id': task.id,
-                        'task': task.to_dict(),
-                        'old_value': old_status,
-                        'new_value': task.status,
-                        'changed_by': current_user.id,
-                        'meeting_id': meeting.id if meeting else None,
-                        'workspace_id': str(current_user.workspace_id)
-                    },
-                    workspace_id=str(current_user.workspace_id),
-                    client_id=f"user_{current_user.id}"
-                )
-                event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
-            except Exception as e:
-                logger.error(f"Failed to emit TASK_STATUS_CHANGED event: {e}")
+        # CROWN⁴.5 Phase 2 Batch 2: Emit TASK_STATUS_CHANGED event with completion metadata
+        try:
+            meeting = task.meeting
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_STATUS_CHANGED,
+                event_name=f"Task status changed: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task.to_dict(),
+                    'old_value': old_status,
+                    'new_value': task.status,
+                    'old_completed_at': old_completed_at.isoformat() if old_completed_at else None,
+                    'new_completed_at': task.completed_at.isoformat() if task.completed_at else None,
+                    'changed_by': current_user.id,
+                    'meeting_id': meeting.id if meeting else None,
+                    'workspace_id': str(current_user.workspace_id)
+                },
+                workspace_id=str(current_user.workspace_id),
+                client_id=f"user_{current_user.id}"
+            )
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_STATUS_CHANGED event: {e}")
         
         # Broadcast task_update event
         meeting = task.meeting
