@@ -158,12 +158,12 @@ def get_task(task_id):
                 } if task.meeting else None,
                 'assignees': [
                     {
-                        'id': assignee.user.id,
-                        'username': assignee.user.username,
-                        'email': assignee.user.email
+                        'id': assignee.id,
+                        'username': assignee.username,
+                        'email': assignee.email
                     }
                     for assignee in task.assignees
-                ] if hasattr(task, 'assignees') else []
+                ] if hasattr(task, 'assignees') and task.assignees else []
             }
         else:
             # Full detail (default)
