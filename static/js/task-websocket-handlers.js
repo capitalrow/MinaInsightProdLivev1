@@ -78,6 +78,14 @@ class TaskWebSocketHandlers {
         this.on('task.delete.soft', this._handleTaskDeleted.bind(this));
         this.on('task.restore', this._handleTaskRestored.bind(this));
         
+        // Phase 2 Batch 2: Task Lifecycle Events
+        this.on('task.priority.changed', this._handleBatch2PriorityChanged.bind(this));
+        this.on('task.status.changed', this._handleBatch2StatusChanged.bind(this));
+        this.on('task.assigned', this._handleBatch2TaskAssigned.bind(this));
+        this.on('task.unassigned', this._handleBatch2TaskUnassigned.bind(this));
+        this.on('task.due_date.changed', this._handleBatch2DueDateChanged.bind(this));
+        this.on('task.archived', this._handleBatch2TaskArchived.bind(this));
+        
         // 1. Bootstrap (initial data load)
         this.on('bootstrap_response', this._handleBootstrap.bind(this));
         
@@ -867,6 +875,328 @@ class TaskWebSocketHandlers {
         // Restore is equivalent to create for UI purposes
         if (window.multiTabSync) {
             window.multiTabSync.broadcastTaskCreated(task);
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Shared lifecycle update helper
+     * Unified logic for applying lifecycle changes (priority, status, assignment, due date, archive)
+     * Used by both new Batch 2 events and legacy events for consistency
+     * 
+     * @param {Object} task - Updated task object (single source of truth)
+     * @param {string} eventType - Event type (e.g., 'task.priority.changed')
+     * @param {any} oldValue - Previous value (for logging/diagnostics)
+     * @param {any} newValue - New value (for logging/diagnostics)
+     * @param {Object} crownMetadata - CROWN event metadata (event_id, checksum, etc.)
+     */
+    async _applyLifecycleUpdate(task, eventType, oldValue, newValue, crownMetadata = {}) {
+        // Preserve CROWN⁴.5 metadata for deduplication and reconciliation
+        if (crownMetadata.event_id) {
+            task._crown_event_id = crownMetadata.event_id;
+            task._crown_checksum = crownMetadata.checksum;
+            task._crown_sequence_num = crownMetadata.sequence_num;
+            task._crown_action = crownMetadata.action;
+        }
+        
+        // Log lifecycle change with old/new values for diagnostics
+        const changeLog = oldValue !== undefined && newValue !== undefined 
+            ? `${oldValue} → ${newValue}` 
+            : '';
+        console.log(`🔄 ${eventType}: task ${task.id} ${changeLog}`);
+        
+        try {
+            // Save to IndexedDB cache (single source of truth)
+            await window.taskCache.saveTask(task);
+            
+            // Update DOM (full card update, optimized internally)
+            if (window.optimisticUI) {
+                window.optimisticUI._updateTaskInDOM(task.id, task);
+            }
+            
+            // Multi-tab sync
+            if (window.multiTabSync) {
+                window.multiTabSync.broadcastTaskUpdated(task);
+            }
+            
+            return { success: true };
+        } catch (error) {
+            console.error(`❌ Failed to apply lifecycle update for ${eventType}:`, error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.priority.changed event
+     * @param {Object} data - Event payload {event_id, data: {task, old_value, new_value, ...}}
+     */
+    async _handleBatch2PriorityChanged(data) {
+        // Record telemetry (received)
+        if (window.crownTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.priority.changed', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.priority.changed event');
+            return;
+        }
+        
+        // Extract task and old/new values from dual payload
+        const task = data.data?.task || data.task || data;
+        const oldValue = data.data?.old_value;
+        const newValue = data.data?.new_value;
+        
+        try {
+            // Apply lifecycle update via shared helper
+            const result = await this._applyLifecycleUpdate(task, 'task.priority.changed', oldValue, newValue, {
+                event_id: data.event_id,
+                checksum: data.checksum,
+                sequence_num: data.sequence_num,
+                action: 'priority_changed'
+            });
+            
+            // Record telemetry (processed or error)
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.priority.changed', result.success ? 'processed' : 'error');
+            }
+        } catch (error) {
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.priority.changed', 'error');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.status.changed event
+     * @param {Object} data - Event payload {event_id, data: {task, old_value, new_value, old_completed_at, new_completed_at, ...}}
+     */
+    async _handleBatch2StatusChanged(data) {
+        // Record telemetry (received)
+        if (window.crownTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.status.changed', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.status.changed event');
+            return;
+        }
+        
+        // Extract task and old/new values
+        const task = data.data?.task || data.task || data;
+        const oldValue = data.data?.old_value;
+        const newValue = data.data?.new_value;
+        
+        try {
+            // Apply lifecycle update
+            const result = await this._applyLifecycleUpdate(task, 'task.status.changed', oldValue, newValue, {
+                event_id: data.event_id,
+                checksum: data.checksum,
+                sequence_num: data.sequence_num,
+                action: 'status_changed'
+            });
+            
+            // Animate status change (visual feedback)
+            const card = document.querySelector(`[data-task-id="${task.id}"]`);
+            if (card) {
+                card.classList.add('status-changed');
+                setTimeout(() => card.classList.remove('status-changed'), 500);
+            }
+            
+            // Record telemetry
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.status.changed', result.success ? 'processed' : 'error');
+            }
+        } catch (error) {
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.status.changed', 'error');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.assigned event
+     * @param {Object} data - Event payload {event_id, data: {task, new_value (user_id), ...}}
+     */
+    async _handleBatch2TaskAssigned(data) {
+        // Record telemetry (received)
+        if (window.crownTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.assigned', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.assigned event');
+            return;
+        }
+        
+        // Extract task and assigned user
+        const task = data.data?.task || data.task || data;
+        const assignedUserId = data.data?.new_value;
+        
+        try {
+            // Apply lifecycle update
+            const result = await this._applyLifecycleUpdate(task, 'task.assigned', null, assignedUserId, {
+                event_id: data.event_id,
+                checksum: data.checksum,
+                sequence_num: data.sequence_num,
+                action: 'assigned'
+            });
+            
+            // Record telemetry
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.assigned', result.success ? 'processed' : 'error');
+            }
+        } catch (error) {
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.assigned', 'error');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.unassigned event
+     * @param {Object} data - Event payload {event_id, data: {task, old_value (user_id), ...}}
+     */
+    async _handleBatch2TaskUnassigned(data) {
+        // Record telemetry (received)
+        if (window.CROWNTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.unassigned', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.unassigned event');
+            return;
+        }
+        
+        // Extract task and unassigned user
+        const task = data.data?.task || data.task || data;
+        const unassignedUserId = data.data?.old_value;
+        
+        try {
+            // Apply lifecycle update
+            const result = await this._applyLifecycleUpdate(task, 'task.unassigned', unassignedUserId, null, {
+                event_id: data.event_id,
+                checksum: data.checksum,
+                sequence_num: data.sequence_num,
+                action: 'unassigned'
+            });
+            
+            // Record telemetry
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.unassigned', result.success ? 'processed' : 'error');
+            }
+        } catch (error) {
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.unassigned', 'error');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.due_date.changed event
+     * @param {Object} data - Event payload {event_id, data: {task, old_value, new_value, ...}}
+     */
+    async _handleBatch2DueDateChanged(data) {
+        // Record telemetry (received)
+        if (window.CROWNTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.due_date.changed', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.due_date.changed event');
+            return;
+        }
+        
+        // Extract task and old/new due dates
+        const task = data.data?.task || data.task || data;
+        const oldValue = data.data?.old_value;
+        const newValue = data.data?.new_value;
+        
+        try {
+            // Apply lifecycle update
+            const result = await this._applyLifecycleUpdate(task, 'task.due_date.changed', oldValue, newValue, {
+                event_id: data.event_id,
+                checksum: data.checksum,
+                sequence_num: data.sequence_num,
+                action: 'due_date_changed'
+            });
+            
+            // Record telemetry
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.due_date.changed', result.success ? 'processed' : 'error');
+            }
+        } catch (error) {
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.due_date.changed', 'error');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.archived event
+     * @param {Object} data - Event payload {event_id, data: {task, ...}}
+     */
+    async _handleBatch2TaskArchived(data) {
+        // Record telemetry (received)
+        if (window.CROWNTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.archived', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.archived event');
+            return;
+        }
+        
+        // Extract task
+        const task = data.data?.task || data.task || data;
+        const taskId = task.id || task.task_id;
+        
+        try {
+            // Archive is like soft delete but preserves metadata
+            // Remove from active cache but trigger bootstrap for fresh state
+            await window.taskCache.deleteTask(taskId);
+            
+            // Remove from DOM
+            if (window.optimisticUI) {
+                window.optimisticUI._removeTaskFromDOM(taskId);
+            }
+            
+            // Multi-tab sync
+            if (window.multiTabSync) {
+                window.multiTabSync.broadcastTaskDeleted(taskId);
+            }
+            
+            // Trigger bootstrap to refresh active task list
+            if (window.taskBootstrap) {
+                await window.taskBootstrap.syncInBackground();
+            }
+            
+            console.log(`🗃️ Task archived: ${taskId}`);
+            
+            // Record telemetry (processed)
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.archived', 'processed');
+            }
+        } catch (error) {
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.archived', 'error');
+            }
+            throw error;
         }
     }
 

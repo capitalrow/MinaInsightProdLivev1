@@ -33,11 +33,20 @@ class CROWNTelemetry {
             calmScore: 100,
             // CROWN⁴.5 Phase 2.1 Batch 1: Event handling counters
             batch1Events: {
-                'task.create.manual': { received: 0, processed: 0, errors: 0 },
-                'task.create.ai_accept': { received: 0, processed: 0, errors: 0 },
-                'task.update.core': { received: 0, processed: 0, errors: 0 },
-                'task.delete.soft': { received: 0, processed: 0, errors: 0 },
-                'task.restore': { received: 0, processed: 0, errors: 0 }
+                'task.create.manual': { received: 0, processed: 0, error: 0 },
+                'task.create.ai_accept': { received: 0, processed: 0, error: 0 },
+                'task.update.core': { received: 0, processed: 0, error: 0 },
+                'task.delete.soft': { received: 0, processed: 0, error: 0 },
+                'task.restore': { received: 0, processed: 0, error: 0 }
+            },
+            // CROWN⁴.5 Phase 2.2 Batch 2: Lifecycle event handling counters
+            batch2Events: {
+                'task.priority.changed': { received: 0, processed: 0, error: 0 },
+                'task.status.changed': { received: 0, processed: 0, error: 0 },
+                'task.assigned': { received: 0, processed: 0, error: 0 },
+                'task.unassigned': { received: 0, processed: 0, error: 0 },
+                'task.due_date.changed': { received: 0, processed: 0, error: 0 },
+                'task.archived': { received: 0, processed: 0, error: 0 }
             }
         };
         
@@ -455,7 +464,32 @@ class CROWNTelemetry {
             ...this.sessionMetrics.batch1Events,
             totalReceived: Object.values(this.sessionMetrics.batch1Events).reduce((sum, e) => sum + e.received, 0),
             totalProcessed: Object.values(this.sessionMetrics.batch1Events).reduce((sum, e) => sum + e.processed, 0),
-            totalErrors: Object.values(this.sessionMetrics.batch1Events).reduce((sum, e) => sum + e.errors, 0)
+            totalErrors: Object.values(this.sessionMetrics.batch1Events).reduce((sum, e) => sum + e.error, 0)
+        };
+    }
+    
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Record Batch 2 event handling telemetry
+     * @param {string} eventType - Event type (e.g., 'task.priority.changed')
+     * @param {string} status - Status: 'received', 'processed', or 'error'
+     */
+    recordBatch2Event(eventType, status = 'received') {
+        if (this.sessionMetrics.batch2Events[eventType]) {
+            this.sessionMetrics.batch2Events[eventType][status]++;
+            console.log(`📊 Batch 2 telemetry: ${eventType} ${status} (count: ${this.sessionMetrics.batch2Events[eventType][status]})`);
+        }
+    }
+    
+    /**
+     * Get Batch 2 telemetry summary
+     * @returns {Object} Summary of Batch 2 event handling metrics
+     */
+    getBatch2Telemetry() {
+        return {
+            ...this.sessionMetrics.batch2Events,
+            totalReceived: Object.values(this.sessionMetrics.batch2Events).reduce((sum, e) => sum + e.received, 0),
+            totalProcessed: Object.values(this.sessionMetrics.batch2Events).reduce((sum, e) => sum + e.processed, 0),
+            totalErrors: Object.values(this.sessionMetrics.batch2Events).reduce((sum, e) => sum + e.error, 0)
         };
     }
     
@@ -487,8 +521,9 @@ class CROWNTelemetry {
     // Initialize database
     await telemetryInstance.init();
     
-    // Make instance globally available
-    window.CROWNTelemetry = telemetryInstance;
+    // Make instance globally available (both casing for compatibility)
+    window.CROWNTelemetry = telemetryInstance; // uppercase (legacy)
+    window.crownTelemetry = telemetryInstance; // lowercase (standard)
     
     console.log('✅ CROWNTelemetry initialized and ready');
 })();
