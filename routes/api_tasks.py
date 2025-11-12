@@ -2234,6 +2234,71 @@ def validate_event_sequence():
         return jsonify({'success': False, 'message': 'Validation service error'}), 500
 
 
+@api_tasks_bp.route('/ledger/compact', methods=['POST'])
+@login_required
+def compact_event_ledger():
+    """
+    Compact event ledger by compressing old events (CROWN⁴.5 LedgerCompactor).
+    
+    Creates summaries and deletes old events to reduce database size while maintaining audit trail.
+    """
+    try:
+        from services.ledger_compactor import ledger_compactor
+        
+        data = request.get_json() or {}
+        
+        # Get parameters
+        dry_run = data.get('dry_run', False)
+        batch_size = data.get('batch_size', 1000)
+        
+        # Run compaction
+        result = ledger_compactor.compact_events(
+            dry_run=dry_run,
+            batch_size=batch_size
+        )
+        
+        return jsonify({
+            'success': result.get('success', False),
+            'result': result,
+            'metrics': ledger_compactor.get_metrics()
+        })
+        
+    except Exception as e:
+        logger.error(f"Ledger compaction failed: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Compaction service error'}), 500
+
+
+@api_tasks_bp.route('/ledger/status', methods=['GET'])
+@login_required
+def get_ledger_status():
+    """
+    Get event ledger status and metrics (CROWN⁴.5 LedgerCompactor).
+    
+    Returns compaction metrics and pending event counts.
+    """
+    try:
+        from services.ledger_compactor import ledger_compactor
+        
+        # Get events ready for compaction
+        events_ready = ledger_compactor.get_events_for_compaction(batch_size=0)  # Count only
+        
+        # Count total events in ledger
+        total_events = db.session.query(func.count(EventLedger.id)).scalar()
+        
+        return jsonify({
+            'success': True,
+            'status': {
+                'total_events': total_events,
+                'events_ready_for_compaction': len(events_ready) if events_ready else 0,
+                'metrics': ledger_compactor.get_metrics()
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get ledger status: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Status service error'}), 500
+
+
 @api_tasks_bp.route('/<int:task_id>/history', methods=['GET'])
 @login_required
 def get_task_history(task_id):
