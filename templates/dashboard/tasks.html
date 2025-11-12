@@ -981,7 +981,8 @@
     const createButtons = document.querySelectorAll('.btn-primary');
     createButtons.forEach(btn => {
         if (btn.textContent.includes('New Task') || btn.textContent.includes('Create')) {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 openTaskModal();
             });
         }
