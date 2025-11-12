@@ -289,7 +289,16 @@ class TaskWebSocketHandlers {
         
         // CROWN⁴.5 Batch 1: Support both new events (data.data.task) and legacy (data.task)
         const task = data.data?.task || data.task || data;
-        console.log('✨ Task created:', task.id);
+        
+        // Preserve CROWN⁴.5 metadata for deduplication and reconciliation
+        if (data.event_id) {
+            task._crown_event_id = data.event_id;
+            task._crown_checksum = data.checksum;
+            task._crown_sequence_num = data.sequence_num;
+            task._crown_action = data.data?.action || data.action;
+        }
+        
+        console.log('✨ Task created:', task.id, task._crown_event_id ? `(event: ${task._crown_event_id})` : '');
         
         await window.taskCache.saveTask(task);
         
@@ -316,7 +325,16 @@ class TaskWebSocketHandlers {
         
         // CROWN⁴.5 Batch 1: Support both new events (data.data.task) and legacy (data.task)
         const task = data.data?.task || data.task || data;
-        console.log('📝 Task updated:', task.id);
+        
+        // Preserve CROWN⁴.5 metadata for deduplication and reconciliation
+        if (data.event_id) {
+            task._crown_event_id = data.event_id;
+            task._crown_checksum = data.checksum;
+            task._crown_sequence_num = data.sequence_num;
+            task._crown_action = data.data?.action || data.action;
+        }
+        
+        console.log('📝 Task updated:', task.id, task._crown_event_id ? `(event: ${task._crown_event_id})` : '');
         
         await window.taskCache.saveTask(task);
         
@@ -763,7 +781,16 @@ class TaskWebSocketHandlers {
         
         const task = data.data?.task || data.task || data;
         const taskId = task.id || task.task_id;
-        console.log('♻️ Task restored:', taskId);
+        
+        // Preserve CROWN⁴.5 metadata for deduplication and reconciliation
+        if (data.event_id) {
+            task._crown_event_id = data.event_id;
+            task._crown_checksum = data.checksum;
+            task._crown_sequence_num = data.sequence_num;
+            task._crown_action = 'restored';
+        }
+        
+        console.log('♻️ Task restored:', taskId, task._crown_event_id ? `(event: ${task._crown_event_id})` : '');
         
         // Save restored task to cache
         await window.taskCache.saveTask(task);
@@ -773,7 +800,8 @@ class TaskWebSocketHandlers {
             window.optimisticUI._addTaskToDOM(task);
         }
         
-        // Broadcast to other tabs
+        // CROWN⁴.5 Multi-tab sync: Broadcast restored task to other tabs
+        // Restore is equivalent to create for UI purposes
         if (window.multiTabSync) {
             window.multiTabSync.broadcastTaskCreated(task);
         }
