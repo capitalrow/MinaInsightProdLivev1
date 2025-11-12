@@ -260,6 +260,7 @@ class PredictiveEngine {
 
     /**
      * Get comprehensive predictions for a new task
+     * Uses backend ML predictions first, falls back to local patterns
      * @param {Object} taskData - { title, description, priority }
      * @returns {Promise<Object>}
      */
@@ -268,23 +269,142 @@ class PredictiveEngine {
             await this.init();
         }
 
+        // Try backend API predictions first (CROWN⁴.5 server-side ML)
+        try {
+            const backendPredictions = await this._getBackendPredictions(taskData);
+            if (backendPredictions) {
+                console.log('🤖 Using backend ML predictions');
+                
+                // Emit telemetry
+                if (window.CROWNTelemetry && window.CROWNTelemetry.recordMetric) {
+                    window.CROWNTelemetry.recordMetric('prediction_made_backend', 1, {
+                        due_date_confidence: backendPredictions.due_date_confidence || 0,
+                        priority_confidence: backendPredictions.priority_confidence || 0,
+                        overall_confidence: backendPredictions.overall_confidence || 0
+                    });
+                }
+                
+                return backendPredictions;
+            }
+        } catch (error) {
+            console.warn('⚠️ Backend predictions failed, using local patterns:', error);
+        }
+
+        // Fallback to local pattern-based predictions
+        console.log('🧠 Using local pattern learning');
+        const dueDatePred = this.predictDueDate(taskData);
+        const priorityPred = this.predictPriority(taskData);
+        const labelsSugg = this.suggestLabels(taskData);
+        
+        // Match template expectations: flat structure with labels as array of strings
         const predictions = {
-            dueDate: this.predictDueDate(taskData),
-            priority: this.predictPriority(taskData),
-            labels: this.suggestLabels(taskData),
+            dueDate: dueDatePred.dueDate ? dueDatePred.dueDate.toISOString().split('T')[0] : null,
+            due_date_confidence: dueDatePred.confidence / 100,
+            priority: priorityPred.priority,
+            priority_confidence: priorityPred.confidence / 100,
+            labels: labelsSugg.map(l => l.label), // Template expects array of strings
+            overall_confidence: (
+                (dueDatePred.confidence / 100) * 0.4 + 
+                (priorityPred.confidence / 100) * 0.3 + 
+                (labelsSugg.length > 0 ? 0.3 : 0)
+            ),
             timestamp: new Date().toISOString()
         };
 
         // Emit telemetry
         if (window.CROWNTelemetry && window.CROWNTelemetry.recordMetric) {
-            window.CROWNTelemetry.recordMetric('prediction_made', 1, {
-                due_date_confidence: predictions.dueDate.confidence,
-                priority_confidence: predictions.priority.confidence,
+            window.CROWNTelemetry.recordMetric('prediction_made_local', 1, {
+                due_date_confidence: predictions.due_date_confidence,
+                priority_confidence: predictions.priority_confidence,
                 label_suggestions: predictions.labels.length
             });
         }
 
         return predictions;
+    }
+
+    /**
+     * Get predictions from backend ML service
+     * @param {Object} taskData
+     * @returns {Promise<Object|null>}
+     */
+    async _getBackendPredictions(taskData) {
+        try {
+            const response = await fetch('/api/tasks/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: taskData.title?.trim(),
+                    description: taskData.description?.trim() || null,
+                    task_type: taskData.task_type || 'action_item',
+                    meeting_id: taskData.meeting_id || null
+                })
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    console.warn('⚠️ Not authenticated - skipping backend predictions');
+                    return null;
+                }
+                throw new Error(`Backend API failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (!result.success) {
+                console.warn('⚠️ Backend API returned error:', result.message);
+                return null;
+            }
+
+            const predictions = result.predictions;
+
+            // Transform backend format to match template expectations (flat structure)
+            return {
+                priority: predictions.priority?.value || null,
+                priority_confidence: predictions.priority?.confidence || 0,
+                dueDate: predictions.due_date?.value || null,
+                due_date_confidence: predictions.due_date?.confidence || 0,
+                assignee_id: predictions.assignee_id?.value || null,
+                assignee_confidence: predictions.assignee_id?.confidence || 0,
+                labels: [], // Backend doesn't return labels yet, placeholder for future
+                overall_confidence: predictions.overall_confidence || 0,
+                timestamp: new Date().toISOString()
+            };
+
+        } catch (error) {
+            // Network error or server unavailable - return null to trigger fallback
+            return null;
+        }
+    }
+
+    /**
+     * Record prediction correction for backend learning (CognitiveSynchronizer)
+     * @param {number} taskId
+     * @param {string} field
+     * @param {*} predictedValue
+     * @param {*} actualValue
+     */
+    async recordCorrection(taskId, field, predictedValue, actualValue) {
+        try {
+            await fetch('/api/tasks/predict/learn', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    task_id: taskId,
+                    field,
+                    predicted_value: predictedValue,
+                    actual_value: actualValue
+                })
+            });
+
+            console.log(`📝 Correction sent to backend: ${field} ${predictedValue} → ${actualValue}`);
+        } catch (error) {
+            console.warn('⚠️ Failed to send correction to backend:', error);
+        }
     }
 
     /**
