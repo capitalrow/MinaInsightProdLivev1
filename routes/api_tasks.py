@@ -288,7 +288,7 @@ def create_task():
                     'task_id': task.id,
                     'task': task_data,
                     'meeting_id': meeting.id,
-                    'workspace_id': current_user.workspace_id,
+                    'workspace_id': str(current_user.workspace_id),
                     'action': 'created'
                 },
                 workspace_id=str(current_user.workspace_id),
@@ -553,7 +553,7 @@ def update_task(task_id):
                     'task_id': task.id,
                     'task': task_data,
                     'meeting_id': meeting.id if meeting else None,
-                    'workspace_id': current_user.workspace_id,
+                    'workspace_id': str(current_user.workspace_id),
                     'action': 'updated'
                 },
                 workspace_id=str(current_user.workspace_id),
@@ -665,7 +665,7 @@ def delete_task(task_id):
                     'task_id': task.id,
                     'task': task_data_for_event,
                     'meeting_id': meeting_id,
-                    'workspace_id': workspace_id,
+                    'workspace_id': str(workspace_id),
                     'action': 'deleted'
                 },
                 workspace_id=str(workspace_id),
@@ -747,7 +747,7 @@ def undo_delete_task(task_id):
                     'task_id': task.id,
                     'task': task_data_restore,
                     'meeting_id': meeting.id if meeting else None,
-                    'workspace_id': current_user.workspace_id,
+                    'workspace_id': str(current_user.workspace_id),
                     'action': 'restored'
                 },
                 workspace_id=str(current_user.workspace_id),
@@ -1742,7 +1742,7 @@ def create_task_from_proposal():
                     'task_id': task.id,
                     'task': task_data,
                     'meeting_id': task.meeting_id,
-                    'workspace_id': current_user.workspace_id,
+                    'workspace_id': str(current_user.workspace_id),
                     'action': 'ai_accepted'
                 },
                 workspace_id=str(current_user.workspace_id) if meeting and current_user.workspace_id else None,
