@@ -341,14 +341,25 @@ class LedgerCompactor {
 // Create singleton instance
 const ledgerCompactor = new LedgerCompactor();
 
-// Auto-initialize on page load
+// Auto-initialize on page load ONLY FOR ADMIN USERS
+// Check if user is admin before initializing (requires user context in window.currentUser)
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        ledgerCompactor.init();
+        // Only initialize for admin users
+        if (window.currentUser && window.currentUser.is_admin) {
+            ledgerCompactor.init();
+        } else {
+            console.log('🔒 LedgerCompactor disabled (admin privileges required)');
+        }
     });
 } else {
-    ledgerCompactor.init();
+    // Only initialize for admin users
+    if (window.currentUser && window.currentUser.is_admin) {
+        ledgerCompactor.init();
+    } else {
+        console.log('🔒 LedgerCompactor disabled (admin privileges required)');
+    }
 }
 
-// Export for use in other modules
+// Export for use in other modules (admin users only)
 window.ledgerCompactor = ledgerCompactor;

@@ -20,6 +20,9 @@ class CompactionSummary(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     
+    # Workspace isolation (CRITICAL for multi-tenant security)
+    workspace_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    
     # Compaction metadata
     compaction_date: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     total_events_compacted: Mapped[int] = mapped_column(Integer, nullable=False)
