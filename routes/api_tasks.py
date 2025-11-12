@@ -2147,6 +2147,93 @@ def learn_from_correction():
         return jsonify({'success': False, 'message': 'Learning service error'}), 500
 
 
+@api_tasks_bp.route('/events/recover', methods=['POST'])
+@login_required
+def recover_event_sequence():
+    """
+    Recover from event sequence drift (CROWN⁴.5 TemporalRecoveryEngine).
+    
+    Detects and re-orders drifted events using vector clocks, ensuring causal consistency.
+    """
+    try:
+        from services.temporal_recovery_engine import temporal_recovery_engine
+        
+        data = request.get_json()
+        
+        # Get time window for recovery (default 1 hour)
+        time_window_hours = data.get('time_window_hours', 1)
+        dry_run = data.get('dry_run', False)
+        
+        # Detect sequence drift
+        drift_pairs = temporal_recovery_engine.detect_sequence_drift(
+            session_id=None,  # Check all sessions in workspace
+            time_window_hours=time_window_hours
+        )
+        
+        if not drift_pairs:
+            return jsonify({
+                'success': True,
+                'message': 'No sequence drift detected',
+                'drift_detected': False,
+                'metrics': temporal_recovery_engine.get_metrics()
+            })
+        
+        # Get all events in window for reordering
+        from datetime import datetime, timedelta
+        cutoff_time = datetime.utcnow() - timedelta(hours=time_window_hours)
+        
+        stmt = select(EventLedger).where(
+            and_(
+                EventLedger.created_at >= cutoff_time,
+                EventLedger.workspace_id == str(current_user.workspace_id)
+            )
+        ).order_by(EventLedger.created_at.asc())
+        
+        events = list(db.session.execute(stmt).scalars().all())
+        
+        # Replay events in correct order
+        replay_result = temporal_recovery_engine.replay_events(events, dry_run=dry_run)
+        
+        return jsonify({
+            'success': True,
+            'drift_detected': True,
+            'drift_pairs_count': len(drift_pairs),
+            'replay_result': replay_result,
+            'metrics': temporal_recovery_engine.get_metrics()
+        })
+        
+    except Exception as e:
+        logger.error(f"Event recovery failed: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Recovery service error'}), 500
+
+
+@api_tasks_bp.route('/events/validate', methods=['GET'])
+@login_required
+def validate_event_sequence():
+    """
+    Validate event sequence integrity (CROWN⁴.5 TemporalRecoveryEngine).
+    
+    Checks for gaps, duplicates, and drift in event sequences.
+    """
+    try:
+        from services.temporal_recovery_engine import temporal_recovery_engine
+        
+        # Validate sequence for user's workspace
+        validation_result = temporal_recovery_engine.validate_event_sequence(
+            session_id=None  # Validate all sessions in workspace
+        )
+        
+        return jsonify({
+            'success': True,
+            'validation': validation_result,
+            'metrics': temporal_recovery_engine.get_metrics()
+        })
+        
+    except Exception as e:
+        logger.error(f"Event validation failed: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Validation service error'}), 500
+
+
 @api_tasks_bp.route('/<int:task_id>/history', methods=['GET'])
 @login_required
 def get_task_history(task_id):
