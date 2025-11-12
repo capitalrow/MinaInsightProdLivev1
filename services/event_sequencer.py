@@ -88,23 +88,24 @@ class EventSequencer:
             from datetime import timedelta
             cutoff = datetime.utcnow() - timedelta(hours=hours)
             
-            batch1_types = [
-                'task.create.manual',
-                'task.create.ai_accept',
-                'task.update.core',
-                'task.delete.soft',
-                'task.restore'
+            # FIXED: Use EventType enum values instead of strings
+            batch1_event_types = [
+                (EventType.TASK_CREATE_MANUAL, 'task.create.manual'),
+                (EventType.TASK_CREATE_AI_ACCEPT, 'task.create.ai_accept'),
+                (EventType.TASK_UPDATE_CORE, 'task.update.core'),
+                (EventType.TASK_DELETE_SOFT, 'task.delete.soft'),
+                (EventType.TASK_RESTORE, 'task.restore')
             ]
             
             telemetry = {}
-            for event_type_str in batch1_types:
+            for event_type_enum, event_type_str in batch1_event_types:
                 total = db.session.query(func.count(EventLedger.id)).filter(
-                    EventLedger.event_type == event_type_str,
+                    EventLedger.event_type == event_type_enum,
                     EventLedger.created_at >= cutoff
                 ).scalar() or 0
                 
                 errors = db.session.query(func.count(EventLedger.id)).filter(
-                    EventLedger.event_type == event_type_str,
+                    EventLedger.event_type == event_type_enum,
                     EventLedger.status == EventStatus.FAILED,
                     EventLedger.created_at >= cutoff
                 ).scalar() or 0
