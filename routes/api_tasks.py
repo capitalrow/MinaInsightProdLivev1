@@ -15,6 +15,7 @@ import logging
 from app import db
 from models.summary import Summary
 from services.event_broadcaster import EventBroadcaster
+from services.event_sequencer import event_sequencer
 from services.deduper import deduper
 
 logger = logging.getLogger(__name__)
@@ -274,7 +275,31 @@ def create_task():
         
         db.session.commit()
         
-        # Broadcast task_update event
+        # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_CREATE_MANUAL event
+        try:
+            task_data = task.to_dict()
+            task_data['action'] = 'created'
+            task_data['meeting_title'] = meeting.title
+            
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_CREATE_MANUAL,
+                event_name=f"Task created manually: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task_data,
+                    'meeting_id': meeting.id,
+                    'workspace_id': current_user.workspace_id,
+                    'action': 'created'
+                },
+                workspace_id=str(current_user.workspace_id),
+                client_id=f"user_{current_user.id}"
+            )
+            # Broadcast event immediately
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_CREATE_MANUAL event: {e}")
+        
+        # Broadcast task_update event (legacy broadcast for backward compatibility)
         task_dict = task.to_dict()
         task_dict['action'] = 'created'
         task_dict['meeting_title'] = meeting.title
@@ -509,7 +534,37 @@ def update_task(task_id):
         task.updated_at = datetime.now()
         db.session.commit()
         
-        # Broadcast task_update event with specific event type
+        # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_UPDATE_CORE event
+        try:
+            meeting = task.meeting
+            task_data = task.to_dict()
+            task_data['action'] = 'updated'
+            task_data['meeting_title'] = meeting.title if meeting else 'Unknown'
+            task_data['changes'] = {
+                'status_changed': old_status != task.status,
+                'old_status': old_status,
+                'new_status': task.status
+            }
+            
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_UPDATE_CORE,
+                event_name=f"Task updated: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task_data,
+                    'meeting_id': meeting.id if meeting else None,
+                    'workspace_id': current_user.workspace_id,
+                    'action': 'updated'
+                },
+                workspace_id=str(current_user.workspace_id),
+                client_id=f"user_{current_user.id}"
+            )
+            # Broadcast event immediately
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_UPDATE_CORE event: {e}")
+        
+        # Broadcast task_update event with specific event type (legacy for backward compatibility)
         meeting = task.meeting
         
         # Determine event type based on what changed
@@ -597,7 +652,31 @@ def delete_task(task_id):
         
         db.session.commit()
         
-        # Broadcast task_delete event
+        # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_DELETE_SOFT event
+        try:
+            task_data_for_event = task.to_dict()
+            task_data_for_event['action'] = 'deleted'
+            task_data_for_event['undo_window_seconds'] = 15
+            
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_DELETE_SOFT,
+                event_name=f"Task soft deleted: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task_data_for_event,
+                    'meeting_id': meeting_id,
+                    'workspace_id': workspace_id,
+                    'action': 'deleted'
+                },
+                workspace_id=str(workspace_id),
+                client_id=f"user_{current_user.id}"
+            )
+            # Broadcast event immediately
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_DELETE_SOFT event: {e}")
+        
+        # Broadcast task_delete event (legacy for backward compatibility)
         event_broadcaster.broadcast_task_update(
             task_id=task.id,
             task_data=task_dict,
@@ -655,7 +734,31 @@ def undo_delete_task(task_id):
         
         db.session.commit()
         
-        # Broadcast task_restore event
+        # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_RESTORE event
+        try:
+            task_data_restore = task.to_dict()
+            task_data_restore['action'] = 'restored'
+            task_data_restore['meeting_title'] = meeting.title if meeting else 'Unknown'
+            
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_RESTORE,
+                event_name=f"Task restored: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task_data_restore,
+                    'meeting_id': meeting.id if meeting else None,
+                    'workspace_id': current_user.workspace_id,
+                    'action': 'restored'
+                },
+                workspace_id=str(current_user.workspace_id),
+                client_id=f"user_{current_user.id}"
+            )
+            # Broadcast event immediately
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_RESTORE event: {e}")
+        
+        # Broadcast task_restore event (legacy for backward compatibility)
         event_broadcaster.broadcast_task_update(
             task_id=task.id,
             task_data=task_dict,
@@ -1626,7 +1729,31 @@ def create_task_from_proposal():
         db.session.add(task)
         db.session.commit()
         
-        # Broadcast via WebSocket
+        # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_CREATE_AI_ACCEPT event
+        try:
+            meeting = task.meeting
+            task_data = task.to_dict()
+            task_data['action'] = 'ai_accepted'
+            
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_CREATE_AI_ACCEPT,
+                event_name=f"AI task accepted: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task_data,
+                    'meeting_id': task.meeting_id,
+                    'workspace_id': current_user.workspace_id,
+                    'action': 'ai_accepted'
+                },
+                workspace_id=str(current_user.workspace_id) if meeting and current_user.workspace_id else None,
+                client_id=f"user_{current_user.id}"
+            )
+            # Broadcast event immediately
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_CREATE_AI_ACCEPT event: {e}")
+        
+        # Broadcast via WebSocket (legacy for backward compatibility)
         event_broadcaster.broadcast_task_update(
             task_id=task.id,
             task_data={"title": task.title, "priority": task.priority},
