@@ -579,6 +579,12 @@ class EventBroadcaster:
             EventType.ARCHIVE_REVEAL: "/dashboard",
             EventType.WORKSPACE_SWITCH: "/dashboard",
             EventType.CACHE_INVALIDATE: "/dashboard",
+            # CROWN⁴.5 Phase 2 Batch 1: Core CRUD Events
+            EventType.TASK_CREATE_MANUAL: "/tasks",
+            EventType.TASK_CREATE_AI_ACCEPT: "/tasks",
+            EventType.TASK_UPDATE_CORE: "/tasks",
+            EventType.TASK_DELETE_SOFT: "/tasks",
+            EventType.TASK_RESTORE: "/tasks",
         }
         
         return namespace_map.get(event_type, "/dashboard")

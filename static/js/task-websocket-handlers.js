@@ -71,13 +71,20 @@ class TaskWebSocketHandlers {
 
         // CROWN⁴.5 Event Handlers (20 events)
         
+        // Phase 2 Batch 1: Core CRUD Events (use event_type.value literal strings)
+        this.on('task.create.manual', this._handleTaskCreated.bind(this));
+        this.on('task.create.ai_accept', this._handleTaskCreated.bind(this));
+        this.on('task.update.core', this._handleTaskUpdated.bind(this));
+        this.on('task.delete.soft', this._handleTaskDeleted.bind(this));
+        this.on('task.restore', this._handleTaskRestored.bind(this));
+        
         // 1. Bootstrap (initial data load)
         this.on('bootstrap_response', this._handleBootstrap.bind(this));
         
-        // 2. Task Create
+        // 2. Task Create (legacy)
         this.on('task_created', this._handleTaskCreated.bind(this));
         
-        // 3-9. Task Update (7 variants)
+        // 3-9. Task Update (7 variants - legacy)
         this.on('task_updated', this._handleTaskUpdated.bind(this));
         this.on('task_title_updated', this._handleTaskUpdated.bind(this));
         this.on('task_description_updated', this._handleTaskUpdated.bind(this));
@@ -116,7 +123,7 @@ class TaskWebSocketHandlers {
         // 19. Offline Queue Replay
         this.on('offline_queue_replayed', this._handleOfflineQueueReplayed.bind(this));
         
-        // 20. Task Delete
+        // 20. Task Delete (legacy)
         this.on('task_deleted', this._handleTaskDeleted.bind(this));
         
         // Bulk operations
@@ -280,7 +287,8 @@ class TaskWebSocketHandlers {
             return;
         }
         
-        const task = data.task || data;
+        // CROWN⁴.5 Batch 1: Support both new events (data.data.task) and legacy (data.task)
+        const task = data.data?.task || data.task || data;
         console.log('✨ Task created:', task.id);
         
         await window.taskCache.saveTask(task);
@@ -306,7 +314,8 @@ class TaskWebSocketHandlers {
             return;
         }
         
-        const task = data.task || data;
+        // CROWN⁴.5 Batch 1: Support both new events (data.data.task) and legacy (data.task)
+        const task = data.data?.task || data.task || data;
         console.log('📝 Task updated:', task.id);
         
         await window.taskCache.saveTask(task);
@@ -724,7 +733,8 @@ class TaskWebSocketHandlers {
             return;
         }
         
-        const taskId = data.task_id || data.id;
+        // CROWN⁴.5 Batch 1: Support both new events (data.data.task_id) and legacy (data.task_id)
+        const taskId = data.data?.task_id || data.task_id || data.id;
         console.log('🗑️ Task deleted:', taskId);
         
         await window.taskCache.deleteTask(taskId);
@@ -735,6 +745,37 @@ class TaskWebSocketHandlers {
         
         if (window.multiTabSync) {
             window.multiTabSync.broadcastTaskDeleted(taskId);
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2 Batch 1: Handle task restored event
+     * Restores soft-deleted task (undo delete within 15s window)
+     * @param {Object} data
+     */
+    async _handleTaskRestored(data) {
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.restore event');
+            return;
+        }
+        
+        const task = data.data?.task || data.task || data;
+        const taskId = task.id || task.task_id;
+        console.log('♻️ Task restored:', taskId);
+        
+        // Save restored task to cache
+        await window.taskCache.saveTask(task);
+        
+        // Re-add to DOM (similar to task created)
+        if (window.optimisticUI) {
+            window.optimisticUI._addTaskToDOM(task);
+        }
+        
+        // Broadcast to other tabs
+        if (window.multiTabSync) {
+            window.multiTabSync.broadcastTaskCreated(task);
         }
     }
 

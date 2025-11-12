@@ -71,6 +71,13 @@ class EventType(enum.Enum):
     PARTICIPANT_UPDATE = "participant_update"  # Participant joined/left
     WORKSPACE_SWITCH = "workspace_switch"  # User switched workspace
     CACHE_INVALIDATE = "cache_invalidate"  # Force cache refresh
+    
+    # CROWN⁴.5 Task Event Matrix - Phase 2 Batch 1: Core CRUD Events
+    TASK_CREATE_MANUAL = "task.create.manual"  # User manually created task
+    TASK_CREATE_AI_ACCEPT = "task.create.ai_accept"  # AI-proposed task accepted
+    TASK_UPDATE_CORE = "task.update.core"  # Core fields updated (title/description/metadata)
+    TASK_DELETE_SOFT = "task.delete.soft"  # Task soft deleted (15s undo window)
+    TASK_RESTORE = "task.restore"  # Task restored from soft delete
 
 
 class EventLedger(Base):
