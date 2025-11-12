@@ -703,6 +703,7 @@ class TaskBootstrap {
                 if (e.target.classList.contains('task-checkbox')) return;
                 if (e.target.classList.contains('task-title')) return;
                 if (e.target.closest('.task-actions')) return;
+                if (e.target.closest('.task-menu-trigger')) return;
                 if (e.target.closest('.task-metadata')) return;
                 
                 const taskId = card.dataset.taskId;
