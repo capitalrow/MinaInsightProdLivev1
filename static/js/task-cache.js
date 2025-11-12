@@ -478,7 +478,8 @@ class TaskCache {
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['tasks'], 'readonly');
             const store = transaction.objectStore('tasks');
-            const request = store.get(taskId);
+            const numericId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
+            const request = store.get(numericId);
 
             request.onsuccess = () => {
                 const result = request.result || null;
