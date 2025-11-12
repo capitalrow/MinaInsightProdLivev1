@@ -166,15 +166,28 @@ class TemporalRecoveryEngine {
      * @private
      */
     _detectGaps(receivedSequence) {
+        const gapsDetected = [];
+        
         // Add all missing sequences between expected and received
         for (let seq = this.expectedSequence; seq < receivedSequence; seq++) {
             if (!this.gaps.has(seq)) {
                 this.gaps.add(seq);
+                gapsDetected.push(seq);
                 console.warn(`⚠️ Gap detected: sequence ${seq} missing`);
                 
                 // Start timeout timer for this gap
                 this._startGapTimer(seq);
             }
+        }
+        
+        // Emit telemetry for gap detection
+        if (gapsDetected.length > 0) {
+            this._emitTelemetry('gap-detected', {
+                gaps: gapsDetected,
+                totalGaps: this.gaps.size,
+                expectedSequence: this.expectedSequence,
+                receivedSequence
+            });
         }
         
         // Request backfill if enabled
@@ -210,6 +223,7 @@ class TemporalRecoveryEngine {
      */
     async _flushSequentialEvents() {
         let flushed = 0;
+        const gapsResolved = [];
         
         while (true) {
             // Find all events with expected sequence
@@ -242,11 +256,20 @@ class TemporalRecoveryEngine {
             if (this.gaps.has(nextEvent.workspace_sequence_num)) {
                 this.gaps.delete(nextEvent.workspace_sequence_num);
                 this._clearGapTimer(nextEvent.workspace_sequence_num);
+                gapsResolved.push(nextEvent.workspace_sequence_num);
             }
         }
         
         if (flushed > 0) {
             console.log(`🚿 Flushed ${flushed} sequential events from buffer`);
+            
+            // Emit telemetry for recovery
+            this._emitTelemetry('events-recovered', {
+                flushed,
+                gapsResolved,
+                remainingGaps: this.gaps.size,
+                bufferSize: this.eventBuffer.size
+            });
         }
     }
     
@@ -456,6 +479,23 @@ class TemporalRecoveryEngine {
             gaps: Array.from(this.gaps),
             gap_count: this.gaps.size
         };
+    }
+    
+    /**
+     * Emit telemetry event
+     * @private
+     */
+    _emitTelemetry(action, data) {
+        // Emit custom event for telemetry systems
+        document.dispatchEvent(new CustomEvent('telemetry:temporal-recovery', {
+            detail: {
+                action,
+                timestamp: new Date().toISOString(),
+                workspaceId: this.workspaceId,
+                ...data,
+                status: this.getStatus()
+            }
+        }));
     }
     
     /**
