@@ -30,7 +30,15 @@ class CROWNTelemetry {
             sequenceLags: [],
             offlineQueueDepth: 0,
             emotionCues: {},
-            calmScore: 100
+            calmScore: 100,
+            // CROWN⁴.5 Phase 2.1 Batch 1: Event handling counters
+            batch1Events: {
+                'task.create.manual': { received: 0, processed: 0, errors: 0 },
+                'task.create.ai_accept': { received: 0, processed: 0, errors: 0 },
+                'task.update.core': { received: 0, processed: 0, errors: 0 },
+                'task.delete.soft': { received: 0, processed: 0, errors: 0 },
+                'task.restore': { received: 0, processed: 0, errors: 0 }
+            }
         };
         
         // Performance targets (CROWN⁴ specification)
@@ -426,6 +434,31 @@ class CROWNTelemetry {
      * @param {string} eventName - Name of the event
      * @param {Object} data - Event data
      */
+    /**
+     * CROWN⁴.5 Phase 2.1 Batch 1: Record Batch 1 event handling telemetry
+     * @param {string} eventType - Event type (e.g., 'task.create.manual')
+     * @param {string} status - Status: 'received', 'processed', or 'error'
+     */
+    recordBatch1Event(eventType, status = 'received') {
+        if (this.sessionMetrics.batch1Events[eventType]) {
+            this.sessionMetrics.batch1Events[eventType][status]++;
+            console.log(`📊 Batch 1 telemetry: ${eventType} ${status} (count: ${this.sessionMetrics.batch1Events[eventType][status]})`);
+        }
+    }
+    
+    /**
+     * Get Batch 1 telemetry summary
+     * @returns {Object} Summary of Batch 1 event handling metrics
+     */
+    getBatch1Telemetry() {
+        return {
+            ...this.sessionMetrics.batch1Events,
+            totalReceived: Object.values(this.sessionMetrics.batch1Events).reduce((sum, e) => sum + e.received, 0),
+            totalProcessed: Object.values(this.sessionMetrics.batch1Events).reduce((sum, e) => sum + e.processed, 0),
+            totalErrors: Object.values(this.sessionMetrics.batch1Events).reduce((sum, e) => sum + e.errors, 0)
+        };
+    }
+    
     recordEvent(eventName, data) {
         const event = {
             eventId: `${eventName}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,

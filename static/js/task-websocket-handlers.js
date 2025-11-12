@@ -280,6 +280,12 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskCreated(data) {
+        // CROWN⁴.5 Phase 2.1 Batch 1: Telemetry tracking
+        const eventType = data.event_type || (data.data?.action === 'ai_accepted' ? 'task.create.ai_accept' : 'task.create.manual');
+        if (window.crownTelemetry && eventType.startsWith('task.create')) {
+            window.crownTelemetry.recordBatch1Event(eventType, 'received');
+        }
+        
         // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -300,7 +306,17 @@ class TaskWebSocketHandlers {
         
         console.log('✨ Task created:', task.id, task._crown_event_id ? `(event: ${task._crown_event_id})` : '');
         
-        await window.taskCache.saveTask(task);
+        try {
+            await window.taskCache.saveTask(task);
+            if (window.crownTelemetry && eventType.startsWith('task.create')) {
+                window.crownTelemetry.recordBatch1Event(eventType, 'processed');
+            }
+        } catch (error) {
+            if (window.crownTelemetry && eventType.startsWith('task.create')) {
+                window.crownTelemetry.recordBatch1Event(eventType, 'error');
+            }
+            throw error;
+        }
         
         if (window.optimisticUI) {
             window.optimisticUI._addTaskToDOM(task);
@@ -316,6 +332,12 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskUpdated(data) {
+        // CROWN⁴.5 Phase 2.1 Batch 1: Telemetry tracking
+        const eventType = data.event_type || 'task.update.core';
+        if (window.crownTelemetry && eventType === 'task.update.core') {
+            window.crownTelemetry.recordBatch1Event(eventType, 'received');
+        }
+        
         // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -336,7 +358,17 @@ class TaskWebSocketHandlers {
         
         console.log('📝 Task updated:', task.id, task._crown_event_id ? `(event: ${task._crown_event_id})` : '');
         
-        await window.taskCache.saveTask(task);
+        try {
+            await window.taskCache.saveTask(task);
+            if (window.crownTelemetry && eventType === 'task.update.core') {
+                window.crownTelemetry.recordBatch1Event(eventType, 'processed');
+            }
+        } catch (error) {
+            if (window.crownTelemetry && eventType === 'task.update.core') {
+                window.crownTelemetry.recordBatch1Event(eventType, 'error');
+            }
+            throw error;
+        }
         
         if (window.optimisticUI) {
             window.optimisticUI._updateTaskInDOM(task.id, task);
@@ -744,6 +776,12 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskDeleted(data) {
+        // CROWN⁴.5 Phase 2.1 Batch 1: Telemetry tracking
+        const eventType = data.event_type || 'task.delete.soft';
+        if (window.crownTelemetry && eventType === 'task.delete.soft') {
+            window.crownTelemetry.recordBatch1Event(eventType, 'received');
+        }
+        
         // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -755,7 +793,17 @@ class TaskWebSocketHandlers {
         const taskId = data.data?.task_id || data.task_id || data.id;
         console.log('🗑️ Task deleted:', taskId);
         
-        await window.taskCache.deleteTask(taskId);
+        try {
+            await window.taskCache.deleteTask(taskId);
+            if (window.crownTelemetry && eventType === 'task.delete.soft') {
+                window.crownTelemetry.recordBatch1Event(eventType, 'processed');
+            }
+        } catch (error) {
+            if (window.crownTelemetry && eventType === 'task.delete.soft') {
+                window.crownTelemetry.recordBatch1Event(eventType, 'error');
+            }
+            throw error;
+        }
         
         if (window.optimisticUI) {
             window.optimisticUI._removeTaskFromDOM(taskId);
@@ -772,6 +820,11 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskRestored(data) {
+        // CROWN⁴.5 Phase 2.1 Batch 1: Telemetry tracking
+        if (window.crownTelemetry) {
+            window.crownTelemetry.recordBatch1Event('task.restore', 'received');
+        }
+        
         // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -792,8 +845,18 @@ class TaskWebSocketHandlers {
         
         console.log('♻️ Task restored:', taskId, task._crown_event_id ? `(event: ${task._crown_event_id})` : '');
         
-        // Save restored task to cache
-        await window.taskCache.saveTask(task);
+        try {
+            // Save restored task to cache
+            await window.taskCache.saveTask(task);
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch1Event('task.restore', 'processed');
+            }
+        } catch (error) {
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch1Event('task.restore', 'error');
+            }
+            throw error;
+        }
         
         // Re-add to DOM (similar to task created)
         if (window.optimisticUI) {

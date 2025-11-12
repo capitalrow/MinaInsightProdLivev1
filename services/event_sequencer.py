@@ -62,7 +62,63 @@ class EventSequencer:
         self.gap_timeout_seconds = 30  # Force progress after 30s gap
         self.max_buffer_size_per_workspace = 1000
         
+        # CROWN⁴.5 Phase 2.1 Batch 1: Event emission telemetry counters
+        self.batch1_event_counters = {
+            'TASK_CREATE_MANUAL': {'emitted': 0, 'errors': 0},
+            'TASK_CREATE_AI_ACCEPT': {'emitted': 0, 'errors': 0},
+            'TASK_UPDATE_CORE': {'emitted': 0, 'errors': 0},
+            'TASK_DELETE_SOFT': {'emitted': 0, 'errors': 0},
+            'TASK_RESTORE': {'emitted': 0, 'errors': 0}
+        }
+        
         logger.info("✅ EventSequencer initialized with CROWN⁴.5 gap buffering")
+    
+    @staticmethod
+    def get_batch1_telemetry(hours: int = 24) -> Dict[str, Dict[str, int]]:
+        """
+        CROWN⁴.5 Phase 2.1 Batch 1: Get telemetry counters for Batch 1 events.
+        
+        Args:
+            hours: Look back window in hours
+            
+        Returns:
+            Dictionary with emission and error counts per event type
+        """
+        try:
+            from datetime import timedelta
+            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            
+            batch1_types = [
+                'task.create.manual',
+                'task.create.ai_accept',
+                'task.update.core',
+                'task.delete.soft',
+                'task.restore'
+            ]
+            
+            telemetry = {}
+            for event_type_str in batch1_types:
+                total = db.session.query(func.count(EventLedger.id)).filter(
+                    EventLedger.event_type == event_type_str,
+                    EventLedger.created_at >= cutoff
+                ).scalar() or 0
+                
+                errors = db.session.query(func.count(EventLedger.id)).filter(
+                    EventLedger.event_type == event_type_str,
+                    EventLedger.status == EventStatus.FAILED,
+                    EventLedger.created_at >= cutoff
+                ).scalar() or 0
+                
+                telemetry[event_type_str] = {
+                    'emitted': total,
+                    'errors': errors,
+                    'success_rate': ((total - errors) / total * 100) if total > 0 else 0
+                }
+            
+            return telemetry
+        except Exception as e:
+            logger.error(f"Failed to get Batch 1 telemetry: {e}")
+            return {}
     
     @staticmethod
     def generate_checksum(payload: Dict[str, Any]) -> str:
