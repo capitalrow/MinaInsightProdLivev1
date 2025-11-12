@@ -1979,6 +1979,80 @@ def add_task_comment(task_id):
         return jsonify({'success': False, 'message': 'Internal server error'}), 500
 
 
+@api_tasks_bp.route('/predict', methods=['POST'])
+@login_required
+def predict_task_attributes():
+    """
+    Get AI predictions for task attributes (CROWN⁴.5 PredictiveEngine).
+    
+    Provides smart defaults for:
+    - Due date (based on task type, priority, urgency indicators)
+    - Priority (based on text analysis)
+    - Assignee (based on historical patterns)
+    """
+    try:
+        from services.predictive_engine import predictive_engine
+        
+        data = request.get_json()
+        
+        if not data.get('title'):
+            return jsonify({'success': False, 'message': 'Title is required'}), 400
+        
+        # Get predictions
+        predictions = predictive_engine.get_prediction_suggestions(
+            title=data.get('title'),
+            description=data.get('description'),
+            task_type=data.get('task_type', 'action_item'),
+            user_id=current_user.id,
+            workspace_id=current_user.workspace_id,
+            meeting_id=data.get('meeting_id')
+        )
+        
+        return jsonify({
+            'success': True,
+            'predictions': predictions
+        })
+        
+    except Exception as e:
+        logger.error(f"Prediction failed: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Prediction service error'}), 500
+
+
+@api_tasks_bp.route('/predict/learn', methods=['POST'])
+@login_required
+def learn_from_correction():
+    """
+    Learn from user corrections to improve predictions (CROWN⁴.5 CognitiveSynchronizer).
+    
+    Called when user changes a predicted value to track accuracy and improve future predictions.
+    """
+    try:
+        from services.predictive_engine import predictive_engine
+        
+        data = request.get_json()
+        
+        if not all(k in data for k in ['task_id', 'field', 'predicted_value', 'actual_value']):
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        
+        # Learn from correction
+        predictive_engine.learn_from_correction(
+            task_id=data['task_id'],
+            predicted_field=data['field'],
+            predicted_value=data['predicted_value'],
+            actual_value=data['actual_value'],
+            user_id=current_user.id
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Correction recorded for learning'
+        })
+        
+    except Exception as e:
+        logger.error(f"Learning failed: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Learning service error'}), 500
+
+
 @api_tasks_bp.route('/<int:task_id>/history', methods=['GET'])
 @login_required
 def get_task_history(task_id):
