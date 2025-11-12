@@ -9,6 +9,7 @@ from models import db, Task, Meeting, User, Session, Workspace, TaskComment, Eve
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_, select
 from utils.etag_helper import with_etag, compute_collection_etag
+from utils.auth import admin_required
 # server/routes/api_tasks.py
 import logging
 from app import db
@@ -2235,15 +2236,20 @@ def validate_event_sequence():
 
 
 @api_tasks_bp.route('/ledger/compact', methods=['POST'])
-@login_required
+@admin_required
 def compact_event_ledger():
     """
     Compact event ledger by compressing old events (CROWN⁴.5 LedgerCompactor).
     
-    Creates summaries and deletes old events to reduce database size while maintaining audit trail.
+    **ADMIN ONLY** - Creates summaries and deletes old events to reduce database size
+    while maintaining audit trail. Scoped to admin's workspace for multi-tenant isolation.
     """
     try:
         from services.ledger_compactor import ledger_compactor
+        
+        # Verify user has workspace
+        if not current_user.workspace_id:
+            return jsonify({'success': False, 'message': 'No workspace assigned'}), 400
         
         data = request.get_json() or {}
         
@@ -2251,16 +2257,20 @@ def compact_event_ledger():
         dry_run = data.get('dry_run', False)
         batch_size = data.get('batch_size', 1000)
         
-        # Run compaction
+        # Run compaction (WORKSPACE-SCOPED)
         result = ledger_compactor.compact_events(
+            workspace_id=current_user.workspace_id,
             dry_run=dry_run,
             batch_size=batch_size
         )
         
+        # Get workspace-scoped metrics (CRITICAL: prevents cross-tenant leakage)
+        workspace_metrics = ledger_compactor.get_metrics(workspace_id=current_user.workspace_id)
+        
         return jsonify({
             'success': result.get('success', False),
             'result': result,
-            'metrics': ledger_compactor.get_metrics()
+            'metrics': workspace_metrics
         })
         
     except Exception as e:
@@ -2269,28 +2279,40 @@ def compact_event_ledger():
 
 
 @api_tasks_bp.route('/ledger/status', methods=['GET'])
-@login_required
+@admin_required
 def get_ledger_status():
     """
     Get event ledger status and metrics (CROWN⁴.5 LedgerCompactor).
     
-    Returns compaction metrics and pending event counts.
+    **ADMIN ONLY** - Returns compaction metrics and pending event counts
+    scoped to admin's workspace for multi-tenant isolation.
     """
     try:
         from services.ledger_compactor import ledger_compactor
         
-        # Get events ready for compaction
-        events_ready = ledger_compactor.get_events_for_compaction(batch_size=0)  # Count only
+        # Verify user has workspace
+        if not current_user.workspace_id:
+            return jsonify({'success': False, 'message': 'No workspace assigned'}), 400
         
-        # Count total events in ledger
-        total_events = db.session.query(func.count(EventLedger.id)).scalar()
+        # Get count of events ready for compaction (WORKSPACE-SCOPED)
+        events_ready_count = ledger_compactor.get_events_ready_count(
+            workspace_id=current_user.workspace_id
+        )
+        
+        # Count total events in ledger (WORKSPACE-SCOPED)
+        total_events = db.session.query(func.count(EventLedger.id)).filter(
+            EventLedger.workspace_id == str(current_user.workspace_id)
+        ).scalar()
+        
+        # Get workspace-scoped metrics (CRITICAL: prevents cross-tenant leakage)
+        workspace_metrics = ledger_compactor.get_metrics(workspace_id=current_user.workspace_id)
         
         return jsonify({
             'success': True,
             'status': {
                 'total_events': total_events,
-                'events_ready_for_compaction': len(events_ready) if events_ready else 0,
-                'metrics': ledger_compactor.get_metrics()
+                'events_ready_for_compaction': events_ready_count,
+                'metrics': workspace_metrics
             }
         })
         

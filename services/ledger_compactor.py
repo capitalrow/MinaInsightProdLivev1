@@ -80,16 +80,20 @@ class LedgerCompactor:
     
     def get_events_for_compaction(
         self,
-        batch_size: int = SUMMARY_BATCH_SIZE
+        workspace_id: str,
+        batch_size: int = SUMMARY_BATCH_SIZE,
+        count_only: bool = False
     ) -> List[EventLedger]:
         """
-        Get events that should be compacted.
+        Get events that should be compacted for a specific workspace.
         
         Args:
-            batch_size: Maximum number of events to return
+            workspace_id: Workspace ID to scope compaction
+            batch_size: Maximum number of events to return (ignored if count_only=True)
+            count_only: If True, return empty list but log count for status checks
             
         Returns:
-            List of events ready for compaction
+            List of events ready for compaction (empty if count_only=True)
         """
         try:
             # Calculate cutoff dates
@@ -97,29 +101,83 @@ class LedgerCompactor:
             failed_cutoff = datetime.utcnow() - timedelta(days=self.RETENTION_DAYS_FAILED)
             pending_cutoff = datetime.utcnow() - timedelta(days=self.RETENTION_DAYS_PENDING)
             
-            # Build query for old events
-            query = select(EventLedger).where(
-                and_(
-                    EventLedger.created_at < completed_cutoff,
-                    EventLedger.status == EventStatus.COMPLETED
-                ) | and_(
-                    EventLedger.created_at < failed_cutoff,
-                    EventLedger.status == EventStatus.FAILED
-                ) | and_(
-                    EventLedger.created_at < pending_cutoff,
-                    EventLedger.status == EventStatus.PENDING
+            # Build base condition (WORKSPACE-SCOPED)
+            condition = and_(
+                EventLedger.workspace_id == str(workspace_id),  # CRITICAL: workspace isolation
+                (
+                    and_(
+                        EventLedger.created_at < completed_cutoff,
+                        EventLedger.status == EventStatus.COMPLETED
+                    ) | and_(
+                        EventLedger.created_at < failed_cutoff,
+                        EventLedger.status == EventStatus.FAILED
+                    ) | and_(
+                        EventLedger.created_at < pending_cutoff,
+                        EventLedger.status == EventStatus.PENDING
+                    )
                 )
-            ).order_by(EventLedger.created_at.asc()).limit(batch_size)
+            )
             
+            # If count_only, use get_events_ready_count instead (deprecated path)
+            if count_only:
+                logger.warning("count_only parameter is deprecated, use get_events_ready_count() instead")
+                return []  # Return empty list for backwards compatibility
+            
+            # Otherwise, fetch events
+            query = select(EventLedger).where(condition).order_by(EventLedger.created_at.asc()).limit(batch_size)
             events = list(db.session.scalars(query).all())
             
-            logger.info(f"Found {len(events)} events ready for compaction")
+            logger.info(f"Found {len(events)} events ready for compaction in workspace {workspace_id}")
             
             return events
             
         except Exception as e:
             logger.error(f"Failed to get events for compaction: {e}")
             return []
+    
+    def get_events_ready_count(self, workspace_id: str) -> int:
+        """
+        Get count of events ready for compaction in a workspace.
+        
+        Directly computes workspace-scoped count via COUNT query (no process-global cache).
+        
+        Args:
+            workspace_id: Workspace ID to scope counting
+            
+        Returns:
+            Number of events ready for compaction
+        """
+        try:
+            # Calculate cutoff dates
+            completed_cutoff = datetime.utcnow() - timedelta(days=self.RETENTION_DAYS_COMPLETED)
+            failed_cutoff = datetime.utcnow() - timedelta(days=self.RETENTION_DAYS_FAILED)
+            pending_cutoff = datetime.utcnow() - timedelta(days=self.RETENTION_DAYS_PENDING)
+            
+            # Build condition (WORKSPACE-SCOPED)
+            condition = and_(
+                EventLedger.workspace_id == str(workspace_id),  # CRITICAL: workspace isolation
+                (
+                    and_(
+                        EventLedger.created_at < completed_cutoff,
+                        EventLedger.status == EventStatus.COMPLETED
+                    ) | and_(
+                        EventLedger.created_at < failed_cutoff,
+                        EventLedger.status == EventStatus.FAILED
+                    ) | and_(
+                        EventLedger.created_at < pending_cutoff,
+                        EventLedger.status == EventStatus.PENDING
+                    )
+                )
+            )
+            
+            # Direct COUNT query (no cache, no global state)
+            count = db.session.scalar(select(func.count()).select_from(EventLedger).where(condition)) or 0
+            logger.info(f"Found {count} events ready for compaction in workspace {workspace_id}")
+            return count
+            
+        except Exception as e:
+            logger.error(f"Failed to count events for compaction: {e}")
+            return 0
     
     def create_compaction_summary(
         self,
@@ -180,6 +238,7 @@ class LedgerCompactor:
     
     def compact_events(
         self,
+        workspace_id: str,
         dry_run: bool = False,
         batch_size: int = SUMMARY_BATCH_SIZE
     ) -> Dict[str, Any]:
@@ -190,6 +249,7 @@ class LedgerCompactor:
         audit trail as required by CROWN⁴.5 spec.
         
         Args:
+            workspace_id: Workspace ID to scope compaction (required for multi-tenant isolation)
             dry_run: If True, don't actually delete events
             batch_size: Number of events to compact per batch
             
@@ -197,8 +257,8 @@ class LedgerCompactor:
             Compaction result summary
         """
         try:
-            # Get events to compact
-            events_to_compact = self.get_events_for_compaction(batch_size)
+            # Get events to compact (workspace-scoped)
+            events_to_compact = self.get_events_for_compaction(workspace_id, batch_size)
             
             if not events_to_compact:
                 return {
@@ -216,8 +276,9 @@ class LedgerCompactor:
             summary_id = None
             
             if not dry_run:
-                # Create CompactionSummary record
+                # Create CompactionSummary record (with workspace_id for isolation)
                 compaction_summary = CompactionSummary(
+                    workspace_id=str(workspace_id),  # CRITICAL: workspace isolation
                     total_events_compacted=len(events_to_compact),
                     events_by_type=summary_data.get('by_type', {}),
                     events_by_status=summary_data.get('by_status', {}),
@@ -233,9 +294,14 @@ class LedgerCompactor:
                 db.session.flush()  # Get ID but don't commit yet
                 summary_id = compaction_summary.id
                 
-                # Now safe to delete events (summary is persisted)
+                # Now safe to delete events (WORKSPACE-FILTERED DELETE)
                 event_ids = [e.id for e in events_to_compact]
-                delete_stmt = delete(EventLedger).where(EventLedger.id.in_(event_ids))
+                delete_stmt = delete(EventLedger).where(
+                    and_(
+                        EventLedger.id.in_(event_ids),
+                        EventLedger.workspace_id == str(workspace_id)  # CRITICAL: double-check workspace
+                    )
+                )
                 result = db.session.execute(delete_stmt)
                 deleted_count = result.rowcount
                 
@@ -273,10 +339,11 @@ class LedgerCompactor:
             db.session.rollback()
             logger.error(f"Failed to compact events: {e}")
             
-            # Create failed summary record
+            # Create failed summary record (with workspace_id)
             if not dry_run:
                 try:
                     failed_summary = CompactionSummary(
+                        workspace_id=str(workspace_id),  # CRITICAL: workspace isolation
                         total_events_compacted=0,
                         events_by_type={},
                         events_by_status={},
@@ -297,10 +364,13 @@ class LedgerCompactor:
                 'dry_run': dry_run
             }
     
-    def cleanup_orphaned_events(self) -> Dict[str, Any]:
+    def cleanup_orphaned_events(self, workspace_id: str) -> Dict[str, Any]:
         """
-        Cleanup orphaned events (events with deleted sessions/users).
+        Cleanup orphaned events (events with deleted sessions/users) for a specific workspace.
         
+        Args:
+            workspace_id: Workspace ID to scope cleanup
+            
         Returns:
             Cleanup result
         """
@@ -308,11 +378,12 @@ class LedgerCompactor:
             # In a real implementation, this would check for foreign key violations
             # and cleanup events whose referenced entities no longer exist
             
-            # For now, just check for very old pending events
+            # For now, just check for very old pending events (WORKSPACE-SCOPED)
             cutoff = datetime.utcnow() - timedelta(days=self.RETENTION_DAYS_PENDING)
             
             query = select(EventLedger).where(
                 and_(
+                    EventLedger.workspace_id == str(workspace_id),  # CRITICAL: workspace isolation
                     EventLedger.status == EventStatus.PENDING,
                     EventLedger.created_at < cutoff
                 )
@@ -320,10 +391,15 @@ class LedgerCompactor:
             
             orphaned = list(db.session.scalars(query).all())
             
-            # Delete orphaned events
+            # Delete orphaned events (WORKSPACE-FILTERED DELETE)
             if orphaned:
                 orphaned_ids = [e.id for e in orphaned]
-                delete_stmt = delete(EventLedger).where(EventLedger.id.in_(orphaned_ids))
+                delete_stmt = delete(EventLedger).where(
+                    and_(
+                        EventLedger.id.in_(orphaned_ids),
+                        EventLedger.workspace_id == str(workspace_id)  # CRITICAL: double-check workspace
+                    )
+                )
                 result = db.session.execute(delete_stmt)
                 deleted_count = result.rowcount
                 
@@ -411,8 +487,47 @@ class LedgerCompactor:
         # TODO: Integrate with background job scheduler
         return False
     
-    def get_metrics(self) -> Dict[str, Any]:
-        """Get compaction metrics."""
+    def get_metrics(self, workspace_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get compaction metrics.
+        
+        If workspace_id is provided, returns workspace-scoped metrics computed from
+        CompactionSummary records. Otherwise returns process-global metrics (for backwards compatibility).
+        
+        Args:
+            workspace_id: Optional workspace ID to scope metrics
+            
+        Returns:
+            Dictionary with metrics
+        """
+        # If workspace_id provided, compute fresh metrics from database (WORKSPACE-SCOPED)
+        if workspace_id:
+            try:
+                # Query CompactionSummary for workspace-scoped metrics
+                summaries = db.session.query(CompactionSummary).filter(
+                    CompactionSummary.workspace_id == str(workspace_id)
+                ).all()
+                
+                total_compactions = len([s for s in summaries if s.compaction_success])
+                events_compacted = sum(s.total_events_compacted for s in summaries if s.compaction_success)
+                events_deleted = sum(s.events_deleted for s in summaries if s.compaction_success)
+                summaries_created = total_compactions
+                compaction_failures = len([s for s in summaries if not s.compaction_success])
+                last_compaction_time = max((s.compaction_date for s in summaries if s.compaction_success), default=None)
+                
+                return {
+                    'total_compactions': total_compactions,
+                    'events_compacted': events_compacted,
+                    'events_deleted': events_deleted,
+                    'summaries_created': summaries_created,
+                    'compaction_failures': compaction_failures,
+                    'last_compaction_time': last_compaction_time.isoformat() if last_compaction_time else None
+                }
+            except Exception as e:
+                logger.error(f"Failed to get workspace-scoped metrics: {e}")
+                # Fall through to global metrics on error
+        
+        # Global metrics (process-wide, NOT workspace-scoped - use with caution)
         return self.metrics.copy()
     
     def get_compaction_history(
