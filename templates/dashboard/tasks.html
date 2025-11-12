@@ -1718,6 +1718,16 @@
     const exitSelectionMode = () => window.selectionManager.exit();
     const toggleTaskSelection = (taskCard) => window.selectionManager.toggle(taskCard);
     
+    // Selection mode state getter (auto-synced with window.selectionManager.active)
+    let selectionMode = false;
+    Object.defineProperty(window, 'selectionMode', {
+        get: () => window.selectionManager.active,
+        configurable: true
+    });
+    
+    // Last selected index for shift-click range selection
+    let lastSelectedIndex = -1;
+    
     // Restore selection UI after task list refreshes
     window.addEventListener('tasks:refresh-view', () => {
         setTimeout(() => {

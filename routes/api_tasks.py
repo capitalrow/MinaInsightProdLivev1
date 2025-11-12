@@ -1795,10 +1795,10 @@ def stream_ai_task_proposals():
                         deleted_at=None
                     ).all()
                 else:
-                    # Get all workspace tasks
-                    existing_tasks = db.session.query(Task).filter_by(
-                        workspace_id=current_user.workspace_id,
-                        deleted_at=None
+                    # Get all workspace tasks via Meeting join
+                    existing_tasks = db.session.query(Task).join(Meeting).filter(
+                        Meeting.workspace_id == current_user.workspace_id,
+                        Task.deleted_at.is_(None)
                     ).order_by(Task.created_at.desc()).limit(20).all()
                 
                 existing_titles = [t.title for t in existing_tasks]
