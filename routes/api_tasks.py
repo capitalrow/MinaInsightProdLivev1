@@ -433,6 +433,11 @@ def update_task(task_id):
         old_labels = task.labels
         old_snoozed_until = task.snoozed_until
         
+        # CROWN⁴.5 Phase 2 Batch 2: Track old values for lifecycle event emission
+        old_priority = task.priority
+        old_due_date = task.due_date
+        old_assigned_to_id = task.assigned_to_id
+        
         # Update fields
         if 'title' in data:
             task.title = data['title'].strip()
@@ -485,6 +490,9 @@ def update_task(task_id):
             if not isinstance(assignee_ids, list):
                 return jsonify({'success': False, 'message': 'assignee_ids must be an array'}), 400
             
+            # CROWN⁴.5 Phase 2 Batch 2: Capture old assignee list before mutation
+            old_assignee_ids = [a.user_id for a in db.session.query(TaskAssignee).filter_by(task_id=task.id).all()]
+            
             # Validate all assignees are in workspace
             if assignee_ids:
                 valid_users = db.session.query(User).filter(
@@ -512,6 +520,10 @@ def update_task(task_id):
             
             # 3. Update assigned_to_id for backward compatibility (first assignee)
             task.assigned_to_id = assignee_ids[0] if assignee_ids else None
+        else:
+            # Track old assignee list even if not updating (for single assigned_to_id changes)
+            from models.task import TaskAssignee
+            old_assignee_ids = [a.user_id for a in db.session.query(TaskAssignee).filter_by(task_id=task.id).all()]
         
         if 'labels' in data:
             labels = data['labels']
@@ -563,6 +575,131 @@ def update_task(task_id):
             event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
         except Exception as e:
             logger.error(f"Failed to emit TASK_UPDATE_CORE event: {e}")
+        
+        # CROWN⁴.5 Phase 2 Batch 2: Emit granular lifecycle events
+        meeting = task.meeting
+        workspace_id_str = str(current_user.workspace_id)
+        client_id = f"user_{current_user.id}"
+        
+        # 1. TASK_PRIORITY_CHANGED
+        if 'priority' in data and old_priority != task.priority:
+            try:
+                event = event_sequencer.create_event(
+                    event_type=EventType.TASK_PRIORITY_CHANGED,
+                    event_name=f"Task priority changed: {task.title}",
+                    payload={
+                        'task_id': task.id,
+                        'task': task.to_dict(),
+                        'old_value': old_priority,
+                        'new_value': task.priority,
+                        'changed_by': current_user.id,
+                        'meeting_id': meeting.id if meeting else None,
+                        'workspace_id': workspace_id_str
+                    },
+                    workspace_id=workspace_id_str,
+                    client_id=client_id
+                )
+                event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+            except Exception as e:
+                logger.error(f"Failed to emit TASK_PRIORITY_CHANGED event: {e}")
+        
+        # 2. TASK_STATUS_CHANGED
+        if 'status' in data and old_status != task.status:
+            try:
+                event = event_sequencer.create_event(
+                    event_type=EventType.TASK_STATUS_CHANGED,
+                    event_name=f"Task status changed: {task.title}",
+                    payload={
+                        'task_id': task.id,
+                        'task': task.to_dict(),
+                        'old_value': old_status,
+                        'new_value': task.status,
+                        'changed_by': current_user.id,
+                        'meeting_id': meeting.id if meeting else None,
+                        'workspace_id': workspace_id_str
+                    },
+                    workspace_id=workspace_id_str,
+                    client_id=client_id
+                )
+                event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+            except Exception as e:
+                logger.error(f"Failed to emit TASK_STATUS_CHANGED event: {e}")
+        
+        # 3. TASK_DUE_DATE_CHANGED
+        if 'due_date' in data and old_due_date != task.due_date:
+            try:
+                event = event_sequencer.create_event(
+                    event_type=EventType.TASK_DUE_DATE_CHANGED,
+                    event_name=f"Task due date changed: {task.title}",
+                    payload={
+                        'task_id': task.id,
+                        'task': task.to_dict(),
+                        'old_value': old_due_date.isoformat() if old_due_date else None,
+                        'new_value': task.due_date.isoformat() if task.due_date else None,
+                        'changed_by': current_user.id,
+                        'meeting_id': meeting.id if meeting else None,
+                        'workspace_id': workspace_id_str
+                    },
+                    workspace_id=workspace_id_str,
+                    client_id=client_id
+                )
+                event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+            except Exception as e:
+                logger.error(f"Failed to emit TASK_DUE_DATE_CHANGED event: {e}")
+        
+        # 4. TASK_ASSIGNED / TASK_UNASSIGNED (assignment delta logic)
+        if 'assigned_to_id' in data or 'assignee_ids' in data:
+            try:
+                # Get current assignee list
+                new_assignee_ids = [a.user_id for a in db.session.query(TaskAssignee).filter_by(task_id=task.id).all()]
+                
+                # Handle legacy single-assignee path (assigned_to_id only, no junction table)
+                if 'assigned_to_id' in data and 'assignee_ids' not in data:
+                    # Use old_assigned_to_id and task.assigned_to_id for diff
+                    removed_users = set([old_assigned_to_id]) if old_assigned_to_id and old_assigned_to_id != task.assigned_to_id else set()
+                    added_users = set([task.assigned_to_id]) if task.assigned_to_id and old_assigned_to_id != task.assigned_to_id else set()
+                else:
+                    # Use junction table diff for multi-assignee path
+                    removed_users = set(old_assignee_ids) - set(new_assignee_ids)
+                    added_users = set(new_assignee_ids) - set(old_assignee_ids)
+                
+                # Emit TASK_UNASSIGNED for removed users
+                for user_id in removed_users:
+                    event = event_sequencer.create_event(
+                        event_type=EventType.TASK_UNASSIGNED,
+                        event_name=f"Task unassigned: {task.title}",
+                        payload={
+                            'task_id': task.id,
+                            'task': task.to_dict(),
+                            'unassigned_user_id': user_id,
+                            'changed_by': current_user.id,
+                            'meeting_id': meeting.id if meeting else None,
+                            'workspace_id': workspace_id_str
+                        },
+                        workspace_id=workspace_id_str,
+                        client_id=client_id
+                    )
+                    event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+                
+                # Emit TASK_ASSIGNED for added users
+                for user_id in added_users:
+                    event = event_sequencer.create_event(
+                        event_type=EventType.TASK_ASSIGNED,
+                        event_name=f"Task assigned: {task.title}",
+                        payload={
+                            'task_id': task.id,
+                            'task': task.to_dict(),
+                            'assigned_user_id': user_id,
+                            'changed_by': current_user.id,
+                            'meeting_id': meeting.id if meeting else None,
+                            'workspace_id': workspace_id_str
+                        },
+                        workspace_id=workspace_id_str,
+                        client_id=client_id
+                    )
+                    event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+            except Exception as e:
+                logger.error(f"Failed to emit TASK_ASSIGNED/UNASSIGNED events: {e}")
         
         # Broadcast task_update event with specific event type (legacy for backward compatibility)
         meeting = task.meeting
@@ -1252,6 +1389,29 @@ def update_task_status(task_id):
         
         task.updated_at = datetime.now()
         db.session.commit()
+        
+        # CROWN⁴.5 Phase 2 Batch 2: Emit TASK_STATUS_CHANGED event
+        if old_status != task.status:
+            try:
+                meeting = task.meeting
+                event = event_sequencer.create_event(
+                    event_type=EventType.TASK_STATUS_CHANGED,
+                    event_name=f"Task status changed: {task.title}",
+                    payload={
+                        'task_id': task.id,
+                        'task': task.to_dict(),
+                        'old_value': old_status,
+                        'new_value': task.status,
+                        'changed_by': current_user.id,
+                        'meeting_id': meeting.id if meeting else None,
+                        'workspace_id': str(current_user.workspace_id)
+                    },
+                    workspace_id=str(current_user.workspace_id),
+                    client_id=f"user_{current_user.id}"
+                )
+                event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+            except Exception as e:
+                logger.error(f"Failed to emit TASK_STATUS_CHANGED event: {e}")
         
         # Broadcast task_update event
         meeting = task.meeting
