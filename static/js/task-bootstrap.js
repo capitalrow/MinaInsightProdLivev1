@@ -146,6 +146,15 @@ class TaskBootstrap {
 
             this.initialized = true;
 
+            // CROWN⁴.5: Emit bootstrap complete event for prefetching activation
+            document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+                detail: {
+                    cached_tasks: cachedTasks.length,
+                    first_paint_ms: firstPaintTime,
+                    meets_target: firstPaintTime < 200
+                }
+            }));
+
             return {
                 success: true,
                 cached_tasks: cachedTasks.length,
