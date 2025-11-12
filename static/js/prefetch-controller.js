@@ -25,11 +25,14 @@ window.PrefetchController = class PrefetchController {
         this.maxCacheSize = options.maxCacheSize || 50;
         this.cacheTimeout = options.cacheTimeout || 60000; // 1 minute default
         
+        // CROWN⁴.5: Pluggable resource adapters
+        this.adapter = options.adapter || this._getDefaultAdapter();
+        
         // State tracking
-        this.activeRequests = new Map(); // sessionId -> { abortController, promise, timestamp }
-        this.prefetchCache = new Map(); // sessionId -> { data, timestamp }
-        this.requestQueue = []; // { sessionId, priority, timestamp }
-        this.completedSet = new Set(); // sessionIds that were successfully prefetched
+        this.activeRequests = new Map(); // resourceId -> { abortController, promise, timestamp }
+        this.prefetchCache = new Map(); // resourceId -> { data, timestamp }
+        this.requestQueue = []; // { resourceId, priority, timestamp }
+        this.completedSet = new Set(); // resourceIds that were successfully prefetched
         
         // Statistics
         this.stats = {
@@ -46,45 +49,62 @@ window.PrefetchController = class PrefetchController {
         console.log('🎯 PrefetchController initialized:', {
             maxConcurrent: this.maxConcurrent,
             maxCacheSize: this.maxCacheSize,
-            cacheTimeout: this.cacheTimeout
+            cacheTimeout: this.cacheTimeout,
+            adapter: this.adapter.name || 'custom'
         });
     }
     
     /**
-     * Prefetch session data with intelligent caching and abort control
+     * CROWN⁴.5: Default adapter for sessions (backwards compatibility)
      */
-    async prefetch(sessionId, options = {}) {
+    _getDefaultAdapter() {
+        return {
+            name: 'sessions',
+            keyFn: (sessionId) => `session_${sessionId}`,
+            requestFn: (sessionId) => `/sessions/${sessionId}?format=json`,
+            hydrateFn: async (sessionId, data) => data // No-op for sessions
+        };
+    }
+    
+    /**
+     * Prefetch resource data with intelligent caching and abort control
+     * CROWN⁴.5: Now adapter-agnostic (supports sessions, tasks, etc.)
+     */
+    async prefetch(resourceId, options = {}) {
         const priority = options.priority || 0;
         const force = options.force || false;
         
         // Validation
-        if (!sessionId) {
-            console.warn('⚠️ PrefetchController: No sessionId provided');
+        if (!resourceId) {
+            console.warn('⚠️ PrefetchController: No resourceId provided');
             return null;
         }
         
+        // Get cache key from adapter
+        const cacheKey = this.adapter.keyFn(resourceId);
+        
         // Check cache first (unless force refresh)
-        if (!force && this.prefetchCache.has(sessionId)) {
-            const cached = this.prefetchCache.get(sessionId);
+        if (!force && this.prefetchCache.has(cacheKey)) {
+            const cached = this.prefetchCache.get(cacheKey);
             const age = Date.now() - cached.timestamp;
             
             if (age < this.cacheTimeout) {
                 this.stats.cacheHits++;
-                console.log(`💨 Prefetch cache hit: ${sessionId} (age: ${Math.round(age/1000)}s)`);
+                console.log(`💨 Prefetch cache hit: ${cacheKey} (age: ${Math.round(age/1000)}s)`);
                 return cached.data;
             } else {
                 // Cache expired
-                this.prefetchCache.delete(sessionId);
-                console.log(`⏰ Prefetch cache expired: ${sessionId}`);
+                this.prefetchCache.delete(cacheKey);
+                console.log(`⏰ Prefetch cache expired: ${cacheKey}`);
             }
         }
         
         this.stats.cacheMisses++;
         
         // Check if already in progress
-        if (this.activeRequests.has(sessionId)) {
-            console.log(`🔄 Prefetch already in progress: ${sessionId}, reusing...`);
-            const existing = this.activeRequests.get(sessionId);
+        if (this.activeRequests.has(cacheKey)) {
+            console.log(`🔄 Prefetch already in progress: ${cacheKey}, reusing...`);
+            const existing = this.activeRequests.get(cacheKey);
             return existing.promise;
         }
         
@@ -93,29 +113,34 @@ window.PrefetchController = class PrefetchController {
             // Queue the request and return a Promise that resolves when it's processed
             return new Promise((resolve, reject) => {
                 this.requestQueue.push({ 
-                    sessionId, 
+                    resourceId, 
+                    cacheKey,
                     priority, 
                     timestamp: Date.now(),
                     resolve,
                     reject
                 });
-                console.log(`⏸️ Prefetch queued (${this.activeRequests.size}/${this.maxConcurrent} active): ${sessionId}`);
+                console.log(`⏸️ Prefetch queued (${this.activeRequests.size}/${this.maxConcurrent} active): ${cacheKey}`);
             });
         }
         
         // Execute prefetch
-        return this._executePrefetch(sessionId);
+        return this._executePrefetch(resourceId, cacheKey);
     }
     
     /**
      * Execute prefetch with abort controller
+     * CROWN⁴.5: Now uses adapter for request URL and hydration
      */
-    async _executePrefetch(sessionId) {
+    async _executePrefetch(resourceId, cacheKey) {
         const abortController = new AbortController();
         const startTime = Date.now();
         
+        // Get request URL from adapter
+        const requestUrl = this.adapter.requestFn(resourceId);
+        
         // Create promise for this prefetch
-        const promise = fetch(`/sessions/${sessionId}?format=json`, {
+        const promise = fetch(requestUrl, {
             signal: abortController.signal,
             headers: { 'X-Prefetch': 'true' }
         })
@@ -125,11 +150,20 @@ window.PrefetchController = class PrefetchController {
             }
             return response.json();
         })
-        .then(data => {
+        .then(async data => {
             const duration = Date.now() - startTime;
             
+            // CROWN⁴.5: Hydrate data via adapter (e.g., write to IndexedDB)
+            if (this.adapter.hydrateFn) {
+                try {
+                    await this.adapter.hydrateFn(resourceId, data);
+                } catch (hydrateError) {
+                    console.warn(`⚠️ Hydration failed for ${cacheKey}:`, hydrateError);
+                }
+            }
+            
             // Cache the result
-            this.prefetchCache.set(sessionId, {
+            this.prefetchCache.set(cacheKey, {
                 data,
                 timestamp: Date.now()
             });
@@ -140,58 +174,60 @@ window.PrefetchController = class PrefetchController {
             }
             
             // Mark as completed
-            this.completedSet.add(sessionId);
+            this.completedSet.add(cacheKey);
             
             // Clean up active request
-            this.activeRequests.delete(sessionId);
+            this.activeRequests.delete(cacheKey);
             
             // Process queue
             this._processQueue();
             
             this.stats.totalPrefetches++;
-            console.log(`✅ Prefetch complete: ${sessionId} (${duration}ms)`);
+            console.log(`✅ Prefetch complete: ${cacheKey} (${duration}ms)`);
             
             return data;
         })
         .catch(error => {
             // Clean up active request
-            this.activeRequests.delete(sessionId);
+            this.activeRequests.delete(cacheKey);
             
             // Process queue even on error
             this._processQueue();
             
             if (error.name === 'AbortError') {
                 this.stats.aborted++;
-                console.log(`🚫 Prefetch aborted: ${sessionId}`);
+                console.log(`🚫 Prefetch aborted: ${cacheKey}`);
             } else {
                 this.stats.errors++;
-                console.error(`❌ Prefetch failed: ${sessionId}`, error);
+                console.error(`❌ Prefetch failed: ${cacheKey}`, error);
             }
             
             throw error;
         });
         
         // Track active request
-        this.activeRequests.set(sessionId, {
+        this.activeRequests.set(cacheKey, {
             abortController,
             promise,
             timestamp: Date.now()
         });
         
-        console.log(`🚀 Prefetch started: ${sessionId} (${this.activeRequests.size}/${this.maxConcurrent} active)`);
+        console.log(`🚀 Prefetch started: ${cacheKey} (${this.activeRequests.size}/${this.maxConcurrent} active)`);
         
         return promise;
     }
     
     /**
      * Abort a specific prefetch request
+     * CROWN⁴.5: Now uses adapter key
      */
-    abort(sessionId) {
-        if (this.activeRequests.has(sessionId)) {
-            const request = this.activeRequests.get(sessionId);
+    abort(resourceId) {
+        const cacheKey = this.adapter.keyFn(resourceId);
+        if (this.activeRequests.has(cacheKey)) {
+            const request = this.activeRequests.get(cacheKey);
             request.abortController.abort();
-            this.activeRequests.delete(sessionId);
-            console.log(`🛑 Aborted prefetch: ${sessionId}`);
+            this.activeRequests.delete(cacheKey);
+            console.log(`🛑 Aborted prefetch: ${cacheKey}`);
             
             // Process queue after abort
             this._processQueue();
@@ -206,7 +242,7 @@ window.PrefetchController = class PrefetchController {
      */
     abortAll() {
         let count = 0;
-        for (const [sessionId, request] of this.activeRequests.entries()) {
+        for (const [cacheKey, request] of this.activeRequests.entries()) {
             request.abortController.abort();
             count++;
         }
@@ -235,10 +271,10 @@ window.PrefetchController = class PrefetchController {
             
             // Take next request from queue
             const next = this.requestQueue.shift();
-            console.log(`▶️ Processing queued prefetch: ${next.sessionId}`);
+            console.log(`▶️ Processing queued prefetch: ${next.cacheKey}`);
             
             // Execute it and resolve/reject the queued promise
-            this._executePrefetch(next.sessionId)
+            this._executePrefetch(next.resourceId, next.cacheKey)
                 .then(data => {
                     if (next.resolve) {
                         next.resolve(data);
@@ -275,26 +311,30 @@ window.PrefetchController = class PrefetchController {
     
     /**
      * Get cached data (if available and fresh)
+     * CROWN⁴.5: Now uses adapter key
      */
-    getCached(sessionId) {
-        if (this.prefetchCache.has(sessionId)) {
-            const cached = this.prefetchCache.get(sessionId);
+    getCached(resourceId) {
+        const cacheKey = this.adapter.keyFn(resourceId);
+        if (this.prefetchCache.has(cacheKey)) {
+            const cached = this.prefetchCache.get(cacheKey);
             const age = Date.now() - cached.timestamp;
             
             if (age < this.cacheTimeout) {
                 return cached.data;
             } else {
-                this.prefetchCache.delete(sessionId);
+                this.prefetchCache.delete(cacheKey);
             }
         }
         return null;
     }
     
     /**
-     * Check if session was successfully prefetched
+     * Check if resource was successfully prefetched
+     * CROWN⁴.5: Now uses adapter key
      */
-    isPrefetched(sessionId) {
-        return this.completedSet.has(sessionId) || this.prefetchCache.has(sessionId);
+    isPrefetched(resourceId) {
+        const cacheKey = this.adapter.keyFn(resourceId);
+        return this.completedSet.has(cacheKey) || this.prefetchCache.has(cacheKey);
     }
     
     /**

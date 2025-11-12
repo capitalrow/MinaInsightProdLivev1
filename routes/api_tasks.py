@@ -128,7 +128,11 @@ def list_tasks():
 @api_tasks_bp.route('/<int:task_id>', methods=['GET'])
 @login_required
 def get_task(task_id):
-    """Get detailed task information."""
+    """Get detailed task information.
+    
+    Query Parameters:
+        detail (str): Response detail level ('mini' for prefetching, default: full)
+    """
     try:
         task = db.session.query(Task).join(Meeting).filter(
             Task.id == task_id,
@@ -138,10 +142,36 @@ def get_task(task_id):
         if not task:
             return jsonify({'success': False, 'message': 'Task not found'}), 404
         
-        return jsonify({
-            'success': True,
-            'task': task.to_dict()
-        })
+        # CROWN⁴.5 Phase 1.7: Support mini detail for prefetching
+        detail_level = request.args.get('detail', 'full')
+        
+        if detail_level == 'mini':
+            # Minimal payload optimized for prefetch cache warming
+            response = {
+                'success': True,
+                'task': task.to_dict(),
+                'meeting': {
+                    'id': task.meeting.id,
+                    'title': task.meeting.title,
+                    'date': task.meeting.date.isoformat() if task.meeting.date else None
+                } if task.meeting else None,
+                'assignees': [
+                    {
+                        'id': assignee.user.id,
+                        'username': assignee.user.username,
+                        'email': assignee.user.email
+                    }
+                    for assignee in task.assignees
+                ] if hasattr(task, 'assignees') else []
+            }
+        else:
+            # Full detail (default)
+            response = {
+                'success': True,
+                'task': task.to_dict()
+            }
+        
+        return jsonify(response)
         
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
