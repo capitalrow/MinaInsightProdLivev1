@@ -1,9 +1,0 @@
-{
-  "login": false,
-  "tasks_page": null,
-  "tasks_api": null,
-  "task_creation": null,
-  "websocket": null,
-  "event_sequencer": null,
-  "telemetry": null
-}
