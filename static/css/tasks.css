@@ -757,6 +757,91 @@
 }
 
 /* ========================================
+ * JUMP TO TRANSCRIPT BUTTON (CROWN⁴.6)
+ * ======================================== */
+
+.jump-to-transcript-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(167, 139, 250, 0.1) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 6px;
+  color: rgba(167, 139, 250, 0.9);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 8px;
+}
+
+.jump-to-transcript-btn:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(167, 139, 250, 0.2) 100%);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: rgba(167, 139, 250, 1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+}
+
+.jump-to-transcript-btn:active {
+  transform: translateY(0);
+}
+
+.jump-to-transcript-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.5;
+}
+
+.jump-to-transcript-btn span {
+  white-space: nowrap;
+}
+
+/* ========================================
+ * IMPACT SCORE BADGE (CROWN⁴.6)
+ * ======================================== */
+
+.impact-score-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(245, 158, 11, 0.1) 100%);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 6px;
+  color: rgba(253, 224, 71, 0.95);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  line-height: 1;
+  margin-right: 6px;
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.impact-score-badge svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(251, 191, 36, 0.5);
+  }
+}
+
+.task-card:hover .impact-score-badge {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.25) 0%, rgba(245, 158, 11, 0.2) 100%);
+  border-color: rgba(251, 191, 36, 0.6);
+}
+
+/* ========================================
  * MEETING SOURCE - Hide "Unknown meeting"
  * ======================================== */
 
@@ -2197,6 +2282,24 @@
   background: rgba(156, 163, 175, 0.15);
   color: #d1d5db;
   border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+/* CROWN⁴.6: Priority change animation */
+.priority-changing {
+  animation: priorityPulse 0.3s ease-out;
+  transform-origin: center;
+}
+
+@keyframes priorityPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .category-badge {
