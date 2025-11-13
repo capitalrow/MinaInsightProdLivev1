@@ -1,0 +1,74 @@
+/**
+ * CROWN⁴.6 AI Semantic Search
+ * Toggle button styles for semantic search mode
+ */
+
+.semantic-search-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-left: 0.5rem;
+}
+
+.semantic-search-toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.semantic-search-toggle.active {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(59, 130, 246, 0.25));
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #c4b5fd;
+    box-shadow: 0 0 16px rgba(139, 92, 246, 0.3);
+}
+
+.semantic-search-toggle.active svg {
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        opacity: 1;
+        filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.6));
+    }
+    50% {
+        opacity: 0.8;
+        filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.8));
+    }
+}
+
+.semantic-label {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+/* Update search wrapper to accommodate semantic toggle */
+.search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    max-width: 500px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .semantic-label {
+        display: none;
+    }
+    
+    .semantic-search-toggle {
+        padding: 0.5rem;
+        margin-left: 0.375rem;
+    }
+}
