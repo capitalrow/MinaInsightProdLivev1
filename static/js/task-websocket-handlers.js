@@ -1,170 +1,144 @@
 /**
  * CROWN⁴.5 WebSocket Event Handlers
- * Connects to /tasks namespace and handles all 20 CROWN⁴.5 events.
+ * Registers 20+ event handlers with WebSocketManager for /tasks namespace.
+ * 
+ * ARCHITECTURE (refactored for single-connection ownership):
+ * - WebSocketManager owns the Socket.IO connection to /tasks
+ * - This module exports handler functions that register via wsManager.registerHandlers()
+ * - All events flow through wsManager.handleSequencedEvent() for CROWN⁴ guarantees
  */
 
 class TaskWebSocketHandlers {
     constructor() {
-        this.socket = null;
         this.connected = false;
-        this.namespace = '/tasks';
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        this.namespace = 'tasks'; // No leading slash - wsManager adds it
         this.handlers = new Map();
     }
 
     /**
-     * Connect to tasks WebSocket namespace
-     * @returns {Promise<void>}
+     * Initialize by registering handlers with WebSocketManager
+     * Call this AFTER wsManager.init() completes
+     * @returns {void}
      */
-    async connect() {
-        if (this.connected) {
-            console.log('✅ Already connected to tasks namespace');
+    init() {
+        if (!window.wsManager) {
+            console.error('❌ WebSocketManager not available - cannot register task handlers');
             return;
         }
 
-        try {
-            // Use existing socket.io connection
-            if (!window.io) {
-                console.error('❌ Socket.IO not available');
-                return;
+        // Build handler map for all CROWN⁴.5 events
+        const handlers = this._buildHandlerMap();
+        
+        // Register with WebSocketManager (routes through handleSequencedEvent)
+        window.wsManager.registerHandlers(this.namespace, handlers);
+        
+        // Listen for connection events from wsManager
+        window.wsManager.on('connection_status', (data) => {
+            if (data.namespace === this.namespace) {
+                this.connected = data.connected;
+                if (data.connected) {
+                    console.log('✅ Tasks WebSocket connected');
+                    this._emitBootstrap();
+                } else {
+                    console.log('📵 Tasks WebSocket disconnected');
+                }
             }
-
-            this.socket = window.io(this.namespace, {
-                transports: ['websocket', 'polling'],
-                reconnection: true,
-                reconnectionAttempts: this.maxReconnectAttempts,
-                reconnectionDelay: 1000
-            });
-
-            this._registerEventHandlers();
-            console.log('📡 Connected to tasks WebSocket namespace');
-
-        } catch (error) {
-            console.error('❌ Failed to connect to tasks namespace:', error);
-        }
+        });
+        
+        console.log('✅ Task handlers registered with WebSocketManager');
     }
 
     /**
-     * Register all CROWN⁴.5 event handlers
+     * Build map of all event handlers (CROWN⁴.5: 20+ events)
+     * @returns {Object} Map of event names to handler functions
      */
-    _registerEventHandlers() {
-        // Connection events
-        this.socket.on('connect', () => {
-            this.connected = true;
-            this.reconnectAttempts = 0;
-            console.log('✅ Tasks WebSocket connected');
-            
-            // Trigger bootstrap
-            this._emitBootstrap();
-        });
-
-        this.socket.on('disconnect', () => {
-            this.connected = false;
-            console.log('📵 Tasks WebSocket disconnected');
-        });
-
-        this.socket.on('reconnect', (attemptNumber) => {
-            console.log(`🔄 Reconnected after ${attemptNumber} attempts`);
-            this._emitBootstrap();
-        });
-
-        // CROWN⁴.5 Event Handlers (20 events)
+    _buildHandlerMap() {
+        const handlers = {};
         
-        // Phase 2 Batch 1: Core CRUD Events (use event_type.value literal strings)
-        this.on('task.create.manual', this._handleTaskCreated.bind(this));
-        this.on('task.create.ai_accept', this._handleTaskCreated.bind(this));
-        this.on('task.update.core', this._handleTaskUpdated.bind(this));
-        this.on('task.delete.soft', this._handleTaskDeleted.bind(this));
-        this.on('task.restore', this._handleTaskRestored.bind(this));
+        // Phase 2 Batch 1: Core CRUD Events
+        handlers['task.create.manual'] = this._handleTaskCreated.bind(this);
+        handlers['task.create.ai_accept'] = this._handleTaskCreated.bind(this);
+        handlers['task.update.core'] = this._handleTaskUpdated.bind(this);
+        handlers['task.delete.soft'] = this._handleTaskDeleted.bind(this);
+        handlers['task.restore'] = this._handleTaskRestored.bind(this);
         
         // Phase 2 Batch 2: Task Lifecycle Events
-        this.on('task.priority.changed', this._handleBatch2PriorityChanged.bind(this));
-        this.on('task.status.changed', this._handleBatch2StatusChanged.bind(this));
-        this.on('task.assigned', this._handleBatch2TaskAssigned.bind(this));
-        this.on('task.unassigned', this._handleBatch2TaskUnassigned.bind(this));
-        this.on('task.due_date.changed', this._handleBatch2DueDateChanged.bind(this));
-        this.on('task.archived', this._handleBatch2TaskArchived.bind(this));
+        handlers['task.priority.changed'] = this._handleBatch2PriorityChanged.bind(this);
+        handlers['task.status.changed'] = this._handleBatch2StatusChanged.bind(this);
+        handlers['task.assigned'] = this._handleBatch2TaskAssigned.bind(this);
+        handlers['task.unassigned'] = this._handleBatch2TaskUnassigned.bind(this);
+        handlers['task.due_date.changed'] = this._handleBatch2DueDateChanged.bind(this);
+        handlers['task.archived'] = this._handleBatch2TaskArchived.bind(this);
         
         // 1. Bootstrap (initial data load)
-        this.on('bootstrap_response', this._handleBootstrap.bind(this));
+        handlers['bootstrap_response'] = this._handleBootstrap.bind(this);
         
         // 2. Task Create (legacy)
-        this.on('task_created', this._handleTaskCreated.bind(this));
+        handlers['task_created'] = this._handleTaskCreated.bind(this);
         
         // 3-9. Task Update (7 variants - legacy)
-        this.on('task_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_title_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_description_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_due_date_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_assignee_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_category_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_progress_updated', this._handleTaskUpdated.bind(this));
+        handlers['task_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_title_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_description_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_due_date_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_assignee_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_category_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_progress_updated'] = this._handleTaskUpdated.bind(this);
         
         // 10. Task Status Toggle
-        this.on('task_status_toggled', this._handleTaskStatusToggled.bind(this));
+        handlers['task_status_toggled'] = this._handleTaskStatusToggled.bind(this);
         
         // 11. Task Priority Change
-        this.on('task_priority_changed', this._handleTaskPriorityChanged.bind(this));
+        handlers['task_priority_changed'] = this._handleTaskPriorityChanged.bind(this);
         
         // 12. Task Labels Update
-        this.on('task_labels_updated', this._handleTaskLabelsUpdated.bind(this));
+        handlers['task_labels_updated'] = this._handleTaskLabelsUpdated.bind(this);
         
         // 13. Task Snooze
-        this.on('task_snoozed', this._handleTaskSnoozed.bind(this));
+        handlers['task_snoozed'] = this._handleTaskSnoozed.bind(this);
         
         // 14. Task Merge
-        this.on('tasks_merged', this._handleTasksMerged.bind(this));
+        handlers['tasks_merged'] = this._handleTasksMerged.bind(this);
         
         // 15. Transcript Jump
-        this.on('transcript_jump', this._handleTranscriptJump.bind(this));
+        handlers['transcript_jump'] = this._handleTranscriptJump.bind(this);
         
         // 16. Task Filter
-        this.on('filter_changed', this._handleFilterChanged.bind(this));
+        handlers['filter_changed'] = this._handleFilterChanged.bind(this);
         
         // 17. Task Refresh
-        this.on('tasks_refreshed', this._handleTasksRefreshed.bind(this));
+        handlers['tasks_refreshed'] = this._handleTasksRefreshed.bind(this);
         
         // 18. Idle Sync
-        this.on('idle_sync_complete', this._handleIdleSyncComplete.bind(this));
+        handlers['idle_sync_complete'] = this._handleIdleSyncComplete.bind(this);
         
         // 19. Offline Queue Replay
-        this.on('offline_queue_replayed', this._handleOfflineQueueReplayed.bind(this));
+        handlers['offline_queue_replayed'] = this._handleOfflineQueueReplayed.bind(this);
         
         // 20. Task Delete (legacy)
-        this.on('task_deleted', this._handleTaskDeleted.bind(this));
+        handlers['task_deleted'] = this._handleTaskDeleted.bind(this);
         
         // Bulk operations
-        this.on('tasks_bulk_updated', this._handleTasksBulkUpdated.bind(this));
+        handlers['tasks_bulk_updated'] = this._handleTasksBulkUpdated.bind(this);
         
         // Error handling
-        this.on('error', this._handleError.bind(this));
-    }
-
-    /**
-     * Register event handler
-     * @param {string} event
-     * @param {Function} handler
-     */
-    on(event, handler) {
-        if (!this.socket) return;
+        handlers['error'] = this._handleError.bind(this);
         
-        this.socket.on(event, handler);
-        this.handlers.set(event, handler);
+        return handlers;
     }
 
     /**
-     * Emit event to server
-     * @param {string} event
-     * @param {Object} data
+     * Emit event to server via WebSocketManager
+     * @param {string} event - Event name
+     * @param {Object} data - Event data
      */
     emit(event, data) {
-        if (!this.socket || !this.connected) {
-            console.warn(`⚠️ Cannot emit ${event} - not connected`);
+        if (!window.wsManager) {
+            console.warn(`⚠️ Cannot emit ${event} - WebSocketManager not available`);
             return;
         }
         
-        this.socket.emit(event, data);
+        window.wsManager.send(this.namespace, event, data);
     }
 
     // Event Handlers
@@ -1264,26 +1238,15 @@ class TaskWebSocketHandlers {
     }
 
     /**
-     * Disconnect
+     * Disconnect (no-op since wsManager owns the connection)
      */
     disconnect() {
-        if (this.socket) {
-            this.socket.disconnect();
-            this.connected = false;
-        }
+        console.log('ℹ️ Disconnect called - WebSocketManager owns connection lifecycle');
+        this.connected = false;
     }
 }
 
-// Export singleton
+// Export singleton (initialization happens in tasks.html after wsManager.init)
 window.tasksWS = new TaskWebSocketHandlers();
 
-// Auto-connect on load
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.tasksWS.connect();
-    });
-} else {
-    window.tasksWS.connect();
-}
-
-console.log('🔌 CROWN⁴.5 WebSocket Handlers loaded');
+console.log('🔌 CROWN⁴.5 WebSocket Handlers loaded (awaiting init() call)');

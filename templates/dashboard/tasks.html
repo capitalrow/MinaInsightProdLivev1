@@ -829,7 +829,15 @@
         console.warn('⚠️ CROWNTelemetry not available');
     }
     
-    // Initialize WebSocket Manager with workspace and tasks namespace
+    // CRITICAL: Register task handlers BEFORE connecting to ensure listeners attach
+    if (window.tasksWS && window.wsManager) {
+        window.tasksWS.init();
+        console.log('✅ Task handlers registered (before connection)');
+    } else {
+        console.warn('⚠️ Task handlers or WebSocket Manager not available');
+    }
+    
+    // Initialize WebSocket Manager (connects to tasks namespace)
     if (window.wsManager) {
         const workspaceId = window.WORKSPACE_ID || 1;
         await window.wsManager.init(workspaceId, ['tasks']);
