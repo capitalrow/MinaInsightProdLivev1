@@ -1,0 +1,49 @@
+{
+  "authentication": {
+    "success": true,
+    "client": "<FlaskClient <Flask 'app'>>"
+  },
+  "tasks_page": {
+    "success": true,
+    "latency_ms": 230.9396266937256,
+    "meets_200ms_target": false,
+    "has_task_container": true,
+    "has_websocket": true
+  },
+  "tasks_api_list": null,
+  "task_creation": null,
+  "task_update": null,
+  "subsystems": {
+    "EventSequencer": {
+      "exists": false,
+      "status_code": 404
+    },
+    "Telemetry": {
+      "exists": false,
+      "status_code": 404
+    },
+    "PredictiveEngine": {
+      "exists": false,
+      "status_code": 404
+    },
+    "TemporalRecovery": {
+      "exists": false,
+      "status_code": 404
+    },
+    "LedgerCompactor": {
+      "exists": false,
+      "status_code": 404
+    }
+  },
+  "database_models": {
+    "task_model": {
+      "origin_hash": true,
+      "workspace_id": false
+    },
+    "event_ledger": {
+      "event_type": true,
+      "sequence_num": true,
+      "checksum": true
+    }
+  }
+}

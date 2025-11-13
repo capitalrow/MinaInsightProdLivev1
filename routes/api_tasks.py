@@ -24,7 +24,7 @@ event_broadcaster = EventBroadcaster()
 api_tasks_bp = Blueprint('api_tasks', __name__, url_prefix='/api/tasks')
 
 
-@api_tasks_bp.route('/', methods=['GET'])
+@api_tasks_bp.route('/', methods=['GET'], strict_slashes=False)
 @with_etag
 @login_required
 def list_tasks():
@@ -109,9 +109,54 @@ def list_tasks():
         # Paginate
         tasks = db.paginate(stmt, page=page, per_page=per_page, error_out=False)
         
+        # CROWN⁴.5: Bulk-fetch EventLedger rows to avoid N+1 queries
+        # Query latest event for each task in a single query
+        task_ids = [str(task.id) for task in tasks.items]
+        events_map = {}
+        
+        if task_ids:
+            from sqlalchemy import and_
+            from models.event_ledger import EventLedger
+            
+            # Subquery to get latest sequence_num per task
+            latest_seq_subquery = (
+                db.session.query(
+                    EventLedger.entity_id,
+                    func.max(EventLedger.sequence_num).label('max_seq')
+                )
+                .filter(
+                    EventLedger.entity_type == 'task',
+                    EventLedger.entity_id.in_(task_ids)
+                )
+                .group_by(EventLedger.entity_id)
+                .subquery()
+            )
+            
+            # Fetch actual events with max sequence numbers
+            latest_events = db.session.query(EventLedger).join(
+                latest_seq_subquery,
+                and_(
+                    EventLedger.entity_id == latest_seq_subquery.c.entity_id,
+                    EventLedger.sequence_num == latest_seq_subquery.c.max_seq
+                )
+            ).all()
+            
+            # Create mapping: task_id (as string) -> event
+            # entity_id is stored as string in EventLedger, so keep it as string
+            events_map = {event.entity_id: event for event in latest_events}
+        
+        # Serialize tasks with pre-fetched events
+        task_dicts = []
+        for task in tasks.items:
+            # Look up event by string task ID (entity_id is string in EventLedger)
+            crown_event = events_map.get(str(task.id))
+            # Pass fetch_crown_if_missing=False to prevent N+1 fallback queries
+            # If crown_event is None, it means bulk fetch found no event, so return None without querying
+            task_dicts.append(task.to_dict(include_crown_metadata=True, crown_event=crown_event, fetch_crown_if_missing=False))
+        
         return jsonify({
             'success': True,
-            'tasks': [task.to_dict() for task in tasks.items],
+            'tasks': task_dicts,
             'pagination': {
                 'page': tasks.page,
                 'pages': tasks.pages,
@@ -166,7 +211,7 @@ def get_task(task_id):
             
             response = {
                 'success': True,
-                'task': task.to_dict(),
+                'task': task.to_dict(include_crown_metadata=True),
                 'meeting': {
                     'id': task.meeting.id,
                     'title': task.meeting.title,
@@ -178,7 +223,7 @@ def get_task(task_id):
             # Full detail (default)
             response = {
                 'success': True,
-                'task': task.to_dict()
+                'task': task.to_dict(include_crown_metadata=True)
             }
         
         return jsonify(response)
@@ -187,7 +232,7 @@ def get_task(task_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@api_tasks_bp.route('/', methods=['POST'])
+@api_tasks_bp.route('/', methods=['POST'], strict_slashes=False)
 @login_required
 def create_task():
     """Create a new task."""
@@ -323,7 +368,7 @@ def create_task():
         return jsonify({
             'success': True,
             'message': 'Task created successfully',
-            'task': task.to_dict()
+            'task': task.to_dict(include_crown_metadata=True)
         })
         
     except Exception as e:
