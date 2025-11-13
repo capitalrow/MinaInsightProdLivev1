@@ -1,0 +1,317 @@
+/**
+ * CROWN⁴.6 Meeting Heatmap Styles
+ * Glassmorphic design with gradient glow indicators
+ */
+
+#meeting-heatmap-container {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+/* Header */
+.heatmap-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding: 0 0.25rem;
+}
+
+.heatmap-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0;
+}
+
+.heatmap-title svg {
+    opacity: 0.7;
+}
+
+.heatmap-count {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 500;
+}
+
+/* Grid */
+.heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.75rem;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 0.25rem;
+    margin: -0.25rem;
+}
+
+/* Custom scrollbar */
+.heatmap-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.heatmap-grid::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.heatmap-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.heatmap-grid::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Meeting Card */
+.heatmap-meeting-card {
+    position: relative;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0.75rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.heatmap-meeting-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.heatmap-meeting-card:hover::before {
+    opacity: 1;
+}
+
+.heatmap-meeting-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Glow effect based on heat intensity */
+.meeting-card-glow {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, var(--glow-color) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.heatmap-meeting-card:hover .meeting-card-glow {
+    opacity: 0.15;
+}
+
+/* Heat intensity colors */
+.heat-high {
+    --glow-color: #ff4757;
+    border-color: rgba(255, 71, 87, 0.3);
+}
+
+.heat-high .meeting-card-glow {
+    background: radial-gradient(circle, #ff4757 0%, transparent 70%);
+}
+
+.heat-medium {
+    --glow-color: #ffa502;
+    border-color: rgba(255, 165, 2, 0.3);
+}
+
+.heat-medium .meeting-card-glow {
+    background: radial-gradient(circle, #ffa502 0%, transparent 70%);
+}
+
+.heat-low {
+    --glow-color: #1e90ff;
+    border-color: rgba(30, 144, 255, 0.3);
+}
+
+.heat-low .meeting-card-glow {
+    background: radial-gradient(circle, #1e90ff 0%, transparent 70%);
+}
+
+/* Selected state */
+.heatmap-meeting-card.selected {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--glow-color);
+    box-shadow: 0 0 20px rgba(var(--glow-color-rgb), 0.4);
+}
+
+.heatmap-meeting-card.selected .meeting-card-glow {
+    opacity: 0.3;
+}
+
+/* Card content */
+.meeting-card-content {
+    position: relative;
+    z-index: 1;
+}
+
+.meeting-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.meeting-card-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+    margin: 0;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.meeting-card-date {
+    font-size: 0.6875rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 500;
+}
+
+/* Stats */
+.meeting-card-stats {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+}
+
+.stat-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.375rem;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    transition: background 0.2s ease;
+}
+
+.stat-badge svg {
+    width: 12px;
+    height: 12px;
+    opacity: 0.8;
+}
+
+.stat-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.stat-active {
+    background: rgba(34, 197, 94, 0.2);
+    color: #86efac;
+}
+
+.stat-todo {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+}
+
+.stat-progress {
+    background: rgba(251, 146, 60, 0.2);
+    color: #fdba74;
+}
+
+/* Empty state */
+.heatmap-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.heatmap-empty-state svg {
+    margin-bottom: 0.75rem;
+    opacity: 0.3;
+}
+
+.heatmap-empty-state p {
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin: 0 0 0.25rem 0;
+}
+
+/* Filter indicator */
+#meeting-filter-indicator {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.8125rem;
+}
+
+.filter-label {
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+}
+
+#meeting-filter-indicator strong {
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
+}
+
+.filter-clear-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.7);
+    transition: all 0.2s ease;
+    margin-left: auto;
+}
+
+.filter-clear-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.95);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .heatmap-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 0.5rem;
+    }
+    
+    .heatmap-meeting-card {
+        padding: 0.625rem;
+    }
+    
+    .meeting-card-title {
+        font-size: 0.75rem;
+    }
+}
