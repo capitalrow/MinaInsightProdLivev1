@@ -2302,6 +2302,79 @@
   }
 }
 
+/* CROWN⁴.6: Task completion animation */
+.task-card.completing {
+  animation: taskComplete 0.6s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes taskComplete {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.3;
+  }
+}
+
+/* CROWN⁴.6: Task deletion animation (glide away) */
+.task-card.deleting {
+  animation: taskGlideAway 0.4s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes taskGlideAway {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100px) scale(0.8);
+    opacity: 0;
+  }
+}
+
+/* CROWN⁴.6: Task snooze animation */
+.task-card.snoozing {
+  animation: taskSnooze 0.5s ease-in-out forwards;
+  pointer-events: none;
+}
+
+@keyframes taskSnooze {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-20px) scale(1.05);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(100px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* CROWN⁴.6: Task reorder animation */
+.task-card.reordering {
+  animation: taskReorder 0.3s ease-out;
+}
+
+@keyframes taskReorder {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
 .category-badge {
   padding: 4px 10px;
   border-radius: var(--radius-md);
