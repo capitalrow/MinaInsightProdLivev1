@@ -53,3 +53,4 @@ celery
 flask-sqlalchemy
 sqlalchemy
 Flask-Session
+pgvector
