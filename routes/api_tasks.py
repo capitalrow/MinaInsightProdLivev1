@@ -148,6 +148,22 @@ def get_task(task_id):
         
         if detail_level == 'mini':
             # Minimal payload optimized for prefetch cache warming
+            # Defensive assignees loading to prevent 500 errors
+            assignees_data = []
+            try:
+                if hasattr(task, 'assignees') and task.assignees:
+                    assignees_data = [
+                        {
+                            'id': assignee.id,
+                            'username': assignee.username,
+                            'email': assignee.email
+                        }
+                        for assignee in task.assignees
+                    ]
+            except Exception as assignee_err:
+                logger.warning(f"Failed to load assignees for task {task_id}: {assignee_err}")
+                assignees_data = []
+            
             response = {
                 'success': True,
                 'task': task.to_dict(),
@@ -156,14 +172,7 @@ def get_task(task_id):
                     'title': task.meeting.title,
                     'date': task.meeting.date.isoformat() if task.meeting.date else None
                 } if task.meeting else None,
-                'assignees': [
-                    {
-                        'id': assignee.id,
-                        'username': assignee.username,
-                        'email': assignee.email
-                    }
-                    for assignee in task.assignees
-                ] if hasattr(task, 'assignees') and task.assignees else []
+                'assignees': assignees_data
             }
         else:
             # Full detail (default)
