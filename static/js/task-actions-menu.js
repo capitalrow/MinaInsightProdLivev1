@@ -126,7 +126,6 @@ class TaskActionsMenu {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                 </svg>
                 <span>Edit details</span>
-                <kbd>⌘E</kbd>
             </div>
 
             <div class="task-menu-item" data-action="duplicate" data-task-id="${taskId}">
@@ -152,7 +151,6 @@ class TaskActionsMenu {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                 </svg>
                 <span>Delete</span>
-                <kbd>Del</kbd>
             </div>
         `;
 
@@ -264,8 +262,18 @@ class TaskActionsMenu {
         const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
         if (taskCard) {
             const titleEl = taskCard.querySelector('.task-title');
-            if (titleEl && window.taskInlineEditing) {
-                window.taskInlineEditing.startEditing(titleEl, taskId);
+            if (titleEl) {
+                if (window.taskInlineEditing) {
+                    window.taskInlineEditing.editTitle(titleEl);
+                } else {
+                    titleEl.contentEditable = true;
+                    titleEl.focus();
+                    const range = document.createRange();
+                    range.selectNodeContents(titleEl);
+                    const selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
             }
         }
     }
@@ -278,36 +286,27 @@ class TaskActionsMenu {
         const task = window.taskStore?.getTask(taskId);
         if (!task) return;
 
-        // Archive confirmation
-        this.showModal({
-            title: 'Archive Task',
-            message: `Archive "${task.title}"? You can restore it later from the archived tasks view.`,
-            confirmText: 'Archive',
-            confirmClass: 'btn-warning',
-            onConfirm: async () => {
-                try {
-                    await this.taskUI.archiveTask(taskId);
-                    
-                    if (window.showToast) {
-                        window.showToast('Task archived successfully', 'success', {
-                            action: {
-                                label: 'Undo',
-                                handler: () => this.taskUI.unarchiveTask(taskId)
-                            }
-                        });
-                    }
-
-                    if (window.CROWNTelemetry) {
-                        window.CROWNTelemetry.recordMetric('task_archived', 1);
-                    }
-                } catch (error) {
-                    console.error('Failed to archive task:', error);
-                    if (window.showToast) {
-                        window.showToast('Failed to archive task', 'error');
-                    }
-                }
+        try {
+            await this.taskUI.archiveTask(taskId);
+            
+            if (window.toast) {
+                window.toast.success('Task archived', 5000, {
+                    undoCallback: async () => {
+                        await this.taskUI.unarchiveTask(taskId);
+                    },
+                    undoText: 'Undo'
+                });
             }
-        });
+
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('task_archived', 1);
+            }
+        } catch (error) {
+            console.error('Failed to archive task:', error);
+            if (window.toast) {
+                window.toast.error('Failed to archive task');
+            }
+        }
     }
 
     /**
@@ -327,13 +326,12 @@ class TaskActionsMenu {
                 try {
                     await this.taskUI.deleteTask(taskId);
                     
-                    if (window.showToast) {
-                        window.showToast('Task deleted', 'info', {
-                            duration: 15000,
-                            action: {
-                                label: 'Undo',
-                                handler: () => this.taskUI.restoreTask(taskId)
-                            }
+                    if (window.toast) {
+                        window.toast.info('Task deleted', 15000, {
+                            undoCallback: async () => {
+                                await this.taskUI.restoreTask(taskId);
+                            },
+                            undoText: 'Undo'
                         });
                     }
 
@@ -342,8 +340,8 @@ class TaskActionsMenu {
                     }
                 } catch (error) {
                     console.error('Failed to delete task:', error);
-                    if (window.showToast) {
-                        window.showToast('Failed to delete task', 'error');
+                    if (window.toast) {
+                        window.toast.error('Failed to delete task');
                     }
                 }
             }
@@ -359,38 +357,31 @@ class TaskActionsMenu {
         if (!task) return;
 
         try {
-            // Create duplicate via API
-            const response = await fetch(`/api/tasks/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: `${task.title} (Copy)`,
-                    description: task.description,
-                    meeting_id: task.meeting_id,
-                    priority: task.priority,
-                    category: task.category,
-                    due_date: task.due_date,
-                    assigned_to_id: task.assigned_to_id,
-                    assignee_ids: task.assignee_ids
-                })
-            });
+            const duplicateData = {
+                title: `${task.title} (Copy)`,
+                description: task.description,
+                meeting_id: task.meeting_id,
+                priority: task.priority,
+                category: task.category,
+                due_date: task.due_date,
+                assigned_to_id: task.assigned_to_id,
+                assignee_ids: task.assignee_ids,
+                status: 'todo'
+            };
 
-            const data = await response.json();
-            if (data.success) {
-                if (window.showToast) {
-                    window.showToast('Task duplicated successfully', 'success');
-                }
+            await this.taskUI.createTask(duplicateData);
 
-                if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordMetric('task_duplicated', 1);
-                }
-            } else {
-                throw new Error(data.message || 'Failed to duplicate task');
+            if (window.toast) {
+                window.toast.success('Task duplicated');
+            }
+
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('task_duplicated', 1);
             }
         } catch (error) {
             console.error('Failed to duplicate task:', error);
-            if (window.showToast) {
-                window.showToast('Failed to duplicate task', 'error');
+            if (window.toast) {
+                window.toast.error('Failed to duplicate task');
             }
         }
     }
