@@ -5,7 +5,7 @@ Main dashboard with meetings, tasks, analytics overview.
 
 from flask import Blueprint, render_template, request, jsonify, make_response
 from flask_login import login_required, current_user
-from models import db, Meeting, Task, Analytics, Session, Marker
+from models import db, Meeting, Task, Analytics, Session, Marker, User
 from sqlalchemy import desc, func, and_, or_
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta, date
@@ -281,15 +281,24 @@ def tasks():
     # Get all tasks for workspace (not just assigned to current user)
     if current_user.workspace_id:
         # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
+        # CROWN⁴.6: Eager load meeting, analytics, and assigned_to relationships for spoken provenance + Impact Score
+        # Use distinct() to avoid duplicate rows from analytics join
         all_tasks = db.session.query(Task)\
             .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
             .outerjoin(Session, Task.session_id == Session.id)\
+            .outerjoin(User, Task.assigned_to_id == User.id)\
+            .options(
+                joinedload(Task.meeting).joinedload(Meeting.analytics),
+                joinedload(Task.assigned_to)
+            )\
             .filter(
                 or_(
                     Meeting.workspace_id == current_user.workspace_id,
                     Session.workspace_id == current_user.workspace_id
                 )
-            ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+            )\
+            .distinct()\
+            .order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
     else:
         all_tasks = []
     

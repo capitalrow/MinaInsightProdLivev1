@@ -167,7 +167,8 @@
                  data-priority="{{ task.priority|default('medium')|lower }}"
                  data-assigned-to="{{ task.assigned_to_id or '' }}"
                  data-due-date="{{ task.due_date or '' }}"
-                 data-labels="{{ task.labels|tojson|escape if task.labels else '[]' }}">
+                 data-labels="{{ task.labels|tojson|escape if task.labels else '[]' }}"
+                 data-transcript-span="{{ task.transcript_span|tojson|escape if task.transcript_span else '{}' }}">
                 <div class="checkbox-wrapper">
                     <input type="checkbox" {% if task.completed %}checked{% endif %} class="task-checkbox" data-task-id="{{ task.id }}">
                 </div>
@@ -204,9 +205,31 @@
                                 Add labels
                             </span>
                         {% endif %}
+                        
+                        {# CROWN⁴.6: Jump to Transcript - Signature Meeting-Native Feature #}
+                        {% if task.meeting_id and task.transcript_span and task.transcript_span.start_ms is not none %}
+                        <button class="jump-to-transcript-btn" 
+                                data-action="jump-to-transcript"
+                                data-task-id="{{ task.id }}"
+                                title="Jump to the moment in the meeting transcript where this task was mentioned">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            <span>View in Transcript</span>
+                        </button>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="task-actions">
+                    {# CROWN⁴.6: Impact Score Badge from Meeting #}
+                    {% if task.meeting and task.meeting.analytics and task.meeting.analytics.meeting_effectiveness_score and task.meeting.analytics.meeting_effectiveness_score >= 0.7 %}
+                    <span class="impact-score-badge" title="From high-impact meeting ({{ (task.meeting.analytics.meeting_effectiveness_score * 100)|int }}% effectiveness)">
+                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                        High Impact
+                    </span>
+                    {% endif %}
                     <span class="priority-badge priority-{{ task.priority|default('medium')|lower }}">
                         {{ task.priority|default('medium') }}
                     </span>
@@ -698,6 +721,13 @@
         </div>
     </div>
 </div>
+
+<!-- CROWN⁴.6: Populate task data for spoken provenance -->
+<script nonce="{{ g.csp_nonce }}">
+// Serialize tasks with all relationships for spoken provenance UI
+window.tasks = {{ tasks|map(attribute='to_dict')|list|tojson|safe if tasks else '[]' }};
+console.log('[CROWN⁴.6] Loaded', window.tasks.length, 'tasks for provenance UI');
+</script>
 
 <!-- CROWN⁴.5 Frontend Modules (crown-telemetry and websocket-manager loaded in base.html) -->
 <script src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
