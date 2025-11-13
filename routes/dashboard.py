@@ -282,7 +282,7 @@ def tasks():
     if current_user.workspace_id:
         # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
         # CROWN⁴.6: Eager load meeting, analytics, and assigned_to relationships for spoken provenance + Impact Score
-        # Use distinct() to avoid duplicate rows from analytics join
+        # Use distinct(Task.id) to avoid duplicate rows from analytics join (works with JSON columns)
         all_tasks = db.session.query(Task)\
             .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
             .outerjoin(Session, Task.session_id == Session.id)\
@@ -297,8 +297,8 @@ def tasks():
                     Session.workspace_id == current_user.workspace_id
                 )
             )\
-            .distinct()\
-            .order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+            .distinct(Task.id)\
+            .order_by(Task.id.desc(), Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
     else:
         all_tasks = []
     
