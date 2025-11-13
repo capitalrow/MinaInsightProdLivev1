@@ -147,6 +147,9 @@ class WebSocketManager {
         // Register CROWN⁴ event listeners
         this.registerCROWNEvents(socket, namespace);
         
+        // Register external handlers (CROWN⁴.5 task handlers, etc.)
+        this._registerExternalHandlers(socket, namespace);
+        
         this.sockets[namespace] = socket;
     }
     
@@ -210,6 +213,72 @@ class WebSocketManager {
                         actionText: reminder.action_text || 'View'
                     }
                 );
+            }
+        });
+        
+    }
+    
+    /**
+     * Register external event handlers for a namespace (CROWN⁴.5 integration)
+     * Stores callbacks that will be invoked after event sequencing validation.
+     * 
+     * @param {string} namespace - Namespace (e.g., 'tasks')
+     * @param {Object} handlers - Map of event names to handler functions
+     * 
+     * Example:
+     *   wsManager.registerHandlers('tasks', {
+     *     'bootstrap_response': (data) => { ... },
+     *     'task_created': (data) => { ... }
+     *   });
+     */
+    registerHandlers(namespace, handlers) {
+        if (!this.eventHandlers[namespace]) {
+            this.eventHandlers[namespace] = {};
+        }
+        
+        // Store handlers (will be invoked by handleSequencedEvent)
+        Object.assign(this.eventHandlers[namespace], handlers);
+        
+        // If socket already exists, register ONE-TIME socket listeners
+        // that route through handleSequencedEvent
+        const socket = this.sockets[namespace];
+        if (socket) {
+            Object.keys(handlers).forEach(eventName => {
+                // Check if we already registered a listener for this event
+                const listenerKey = `_registered_${eventName}`;
+                if (!socket[listenerKey]) {
+                    socket.on(eventName, (data) => {
+                        this.handleSequencedEvent(eventName, data, namespace);
+                    });
+                    socket[listenerKey] = true;
+                    console.log(`📡 Registered listener: ${eventName} on /${namespace}`);
+                }
+            });
+        }
+        
+        console.log(`✅ ${Object.keys(handlers).length} handlers registered for /${namespace}`);
+    }
+    
+    /**
+     * Register socket listeners for external handlers (called during connection)
+     * This ensures handlers are attached when namespace connects/reconnects
+     * @param {Socket} socket - Socket instance
+     * @param {string} namespace - Namespace name
+     */
+    _registerExternalHandlers(socket, namespace) {
+        if (!this.eventHandlers[namespace]) {
+            return;
+        }
+        
+        Object.keys(this.eventHandlers[namespace]).forEach(eventName => {
+            // Prevent duplicate registration on reconnect
+            const listenerKey = `_registered_${eventName}`;
+            if (!socket[listenerKey]) {
+                socket.on(eventName, (data) => {
+                    this.handleSequencedEvent(eventName, data, namespace);
+                });
+                socket[listenerKey] = true;
+                console.log(`📡 Registered listener: ${eventName} on /${namespace}`);
             }
         });
     }
@@ -289,6 +358,15 @@ class WebSocketManager {
         
         // Emit to local handlers
         this.emit(eventName, data);
+        
+        // Invoke namespace-specific registered handlers (CROWN⁴.5)
+        if (this.eventHandlers[namespace] && this.eventHandlers[namespace][eventName]) {
+            try {
+                this.eventHandlers[namespace][eventName](data);
+            } catch (error) {
+                console.error(`Error in ${namespace}/${eventName} handler:`, error);
+            }
+        }
         
         // Broadcast to other tabs
         if (this.broadcastChannel) {
