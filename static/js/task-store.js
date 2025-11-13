@@ -480,11 +480,37 @@ class TaskStore {
     }
 }
 
-// Initialize global singleton when cacheManager is available
+// Initialize global singleton when cacheManager is ready
 window.taskStore = null;
 
-// Auto-initialize when cache manager is ready
-if (window.cacheManager) {
-    window.taskStore = new TaskStore(window.cacheManager, window.cacheValidator);
-    console.log('🏪 TaskStore instance created');
-}
+// Initialize TaskStore when cacheManager promise resolves
+(async function initializeTaskStore() {
+    try {
+        console.log('[TaskStore] Waiting for cacheManager to be ready...');
+        
+        // Wait for cacheManager to initialize
+        await window.cacheManagerReady;
+        
+        console.log('[TaskStore] cacheManager ready, checking dependencies...');
+        
+        // Check if cacheValidator is available
+        if (!window.cacheValidator) {
+            console.warn('⚠️ [TaskStore] cacheValidator not available, retrying in 100ms...');
+            setTimeout(initializeTaskStore, 100);
+            return;
+        }
+        
+        // Create TaskStore instance
+        window.taskStore = new TaskStore(window.cacheManager, window.cacheValidator);
+        console.log('✅ [TaskStore] TaskStore instance created');
+        
+        // Fire event to notify dependent modules
+        window.dispatchEvent(new CustomEvent('taskStoreReady', { 
+            detail: { taskStore: window.taskStore } 
+        }));
+        console.log('📡 [TaskStore] taskStoreReady event fired');
+        
+    } catch (error) {
+        console.error('❌ [TaskStore] Failed to initialize:', error);
+    }
+})();
