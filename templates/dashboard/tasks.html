@@ -725,7 +725,7 @@
 <!-- CROWN⁴.6: Populate task data for spoken provenance -->
 <script nonce="{{ g.csp_nonce }}">
 // Serialize tasks with all relationships for spoken provenance UI
-window.tasks = {{ tasks|map(attribute='to_dict')|list|tojson|safe if tasks else '[]' }};
+window.tasks = {{ tasks_json|tojson|safe if tasks_json else '[]' }};
 console.log('[CROWN⁴.6] Loaded', window.tasks.length, 'tasks for provenance UI');
 </script>
 
