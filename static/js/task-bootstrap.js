@@ -18,6 +18,10 @@ class TaskBootstrap {
             sync_start: 0,
             sync_end: 0
         };
+        
+        // CROWN⁴.6: Singleton TaskGrouping instance
+        this.taskGrouping = null;
+        this.groupingThreshold = 12; // Enable grouping for 12+ tasks
     }
 
     /**
@@ -426,8 +430,40 @@ class TaskBootstrap {
 
         // Render tasks with error protection
         try {
-            const tasksHTML = tasks.map((task, index) => this.renderTaskCard(task, index)).join('');
-            container.innerHTML = tasksHTML;
+            // CROWN⁴.6: Use TaskGrouping for medium lists (12-50 tasks)
+            // Virtual list will handle >50 without grouping for performance
+            const useGrouping = window.TaskGrouping && 
+                               tasks.length >= this.groupingThreshold && 
+                               tasks.length <= 50;
+            
+            if (useGrouping) {
+                // Initialize singleton TaskGrouping instance
+                if (!this.taskGrouping) {
+                    this.taskGrouping = new window.TaskGrouping(window.taskStore);
+                    console.log('✅ TaskGrouping singleton created');
+                }
+                
+                // Track task indices for proper animation
+                let globalIndex = 0;
+                
+                // Create task renderer that preserves index and returns DOM
+                const taskRenderer = (task) => {
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = this.renderTaskCard(task, globalIndex++);
+                    return wrapper.firstElementChild;
+                };
+                
+                // Render grouped sections
+                const groupedContainer = this.taskGrouping.render(tasks, taskRenderer);
+                container.innerHTML = '';
+                container.appendChild(groupedContainer);
+                
+                console.log(`✅ Rendered ${tasks.length} tasks with grouping`);
+            } else {
+                // Fallback to flat list for small counts or very large (virtualized) lists
+                const tasksHTML = tasks.map((task, index) => this.renderTaskCard(task, index)).join('');
+                container.innerHTML = tasksHTML;
+            }
             
             // Show tasks list (hides all state overlays)
             this.showTasksList();
