@@ -42,6 +42,12 @@ class TaskContextPreview {
 
         // Mouse events for desktop
         container.addEventListener('mouseenter', (e) => {
+            // Don't trigger on menu button or if menu is open
+            if (e.target.closest('.task-menu-trigger, .task-menu')) {
+                this.cancelPendingTimers();
+                return;
+            }
+            
             const card = e.target.closest('.task-card[data-task-id]');
             if (card && this.shouldShowPreview(card)) {
                 this.scheduleShow(card);
@@ -74,6 +80,12 @@ class TaskContextPreview {
         let touchStartTarget = null;
         
         container.addEventListener('touchstart', (e) => {
+            // Don't trigger on menu button or if menu is open
+            if (e.target.closest('.task-menu-trigger, .task-menu')) {
+                this.cancelPendingTimers();
+                return;
+            }
+            
             const card = e.target.closest('.task-card[data-task-id]');
             if (card && this.shouldShowPreview(card)) {
                 touchStartTarget = card;
@@ -110,8 +122,29 @@ class TaskContextPreview {
      * Check if preview should be shown for this card
      */
     shouldShowPreview(card) {
+        // Don't show if menu is currently open
+        if (document.querySelector('.task-menu')) {
+            return false;
+        }
+        
         // Only show for AI-extracted tasks
         return card.dataset.extractedByAi === 'true';
+    }
+
+    /**
+     * Cancel any pending show/hide timers and hide tooltip
+     */
+    cancelPendingTimers() {
+        if (this.showTimeout) {
+            clearTimeout(this.showTimeout);
+            this.showTimeout = null;
+        }
+        if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+            this.hideTimeout = null;
+        }
+        // Also hide any currently displayed tooltip
+        this.hide();
     }
 
     /**
