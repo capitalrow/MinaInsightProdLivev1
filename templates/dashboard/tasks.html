@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=5">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1">
 {% endblock %}
 
 {% block content %}
@@ -2704,4 +2705,8 @@
     console.log('💡 Debug tip: Run clearTaskCache() to clear cache and reload');
 })();
 </script>
+
+<!-- CROWN⁴.6: Meeting-Native Features -->
+<script src="{{ url_for('static', filename='js/task-transcript-navigation.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/task-spoken-provenance.js') }}?v=1"></script>
 {% endblock %}
