@@ -157,16 +157,60 @@ class TaskActionsMenu {
         // Position menu - append to body to avoid CSS clipping (Golden Standard)
         document.body.appendChild(menu);
         
-        // Calculate position
+        // Smart positioning with edge detection
         const triggerRect = trigger.getBoundingClientRect();
+        const menuRect = menu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const PADDING = 8; // Safe margin from viewport edges
+        
         menu.style.position = 'fixed';
-        menu.style.top = (triggerRect.bottom + 4) + 'px';
-        menu.style.right = (window.innerWidth - triggerRect.right) + 'px';
         menu.style.zIndex = '1000';
+        
+        // Vertical positioning: prefer below, flip to above if no space
+        let top;
+        const spaceBelow = viewportHeight - triggerRect.bottom;
+        const spaceAbove = triggerRect.top;
+        
+        if (spaceBelow >= menuRect.height + PADDING) {
+            // Enough space below
+            top = triggerRect.bottom + 4;
+        } else if (spaceAbove >= menuRect.height + PADDING) {
+            // Not enough space below, flip to above
+            top = triggerRect.top - menuRect.height - 4;
+        } else {
+            // Not enough space either way, center vertically with scrolling
+            top = Math.max(PADDING, Math.min(triggerRect.bottom + 4, viewportHeight - menuRect.height - PADDING));
+        }
+        
+        // Horizontal positioning: prefer right-aligned, flip to left if no space
+        let left, right;
+        const spaceRight = viewportWidth - triggerRect.right;
+        const spaceLeft = triggerRect.left;
+        
+        if (spaceRight >= menuRect.width + PADDING) {
+            // Enough space on right, align menu's right edge with trigger's right edge
+            right = window.innerWidth - triggerRect.right;
+            menu.style.right = right + 'px';
+        } else if (spaceLeft >= menuRect.width + PADDING) {
+            // Not enough space on right, align to left edge
+            left = triggerRect.left;
+            menu.style.left = left + 'px';
+        } else {
+            // Not enough space either way, align to right edge with padding
+            right = PADDING;
+            menu.style.right = right + 'px';
+        }
+        
+        menu.style.top = top + 'px';
         
         console.log('[TaskActionsMenu] Menu positioned at:', {
             top: menu.style.top,
-            right: menu.style.right
+            left: menu.style.left || 'auto',
+            right: menu.style.right || 'auto',
+            spaceBelow,
+            spaceAbove,
+            menuHeight: menuRect.height
         });
 
         // Show menu with animation
