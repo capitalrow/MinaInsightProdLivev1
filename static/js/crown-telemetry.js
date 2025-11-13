@@ -505,7 +505,15 @@ class CROWNTelemetry {
         if (this.db) {
             const transaction = this.db.transaction(['events'], 'readwrite');
             const store = transaction.objectStore('events');
-            store.add(event).catch(err => console.warn('Failed to save event:', err));
+            const request = store.add(event);
+            
+            request.onsuccess = () => {
+                // Event persisted successfully
+            };
+            
+            request.onerror = (err) => {
+                console.warn('Failed to save telemetry event:', err);
+            };
         }
     }
 }
