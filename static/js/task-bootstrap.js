@@ -21,7 +21,7 @@ class TaskBootstrap {
         
         // CROWN⁴.6: Singleton TaskGrouping instance
         this.taskGrouping = null;
-        this.groupingThreshold = 12; // Enable grouping for 12+ tasks
+        this.groupingThreshold = 4; // Enable grouping for 4+ tasks (lowered for testing)
     }
 
     /**
