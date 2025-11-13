@@ -298,10 +298,8 @@ class OptimisticUI {
             const updatedTask = { ...task, ...updates };
             await this.cache.updateTask(taskId, updatedTask);
             
-            // Step 2: Remove from DOM immediately (but keep in cache)
-            this._removeTaskFromDOM(taskId);
-            
-            // Dispatch deletion event for haptics/animations
+            // Step 2: Dispatch deletion event for animations FIRST
+            // TaskAnimationController will handle DOM removal in animation's onComplete
             window.dispatchEvent(new CustomEvent('task:deleted', {
                 detail: { taskId, task: updatedTask }
             }));
@@ -336,6 +334,21 @@ class OptimisticUI {
                 queueId
             });
             this._syncToServer(opId, 'update', updates, taskId);
+
+            // CROWN⁴.6: Show undo toast for single task deletion
+            if (window.toastManager) {
+                window.toastManager.show({
+                    message: `Deleted "${task.title}"`,
+                    type: 'warning',
+                    duration: 15000,
+                    action: {
+                        label: 'Undo',
+                        callback: async () => {
+                            await this.restoreTask(taskId);
+                        }
+                    }
+                });
+            }
 
         } catch (error) {
             console.error('❌ Optimistic delete failed:', error);
