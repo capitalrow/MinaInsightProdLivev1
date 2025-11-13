@@ -1,0 +1,28 @@
+{
+  "events": {
+    "bootstrap": {
+      "status": "BLOCKED",
+      "reason": "Redirected to login",
+      "latency_ms": 14.364480972290039
+    },
+    "create_manual": {
+      "status": "BLOCKED",
+      "reason": "Authentication required"
+    }
+  },
+  "subsystems": {
+    "event_sequencer": {
+      "status": "NOT_FOUND",
+      "note": "API endpoint does not exist"
+    },
+    "telemetry": {
+      "status": "NOT_FOUND"
+    },
+    "websocket": {
+      "status": "UNKNOWN",
+      "http_status": 400
+    }
+  },
+  "performance": {},
+  "issues": []
+}
