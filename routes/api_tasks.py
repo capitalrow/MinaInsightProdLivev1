@@ -259,6 +259,86 @@ def format_ms_to_time(milliseconds):
     return f"{minutes:02d}:{seconds:02d}"
 
 
+@api_tasks_bp.route('/meeting-heatmap', methods=['GET'])
+@login_required
+def get_meeting_heatmap():
+    """Get meeting heatmap data for CROWN⁴.6 Meeting Intelligence visualization.
+    
+    Returns meetings with active task counts, sorted by task count (descending).
+    Used for the Meeting Heatmap component to show which meetings have actionable items.
+    """
+    try:
+        # Query meetings with task counts
+        from sqlalchemy import case
+        
+        # Subquery to count tasks per meeting
+        task_counts = db.session.query(
+            Task.meeting_id,
+            func.count(Task.id).label('total_tasks'),
+            func.sum(case((Task.status == 'todo', 1), else_=0)).label('todo_count'),
+            func.sum(case((Task.status == 'in_progress', 1), else_=0)).label('in_progress_count'),
+            func.sum(case((Task.status == 'completed', 1), else_=0)).label('completed_count')
+        ).filter(
+            Task.deleted_at.is_(None)
+        ).group_by(Task.meeting_id).subquery()
+        
+        # Join with meetings
+        meetings = db.session.query(
+            Meeting,
+            func.coalesce(task_counts.c.total_tasks, 0).label('total_tasks'),
+            func.coalesce(task_counts.c.todo_count, 0).label('todo_count'),
+            func.coalesce(task_counts.c.in_progress_count, 0).label('in_progress_count'),
+            func.coalesce(task_counts.c.completed_count, 0).label('completed_count')
+        ).outerjoin(
+            task_counts, Meeting.id == task_counts.c.meeting_id
+        ).filter(
+            Meeting.workspace_id == current_user.workspace_id,
+            Meeting.deleted_at.is_(None)
+        ).order_by(
+            func.coalesce(task_counts.c.total_tasks, 0).desc(),
+            Meeting.created_at.desc()
+        ).limit(20).all()  # Limit to top 20 meetings
+        
+        # Build response
+        heatmap_data = []
+        for meeting, total, todo, in_progress, completed in meetings:
+            # Calculate active tasks (todo + in_progress)
+            active_count = todo + in_progress
+            
+            # Skip meetings with no tasks
+            if total == 0:
+                continue
+            
+            # Calculate heat intensity (0-100 scale)
+            # Primarily based on active tasks, with recency bonus
+            days_ago = (datetime.utcnow() - meeting.created_at).days if meeting.created_at else 999
+            recency_bonus = max(0, 10 - days_ago) * 2  # Up to +20 for recent meetings
+            heat_intensity = min(100, (active_count * 10) + recency_bonus)
+            
+            heatmap_data.append({
+                'meeting_id': meeting.id,
+                'meeting_title': meeting.title,
+                'created_at': meeting.created_at.isoformat() if meeting.created_at else None,
+                'total_tasks': total,
+                'active_tasks': active_count,
+                'todo_count': todo,
+                'in_progress_count': in_progress,
+                'completed_count': completed,
+                'heat_intensity': heat_intensity,
+                'days_ago': days_ago
+            })
+        
+        return jsonify({
+            'success': True,
+            'meetings': heatmap_data,
+            'total_meetings': len(heatmap_data)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching meeting heatmap: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @api_tasks_bp.route('/', methods=['POST'])
 @login_required
 def create_task():
