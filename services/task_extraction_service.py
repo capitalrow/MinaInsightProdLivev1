@@ -66,7 +66,7 @@ class TaskExtractionService:
         # Get meeting transcript
         stmt = select(Segment).filter_by(
             session_id=meeting.session.id,
-            is_final=True
+            kind='final'
         ).order_by(Segment.start_ms)
         segments = db.session.execute(stmt).scalars().all()
         
@@ -75,19 +75,22 @@ class TaskExtractionService:
         
         transcript = self._build_transcript(segments)
         
-        # Extract tasks using AI
-        ai_tasks = await self._extract_tasks_with_ai(transcript, meeting)
+        # Extract tasks using AI with segment tracking
+        ai_tasks = await self._extract_tasks_with_ai(transcript, meeting, segments)
         
         # Extract tasks using pattern matching (backup/supplement)
-        pattern_tasks = self._extract_tasks_with_patterns(transcript)
+        pattern_tasks = self._extract_tasks_with_patterns(transcript, segments)
         
         # Combine and deduplicate
         all_tasks = self._merge_and_deduplicate_tasks(ai_tasks, pattern_tasks)
         
+        # Link tasks to transcript segments for "Jump to Transcript" feature
+        self._link_tasks_to_segments(all_tasks, segments)
+        
         return all_tasks
 
-    async def _extract_tasks_with_ai(self, transcript: str, meeting: Meeting) -> List[ExtractedTask]:
-        """Use OpenAI to extract tasks from meeting transcript."""
+    async def _extract_tasks_with_ai(self, transcript: str, meeting: Meeting, segments=None) -> List[ExtractedTask]:
+        """Use OpenAI to extract tasks from meeting transcript with segment tracking."""
         if not self.client:
             return []
         
@@ -101,6 +104,8 @@ class TaskExtractionService:
         5. Confidence score (0.0 to 1.0) in your extraction
         6. Any mentioned assignee
         7. Any mentioned due date or timeline
+        8. The exact quote from the transcript where this task was mentioned
+        9. If known, who said it (speaker name)
         
         Focus on explicit action items, commitments, and next steps. Avoid including general discussion points.
         
@@ -115,7 +120,8 @@ class TaskExtractionService:
               "confidence": 0.85,
               "assigned_to": "person name if mentioned",
               "due_date_text": "timeline if mentioned",
-              "context": "relevant quote from transcript"
+              "context": "relevant quote from transcript",
+              "speaker": "name of person who said it if identifiable"
             }
           ]
         }"""
@@ -168,7 +174,11 @@ class TaskExtractionService:
                     confidence=float(task_data.get("confidence", 0.5)),
                     assigned_to=task_data.get("assigned_to", "").strip() or None,
                     due_date_text=task_data.get("due_date_text", "").strip() or None,
-                    context={"source": "ai", "quote": task_data.get("context", "")}
+                    context={
+                        "source": "ai",
+                        "quote": task_data.get("context", ""),
+                        "speaker": task_data.get("speaker", "").strip() or None
+                    }
                 )
                 
                 if task.title and len(task.title) > 3:  # Basic validation
@@ -180,7 +190,7 @@ class TaskExtractionService:
             print(f"AI task extraction failed: {e}")
             return []
 
-    def _extract_tasks_with_patterns(self, transcript: str) -> List[ExtractedTask]:
+    def _extract_tasks_with_patterns(self, transcript: str, segments=None) -> List[ExtractedTask]:
         """Extract tasks using regex patterns as backup method."""
         tasks = []
         lines = transcript.split('\n')
@@ -284,6 +294,81 @@ class TaskExtractionService:
         similarity = len(intersection) / len(union)
         return similarity >= threshold
 
+    def _link_tasks_to_segments(self, tasks: List[ExtractedTask], segments) -> None:
+        """Link extracted tasks to transcript segments for jump-to-transcript feature.
+        
+        CROWN⁴.6: Uses fuzzy matching and prevents overwrites during deduplication.
+        Each task instance gets its own transcript_span - dedupe doesn't clobber it.
+        """
+        if not segments:
+            return
+        
+        for task in tasks:
+            # Skip if already has a transcript_span (prevents deduplication overwrites)
+            if task.context and task.context.get("transcript_span"):
+                continue
+            
+            if not task.context or not task.context.get("quote"):
+                continue
+            
+            quote = task.context.get("quote", "").strip().lower()
+            if not quote or len(quote) < 10:  # Skip very short quotes
+                continue
+            
+            # Find the segment(s) that contain this quote using fuzzy matching
+            matched_segments = []
+            for segment in segments:
+                segment_text = segment.text.lower()
+                
+                # Exact substring match
+                if quote in segment_text:
+                    matched_segments.append(segment)
+                # Fuzzy match: check if significant words overlap (>70%)
+                elif self._fuzzy_match_quote(quote, segment_text):
+                    matched_segments.append(segment)
+            
+            if matched_segments:
+                # Use the first matched segment (or combine nearby ones within 5 seconds)
+                first_segment = matched_segments[0]
+                last_segment = matched_segments[-1] if len(matched_segments) > 1 else first_segment
+                
+                # Only combine segments if they're within 5 seconds of each other
+                if last_segment.start_ms and first_segment.start_ms:
+                    time_diff_ms = last_segment.start_ms - first_segment.start_ms
+                    if time_diff_ms > 5000:  # More than 5 seconds apart
+                        last_segment = first_segment
+                        matched_segments = [first_segment]
+                
+                # Store transcript span in task context (unique to this task instance)
+                if not task.context:
+                    task.context = {}
+                
+                task.context["transcript_span"] = {
+                    "start_ms": first_segment.start_ms,
+                    "end_ms": last_segment.end_ms,
+                    "segment_ids": [seg.id for seg in matched_segments]
+                }
+
+    def _fuzzy_match_quote(self, quote: str, segment_text: str, threshold: float = 0.7) -> bool:
+        """Fuzzy match quote to segment text based on significant word overlap.
+        
+        CROWN⁴.6: Handles cases where AI paraphrases the quote.
+        """
+        # Extract significant words (>3 chars, not common stop words)
+        stop_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'}
+        
+        quote_words = set(word for word in quote.split() if len(word) > 3 and word not in stop_words)
+        segment_words = set(word for word in segment_text.split() if len(word) > 3 and word not in stop_words)
+        
+        if not quote_words or not segment_words:
+            return False
+        
+        # Calculate overlap ratio
+        intersection = quote_words.intersection(segment_words)
+        overlap_ratio = len(intersection) / len(quote_words)
+        
+        return overlap_ratio >= threshold
+
     def create_tasks_in_database(self, meeting_id: int, extracted_tasks: List[ExtractedTask]) -> List[Task]:
         """Create Task objects in database from extracted tasks."""
         created_tasks = []
@@ -309,6 +394,9 @@ class TaskExtractionService:
                 # Find assignee if mentioned
                 assigned_to_id = self._find_user_by_name(extracted_task.assigned_to)
                 
+                # Extract transcript_span from context if available
+                transcript_span = extracted_task.context.get("transcript_span") if extracted_task.context else None
+                
                 task = Task(
                     meeting_id=meeting_id,
                     title=extracted_task.title,
@@ -320,6 +408,7 @@ class TaskExtractionService:
                     extracted_by_ai=True,
                     confidence_score=extracted_task.confidence,
                     extraction_context=extracted_task.context,
+                    transcript_span=transcript_span,
                     position=current_position
                 )
                 

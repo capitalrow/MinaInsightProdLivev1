@@ -1,0 +1,159 @@
+/**
+ * CROWN⁴.6 Spoken Provenance Styling
+ * Glassmorphic styling for meeting-native task provenance UI
+ */
+
+/* Main provenance container */
+.task-provenance {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(99, 102, 241, 0.05);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: 8px;
+    font-size: 13px;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+}
+
+.task-card:hover .task-provenance {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.25);
+}
+
+/* Provenance items */
+.task-provenance-meeting,
+.task-provenance-speaker,
+.task-provenance-quote {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-secondary);
+}
+
+.provenance-icon {
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+/* Meeting title */
+.provenance-meeting-title {
+    font-weight: 500;
+    color: var(--color-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 250px;
+}
+
+/* Speaker name */
+.provenance-speaker-name {
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+/* Confidence indicator (small dot) */
+.provenance-confidence {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-left: 4px;
+}
+
+.provenance-confidence-high {
+    background: #10b981; /* green */
+}
+
+.provenance-confidence-medium {
+    background: #f59e0b; /* amber */
+}
+
+.provenance-confidence-low {
+    background: #ef4444; /* red */
+}
+
+/* Quote snippet */
+.provenance-quote-text {
+    font-style: italic;
+    color: var(--color-text-secondary);
+    opacity: 0.9;
+    line-height: 1.4;
+}
+
+/* Jump to transcript button */
+.task-provenance-jump {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(147, 51, 234, 0.1));
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 6px;
+    color: var(--color-primary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    align-self: flex-start;
+}
+
+.task-provenance-jump:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(147, 51, 234, 0.15));
+    border-color: rgba(99, 102, 241, 0.5);
+    transform: translateX(2px);
+}
+
+.task-provenance-jump:active {
+    transform: translateX(0);
+}
+
+.task-provenance-jump svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .task-provenance {
+        font-size: 12px;
+        padding: 10px;
+    }
+
+    .provenance-meeting-title {
+        max-width: 180px;
+    }
+
+    .task-provenance-jump {
+        font-size: 11px;
+        padding: 5px 10px;
+    }
+}
+
+/* Tooltip for long quotes */
+.task-provenance-quote[title]:hover {
+    cursor: help;
+}
+
+/* Animation on appearance */
+@keyframes fadeInProvenance {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.task-provenance {
+    animation: fadeInProvenance 0.3s ease-out;
+}
+
+/* Hidden state */
+.task-provenance.hidden {
+    display: none;
+}
