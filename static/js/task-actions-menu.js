@@ -86,22 +86,35 @@ class TaskActionsMenu {
      * @param {HTMLElement} trigger - Menu trigger button
      */
     toggleMenu(trigger) {
+        console.log('[TaskActionsMenu] toggleMenu called');
         const taskId = trigger.dataset.taskId;
+        console.log('[TaskActionsMenu] taskId:', taskId);
+        console.log('[TaskActionsMenu] window.taskStore exists:', !!window.taskStore);
+        
         const taskCard = trigger.closest('.task-card');
-        if (!taskCard) return;
+        if (!taskCard) {
+            console.warn('[TaskActionsMenu] No task card found for trigger');
+            return;
+        }
 
         // Close existing menu if open
         if (this.activeMenu) {
             this.closeMenu();
             // If clicking same trigger, just close (don't reopen)
             if (this.activeMenu.dataset.taskId === taskId) {
+                console.log('[TaskActionsMenu] Toggling same menu - closing only');
                 return;
             }
         }
 
-        // Get task data
+        // Get task data - but don't fail silently
         const task = window.taskStore?.getTaskById(taskId);
-        if (!task) return;
+        console.log('[TaskActionsMenu] task data:', task);
+        
+        if (!task) {
+            console.error('[TaskActionsMenu] Task not found in taskStore. TaskId:', taskId, 'TaskStore:', window.taskStore);
+            // Continue anyway for debugging - create menu without task data
+        }
 
         // Create menu
         const menu = document.createElement('div');
@@ -143,15 +156,25 @@ class TaskActionsMenu {
             </div>
         `;
 
-        // Position menu relative to trigger
+        // Position menu - append to body to avoid CSS clipping (Golden Standard)
+        document.body.appendChild(menu);
+        
+        // Calculate position
         const triggerRect = trigger.getBoundingClientRect();
-        const actionsContainer = trigger.closest('.task-actions');
-        actionsContainer.style.position = 'relative';
-        actionsContainer.appendChild(menu);
+        menu.style.position = 'fixed';
+        menu.style.top = (triggerRect.bottom + 4) + 'px';
+        menu.style.right = (window.innerWidth - triggerRect.right) + 'px';
+        menu.style.zIndex = '1000';
+        
+        console.log('[TaskActionsMenu] Menu positioned at:', {
+            top: menu.style.top,
+            right: menu.style.right
+        });
 
         // Show menu with animation
         requestAnimationFrame(() => {
             menu.classList.add('visible');
+            console.log('[TaskActionsMenu] Menu should be visible now');
         });
 
         // Update trigger state
