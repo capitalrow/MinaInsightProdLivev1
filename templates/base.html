@@ -169,6 +169,9 @@
     <!-- Cache Validator with Checksum Validation -->
     <script src="{{ url_for('static', filename='js/cache-validator.js') }}"></script>
     
+    <!-- CROWN⁴.6 Unified Cache Bootstrap (initializes cacheManager across all pages) -->
+    <script src="{{ url_for('static', filename='js/cache-bootstrap.js') }}" nonce="{{ g.csp_nonce }}"></script>
+    
     <!-- CROWN⁴ BroadcastChannel Multi-Tab Synchronization -->
     <script src="{{ url_for('static', filename='js/broadcast-sync.js') }}"></script>
     
