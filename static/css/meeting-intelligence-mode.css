@@ -1,0 +1,248 @@
+/**
+ * CROWN⁴.6 Meeting Intelligence Mode
+ * Styles for meeting-grouped task view
+ */
+
+/* Toggle Button */
+.meeting-intelligence-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.meeting-intelligence-toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.meeting-intelligence-toggle.active {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2));
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #c4b5fd;
+}
+
+.meeting-intelligence-toggle svg {
+    flex-shrink: 0;
+}
+
+.toggle-label {
+    white-space: nowrap;
+}
+
+/* Meeting Intelligence View Container */
+.meeting-intelligence-view {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Meeting Group */
+.meeting-group {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.meeting-group:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Meeting Group Header */
+.meeting-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(59, 130, 246, 0.08));
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 1rem;
+}
+
+.meeting-header-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.meeting-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2));
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 10px;
+    color: #c4b5fd;
+    flex-shrink: 0;
+}
+
+.no-meeting-icon {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(251, 191, 36, 0.15));
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #fcd34d;
+}
+
+.meeting-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.meeting-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+    margin: 0 0 0.25rem 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.meeting-date {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 500;
+}
+
+/* Meeting Stats */
+.meeting-stats {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-shrink: 0;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.125rem;
+}
+
+.stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.6875rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.stat-pending .stat-value {
+    color: #fbbf24;
+}
+
+.stat-completed .stat-value {
+    color: #22c55e;
+}
+
+.stat-divider {
+    width: 1px;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Meeting Group Tasks */
+.meeting-group-tasks {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+    gap: 0.5rem;
+}
+
+.meeting-group-tasks .task-card {
+    margin: 0;
+}
+
+/* No Meeting Group Variant */
+.no-meeting-group .meeting-group-header {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(251, 191, 36, 0.08));
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.9375rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .meeting-intelligence-toggle .toggle-label {
+        display: none;
+    }
+    
+    .meeting-group-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .meeting-header-content {
+        width: 100%;
+    }
+    
+    .meeting-stats {
+        width: 100%;
+        justify-content: space-around;
+        padding-top: 0.75rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .stat-divider {
+        height: 40px;
+    }
+}
+
+@media (max-width: 480px) {
+    .meeting-group-tasks {
+        padding: 0.25rem;
+    }
+    
+    .meeting-icon {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .meeting-title {
+        font-size: 0.9375rem;
+    }
+    
+    .meeting-date {
+        font-size: 0.75rem;
+    }
+}
+
+/* Dark mode optimization */
+@media (prefers-color-scheme: dark) {
+    .meeting-group {
+        background: rgba(255, 255, 255, 0.01);
+    }
+    
+    .meeting-group-header {
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.06), rgba(59, 130, 246, 0.06));
+    }
+}
