@@ -2786,4 +2786,158 @@ def get_task_history(task_id):
     except Exception as e:
         logger.error(f"Error loading history for task {task_id}: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+
+# CROWN⁴.5 Phase 1: EventSequencer API Endpoints
+
+
+@api_tasks_bp.route('/events', methods=['GET'], strict_slashes=False)
+@login_required
+def get_events():
+    """
+    CROWN⁴.5: Get event ledger entries for the current workspace.
+    Supports filtering by entity_type, entity_id, and pagination.
+    """
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        entity_type = request.args.get('entity_type', None)
+        entity_id = request.args.get('entity_id', None)
+        
+        # Base query - events from current workspace (SQLAlchemy 2.0 style)
+        stmt = select(EventLedger).filter_by(
+            workspace_id=str(current_user.workspace_id)
+        )
+        
+        # Apply filters
+        if entity_type:
+            stmt = stmt.filter_by(entity_type=entity_type)
+        
+        if entity_id:
+            stmt = stmt.filter_by(entity_id=str(entity_id))
+        
+        # Order by sequence number (newest first)
+        stmt = stmt.order_by(EventLedger.sequence_num.desc())
+        
+        # Execute and paginate
+        events = db.paginate(stmt, page=page, per_page=per_page, error_out=False)
+        
+        return jsonify({
+            'success': True,
+            'events': [event.to_dict() for event in events.items],
+            'pagination': {
+                'page': events.page,
+                'per_page': events.per_page,
+                'total': events.total,
+                'pages': events.pages
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching events: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+
+@api_tasks_bp.route('/events/validate', methods=['POST'], strict_slashes=False)
+@login_required
+def validate_event():
+    """
+    CROWN⁴.5: Validate event payload and check for sequence gaps.
+    Used for debugging and event integrity verification.
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        # Import EventSequencer for validation
+        from services.event_sequencer import EventSequencer
+        
+        # Validate checksum if provided
+        valid_checksum = True
+        if 'payload' in data and 'checksum' in data:
+            expected_checksum = EventSequencer.generate_checksum(data['payload'])
+            valid_checksum = expected_checksum == data['checksum']
+        
+        # Check for sequence gaps (if entity_id provided)
+        has_gaps = False
+        gap_details = None
+        if 'entity_id' in data and 'sequence_num' in data:
+            stmt = select(EventLedger).filter_by(
+                entity_type=data.get('entity_type', 'task'),
+                entity_id=str(data['entity_id']),
+                workspace_id=str(current_user.workspace_id)
+            ).order_by(EventLedger.sequence_num.desc())
+            last_event = db.session.execute(stmt).scalar_one_or_none()
+            
+            if last_event:
+                expected_seq = last_event.sequence_num + 1
+                if data['sequence_num'] > expected_seq:
+                    has_gaps = True
+                    gap_details = {
+                        'last_sequence': last_event.sequence_num,
+                        'received_sequence': data['sequence_num'],
+                        'gap_size': data['sequence_num'] - expected_seq
+                    }
+        
+        return jsonify({
+            'success': True,
+            'validation': {
+                'checksum_valid': valid_checksum,
+                'has_sequence_gaps': has_gaps,
+                'gap_details': gap_details
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error validating event: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+
+@api_tasks_bp.route('/telemetry', methods=['GET'], strict_slashes=False)
+@login_required
+def get_telemetry():
+    """
+    CROWN⁴.5 Phase 2.1 Batch 1: Get telemetry data for event emission and processing.
+    Includes Batch 1 event types and general system metrics.
+    """
+    try:
+        # Import EventSequencer for telemetry
+        from services.event_sequencer import EventSequencer
+        
+        # Get Batch 1 telemetry (last 24 hours)
+        hours = request.args.get('hours', 24, type=int)
+        batch1_telemetry = EventSequencer.get_batch1_telemetry(hours=hours)
+        
+        # Get general event statistics for the workspace
+        total_events = db.session.execute(
+            select(func.count(EventLedger.id)).filter_by(
+                workspace_id=str(current_user.workspace_id)
+            )
+        ).scalar() or 0
+        
+        failed_events = db.session.execute(
+            select(func.count(EventLedger.id)).filter_by(
+                workspace_id=str(current_user.workspace_id),
+                status='failed'
+            )
+        ).scalar() or 0
+        
+        return jsonify({
+            'success': True,
+            'telemetry': {
+                'batch1_events': batch1_telemetry,
+                'workspace_stats': {
+                    'total_events': total_events,
+                    'failed_events': failed_events,
+                    'success_rate': ((total_events - failed_events) / total_events * 100) if total_events > 0 else 0
+                },
+                'lookback_hours': hours
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching telemetry: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
         
