@@ -5,7 +5,7 @@ REST API endpoints for task management, CRUD operations, and status updates.
 
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from models import db, Task, Meeting, User, Session, Workspace, TaskComment, EventLedger, EventType
+from models import db, Task, Meeting, User, Session, Workspace, TaskComment, EventLedger, EventType, Segment
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_, select
 from utils.etag_helper import with_etag, compute_collection_etag
@@ -170,21 +170,93 @@ def get_task(task_id):
                 'meeting': {
                     'id': task.meeting.id,
                     'title': task.meeting.title,
-                    'date': task.meeting.date.isoformat() if task.meeting.date else None
+                    'date': task.meeting.created_at.isoformat() if task.meeting.created_at else None
                 } if task.meeting else None,
                 'assignees': assignees_data
             }
         else:
-            # Full detail (default)
+            # Full detail (default) - include meeting info for CROWN⁴.6
             response = {
                 'success': True,
-                'task': task.to_dict()
+                'task': task.to_dict(include_relationships=True)
             }
         
         return jsonify(response)
         
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_tasks_bp.route('/<int:task_id>/transcript-context', methods=['GET'])
+@login_required
+def get_task_transcript_context(task_id):
+    """Get transcript context for a task (CROWN⁴.6 feature).
+    
+    Returns the spoken context, speaker, and transcript snippet where this task was mentioned.
+    Used for preview tooltips and spoken provenance UI.
+    """
+    try:
+        # Fetch task and verify workspace access
+        task = db.session.query(Task).join(Meeting).filter(
+            Task.id == task_id,
+            Meeting.workspace_id == current_user.workspace_id
+        ).first()
+        
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # Check if task has transcript context
+        if not task.transcript_span or not task.extraction_context:
+            return jsonify({
+                'success': True,
+                'context': None,
+                'message': 'No transcript context available'
+            })
+        
+        # Build context response
+        transcript_span = task.transcript_span
+        extraction_context = task.extraction_context
+        
+        # Fetch the actual segment text if segment_ids are available
+        segment_texts = []
+        if transcript_span.get('segment_ids'):
+            from sqlalchemy import select
+            stmt = select(Segment).filter(Segment.id.in_(transcript_span['segment_ids']))
+            segments = db.session.execute(stmt).scalars().all()
+            segment_texts = [seg.text for seg in segments]
+        
+        context_response = {
+            'task_id': task.id,
+            'task_title': task.title,
+            'meeting_id': task.meeting_id,
+            'meeting_title': task.meeting.title if task.meeting else None,
+            'speaker': extraction_context.get('speaker'),
+            'quote': extraction_context.get('quote', ''),
+            'full_segments': segment_texts,
+            'confidence': task.confidence_score,
+            'start_ms': transcript_span.get('start_ms'),
+            'end_ms': transcript_span.get('end_ms'),
+            'start_time_formatted': format_ms_to_time(transcript_span.get('start_ms')) if transcript_span.get('start_ms') else None
+        }
+        
+        return jsonify({
+            'success': True,
+            'context': context_response
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching transcript context for task {task_id}: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+def format_ms_to_time(milliseconds):
+    """Format milliseconds to MM:SS format."""
+    if not milliseconds:
+        return "00:00"
+    total_seconds = milliseconds // 1000
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
+    return f"{minutes:02d}:{seconds:02d}"
 
 
 @api_tasks_bp.route('/', methods=['POST'])
