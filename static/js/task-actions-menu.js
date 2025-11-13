@@ -108,7 +108,7 @@ class TaskActionsMenu {
         }
 
         // Get task data - but don't fail silently
-        const task = window.taskStore?.getTaskById(taskId);
+        const task = window.taskStore?.getTask(taskId);
         console.log('[TaskActionsMenu] task data:', task);
         
         if (!task) {
@@ -275,7 +275,7 @@ class TaskActionsMenu {
      * @param {string|number} taskId - Task ID
      */
     async handleArchive(taskId) {
-        const task = window.taskStore?.getTaskById(taskId);
+        const task = window.taskStore?.getTask(taskId);
         if (!task) return;
 
         // Archive confirmation
@@ -315,7 +315,7 @@ class TaskActionsMenu {
      * @param {string|number} taskId - Task ID
      */
     showDeleteConfirmation(taskId) {
-        const task = window.taskStore?.getTaskById(taskId);
+        const task = window.taskStore?.getTask(taskId);
         if (!task) return;
 
         this.showModal({
@@ -355,7 +355,7 @@ class TaskActionsMenu {
      * @param {string|number} taskId - Task ID
      */
     async handleDuplicate(taskId) {
-        const task = window.taskStore?.getTaskById(taskId);
+        const task = window.taskStore?.getTask(taskId);
         if (!task) return;
 
         try {
