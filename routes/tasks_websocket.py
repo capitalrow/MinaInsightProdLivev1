@@ -363,12 +363,33 @@ def register_tasks_namespace(socketio):
             session_id = data.get('session_id')
             queue_data = data.get('queue_data', [])
             
-            # Flask-SQLAlchemy 3.x syntax
+            # Flask-SQLAlchemy 3.x syntax with defensive deduplication
             stmt = select(OfflineQueue).filter_by(
                 user_id=user_id,
                 session_id=session_id
             )
-            existing = db.session.execute(stmt).scalar_one_or_none()
+            
+            # Defensive handling: if duplicates exist, clean them up
+            try:
+                existing = db.session.execute(stmt).scalar_one_or_none()
+            except Exception as scalar_err:
+                # Multiple rows found - clean up duplicates
+                logger.warning(f"Multiple offline queue rows found for user {user_id}, session {session_id}. Deduplicating...")
+                all_records = db.session.execute(stmt).scalars().all()
+                
+                # Keep the most recent, delete the rest
+                if all_records:
+                    sorted_records = sorted(all_records, key=lambda r: r.updated_at, reverse=True)
+                    existing = sorted_records[0]
+                    
+                    # Delete duplicates
+                    for duplicate in sorted_records[1:]:
+                        db.session.delete(duplicate)
+                        logger.info(f"Deleted duplicate offline_queue record ID {duplicate.id}")
+                    
+                    db.session.commit()
+                else:
+                    existing = None
             
             if existing:
                 existing.queue_data = queue_data
