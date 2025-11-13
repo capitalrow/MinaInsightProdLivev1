@@ -49,6 +49,9 @@ class Task(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     
+    # CROWN⁴.5: Workspace isolation (CRITICAL for multi-tenant security)
+    workspace_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    
     # Task content
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
