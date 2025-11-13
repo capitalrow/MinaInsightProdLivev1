@@ -5,6 +5,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=5">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-heatmap.css') }}?v=1">
 {% endblock %}
 
 {% block content %}
@@ -135,12 +136,18 @@
     <!-- AI Proposals Section (CROWN⁴.5 Task 10) -->
     <div id="ai-proposals-container"></div>
 
+    <!-- CROWN⁴.6 Meeting Heatmap -->
+    <div id="meeting-filter-indicator"></div>
+    <div id="meeting-heatmap-container"></div>
+
     <!-- Task List Container (CROWN⁴.5 Required Structure) -->
     <div id="tasks-list-container" class="tasks-list-container">
         {% if tasks and tasks|length > 0 %}
             {% for task in tasks %}
             <div class="task-card{% if task.completed %} completed{% endif %}" 
                  data-task-id="{{ task.id }}"
+                 data-meeting-id="{{ task.meeting_id or '' }}"
+                 data-extracted-by-ai="{{ 'true' if task.extracted_by_ai else 'false' }}"
                  data-status="{% if task.completed %}completed{% else %}pending{% endif %}"
                  data-priority="{{ task.priority|default('medium')|lower }}"
                  data-assigned-to="{{ task.assigned_to_id or '' }}"
@@ -2709,4 +2716,5 @@
 <!-- CROWN⁴.6: Meeting-Native Features -->
 <script src="{{ url_for('static', filename='js/task-transcript-navigation.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='js/task-spoken-provenance.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/meeting-heatmap.js') }}?v=1"></script>
 {% endblock %}
