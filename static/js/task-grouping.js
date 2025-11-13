@@ -8,6 +8,8 @@
  * - All Other Tasks: Catch-all section
  */
 
+console.log('🔧 [TaskGrouping] FILE LOADED - Starting module initialization...');
+
 class TaskGrouping {
     constructor(taskStore) {
         this.taskStore = taskStore;
@@ -60,6 +62,22 @@ class TaskGrouping {
      * @returns {Object} Grouped tasks
      */
     groupTasks(tasks) {
+        console.log(`🔧 [TaskGrouping] groupTasks() called with ${tasks.length} tasks`);
+        
+        // Log sample task to verify data structure
+        if (tasks.length > 0) {
+            const sample = tasks[0];
+            console.log('🔧 [TaskGrouping] Sample task fields:', {
+                id: sample.id,
+                title: sample.title?.substring(0, 30),
+                is_pinned: sample.is_pinned,
+                updated_at: sample.updated_at,
+                due_date: sample.due_date,
+                meeting_id: sample.meeting_id,
+                meeting_title: sample.meeting_title
+            });
+        }
+        
         const now = Date.now();
         const oneDayAgo = now - (24 * 60 * 60 * 1000);
         const sevenDaysFromNow = now + (7 * 24 * 60 * 60 * 1000);
@@ -125,6 +143,15 @@ class TaskGrouping {
             const aLatest = Math.max(...a.tasks.map(t => new Date(t.created_at).getTime()));
             const bLatest = Math.max(...b.tasks.map(t => new Date(t.created_at).getTime()));
             return bLatest - aLatest;
+        });
+
+        // Log grouping results
+        console.log('🔧 [TaskGrouping] Grouping results:', {
+            pinned: groups.pinned.length,
+            recentlyUpdated: groups.recentlyUpdated.length,
+            dueSoon: groups.dueSoon.length,
+            meetings: groups.meetingsList.length,
+            other: groups.other.length
         });
 
         return groups;
@@ -295,5 +322,10 @@ class TaskGrouping {
 }
 
 // Export for use in task page
-window.TaskGrouping = TaskGrouping;
-console.log('✅ TaskGrouping module loaded');
+try {
+    window.TaskGrouping = TaskGrouping;
+    console.log('✅ [TaskGrouping] Module exported to window.TaskGrouping');
+    console.log('✅ [TaskGrouping] Verification: window.TaskGrouping exists?', typeof window.TaskGrouping !== 'undefined');
+} catch (error) {
+    console.error('❌ [TaskGrouping] Failed to export module:', error);
+}
