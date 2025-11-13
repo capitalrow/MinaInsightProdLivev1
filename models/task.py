@@ -49,9 +49,6 @@ class Task(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     
-    # CROWN⁴.5: Workspace isolation (CRITICAL for multi-tenant security)
-    workspace_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    
     # Task content
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
@@ -233,15 +230,8 @@ class Task(Base):
         if self.watchers and user_id in self.watchers:
             self.watchers.remove(user_id)
 
-    def to_dict(self, include_relationships=False, include_crown_metadata=False, crown_event=None, fetch_crown_if_missing=True):
-        """Convert task to dictionary for JSON serialization.
-        
-        Args:
-            include_relationships: Include related objects (assignees, meeting, etc.)
-            include_crown_metadata: Include CROWN⁴.5 event metadata
-            crown_event: Pre-fetched EventLedger instance (avoids N+1 queries)
-            fetch_crown_if_missing: If True and crown_event is None, query EventLedger. If False, return None values without querying.
-        """
+    def to_dict(self, include_relationships=False):
+        """Convert task to dictionary for JSON serialization."""
         data = {
             'id': self.id,
             'title': self.title,
@@ -284,42 +274,6 @@ class Task(Base):
             'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None,
             'deleted_by_user_id': self.deleted_by_user_id,
         }
-        
-        # CROWN⁴.5: Add event metadata for multi-tab sync, drift detection, and event sequencing
-        if include_crown_metadata:
-            if crown_event:
-                # Use pre-fetched event (bulk query optimization)
-                data['_crown_event_id'] = crown_event.id
-                data['_crown_checksum'] = crown_event.checksum
-                data['_crown_sequence_num'] = crown_event.sequence_num
-            elif fetch_crown_if_missing:
-                # Fallback: query EventLedger (only for single-task endpoints like create/get)
-                try:
-                    from models.event_ledger import EventLedger
-                    latest_event = EventLedger.query.filter_by(
-                        entity_type='task',
-                        entity_id=str(self.id)
-                    ).order_by(EventLedger.sequence_num.desc()).first()
-                    
-                    if latest_event:
-                        data['_crown_event_id'] = latest_event.id
-                        data['_crown_checksum'] = latest_event.checksum
-                        data['_crown_sequence_num'] = latest_event.sequence_num
-                    else:
-                        data['_crown_event_id'] = None
-                        data['_crown_checksum'] = None
-                        data['_crown_sequence_num'] = None
-                except Exception as e:
-                    import logging
-                    logging.warning(f"Failed to fetch CROWN metadata for task {self.id}: {e}")
-                    data['_crown_event_id'] = None
-                    data['_crown_checksum'] = None
-                    data['_crown_sequence_num'] = None
-            else:
-                # Bulk hydration was performed; no event found, return None without querying
-                data['_crown_event_id'] = None
-                data['_crown_checksum'] = None
-                data['_crown_sequence_num'] = None
         
         if include_relationships:
             if self.assigned_to:

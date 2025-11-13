@@ -99,15 +99,14 @@ class EventSequencer:
             
             telemetry = {}
             for event_type_enum, event_type_str in batch1_event_types:
-                # Use .value to get the string representation for database comparison
                 total = db.session.query(func.count(EventLedger.id)).filter(
-                    EventLedger.event_type == event_type_enum.value,
+                    EventLedger.event_type == event_type_enum,
                     EventLedger.created_at >= cutoff
                 ).scalar() or 0
                 
                 errors = db.session.query(func.count(EventLedger.id)).filter(
-                    EventLedger.event_type == event_type_enum.value,
-                    EventLedger.status == EventStatus.FAILED.value,
+                    EventLedger.event_type == event_type_enum,
+                    EventLedger.status == EventStatus.FAILED,
                     EventLedger.created_at >= cutoff
                 ).scalar() or 0
                 
