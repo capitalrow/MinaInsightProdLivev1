@@ -307,8 +307,12 @@ def tasks():
     in_progress_tasks = [t for t in all_tasks if t.status == 'in_progress']
     completed_tasks = [t for t in all_tasks if t.status == 'completed'][:10]
     
+    # CROWN⁴.6: Serialize tasks for frontend (fixes JSON serialization of to_dict method)
+    tasks_serialized = [t.to_dict() for t in all_tasks]
+    
     return render_template('dashboard/tasks.html',
                          tasks=all_tasks,
+                         tasks_json=tasks_serialized,
                          todo_tasks=todo_tasks,
                          in_progress_tasks=in_progress_tasks,
                          completed_tasks=completed_tasks)
