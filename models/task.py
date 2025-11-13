@@ -7,6 +7,7 @@ from typing import Optional, TYPE_CHECKING
 from datetime import datetime, date
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, Integer, DateTime, Date, Text, Boolean, ForeignKey, func, JSON, Float, Index
+from pgvector.sqlalchemy import Vector
 from .base import Base
 
 # Forward reference for type checking
@@ -117,6 +118,11 @@ class Task(Base):
     
     # CROWN⁴.5 Phase 3: Task ordering/positioning for drag-drop
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # Display order (lower = higher priority)
+    
+    # CROWN⁴.6: Semantic search embeddings
+    embedding: Mapped[Optional[list]] = mapped_column(Vector(1536), nullable=True)  # OpenAI embedding vector (1536-dim)
+    embedding_model: Mapped[Optional[str]] = mapped_column(String(64), default="text-embedding-3-small")
+    embedding_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Dependencies and relationships
     depends_on_task_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True)
@@ -231,7 +237,12 @@ class Task(Base):
             self.watchers.remove(user_id)
 
     def to_dict(self, include_relationships=False):
-        """Convert task to dictionary for JSON serialization."""
+        """Convert task to dictionary for JSON serialization.
+        
+        Note: Embedding fields (embedding, embedding_model, embedding_updated_at) are intentionally 
+        excluded from serialization to avoid pgvector.Vector JSON serialization issues and reduce 
+        payload size (1536-dim vectors are large). Embeddings are only used for backend similarity search.
+        """
         data = {
             'id': self.id,
             'title': self.title,
@@ -275,6 +286,7 @@ class Task(Base):
             'emotional_state': self.emotional_state,
             'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None,
             'deleted_by_user_id': self.deleted_by_user_id,
+            # CROWN⁴.6: embedding, embedding_model, embedding_updated_at intentionally excluded
         }
         
         if include_relationships:

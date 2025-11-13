@@ -7,7 +7,7 @@ from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
 from models import db, Task, Meeting, User, Session, Workspace, TaskComment, EventLedger, EventType, Segment
 from datetime import datetime, date, timedelta
-from sqlalchemy import func, and_, or_, select
+from sqlalchemy import func, and_, or_, select, text
 from utils.etag_helper import with_etag, compute_collection_etag
 from utils.auth import admin_required
 # server/routes/api_tasks.py
@@ -17,6 +17,7 @@ from models.summary import Summary
 from services.event_broadcaster import EventBroadcaster
 from services.event_sequencer import event_sequencer
 from services.deduper import deduper
+from services.task_embedding_service import get_embedding_service
 
 logger = logging.getLogger(__name__)
 event_broadcaster = EventBroadcaster()
@@ -68,13 +69,69 @@ def list_tasks():
         if meeting_id:
             stmt = stmt.where(Task.meeting_id == meeting_id)
         
+        # CROWN⁴.6: Semantic search support
+        semantic = request.args.get('semantic', 'false').lower() == 'true'
+        semantic_mode_active = False  # Track if semantic ordering was applied
+        
         if search:
-            stmt = stmt.where(
-                or_(
-                    Task.title.contains(search),
-                    Task.description.contains(search)
+            if semantic:
+                # Try semantic search with pgvector cosine similarity
+                embedding_service = get_embedding_service()
+                if embedding_service.is_available():
+                    try:
+                        # Generate embedding for search query
+                        query_embedding = embedding_service.generate_embedding(search)
+                        
+                        if query_embedding:
+                            # Use pgvector.sqlalchemy cosine_distance for similarity search
+                            # Scoped to workspace via existing Meeting join
+                            from sqlalchemy import func
+                            
+                            # Filter tasks with embeddings
+                            stmt = stmt.where(Task.embedding.isnot(None))
+                            
+                            # Order by cosine similarity (distance) - lower distance = more similar
+                            stmt = stmt.order_by(Task.embedding.cosine_distance(query_embedding))
+                            
+                            # Limit to top 50 most similar tasks
+                            stmt = stmt.limit(50)
+                            
+                            semantic_mode_active = True  # Flag to skip default ordering
+                            logger.info(f"Semantic search active for query: '{search[:50]}...'")
+                        else:
+                            # Fall back to keyword search
+                            logger.warning("Failed to generate query embedding, falling back to keyword search")
+                            stmt = stmt.where(
+                                or_(
+                                    Task.title.contains(search),
+                                    Task.description.contains(search)
+                                )
+                            )
+                    except Exception as e:
+                        logger.error(f"Semantic search failed: {e}, falling back to keyword search")
+                        # Fall back to keyword search
+                        stmt = stmt.where(
+                            or_(
+                                Task.title.contains(search),
+                                Task.description.contains(search)
+                            )
+                        )
+                else:
+                    # Embedding service not available, fall back to keyword search
+                    stmt = stmt.where(
+                        or_(
+                            Task.title.contains(search),
+                            Task.description.contains(search)
+                        )
+                    )
+            else:
+                # Regular keyword search
+                stmt = stmt.where(
+                    or_(
+                        Task.title.contains(search),
+                        Task.description.contains(search)
+                    )
                 )
-            )
         
         # Due date filters
         if due_date_filter:
@@ -99,12 +156,14 @@ def list_tasks():
         
         # Order by position (drag-drop), then priority and due date
         # CROWN⁴.5 Phase 3: Position-based ordering for drag-drop reordering
-        stmt = stmt.order_by(
-            Task.position.asc(),
-            Task.priority.desc(),
-            Task.due_date.asc().nullslast(),
-            Task.created_at.desc()
-        )
+        # CROWN⁴.6: Skip default ordering if semantic search is active (preserve cosine similarity ordering)
+        if not semantic_mode_active:
+            stmt = stmt.order_by(
+                Task.position.asc(),
+                Task.priority.desc(),
+                Task.due_date.asc().nullslast(),
+                Task.created_at.desc()
+            )
         
         # Paginate
         tasks = db.paginate(stmt, page=page, per_page=per_page, error_out=False)
