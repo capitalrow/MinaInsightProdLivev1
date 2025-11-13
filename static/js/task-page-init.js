@@ -13,6 +13,14 @@
     const initTaskActionsMenu = () => {
         console.log('[DEBUG] initTaskActionsMenu() called');
         
+        // Check if taskStore is available (critical dependency)
+        if (!window.taskStore) {
+            console.warn('⚠️ taskStore not available yet, waiting for taskStoreReady event...');
+            // Listen for taskStore ready event
+            window.addEventListener('taskStoreReady', initTaskActionsMenu, { once: true });
+            return;
+        }
+        
         // Check if optimisticUI is available
         if (!window.optimisticUI) {
             console.warn('⚠️ optimisticUI not available yet, retrying in 100ms...');
@@ -31,6 +39,7 @@
             window.taskActionsMenu = new window.TaskActionsMenu(window.optimisticUI);
             console.log('✅ Task actions menu initialized successfully');
             console.log('[DEBUG] taskActionsMenu instance created:', !!window.taskActionsMenu);
+            console.log('[DEBUG] taskStore available:', !!window.taskStore);
         } catch (error) {
             console.error('❌ Failed to initialize TaskActionsMenu:', error);
         }
