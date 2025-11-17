@@ -44,13 +44,17 @@ def list_tasks():
         # Base query - tasks from meetings in user's workspace (exclude soft-deleted by default)
         include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
         
-        # CROWN⁴.6 OPTIMIZATION: Eager load relationships to prevent N+1 queries
-        # Assignees: selectinload for many-to-many (more efficient than joinedload)
-        # Meeting: joinedload for foreign key relationship (already joined in query)
+        # CROWN⁴.6 OPTIMIZATION: Eager load ALL relationships to prevent N+1 queries
+        # Performance target: <500ms for full sync with 15+ tasks
+        # - assignees: selectinload for many-to-many (more efficient than joinedload)
+        # - meeting: joinedload since we're already joining on Meeting table
+        # - assigned_to, created_by, deleted_by: joinedload for single FK relationships
         stmt = select(Task).join(Meeting).options(
             selectinload(Task.assignees),
+            joinedload(Task.meeting),
             joinedload(Task.assigned_to),
-            joinedload(Task.created_by)
+            joinedload(Task.created_by),
+            joinedload(Task.deleted_by)
         ).where(
             Meeting.workspace_id == current_user.workspace_id
         )
@@ -360,7 +364,7 @@ def get_meeting_heatmap():
             task_counts, Meeting.id == task_counts.c.meeting_id
         ).filter(
             Meeting.workspace_id == current_user.workspace_id,
-            Meeting.deleted_at.is_(None)
+            Meeting.archived == False
         ).order_by(
             func.coalesce(task_counts.c.total_tasks, 0).desc(),
             Meeting.created_at.desc()
