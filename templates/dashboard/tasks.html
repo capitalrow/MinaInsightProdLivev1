@@ -660,6 +660,8 @@ console.log('[CROWN⁴.6] Loaded', window.tasks.length, 'tasks for provenance UI
 <script src="{{ url_for('static', filename='js/task-detail-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <!-- CROWN⁴.6: TaskGrouping MUST load BEFORE task-bootstrap.js -->
 <script src="{{ url_for('static', filename='js/task-grouping.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- CROWN⁴.6: PerformanceValidator MUST load BEFORE task-bootstrap.js to capture first paint event -->
+<script src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <!-- CROWN⁴.5 Phase 1.7: PrefetchController with Task Adapter -->
 <script src="{{ url_for('static', filename='js/prefetch-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-prefetch-adapter.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -681,7 +683,7 @@ console.log('[CROWN⁴.6] Loaded', window.tasks.length, 'tasks for provenance UI
 <script src="{{ url_for('static', filename='js/task-clustering.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <!-- task-grouping.js moved above task-bootstrap.js for proper dependency loading -->
 <script src="{{ url_for('static', filename='js/haptic-feedback.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- performance-validator.js moved above task-bootstrap.js to capture first paint event -->
 <script src="{{ url_for('static', filename='js/task-keyboard-shortcuts.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
