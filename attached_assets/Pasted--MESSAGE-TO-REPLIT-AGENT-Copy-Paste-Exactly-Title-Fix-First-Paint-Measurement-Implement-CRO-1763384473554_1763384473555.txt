@@ -1,0 +1,237 @@
+
+
+✅ MESSAGE TO REPLIT AGENT — Copy/Paste Exactly
+
+Title: Fix First Paint Measurement + Implement CROWN⁴.6 Baseline for Tasks Page (Stage 1 Only)
+
+I need you to focus ONLY on two things right now:
+
+
+---
+
+PART A — FIX THE BROKEN FIRST PAINT MEASUREMENT
+
+The context:
+
+The “Tasks First Paint” metric is showing N/A.
+
+This means the event task:bootstrap:complete is not being captured before PerformanceValidator runs.
+
+Earlier logs showed navigation–cached loads and immediate bootstrap execution.
+
+
+Your required fix:
+
+1. Ensure performance-validator.js initializes before task-bootstrap.js runs.
+
+
+2. Make sure performanceObserver.start() is called before the bootstrap event can theoretically fire.
+
+
+3. Ensure performance.mark('tasks_first_paint') is triggered in task-bootstrap.js exactly when tasks paint the first DOM layer.
+
+
+4. Ensure the event
+window.dispatchEvent(new CustomEvent("task:bootstrap:complete"))
+fires after the paint mark.
+
+
+
+Acceptance Criteria:
+
+Console should show “Mina.Tasks First Paint: <X>ms” on every page load.
+
+No N/A values.
+
+It must work on:
+
+Full browser refresh
+
+Internal navigation
+
+Mobile preview
+
+
+
+Do not add new features here — just fix the event ordering so First Paint is captured reliably.
+
+
+---
+
+PART B — IMPLEMENT CROWN⁴.6 BASELINE FEATURES (FOUNDATION ONLY)
+
+⚠️ You are not building the full CROWN⁴.6 spec now — only the foundation.
+
+Implement the following four features ONLY:
+
+
+---
+
+1. Semantic Search Toggle UI (no backend yet)
+
+Add a small toggle/button next to the existing search bar labelled:
+
+AI Search
+
+Requirements:
+
+Toggle on/off visually.
+
+No functional semantic search yet.
+
+Toggle state stored in local JS only.
+
+No backend calls.
+
+
+
+---
+
+2. Meeting Intelligence Mode Toggle
+
+Add a toggle in the Tasks header called:
+
+Meeting Mode
+
+When enabled, it simply:
+
+Adds a CSS class (meeting-mode-on) to body
+
+No AI grouping yet
+
+No filters yet
+
+
+UI only.
+
+
+---
+
+3. Stress Indicators (Light Version)
+
+For now, implement basic visual signals only:
+
+If a task is overdue → soft red glow on the due date chip
+
+If > 10 pending tasks → add a small amber dot on the header
+
+
+No computations beyond simple counts.
+
+
+---
+
+4. Developer Performance Panel (Simple Version)
+
+Add a small keyboard shortcut:
+
+Ctrl/Cmd + Shift + M
+
+This should open a lightweight overlay showing:
+
+Tasks First Paint: X ms
+Sync time: Y ms
+Last WS event: Z
+Pending offline mutations: N
+
+Use existing metrics already available in console.
+Do NOT implement new metrics or telemetry — use what exists today.
+
+
+---
+
+OUT OF SCOPE (Do NOT build these yet):
+
+❌ Semantic search backend
+❌ Transcript previews
+❌ Swipe gestures
+❌ Meeting-aware clustering
+❌ Predictive Engine
+❌ Impact Score logic
+❌ NLP confidence grading
+❌ Jump-to-span morph transitions
+❌ Full stress model
+❌ Offline vector clock replay upgrades
+❌ Animation overhaul
+❌ Anything outside Tasks page
+
+Stay strictly within the tasks page, and only implement the 4 UI features above.
+
+
+---
+
+PART C — CONFIRMATION CHECKLIST BEFORE YOU SHOW ME RESULTS
+
+Before sending screenshots back, verify:
+
+Tasks First Paint
+
+NOT N/A
+
+Always < 500ms ideally
+
+Visible on refresh + navigation
+
+
+Semantic Search Toggle
+
+Visible
+
+Toggles on/off
+
+No errors
+
+
+Meeting Mode Toggle
+
+Visible
+
+Adds/removes CSS class
+
+UI reacts (can be subtle)
+
+
+Stress Indicators
+
+Overdue tasks glow
+
+Header shows amber dot when pending > 10
+
+
+Developer Panel
+
+Opens with Cmd/Ctrl + Shift + M
+
+Shows 4 key metrics
+
+
+
+---
+
+Deliverables
+
+1. Updated JS + CSS files (full files if changed)
+
+
+2. Screenshots of:
+
+First Paint metric working
+
+Both new toggles visible
+
+Stress indicator behaviour
+
+Developer panel open
+
+
+
+
+
+---
+
+That’s it — focus only on correctness and completeness here.
+
+
+---
+
+Chin — after the agent completes this, I’ll help you define Stage 2, which brings in Meeting Clustering, Semantic Search, and the emotional UI layer based on spoken context.
