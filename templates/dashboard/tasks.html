@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=5">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/linear-inspired-animations.css') }}?v=1">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-heatmap.css') }}?v=1">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-context-preview.css') }}?v=1">
@@ -712,13 +713,18 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 <!-- Load task page initialization (moved to external file for better CSP compatibility) -->
 <script src="{{ url_for('static', filename='js/task-page-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
+<!-- CROWN⁴.6: Linear-Inspired Performance & Animations -->
+<script src="{{ url_for('static', filename='js/tasks-linear-inspired.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/emotional-task-ui.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/spoken-provenance-ui.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+
 <!-- CROWN⁴.6: Meeting-Native Features -->
-<script src="{{ url_for('static', filename='js/task-transcript-navigation.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/task-spoken-provenance.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/meeting-heatmap.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/task-context-preview.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/meeting-intelligence-mode.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/semantic-search.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/stress-indicators.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/dev-performance-panel.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/task-transcript-navigation.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-spoken-provenance.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/meeting-heatmap.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-context-preview.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/meeting-intelligence-mode.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/semantic-search.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/stress-indicators.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/dev-performance-panel.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 {% endblock %}
