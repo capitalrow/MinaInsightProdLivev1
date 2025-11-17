@@ -8,6 +8,7 @@ from flask_login import login_required, current_user
 from models import db, Task, Meeting, User, Session, Workspace, TaskComment, EventLedger, EventType, Segment
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_, select, text
+from sqlalchemy.orm import joinedload, selectinload
 from utils.etag_helper import with_etag, compute_collection_etag
 from utils.auth import admin_required
 # server/routes/api_tasks.py
@@ -43,7 +44,14 @@ def list_tasks():
         # Base query - tasks from meetings in user's workspace (exclude soft-deleted by default)
         include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
         
-        stmt = select(Task).join(Meeting).where(
+        # CROWN⁴.6 OPTIMIZATION: Eager load relationships to prevent N+1 queries
+        # Assignees: selectinload for many-to-many (more efficient than joinedload)
+        # Meeting: joinedload for foreign key relationship (already joined in query)
+        stmt = select(Task).join(Meeting).options(
+            selectinload(Task.assignees),
+            joinedload(Task.assigned_to),
+            joinedload(Task.created_by)
+        ).where(
             Meeting.workspace_id == current_user.workspace_id
         )
         

@@ -53,6 +53,12 @@ class TaskActionsMenu {
      * Toggle Menu (Open/Close)
      ***************************************************************/
     toggleMenu(trigger) {
+        // CRITICAL FIX: Validate trigger element
+        if (!trigger) {
+            console.error('[TaskActionsMenu] toggleMenu called with null trigger');
+            return;
+        }
+        
         // If this trigger already owns the open menu → close it
         if (this.activeMenu && this.activeTrigger === trigger) {
             this.closeMenu();
@@ -60,7 +66,11 @@ class TaskActionsMenu {
         }
 
         // Otherwise open a new menu
-        const taskId = trigger.dataset.taskId;
+        const taskId = trigger.dataset?.taskId;
+        if (!taskId) {
+            console.error('[TaskActionsMenu] Trigger missing data-task-id attribute');
+            return;
+        }
         this.openGlobalMenu(trigger, taskId);
     }
 
@@ -70,11 +80,19 @@ class TaskActionsMenu {
     closeMenu() {
         if (!this.activeMenu) return;
 
-        this.activeMenu.remove();
+        try {
+            this.activeMenu.remove();
+        } catch (e) {
+            console.warn('[TaskActionsMenu] Error removing menu:', e);
+        }
         this.activeMenu = null;
 
         if (this.activeTrigger) {
-            this.activeTrigger.setAttribute("aria-expanded", "false");
+            try {
+                this.activeTrigger.setAttribute("aria-expanded", "false");
+            } catch (e) {
+                console.warn('[TaskActionsMenu] Error updating trigger:', e);
+            }
         }
 
         this.activeTrigger = null;
@@ -253,6 +271,16 @@ class TaskActionsMenu {
  * NEW — Open Global Floating Command Palette (Option 2)
  ********************************************************************/
     openGlobalMenu(trigger, taskId) {
+        // CRITICAL FIX: Validate inputs
+        if (!trigger) {
+            console.error('[TaskActionsMenu] openGlobalMenu called with null trigger');
+            return;
+        }
+        if (!taskId) {
+            console.error('[TaskActionsMenu] openGlobalMenu called without taskId');
+            return;
+        }
+        
         // Close previous menu if open
         this.closeMenu();
 
