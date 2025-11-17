@@ -284,6 +284,30 @@ class TaskStore {
     getTask(taskId) {
         return this.tasks.get(taskId);
     }
+
+    /**
+     * Backwards-compatible helper for UI modules that expect getTaskById
+     * - Accepts string or number
+     * - Handles temp_ IDs safely
+     */
+    getTaskById(taskId) {
+        // For provisional client-side IDs (temp_...), keep as-is
+        if (typeof taskId === 'string' && taskId.startsWith('temp_')) {
+            return this.tasks.get(taskId);
+        }
+
+        // For normal IDs coming from data-attributes, coerce "417" -> 417
+        let key = taskId;
+        if (typeof taskId === 'string') {
+            const asNumber = Number(taskId);
+            if (!Number.isNaN(asNumber)) {
+                key = asNumber;
+            }
+        }
+
+        return this.tasks.get(key);
+    }
+
     
     /**
      * Get all tasks
