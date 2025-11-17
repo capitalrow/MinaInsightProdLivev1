@@ -1,0 +1,129 @@
+/**
+ * CROWN⁴.6 Stress Indicators
+ * Visual feedback for task overload and overdue tasks
+ */
+
+/* Overdue Task Red Glow */
+.task-card.overdue {
+    border-color: rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.3), 
+                0 0 32px rgba(239, 68, 68, 0.15);
+    animation: pulse-red 2s ease-in-out infinite;
+}
+
+@keyframes pulse-red {
+    0%, 100% {
+        box-shadow: 0 0 16px rgba(239, 68, 68, 0.3), 
+                    0 0 32px rgba(239, 68, 68, 0.15);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.4), 
+                    0 0 40px rgba(239, 68, 68, 0.2);
+    }
+}
+
+.task-card.overdue::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(220, 38, 38, 0.08));
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* Stress Indicator Dot in Header */
+.stress-indicator {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: rgba(251, 191, 36, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: 50%;
+    cursor: help;
+    transition: all 0.2s ease;
+}
+
+.stress-indicator:hover {
+    background: rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.5);
+    transform: scale(1.1);
+}
+
+.stress-dot {
+    width: 12px;
+    height: 12px;
+    background: #fbbf24;
+    border-radius: 50%;
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
+    animation: pulse-amber 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-amber {
+    0%, 100% {
+        box-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
+        opacity: 1;
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(251, 191, 36, 0.8);
+        opacity: 0.8;
+    }
+}
+
+.stress-tooltip {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 0.75rem;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    font-size: 0.75rem;
+    border-radius: 6px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 1000;
+}
+
+.stress-indicator:hover .stress-tooltip {
+    opacity: 1;
+}
+
+/* High stress level (>20 tasks) */
+.stress-indicator.high-stress {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.stress-indicator.high-stress .stress-dot {
+    background: #ef4444;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+}
+
+@keyframes pulse-red-dot {
+    0%, 100% {
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+        opacity: 1;
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+        opacity: 0.8;
+    }
+}
+
+.stress-indicator.high-stress .stress-dot {
+    animation: pulse-red-dot 1.5s ease-in-out infinite;
+}
+
+/* Hidden state */
+.stress-indicator.hidden {
+    display: none;
+}
