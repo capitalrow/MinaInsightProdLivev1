@@ -412,7 +412,7 @@
   border: 1px solid rgba(255, 255, 255, 0.05);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .task-item-enhanced::before {
@@ -3416,7 +3416,7 @@
   flex-direction: column;
   gap: var(--space-2);
   padding-left: var(--space-2);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .task-section-content[aria-hidden="true"] {
@@ -3469,7 +3469,12 @@
 .task-card,
 .task-actions,
 .task-header-row,
-.task-content-enhanced {
+.task-content-enhanced,
+.task-item-enhanced,
+.task-priority-section,
+.task-list-enhanced,
+.tasks-list-container,
+.tasks-container {
     overflow: visible !important;
 }
 
@@ -3580,7 +3585,7 @@
 
     width: 220px;
     max-width: 260px;
-    z-index: 5000 !important; /* Above all UI */
+    z-index: 999999 !important; /* Above all UI */
 
     opacity: 0;
     transform: translate3d(0, 0, 0) scale(0.96);
