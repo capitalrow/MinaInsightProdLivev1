@@ -23,17 +23,30 @@ class MeetingHeatmap {
     async fetchHeatmapData() {
         try {
             const response = await fetch('/api/tasks/meeting-heatmap');
+            
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const errorText = await response.text();
+                console.error(`[MeetingHeatmap] HTTP ${response.status}: ${errorText}`);
+                throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
             }
 
             const data = await response.json();
-            if (data.success) {
+            
+            if (!data.success) {
+                console.error('[MeetingHeatmap] API returned error:', data.message || 'Unknown error');
+                this.meetings = [];
+                // Don't return early - still render the empty state UI
+            } else {
                 this.meetings = data.meetings || [];
-                console.log(`[MeetingHeatmap] Loaded ${this.meetings.length} meetings with tasks`);
+                console.log(`[MeetingHeatmap] ✅ Loaded ${this.meetings.length} meetings with ${data.total_meetings} total`);
             }
+            
         } catch (error) {
-            console.error('[MeetingHeatmap] Error fetching data:', error);
+            console.error('[MeetingHeatmap] Error fetching data:', {
+                message: error.message,
+                stack: error.stack,
+                error: error
+            });
             this.meetings = [];
         }
     }
