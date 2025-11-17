@@ -302,6 +302,11 @@ class TaskActionsMenu {
             top = rect.top - menuHeight - 10;
         }
 
+        // CRITICAL: Prevent menu from going above viewport (negative top)
+        if (top < 10) {
+            top = 10; // Keep at least 10px from top of screen
+        }
+
         // Prevent left off-screen
         if (left < 10) left = 10;
 
