@@ -2415,8 +2415,12 @@ def stream_ai_task_proposals():
                     context_parts.append(f"Meeting: {meeting.title}")
                     
                     # Try to get summary from session
-                    if meeting.session and hasattr(meeting.session, 'summary'):
-                        context_parts.append(f"Summary: {meeting.session.summary[:500]}")
+                    if meeting.session:
+                        summary_obj = db.session.query(Summary).filter_by(session_id=meeting.session.id).first()
+                        if summary_obj and summary_obj.summary_md:
+                            context_parts.append(f"Summary: {summary_obj.summary_md[:500]}")
+                        elif meeting.description:
+                            context_parts.append(f"Description: {meeting.description[:300]}")
                     elif meeting.description:
                         context_parts.append(f"Description: {meeting.description[:300]}")
                 else:
@@ -2429,8 +2433,12 @@ def stream_ai_task_proposals():
                         meeting_summaries = []
                         for m in recent_meetings:
                             summary_text = None
-                            if m.session and hasattr(m.session, 'summary'):
-                                summary_text = m.session.summary[:200]
+                            if m.session:
+                                summary_obj = db.session.query(Summary).filter_by(session_id=m.session.id).first()
+                                if summary_obj and summary_obj.summary_md:
+                                    summary_text = summary_obj.summary_md[:200]
+                                elif m.description:
+                                    summary_text = m.description[:200]
                             elif m.description:
                                 summary_text = m.description[:200]
                             
