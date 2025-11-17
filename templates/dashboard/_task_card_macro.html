@@ -1,0 +1,94 @@
+{# Task Card Macro - Reusable template for server-rendered task cards #}
+{# CROWN⁴.6: Fragment-based hydration for optimistic inserts #}
+
+{% macro task_card(task) %}
+<div class="task-card{% if task.completed %} completed{% endif %}" 
+     data-task-id="{{ task.id }}"
+     data-meeting-id="{{ task.meeting_id or '' }}"
+     data-extracted-by-ai="{{ 'true' if task.extracted_by_ai else 'false' }}"
+     data-status="{% if task.completed %}completed{% else %}pending{% endif %}"
+     data-priority="{{ task.priority|default('medium')|lower }}"
+     data-assigned-to="{{ task.assigned_to_id or '' }}"
+     data-due-date="{{ task.due_date or '' }}"
+     data-labels="{{ task.labels|tojson|escape if task.labels else '[]' }}"
+     data-transcript-span="{{ task.transcript_span|tojson|escape if task.transcript_span else '{}' }}">
+    <div class="checkbox-wrapper">
+        <input type="checkbox" {% if task.completed %}checked{% endif %} class="task-checkbox" data-task-id="{{ task.id }}">
+    </div>
+    <div class="task-content">
+        <h3 class="task-title">{{ task.title or 'Untitled Task' }}</h3>
+        <div class="task-metadata">
+            <span class="task-assignee" data-field="assignee" title="Click to assign">
+                {% if task.assigned_to %}
+                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                    {{ task.assigned_to.display_name or task.assigned_to.username }}
+                {% else %}
+                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                    Unassigned
+                {% endif %}
+            </span>
+            <span class="task-due-date" data-field="due_date" title="Click to set due date">
+                {% if task.due_date %}
+                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+                    {{ task.due_date.strftime('%b %d') }}
+                {% else %}
+                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+                    No due date
+                {% endif %}
+            </span>
+            {% if task.labels and task.labels|length > 0 %}
+                <div class="task-labels" data-field="labels" title="Click to edit labels">
+                    {% for label in task.labels %}
+                        <span class="task-label">{{ label }}</span>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <span class="task-labels-empty" data-field="labels" title="Click to add labels">
+                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z"/></svg>
+                    Add labels
+                </span>
+            {% endif %}
+            
+            {# CROWN⁴.6: Jump to Transcript - Signature Meeting-Native Feature #}
+            {% if task.meeting_id and task.transcript_span and task.transcript_span.start_ms is not none %}
+            <button class="jump-to-transcript-btn" 
+                    data-action="jump-to-transcript"
+                    data-task-id="{{ task.id }}"
+                    title="Jump to the moment in the meeting transcript where this task was mentioned">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                <span>View in Transcript</span>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    <div class="task-actions">
+        {# CROWN⁴.6: Impact Score Badge from Meeting #}
+        {% if task.meeting and task.meeting.analytics and task.meeting.analytics.meeting_effectiveness_score and task.meeting.analytics.meeting_effectiveness_score >= 0.7 %}
+        <span class="impact-score-badge" title="From high-impact meeting ({{ (task.meeting.analytics.meeting_effectiveness_score * 100)|int }}% effectiveness)">
+            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+            High Impact
+        </span>
+        {% endif %}
+        <span class="priority-badge priority-{{ task.priority|default('medium')|lower }}">
+            {{ task.priority|default('medium') }}
+        </span>
+        <button class="task-menu-trigger" 
+                data-task-id="{{ task.id }}"
+                role="button"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-label="Task actions menu"
+                title="More actions">
+            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="5" r="2"/>
+                <circle cx="12" cy="12" r="2"/>
+                <circle cx="12" cy="19" r="2"/>
+            </svg>
+        </button>
+    </div>
+</div>
+{% endmacro %}

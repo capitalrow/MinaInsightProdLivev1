@@ -162,7 +162,7 @@ class MinaTasksLinear {
      * Uses keyed diff-based DOM reconciliation with FLIP animations
      * Per architect guidance: preserve listeners, reorder via insertBefore, <200ms target
      */
-    updateTasksSmooth(newTasks) {
+    async updateTasksSmooth(newTasks) {
         const container = document.getElementById('tasks-list-container');
         if (!container) return;
         
@@ -194,6 +194,7 @@ class MinaTasksLinear {
         
         // DOM Reconciliation: walk newTasks in order, reposition out-of-place nodes
         const nodesToAnimate = [];
+        const newTaskFragments = []; // Track new tasks for batch fragment fetch
         
         for (let i = 0; i < newTasks.length; i++) {
             const task = newTasks[i];
@@ -217,8 +218,29 @@ class MinaTasksLinear {
                 cardMap.delete(task.id); // Mark as processed
             } else {
                 // New task - needs server-rendered fragment
-                // For MVP: trigger reload (architect suggested fetching fragments later)
-                console.log(`[Smooth Update] New task ${task.id} detected - reloading for server-rendered version`);
+                newTaskFragments.push({ task, index: i });
+            }
+        }
+        
+        // Handle new task insertions via fragment hydration
+        if (newTaskFragments.length > 0) {
+            try {
+                // Fetch and insert fragments for all new tasks
+                const hydratedCount = await this.hydrateNewTasks(newTaskFragments, container);
+                
+                if (hydratedCount === 0) {
+                    // All fragments failed - fall back to reload
+                    console.warn(`[Smooth Update] Fragment hydration failed for all ${newTaskFragments.length} tasks - reloading`);
+                    setTimeout(() => window.location.reload(), 100);
+                    return;
+                }
+                
+                // Re-run reconciliation after hydration (tasks now exist in DOM)
+                console.log(`[Smooth Update] Hydrated ${hydratedCount}/${newTaskFragments.length} tasks - re-running reconciliation`);
+                return await this.updateTasksSmooth(newTasks);
+            } catch (error) {
+                console.error(`[Smooth Update] Fragment hydration error:`, error);
+                // Fall back to reload on error
                 setTimeout(() => window.location.reload(), 100);
                 return;
             }
@@ -285,6 +307,77 @@ class MinaTasksLinear {
         if (updateTime > 200) {
             console.warn(`[Performance] Update exceeded 200ms target: ${updateTime.toFixed(2)}ms`);
         }
+    }
+    
+    /**
+     * Hydrate new task cards by fetching server-rendered HTML fragments
+     * CROWN⁴.6: Fragment-based hydration for optimistic inserts
+     * Returns: Number of successfully hydrated tasks
+     */
+    async hydrateNewTasks(newTaskFragments, container) {
+        const fetchPromises = newTaskFragments.map(({ task }) => 
+            fetch(`/api/tasks/${task.id}/html`)
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.success && data.html) {
+                        return { taskId: task.id, html: data.html };
+                    }
+                    throw new Error(`Server returned failure for task ${task.id}`);
+                })
+                .catch(error => {
+                    console.error(`[Fragment Hydration] Failed for task ${task.id}:`, error.message);
+                    return null;
+                })
+        );
+        
+        const fragments = await Promise.all(fetchPromises);
+        let successCount = 0;
+        
+        // Insert HTML fragments into DOM
+        fragments.forEach((fragment, idx) => {
+            if (!fragment) return;
+            
+            const { taskId, html } = fragment;
+            const { index } = newTaskFragments[idx];
+            
+            try {
+                // Create temporary container to parse HTML
+                const temp = document.createElement('div');
+                temp.innerHTML = html;
+                const newCard = temp.firstElementChild;
+                
+                if (!newCard) {
+                    console.error(`[Fragment Hydration] No card element in HTML for task ${taskId}`);
+                    return;
+                }
+                
+                // Insert at correct position
+                const referenceNode = container.children[index] || null;
+                container.insertBefore(newCard, referenceNode);
+                
+                // Add fade-in animation for new card
+                newCard.style.opacity = '0';
+                newCard.style.transform = 'translateY(10px)';
+                
+                requestAnimationFrame(() => {
+                    newCard.style.transition = 'opacity 300ms ease-out, transform 300ms ease-out';
+                    newCard.style.opacity = '1';
+                    newCard.style.transform = 'translateY(0)';
+                });
+                
+                successCount++;
+                console.log(`[Fragment Hydration] Inserted task ${taskId} at position ${index}`);
+            } catch (error) {
+                console.error(`[Fragment Hydration] DOM insertion failed for task ${taskId}:`, error);
+            }
+        });
+        
+        return successCount;
     }
     
     /**
