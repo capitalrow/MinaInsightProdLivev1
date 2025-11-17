@@ -183,6 +183,12 @@ class TaskActionsMenu {
 
         // Get global menu element
         const menu = document.getElementById("task-menu");
+        
+        // Safety check: menu must exist
+        if (!menu) {
+            console.error("[TaskActionsMenu] Menu element #task-menu not found");
+            return;
+        }
 
         // Store task ID for later actions
         menu.dataset.taskId = taskId;
