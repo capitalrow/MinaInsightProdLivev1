@@ -670,14 +670,9 @@ class PerformanceValidator {
     }
 }
 
-// Initialize global instance
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.performanceValidator = new PerformanceValidator();
-    });
-} else {
-    window.performanceValidator = new PerformanceValidator();
-}
+// Initialize global instance IMMEDIATELY (no DOMContentLoaded wait)
+// This ensures the event listener is attached before task-bootstrap can emit events
+window.performanceValidator = new PerformanceValidator();
 
 // Auto-print report after 10 seconds of page load
 setTimeout(() => {
