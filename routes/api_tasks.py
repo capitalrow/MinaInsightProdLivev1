@@ -258,6 +258,48 @@ def get_task(task_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@api_tasks_bp.route('/<int:task_id>/html', methods=['GET'])
+@login_required
+def get_task_html(task_id):
+    """Get server-rendered HTML fragment for a task card (CROWN⁴.6 feature).
+    
+    Returns the complete HTML for a task card to enable fragment-based hydration
+    for optimistic inserts without page reloads. Preserves all data attributes
+    needed for emotional UI and spoken provenance features.
+    """
+    try:
+        from flask import render_template_string
+        
+        # Fetch task with all relationships eager loaded
+        task = db.session.query(Task).options(
+            joinedload(Task.meeting),
+            joinedload(Task.assigned_to),
+            selectinload(Task.assignees)
+        ).join(Meeting).filter(
+            Task.id == task_id,
+            Meeting.workspace_id == current_user.workspace_id
+        ).first()
+        
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # Render task card using macro
+        html = render_template_string(
+            "{% from 'dashboard/_task_card_macro.html' import task_card %}{{ task_card(task) }}",
+            task=task
+        )
+        
+        return jsonify({
+            'success': True,
+            'html': html.strip(),
+            'task': task.to_dict()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error rendering task {task_id} HTML fragment: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @api_tasks_bp.route('/<int:task_id>/transcript-context', methods=['GET'])
 @login_required
 def get_task_transcript_context(task_id):
