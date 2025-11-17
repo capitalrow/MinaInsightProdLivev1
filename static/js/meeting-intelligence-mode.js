@@ -39,6 +39,9 @@ class MeetingIntelligenceMode {
             toggleBtn.classList.toggle('active', this.isActive);
         }
 
+        // CROWN⁴.6: Add/remove 'meeting-mode-on' class to body
+        document.body.classList.toggle('meeting-mode-on', this.isActive);
+
         if (this.isActive) {
             this.activateMeetingMode();
         } else {
