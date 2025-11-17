@@ -52,6 +52,11 @@ class MinaTasksLinear {
         const tasks = await tasksPromise;
         this.tasks = tasks;
         
+        // Update window.tasks for downstream scripts (provenance, emotional UI)
+        if (typeof window !== 'undefined') {
+            window.tasks = tasks;
+        }
+        
         // Render with FLIP animation
         this.renderTasksWithFLIP(tasks);
         
@@ -149,6 +154,172 @@ class MinaTasksLinear {
             }
         } catch (error) {
             console.log('[Background fetch] Failed silently:', error.message);
+        }
+    }
+    
+    /**
+     * Smoothly update tasks when data changes (WebSocket, filter, background sync)
+     * Uses keyed diff-based DOM reconciliation with FLIP animations
+     * Per architect guidance: preserve listeners, reorder via insertBefore, <200ms target
+     */
+    updateTasksSmooth(newTasks) {
+        const container = document.getElementById('tasks-list-container');
+        if (!container) return;
+        
+        // Update internal state
+        const oldTasks = this.tasks;
+        this.tasks = newTasks;
+        
+        // Update window.tasks for downstream scripts
+        if (typeof window !== 'undefined') {
+            window.tasks = newTasks;
+        }
+        
+        const startTime = performance.now();
+        
+        // Build id→element map from current DOM (keyed diff)
+        const existingCards = Array.from(container.querySelectorAll('.task-card'));
+        const cardMap = new Map();
+        existingCards.forEach(card => {
+            const taskId = parseInt(card.dataset.taskId);
+            cardMap.set(taskId, card);
+        });
+        
+        // FLIP Phase 1: Capture FIRST positions before mutations
+        const firstPositions = new Map();
+        existingCards.forEach(card => {
+            const rect = card.getBoundingClientRect();
+            firstPositions.set(card, { top: rect.top, left: rect.left });
+        });
+        
+        // DOM Reconciliation: walk newTasks in order, reposition out-of-place nodes
+        const nodesToAnimate = [];
+        
+        for (let i = 0; i < newTasks.length; i++) {
+            const task = newTasks[i];
+            const existingCard = cardMap.get(task.id);
+            
+            if (existingCard) {
+                // Reuse existing node (preserves event listeners)
+                // Update content if changed
+                this.patchTaskCard(existingCard, task);
+                
+                // Check if node is already in correct position
+                const currentNodeAtPosition = container.children[i];
+                
+                if (existingCard !== currentNodeAtPosition) {
+                    // Out of place - move it using insertBefore (preserves listeners)
+                    const referenceNode = container.children[i] || null;
+                    container.insertBefore(existingCard, referenceNode);
+                    nodesToAnimate.push(existingCard);
+                }
+                
+                cardMap.delete(task.id); // Mark as processed
+            } else {
+                // New task - needs server-rendered fragment
+                // For MVP: trigger reload (architect suggested fetching fragments later)
+                console.log(`[Smooth Update] New task ${task.id} detected - reloading for server-rendered version`);
+                setTimeout(() => window.location.reload(), 100);
+                return;
+            }
+        }
+        
+        // Remove tasks that no longer exist (remaining in cardMap)
+        // Let them animate out gracefully in situ - no container clearing
+        cardMap.forEach((card, taskId) => {
+            card.style.transition = 'opacity 200ms ease-out, transform 200ms ease-out';
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(-20px)';
+            setTimeout(() => {
+                if (card.parentNode) {
+                    card.parentNode.removeChild(card);
+                }
+            }, 200);
+        });
+        
+        // FLIP Phase 2: Capture LAST positions after mutations
+        const lastPositions = new Map();
+        nodesToAnimate.forEach(card => {
+            const rect = card.getBoundingClientRect();
+            lastPositions.set(card, { top: rect.top, left: rect.left });
+        });
+        
+        // FLIP Phase 3 & 4: Invert and Play animations
+        nodesToAnimate.forEach((card, index) => {
+            const first = firstPositions.get(card);
+            const last = lastPositions.get(card);
+            
+            if (first && last) {
+                // Calculate delta (invert)
+                const deltaY = first.top - last.top;
+                const deltaX = first.left - last.left;
+                
+                // Set initial transform (pre-animation)
+                card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                card.style.transition = 'none';
+                
+                // Animate to final position (play)
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        card.style.transition = `transform ${this.ANIMATION_DURATION}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+                        card.style.transitionDelay = `${index * 12}ms`; // Stagger for "ink flow"
+                        card.style.transform = 'translate(0, 0)';
+                    });
+                });
+            }
+        });
+        
+        // Trigger reapply of emotional UI and provenance after layout settles
+        requestAnimationFrame(() => {
+            if (window.emotionalUI) {
+                window.emotionalUI.reapplyEmotionalCues();
+            }
+            if (window.spokenProvenanceUI) {
+                window.spokenProvenanceUI.reapplyProvenance();
+            }
+        });
+        
+        const updateTime = performance.now() - startTime;
+        console.log(`[Smooth Update] Reconciled ${newTasks.length} tasks with FLIP in ${updateTime.toFixed(2)}ms`);
+        
+        if (updateTime > 200) {
+            console.warn(`[Performance] Update exceeded 200ms target: ${updateTime.toFixed(2)}ms`);
+        }
+    }
+    
+    /**
+     * Patch task card content in-place (preserves event listeners)
+     */
+    patchTaskCard(card, task) {
+        // Update title if changed
+        const titleEl = card.querySelector('.task-title');
+        if (titleEl && titleEl.textContent !== task.title) {
+            titleEl.textContent = task.title;
+        }
+        
+        // Update status/completion
+        const checkbox = card.querySelector('.task-checkbox');
+        const isCompleted = task.status === 'completed';
+        if (checkbox && checkbox.checked !== isCompleted) {
+            checkbox.checked = isCompleted;
+            if (isCompleted) {
+                card.classList.add('completed');
+            } else {
+                card.classList.remove('completed');
+            }
+        }
+        
+        // Update priority
+        const newPriority = task.priority || 'medium';
+        if (card.dataset.priority !== newPriority) {
+            card.className = card.className.replace(/task-priority-\w+/, `task-priority-${newPriority}`);
+            card.dataset.priority = newPriority;
+            
+            const priorityBadge = card.querySelector('.priority-badge');
+            if (priorityBadge) {
+                priorityBadge.className = `priority-badge priority-${newPriority}`;
+                priorityBadge.textContent = newPriority;
+            }
         }
     }
     
