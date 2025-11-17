@@ -187,6 +187,58 @@ class EmotionalTaskUI {
         
         // Adjust spacing and breathing room
         this.adjustVisualDensity();
+        
+        // Setup reapply on task changes
+        this.setupReapplyLogic();
+    }
+    
+    /**
+     * Reapply emotional cues when tasks change (filters, WebSocket, optimistic updates)
+     */
+    reapplyEmotionalCues() {
+        console.log('[Emotional UI] Reapplying emotional cues to updated tasks...');
+        
+        // Remove old classes first
+        const taskCards = document.querySelectorAll('.task-card');
+        taskCards.forEach(card => {
+            card.classList.remove('emotion-calm', 'emotion-energizing', 'emotion-focused', 'emotion-playful', 'emotion-neutral');
+            const oldIndicator = card.querySelector('.emotional-indicator');
+            if (oldIndicator) oldIndicator.remove();
+        });
+        
+        // Reapply emotional cues
+        this.applyEmotionalCues();
+    }
+    
+    /**
+     * Setup logic to reapply emotional cues when tasks change
+     */
+    setupReapplyLogic() {
+        // Listen for task list changes
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                    // New task cards added - apply emotional cues
+                    const addedCards = Array.from(mutation.addedNodes).filter(n => 
+                        n.classList && n.classList.contains('task-card')
+                    );
+                    if (addedCards.length > 0) {
+                        this.applyEmotionalCues();
+                        break;
+                    }
+                }
+            }
+        });
+        
+        const container = document.getElementById('tasks-list-container');
+        if (container) {
+            observer.observe(container, { childList: true, subtree: true });
+        }
+        
+        // Expose reapply method globally for manual calls
+        if (typeof window !== 'undefined') {
+            window.emotionalUI = this;
+        }
     }
     
     /**

@@ -68,13 +68,25 @@ class SpokenProvenanceUI {
             taskData = window.tasks.find(t => t.id === taskId);
         }
         
+        // If no task data available, fetch it for this task
+        if (!taskData && taskId) {
+            this.fetchAndCacheTaskData(taskId).then(() => {
+                // Retry adding badge with fresh data
+                if (metadata.querySelector('.provenance-badge')) {
+                    metadata.querySelector('.provenance-badge').remove();
+                }
+                this.addProvenanceBadge(card, taskId, meetingId, extractedByAI);
+            });
+            return;
+        }
+        
         const badge = document.createElement('button');
         badge.className = 'provenance-badge';
         badge.dataset.taskId = taskId;
         badge.dataset.meetingId = meetingId;
         
-        // Badge content
-        const meetingTitle = taskData?.meeting?.title || 'Meeting';
+        // Badge content - use real data from task
+        const meetingTitle = taskData?.meeting?.title || card.dataset.meetingTitle || 'Meeting';
         const speaker = taskData?.extraction_context?.speaker || null;
         const confidence = taskData?.confidence_score || null;
         
@@ -168,6 +180,29 @@ class SpokenProvenanceUI {
     }
     
     /**
+     * Fetch and cache task data for a single task
+     */
+    async fetchAndCacheTaskData(taskId) {
+        try {
+            const response = await fetch(`/api/tasks/${taskId}`);
+            if (!response.ok) return null;
+            
+            const data = await response.json();
+            const task = data.task;
+            
+            // Add to window.tasks if it doesn't exist
+            if (window.tasks && !window.tasks.find(t => t.id === taskId)) {
+                window.tasks.push(task);
+            }
+            
+            return task;
+        } catch (error) {
+            console.log('[Provenance] Failed to fetch task data:', error.message);
+            return null;
+        }
+    }
+    
+    /**
      * Show inline context preview (5-10 seconds of transcript)
      */
     async showInlineContextPreview(taskId, card) {
@@ -178,7 +213,11 @@ class SpokenProvenanceUI {
         
         // Get context data
         const context = await this.fetchContext(taskId);
-        if (!context || !context.quote) return;
+        if (!context || !context.quote) {
+            // Gracefully handle missing data - show a helpful message
+            console.log('[Provenance] No transcript context available for task', taskId);
+            return;
+        }
         
         // Create preview bubble
         const preview = document.createElement('div');
@@ -397,6 +436,20 @@ class SpokenProvenanceUI {
     }
     
     /**
+     * Reapply provenance badges when tasks change
+     */
+    reapplyProvenance() {
+        console.log('[Spoken Provenance] Reapplying provenance badges to updated tasks...');
+        
+        // Remove old badges
+        const oldBadges = document.querySelectorAll('.provenance-badge');
+        oldBadges.forEach(badge => badge.remove());
+        
+        // Reapply provenance indicators
+        this.setupProvenanceIndicators();
+    }
+    
+    /**
      * Setup transcript navigation
      */
     setupTranscriptNavigation() {
@@ -409,6 +462,11 @@ class SpokenProvenanceUI {
             
             this.jumpToTranscript(taskId, meetingId);
         });
+        
+        // Expose globally for manual calls
+        if (typeof window !== 'undefined') {
+            window.spokenProvenanceUI = this;
+        }
     }
     
     /**
