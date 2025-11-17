@@ -24,16 +24,20 @@ class TaskActionsMenu {
     }
 
     /***************************************************************
-     * Bind all menu triggers (3-dot buttons)
+     * Bind all menu triggers (3-dot buttons) using event delegation
+     * This ensures dynamically-loaded tasks also work
      ***************************************************************/
     bindTriggers() {
-        document.querySelectorAll(".task-menu-trigger")
-            .forEach(trigger => {
-                trigger.addEventListener("click", (evt) => {
-                    evt.stopPropagation();
-                    this.toggleMenu(trigger);
-                });
-            });
+        // Use event delegation to handle both existing and dynamically-added triggers
+        document.addEventListener("click", (evt) => {
+            const trigger = evt.target.closest(".task-menu-trigger");
+            if (trigger) {
+                evt.stopPropagation();
+                evt.preventDefault();
+                console.log("[TaskActionsMenu] Three-dot clicked, taskId:", trigger.dataset.taskId);
+                this.toggleMenu(trigger);
+            }
+        });
     }
 
     moveMenuToBody() {
