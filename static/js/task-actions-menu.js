@@ -271,18 +271,29 @@ class TaskActionsMenu {
 
         // Store task ID for later actions
         menu.dataset.taskId = taskId;
-
-        // Make visible
-        menu.classList.add("visible");
         menu.dataset.state = "open";
 
-        // Compute viewport positioning
+        // CRITICAL FIX: Ensure menu is in DOM and temporarily visible for measurement
+        // Remove visible class first to ensure clean state
+        menu.classList.remove("visible");
+        
+        // Make it invisible but rendered for measurement
+        menu.style.opacity = '0';
+        menu.style.pointerEvents = 'none';
+        menu.style.display = 'block';
+        
+        // Force browser reflow to ensure element is rendered
+        void menu.offsetHeight;
+
+        // Compute viewport positioning NOW that element is rendered
         const rect = trigger.getBoundingClientRect();
-        const menuHeight = menu.offsetHeight;
-        const menuWidth = menu.offsetWidth;
+        const menuHeight = menu.offsetHeight || 300; // Fallback height
+        const menuWidth = menu.offsetWidth || 220;   // Fallback width
         const viewportHeight = window.innerHeight;
 
-        // Default: open BELOW
+        console.log(`[TaskActionsMenu] Menu dimensions: ${menuWidth}x${menuHeight}`);
+
+        // Default: open BELOW and align to right of trigger
         let top = rect.bottom + 10;
         let left = rect.right - menuWidth;
 
@@ -299,8 +310,17 @@ class TaskActionsMenu {
             left = window.innerWidth - menuWidth - 10;
         }
 
+        console.log(`[TaskActionsMenu] Positioning menu at top:${top}px, left:${left}px`);
+
+        // Set final position
         menu.style.top = `${top}px`;
         menu.style.left = `${left}px`;
+        
+        // Now make it visible with transition
+        menu.style.opacity = '';
+        menu.style.pointerEvents = '';
+        menu.style.display = '';
+        menu.classList.add("visible");
         
         // Activate tracked menu
         this.activeMenu = menu;
