@@ -1,294 +1,293 @@
 /**
  * CROWN⁴.6 Spoken Provenance UI
- * Displays meeting context, speaker, and spoken origin for tasks
+ * Server-rendered badges with zero-fetch context preview
  * This is Mina's unique differentiator - showing "who said what, when"
+ * 
+ * ARCHITECTURE NOTE:
+ * All provenance data is server-rendered in task_card_macro.html with full context
+ * embedded in data attributes. No client-side fetching or dynamic enhancement needed.
  */
 
 class TaskSpokenProvenance {
     constructor() {
+        console.log('[TaskSpokenProvenance] Server-rendered provenance active (zero fetches)');
+    }
+}
+
+// Global instance
+window.taskSpokenProvenance = new TaskSpokenProvenance();
+
+/**
+ * CROWN⁴.6: Context Preview Handler
+ * Shows transcript context bubble when user hovers/clicks on provenance badge
+ */
+class ContextPreviewHandler {
+    constructor() {
+        this.activePreview = null;
+        this.hoverTimeout = null;
+        this.HOVER_DELAY_MS = 800; // Show preview after 800ms hover
         this.init();
     }
 
     init() {
-        console.log('[TaskSpokenProvenance] Initializing...');
+        console.log('[ContextPreview] Initializing handlers');
         
-        // Enhance all task cards with spoken provenance on page load
-        this.enhanceAllTaskCards();
-        
-        // Listen for new tasks being added dynamically
-        this.observeTaskCards();
-        
-        console.log('[TaskSpokenProvenance] Initialized successfully');
-    }
-
-    /**
-     * Enhance all existing task cards with spoken provenance UI
-     */
-    enhanceAllTaskCards() {
-        const taskCards = document.querySelectorAll('.task-card[data-task-id]');
-        taskCards.forEach(card => this.enhanceTaskCard(card));
-    }
-
-    /**
-     * Observe DOM for dynamically added task cards
-     * CROWN⁴.6: Fixed to observe nested insertions (subtree: true)
-     */
-    observeTaskCards() {
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === 1) {
-                        // Check if the node itself is a task card
-                        if (node.classList && node.classList.contains('task-card')) {
-                            this.enhanceTaskCard(node);
-                        }
-                        // Also check descendants (nested task cards)
-                        if (node.querySelectorAll) {
-                            const nestedCards = node.querySelectorAll('.task-card');
-                            nestedCards.forEach(card => this.enhanceTaskCard(card));
-                        }
-                    }
-                });
-            });
-        });
-
-        const container = document.getElementById('tasks-list-container');
-        if (container) {
-            // CROWN⁴.6: Observe subtree to catch nested insertions
-            observer.observe(container, { childList: true, subtree: true });
-        }
-    }
-
-    /**
-     * Enhance a task card with spoken provenance UI
-     * CROWN⁴.6 Optimization: Uses cached data instead of N+1 API fetches
-     * @param {HTMLElement} card - Task card element
-     */
-    async enhanceTaskCard(card) {
-        const taskId = card.dataset.taskId;
-        if (!taskId || card.dataset.provenanceEnhanced === 'true') {
+        const tasksContainer = document.getElementById('tasks-list-container');
+        if (!tasksContainer) {
+            console.warn('[ContextPreview] Tasks container not found');
             return;
         }
-
-        try {
-            // CROWN⁴.6: Try to get task from cache first to avoid N+1 fetches
-            let task = this.getTaskFromCache(taskId);
+        
+        // Handle click on provenance badge (mobile and desktop)
+        tasksContainer.addEventListener('click', (e) => {
+            const badge = e.target.closest('.provenance-badge');
+            if (!badge) return;
             
-            // If not in cache and task is AI-extracted, fetch it
-            if (!task) {
-                const extractedByAI = card.dataset.extractedByAi === 'true';
-                if (!extractedByAI) {
-                    // Skip non-AI tasks to avoid unnecessary fetches
-                    card.dataset.provenanceEnhanced = 'true';
-                    return;
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const taskId = badge.dataset.taskId;
+            this.showContextPreview(taskId, badge);
+        });
+        
+        // Handle hover on provenance badge (desktop only)
+        if (!this.isTouchDevice()) {
+            tasksContainer.addEventListener('mouseenter', (e) => {
+                const badge = e.target.closest('.provenance-badge');
+                if (!badge) return;
+                
+                const taskId = badge.dataset.taskId;
+                
+                // Clear any existing hover timeout
+                if (this.hoverTimeout) {
+                    clearTimeout(this.hoverTimeout);
                 }
                 
-                // Fetch from API as fallback
-                task = await this.fetchTaskDetails(taskId);
-                if (!task) {
-                    card.dataset.provenanceEnhanced = 'true';
-                    return;
+                // Show preview after delay
+                this.hoverTimeout = setTimeout(() => {
+                    this.showContextPreview(taskId, badge);
+                }, this.HOVER_DELAY_MS);
+                
+            }, true);
+            
+            tasksContainer.addEventListener('mouseleave', (e) => {
+                const badge = e.target.closest('.provenance-badge');
+                if (!badge) return;
+                
+                // Clear hover timeout
+                if (this.hoverTimeout) {
+                    clearTimeout(this.hoverTimeout);
+                    this.hoverTimeout = null;
                 }
-            }
-
-            // Mark as enhanced to avoid re-processing
-            card.dataset.provenanceEnhanced = 'true';
-
-            // Only add provenance if task was extracted by AI or has transcript context
-            if (!task.extracted_by_ai && !task.transcript_span) {
-                return;
-            }
-
-            // Build and inject provenance UI
-            const provenanceHTML = this.buildProvenanceUI(task);
-            if (provenanceHTML) {
-                this.injectProvenanceUI(card, provenanceHTML);
-            }
-
-            // Enable "Jump to Transcript" button in menu if transcript_span exists (explicit check for null/undefined)
-            if (task.transcript_span && (task.transcript_span.start_ms !== null && task.transcript_span.start_ms !== undefined)) {
-                this.enableJumpToTranscriptButton(taskId);
-            }
-
-        } catch (error) {
-            console.error(`[TaskSpokenProvenance] Error enhancing card ${taskId}:`, error);
-        }
-    }
-
-    /**
-     * Get task from TaskCache (CROWN⁴.5 IndexedDB cache) or TaskStore
-     * @param {string|number} taskId - Task ID
-     * @returns {Object|null} Task object
-     */
-    getTaskFromCache(taskId) {
-        // Try CROWN⁴.5 TaskStore first (in-memory)
-        if (window.taskStore && typeof window.taskStore.getTask === 'function') {
-            const task = window.taskStore.getTask(taskId);
-            if (task) {
-                console.log(`[TaskSpokenProvenance] Using TaskStore cache for task: ${taskId}`);
-                return task;
-            }
+                
+                // Don't hide preview immediately - let user move to it
+                setTimeout(() => {
+                    if (this.activePreview && !this.activePreview.matches(':hover')) {
+                        this.hideContextPreview();
+                    }
+                }, 200);
+                
+            }, true);
         }
         
-        // Try window.tasks array (server-rendered data)
-        if (window.tasks && Array.isArray(window.tasks)) {
-            const task = window.tasks.find(t => t.id === parseInt(taskId));
-            if (task) {
-                console.log(`[TaskSpokenProvenance] Using server-rendered data for task: ${taskId}`);
-                return task;
-            }
-        }
-        
-        return null;
-    }
-
-    /**
-     * Fetch task details from API (fallback)
-     * @param {string|number} taskId - Task ID
-     * @returns {Promise<Object|null>} Task object
-     */
-    async fetchTaskDetails(taskId) {
-        try {
-            const response = await fetch(`/api/tasks/${taskId}`);
-            if (!response.ok) {
-                return null;
-            }
-
-            const data = await response.json();
-            return data.success ? data.task : null;
-        } catch (error) {
-            console.error(`[TaskSpokenProvenance] Error fetching task ${taskId}:`, error);
-            return null;
-        }
-    }
-
-    /**
-     * Build spoken provenance UI HTML
-     * @param {Object} task - Task object
-     * @returns {string} HTML string
-     */
-    buildProvenanceUI(task) {
-        const context = task.extraction_context || {};
-        const transcriptSpan = task.transcript_span;
-        
-        const speaker = context.speaker || 'Unknown';
-        const quote = context.quote || '';
-        const confidence = task.confidence_score;
-        const meetingTitle = task.meeting?.title || 'Meeting';
-
-        let html = '<div class="task-provenance">';
-        
-        // Meeting badge with icon
-        html += `
-            <div class="task-provenance-meeting">
-                <svg class="provenance-icon" width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 11 8.76l1-1.36 1 1.36L15.38 12 17 10.83 14.92 8H20v6z"/>
-                </svg>
-                <span class="provenance-meeting-title" title="From meeting: ${this.escapeHtml(meetingTitle)}">${this.escapeHtml(meetingTitle)}</span>
-            </div>
-        `;
-
-        // Speaker & confidence indicator
-        if (speaker && speaker !== 'Unknown') {
-            const confidenceClass = confidence >= 0.8 ? 'high' : confidence >= 0.6 ? 'medium' : 'low';
-            html += `
-                <div class="task-provenance-speaker">
-                    <svg class="provenance-icon" width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                    </svg>
-                    <span class="provenance-speaker-name">${this.escapeHtml(speaker)}</span>
-                    ${confidence ? `<span class="provenance-confidence provenance-confidence-${confidenceClass}" title="AI Confidence: ${Math.round(confidence * 100)}%"></span>` : ''}
-                </div>
-            `;
-        }
-
-        // Quote snippet (if available)
-        if (quote && quote.length > 10) {
-            const shortQuote = quote.length > 80 ? quote.substring(0, 80) + '...' : quote;
-            html += `
-                <div class="task-provenance-quote" title="${this.escapeHtml(quote)}">
-                    <svg class="provenance-icon" width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/>
-                    </svg>
-                    <span class="provenance-quote-text">"${this.escapeHtml(shortQuote)}"</span>
-                </div>
-            `;
-        }
-
-        // Jump to transcript link (if transcript_span exists - explicit null/undefined check)
-        if (transcriptSpan && (transcriptSpan.start_ms !== null && transcriptSpan.start_ms !== undefined)) {
-            html += `
-                <button class="task-provenance-jump" data-action="jump-to-transcript" data-task-id="${task.id}" title="Jump to transcript moment">
-                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
-                    </svg>
-                    <span>Jump to transcript</span>
-                </button>
-            `;
-        }
-
-        html += '</div>';
-
-        return html;
-    }
-
-    /**
-     * Inject provenance UI into task card
-     * @param {HTMLElement} card - Task card element
-     * @param {string} html - Provenance HTML
-     */
-    injectProvenanceUI(card, html) {
-        const taskMetadata = card.querySelector('.task-metadata');
-        if (taskMetadata) {
-            // Insert provenance after metadata
-            taskMetadata.insertAdjacentHTML('afterend', html);
-        } else {
-            // Fallback: insert at beginning of task-content
-            const taskContent = card.querySelector('.task-content');
-            if (taskContent) {
-                taskContent.insertAdjacentHTML('afterbegin', html);
-            }
-        }
-    }
-
-    /**
-     * Enable "Jump to Transcript" button in task menu
-     * @param {string|number} taskId - Task ID
-     */
-    enableJumpToTranscriptButton(taskId) {
-        // Find the task menu and enable the jump button
-        document.addEventListener('DOMContentLoaded', () => {
-            const menu = document.querySelector(`#task-menu[data-task-id="${taskId}"]`);
-            if (!menu) {
-                // Menu might not be rendered yet, will be handled when menu opens
-                return;
-            }
-
-            const jumpBtn = menu.querySelector('[data-action="jump-to-transcript"]');
-            if (jumpBtn) {
-                jumpBtn.classList.remove('hidden');
+        // Close preview when clicking outside
+        document.addEventListener('click', (e) => {
+            if (this.activePreview && !e.target.closest('.context-preview-bubble') && !e.target.closest('.provenance-badge')) {
+                this.hideContextPreview();
             }
         });
+        
+        console.log('[ContextPreview] ✓ Handlers initialized');
+    }
+    
+    async showContextPreview(taskId, anchorElement) {
+        if (!taskId) return;
+        
+        // Hide any existing preview first to prevent stacking
+        this.hideContextPreview();
+        
+        // CROWN⁴.6: Use server-hydrated context data (zero fetches)
+        const hasContext = anchorElement.dataset.hasContext === 'true';
+        if (!hasContext) {
+            console.log('[ContextPreview] Task has no context');
+            return;
+        }
+        
+        try {
+            // Extract context from data attributes (server-rendered, no fetch needed)
+            const context = {
+                task_id: taskId,
+                quote: anchorElement.dataset.contextQuote || '',
+                speaker: anchorElement.dataset.contextSpeaker || 'Unknown',
+                start_ms: parseInt(anchorElement.dataset.contextStartMs) || 0,
+                meeting_id: anchorElement.dataset.meetingId,
+                meeting_title: anchorElement.dataset.meetingTitle || 'Meeting',
+                confidence: parseFloat(anchorElement.dataset.confidence) || 0,
+                start_time_formatted: this.formatTimestamp(parseInt(anchorElement.dataset.contextStartMs) || 0)
+            };
+            
+            console.log('[ContextPreview] Using server-hydrated context (zero fetch)');
 
-        // Also update global menu when it opens for this task
-        const originalMenu = document.getElementById('task-menu');
-        if (originalMenu) {
-            originalMenu.addEventListener('task-menu-opened', (e) => {
-                if (e.detail && e.detail.taskId === String(taskId)) {
-                    const jumpBtn = originalMenu.querySelector('[data-action="jump-to-transcript"]');
-                    if (jumpBtn) {
-                        jumpBtn.classList.remove('hidden');
+            
+            // Create preview bubble
+            const bubble = this.createBubble(context);
+            
+            // Position relative to badge
+            this.positionBubble(bubble, anchorElement);
+            
+            // Add to DOM
+            document.body.appendChild(bubble);
+            
+            // Trigger show animation
+            requestAnimationFrame(() => {
+                bubble.classList.add('show');
+            });
+            
+            // Store reference
+            this.activePreview = bubble;
+            
+            // Track interaction
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordEvent('task_context_preview_shown', {
+                    task_id: taskId,
+                    has_speaker: !!context.speaker,
+                    confidence: context.confidence
+                });
+            }
+            
+        } catch (error) {
+            console.error('[ContextPreview] Failed to load context:', error);
+        }
+    }
+    
+    hideContextPreview() {
+        if (!this.activePreview) return;
+        
+        this.activePreview.classList.remove('show');
+        
+        setTimeout(() => {
+            if (this.activePreview && this.activePreview.parentNode) {
+                this.activePreview.remove();
+            }
+            this.activePreview = null;
+        }, 200);
+    }
+    
+    createBubble(context) {
+        const bubble = document.createElement('div');
+        bubble.className = 'context-preview-bubble';
+        
+        const speakerDisplay = context.speaker || 'Unknown Speaker';
+        const timeDisplay = context.start_time_formatted || '--:--';
+        const quoteDisplay = context.quote || 'No transcript available';
+        
+        bubble.innerHTML = `
+            <div class="context-preview-header">
+                <span class="context-preview-label">Meeting Context</span>
+                <button class="context-preview-close" aria-label="Close">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <blockquote class="context-preview-quote">
+                "${this.escapeHtml(quoteDisplay)}"
+            </blockquote>
+            
+            <div class="context-preview-footer">
+                <div class="context-preview-speaker">
+                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    </svg>
+                    ${this.escapeHtml(speakerDisplay)}
+                </div>
+                <span class="context-preview-time">${this.escapeHtml(timeDisplay)}</span>
+            </div>
+            
+            ${context.meeting_id ? `
+            <button class="context-preview-jump" data-meeting-id="${context.meeting_id}" data-start-ms="${context.start_ms}">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                Jump to Full Transcript
+            </button>
+            ` : ''}
+        `;
+        
+        // Handle close button
+        const closeBtn = bubble.querySelector('.context-preview-close');
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.hideContextPreview();
+        });
+        
+        // Handle jump to transcript
+        const jumpBtn = bubble.querySelector('.context-preview-jump');
+        if (jumpBtn) {
+            jumpBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const meetingId = jumpBtn.dataset.meetingId;
+                const startMs = jumpBtn.dataset.startMs;
+                
+                if (meetingId && startMs) {
+                    window.location.href = `/meetings/${meetingId}/transcript?t=${startMs}`;
+                    
+                    if (window.CROWNTelemetry) {
+                        window.CROWNTelemetry.recordEvent('task_jump_to_transcript', {
+                            task_id: context.task_id,
+                            meeting_id: meetingId,
+                            start_ms: startMs
+                        });
                     }
                 }
             });
         }
+        
+        // Prevent bubble from closing when clicking inside
+        bubble.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+        
+        return bubble;
     }
-
-    /**
-     * Escape HTML to prevent XSS
-     * @param {string} text - Text to escape
-     * @returns {string} Escaped text
-     */
+    
+    positionBubble(bubble, anchor) {
+        const rect = anchor.getBoundingClientRect();
+        const bubbleWidth = 360;
+        const padding = 12;
+        
+        bubble.style.position = 'fixed';
+        bubble.style.top = `${rect.bottom + 8}px`;
+        bubble.style.maxWidth = `${bubbleWidth}px`;
+        bubble.style.zIndex = '10000';
+        
+        const centerX = rect.left + (rect.width / 2) - (bubbleWidth / 2);
+        const minX = padding;
+        const maxX = window.innerWidth - bubbleWidth - padding;
+        
+        const left = Math.max(minX, Math.min(maxX, centerX));
+        bubble.style.left = `${left}px`;
+        
+        // Check if bubble would overflow bottom
+        const bubbleRect = bubble.getBoundingClientRect();
+        if (bubbleRect.bottom > window.innerHeight - padding) {
+            bubble.style.top = `${rect.top - bubbleRect.height - 8}px`;
+        }
+    }
+    
+    isTouchDevice() {
+        return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    }
+    
+    formatTimestamp(ms) {
+        if (!ms) return '00:00';
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -296,5 +295,5 @@ class TaskSpokenProvenance {
     }
 }
 
-// Global instance
-window.taskSpokenProvenance = new TaskSpokenProvenance();
+// Initialize context preview handler
+window.contextPreviewHandler = new ContextPreviewHandler();
