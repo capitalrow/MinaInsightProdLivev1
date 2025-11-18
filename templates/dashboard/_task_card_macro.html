@@ -16,6 +16,58 @@
         <input type="checkbox" {% if task.completed %}checked{% endif %} class="task-checkbox" data-task-id="{{ task.id }}">
     </div>
     <div class="task-content">
+        {# CROWN⁴.6: Spoken Provenance - Meeting origin display #}
+        {% if task.extracted_by_ai and task.meeting %}
+        <div class="task-provenance-header">
+            {# Embed full context data in badge for zero-fetch preview #}
+            {% set full_quote = task.extraction_context.quote if task.extraction_context and task.extraction_context.quote else '' %}
+            {% set speaker = task.extraction_context.speaker if task.extraction_context and task.extraction_context.speaker else 'Unknown' %}
+            {% set start_ms = task.transcript_span.start_ms if task.transcript_span and task.transcript_span.start_ms is not none else 0 %}
+            <span class="provenance-badge" 
+                  data-task-id="{{ task.id }}"
+                  data-action="show-context-preview"
+                  data-has-context="{{ 'true' if full_quote else 'false' }}"
+                  data-context-quote="{{ full_quote|escape }}"
+                  data-context-speaker="{{ speaker|escape }}"
+                  data-context-start-ms="{{ start_ms }}"
+                  data-meeting-id="{{ task.meeting_id }}"
+                  data-meeting-title="{{ task.meeting.title|escape }}"
+                  data-confidence="{{ task.confidence_score if task.confidence_score else 0 }}"
+                  title="{{ full_quote if full_quote else 'Click to see meeting context' }}">
+                <svg class="provenance-icon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                <span class="provenance-text">{{ task.meeting.title|truncate(20, True) }}</span>
+                <span class="provenance-date">
+                    • {{ task.meeting.created_at.strftime('%b %d') if task.meeting.created_at else '' }}
+                </span>
+                {% if task.extraction_context and task.extraction_context.speaker %}
+                <span class="provenance-speaker">
+                    • {{ task.extraction_context.speaker|truncate(12, True) }}
+                </span>
+                {% endif %}
+                {% if task.confidence_score %}
+                <span class="provenance-confidence {% if task.confidence_score >= 0.8 %}high{% elif task.confidence_score >= 0.6 %}medium{% else %}low{% endif %}" 
+                      title="AI confidence: {{ (task.confidence_score * 100)|int }}%">
+                    {% if task.confidence_score >= 0.8 %}
+                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                    </svg>
+                    {% elif task.confidence_score >= 0.6 %}
+                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    {% else %}
+                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    {% endif %}
+                </span>
+                {% endif %}
+            </span>
+        </div>
+        {% endif %}
+        
         <h3 class="task-title">{{ task.title or 'Untitled Task' }}</h3>
         <div class="task-metadata">
             <span class="task-assignee" data-field="assignee" title="Click to assign">
