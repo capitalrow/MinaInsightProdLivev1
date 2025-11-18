@@ -563,5 +563,12 @@ class TaskCompletionUX {
     }
 }
 
-// Initialize globally
-window.taskCompletionUX = new TaskCompletionUX();
+// Initialize globally when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.taskCompletionUX = new TaskCompletionUX();
+    });
+} else {
+    // DOM already loaded
+    window.taskCompletionUX = new TaskCompletionUX();
+}
