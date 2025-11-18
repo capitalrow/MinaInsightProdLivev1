@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/semantic-search.css') }}?v=1">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/stress-indicators.css') }}?v=1">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dev-performance-panel.css') }}?v=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-completion-ux.css') }}?v=1">
 {% endblock %}
 
 {% block content %}
@@ -727,4 +728,7 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 <script src="{{ url_for('static', filename='js/semantic-search.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/stress-indicators.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/dev-performance-panel.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+
+<!-- CROWN⁴.6 Task 5: Perfect Completion UX -->
+<script src="{{ url_for('static', filename='js/task-completion-ux.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 {% endblock %}
