@@ -65,7 +65,7 @@ class TaskCompletionUX {
      * Attach event listeners for completion
      */
     attachEventListeners() {
-        document.addEventListener('task:completed', (e) => {
+        window.addEventListener('task:completed', (e) => {
             this.handleCompletion(e.detail);
         });
         
