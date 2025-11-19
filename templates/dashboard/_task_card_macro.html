@@ -17,6 +17,13 @@
     </div>
     <div class="task-content">
         {# CROWN⁴.6: Spoken Provenance - Meeting origin display #}
+        {# DEBUG: Test rendering (remove after confirming) #}
+        {% if task.extracted_by_ai %}
+        <div style="background: #10b981; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+            🔍 DEBUG: AI task | Meeting: {{ task.meeting.title if task.meeting else 'NO MEETING OBJ' }} | ID: {{ task.meeting_id }}
+        </div>
+        {% endif %}
+        
         {% if task.extracted_by_ai and task.meeting %}
         <div class="task-provenance-header">
             {# Embed full context data in badge for zero-fetch preview #}
