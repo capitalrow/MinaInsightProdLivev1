@@ -11,6 +11,33 @@
 class TaskSpokenProvenance {
     constructor() {
         console.log('[TaskSpokenProvenance] Server-rendered provenance active (zero fetches)');
+        this.logProvenanceData();
+    }
+    
+    /**
+     * Log provenance data for debugging (console only, no frontend debug)
+     */
+    logProvenanceData() {
+        const taskCards = document.querySelectorAll('.task-card[data-extracted-by-ai="true"]');
+        console.log(`[Provenance Debug] Found ${taskCards.length} AI-extracted tasks`);
+        
+        taskCards.forEach((card, index) => {
+            const taskId = card.dataset.taskId;
+            const meetingId = card.dataset.meetingId;
+            const badge = card.querySelector('.provenance-badge');
+            
+            console.log(`[Task ${taskId}]`, {
+                extracted_by_ai: true,
+                meeting_id: meetingId,
+                badge_exists: !!badge,
+                badge_data: badge ? {
+                    meeting_title: badge.dataset.meetingTitle,
+                    speaker: badge.dataset.contextSpeaker,
+                    quote: badge.dataset.contextQuote?.substring(0, 50) + '...',
+                    confidence: badge.dataset.confidence
+                } : 'NO BADGE FOUND'
+            });
+        });
     }
 }
 
