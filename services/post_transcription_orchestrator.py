@@ -926,6 +926,7 @@ class PostTranscriptionOrchestrator:
                             # Create task only if quality is acceptable
                             task = Task(
                                 session_id=session.id,
+                                workspace_id=session.workspace_id,  # CRITICAL: Copy workspace_id from session
                                 title=task_text[:255],  # Use refined text
                                 description=f"AI-extracted action item (quality score: {quality_score.total_score:.2f})",
                                 priority=priority,  # Parsed priority
@@ -1190,7 +1191,15 @@ class PostTranscriptionOrchestrator:
             List of created Task objects
         """
         from models.task import Task
+        from models.session import Session as SessionModel
         import re
+        
+        # Get session to access workspace_id
+        session_obj = db.session.query(SessionModel).filter_by(id=session_id).first()
+        if not session_obj:
+            logger.error(f"[Pattern Extract] Session {session_id} not found")
+            return []
+        workspace_id = session_obj.workspace_id
         
         # Comprehensive task patterns to detect action items
         # Each pattern captures the task description in group 1
@@ -1373,6 +1382,7 @@ class PostTranscriptionOrchestrator:
                     try:
                         task = Task(
                             session_id=session_id,
+                            workspace_id=workspace_id,  # CRITICAL: Copy workspace_id from session
                             title=task_text,  # Use FULL refined text (no truncation)
                             description=f"Extracted from transcript via pattern matching",
                             priority=priority,  # Intelligent priority detection
