@@ -72,21 +72,33 @@ class TaskDetailModal {
         console.log('[TaskDetailModal] Initialized successfully');
     }
     
-    open(taskId) {
+    async open(taskId) {
         console.log(`[TaskDetailModal] Opening modal for task: ${taskId}`);
         
         this.currentTaskId = taskId;
         this.hasUnsavedChanges = false;
         
-        // Find the task card
-        const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
-        if (!taskCard) {
-            console.error(`[TaskDetailModal] Task card not found: ${taskId}`);
-            return;
+        // CROWN⁴.5 Phase 1.7: Check prefetch cache first for instant modal open
+        let taskData = null;
+        if (window.taskPrefetchAdapter) {
+            taskData = window.taskPrefetchAdapter.getCachedTask(taskId);
+            if (taskData) {
+                console.log(`[TaskDetailModal] Using prefetched data for task: ${taskId}`);
+            }
         }
         
-        // Populate modal with task data
-        this.populateTaskData(taskCard);
+        if (taskData) {
+            // Use prefetched data for instant population
+            this.populateFromPrefetchData(taskData);
+        } else {
+            // Fallback to DOM-based population
+            const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+            if (!taskCard) {
+                console.error(`[TaskDetailModal] Task card not found: ${taskId}`);
+                return;
+            }
+            this.populateTaskData(taskCard);
+        }
         
         // Load additional data (comments, history)
         this.loadComments(taskId);
@@ -131,6 +143,83 @@ class TaskDetailModal {
         document.querySelectorAll('.task-detail-panel').forEach(panel => {
             panel.classList.toggle('active', panel.dataset.panel === tabName);
         });
+    }
+    
+    /**
+     * CROWN⁴.5 Phase 1.7: Populate modal from prefetched data (mini detail payload)
+     */
+    populateFromPrefetchData(prefetchData) {
+        const task = prefetchData.task;
+        const meeting = prefetchData.meeting;
+        const assignees = prefetchData.assignees || [];
+        
+        // Populate form fields
+        const titleEl = document.getElementById('detail-title');
+        if (titleEl) titleEl.textContent = task.title || '';
+        
+        const statusEl = document.getElementById('detail-status');
+        if (statusEl) statusEl.value = task.status || 'pending';
+        
+        const priorityEl = document.getElementById('detail-priority');
+        if (priorityEl) priorityEl.value = task.priority || 'medium';
+        
+        const dueDateEl = document.getElementById('detail-due-date');
+        if (dueDateEl && task.due_date) {
+            // API returns ISO format date string
+            dueDateEl.value = task.due_date;
+        }
+        
+        const createdEl = document.getElementById('detail-created');
+        if (createdEl) {
+            createdEl.textContent = task.created_at ? this.formatDate(new Date(task.created_at)) : 'N/A';
+        }
+        
+        // Populate description
+        const descriptionEl = document.getElementById('detail-description');
+        if (descriptionEl) {
+            descriptionEl.value = task.description || '';
+        }
+        
+        // Populate source with proper formatting
+        const sourceEl = document.getElementById('detail-source');
+        if (sourceEl) {
+            const sourceLabel = task.source === 'ai' ? 
+                '<span class="assignee-badge">🤖 AI Generated</span>' : 
+                '<span class="assignee-badge">👤 Manual Entry</span>';
+            sourceEl.innerHTML = sourceLabel;
+        }
+        
+        // Populate assignees using helper method
+        const assigneeNames = assignees.length > 0 
+            ? assignees.map(a => a.username).join(', ')
+            : (task.assigned_to_id ? 'Assigned' : '');
+        this.populateAssignees(assigneeNames);
+        
+        // Populate meeting information in header
+        const meetingEl = document.getElementById('detail-meeting');
+        if (meetingEl && meeting) {
+            meetingEl.textContent = meeting.title || 'Unknown Meeting';
+            if (meeting.id) {
+                meetingEl.dataset.meetingId = meeting.id;
+                // Make it clickable to navigate to meeting
+                meetingEl.style.cursor = 'pointer';
+                meetingEl.onclick = () => {
+                    window.location.href = `/meetings/${meeting.id}`;
+                };
+            }
+        }
+        
+        // Store current data for change tracking (matching DOM path structure)
+        this.currentTaskData = {
+            title: task.title,
+            status: task.status,
+            priority: task.priority,
+            dueDate: task.due_date,
+            description: task.description,
+            assignedTo: assigneeNames
+        };
+        
+        console.log('[TaskDetailModal] Populated from prefetch data with full context');
     }
     
     populateTaskData(taskCard) {

@@ -5,7 +5,7 @@ Main dashboard with meetings, tasks, analytics overview.
 
 from flask import Blueprint, render_template, request, jsonify, make_response
 from flask_login import login_required, current_user
-from models import db, Meeting, Task, Analytics, Session, Marker
+from models import db, Meeting, Task, Analytics, Session, Marker, User
 from sqlalchemy import desc, func, and_, or_
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta, date
@@ -279,17 +279,31 @@ def meetings():
 def tasks():
     """Tasks overview page with kanban board."""
     # Get all tasks for workspace (not just assigned to current user)
-    if current_user.workspace_id:
+    if current_user.is_authenticated and current_user.workspace_id:
         # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
+        # CROWN⁴.6: Eager load meeting, analytics, and assigned_to relationships for spoken provenance + Impact Score
+        # Use distinct(Task.id) to avoid duplicate rows from analytics join (works with JSON columns)
+        # CRITICAL: tasks.workspace_id is VARCHAR, but users/meetings/sessions.workspace_id are INTEGER
+        # Cast current_user.workspace_id to string for Task.workspace_id comparison
+        workspace_id_str = str(current_user.workspace_id)
+        
         all_tasks = db.session.query(Task)\
             .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
             .outerjoin(Session, Task.session_id == Session.id)\
+            .outerjoin(User, Task.assigned_to_id == User.id)\
+            .options(
+                joinedload(Task.meeting).joinedload(Meeting.analytics),
+                joinedload(Task.assigned_to)
+            )\
             .filter(
                 or_(
-                    Meeting.workspace_id == current_user.workspace_id,
-                    Session.workspace_id == current_user.workspace_id
+                    Task.workspace_id == workspace_id_str,  # VARCHAR comparison (tasks.workspace_id is VARCHAR)
+                    Meeting.workspace_id == current_user.workspace_id,  # INTEGER comparison
+                    Session.workspace_id == current_user.workspace_id,  # INTEGER comparison
                 )
-            ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+            )\
+            .distinct(Task.id)\
+            .order_by(Task.id.desc(), Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
     else:
         all_tasks = []
     
@@ -298,8 +312,12 @@ def tasks():
     in_progress_tasks = [t for t in all_tasks if t.status == 'in_progress']
     completed_tasks = [t for t in all_tasks if t.status == 'completed'][:10]
     
+    # CROWN⁴.6: Serialize tasks for frontend (fixes JSON serialization of to_dict method)
+    tasks_serialized = [t.to_dict() for t in all_tasks]
+    
     return render_template('dashboard/tasks.html',
                          tasks=all_tasks,
+                         tasks_json=tasks_serialized,
                          todo_tasks=todo_tasks,
                          in_progress_tasks=in_progress_tasks,
                          completed_tasks=completed_tasks)

@@ -62,7 +62,15 @@ class PerformanceValidator {
     }
 
     setupPerformanceObservers() {
-        // Monitor paint timing
+        // CROWN⁴.6 FIX: Listen for task bootstrap completion event
+        document.addEventListener('task:bootstrap:complete', (e) => {
+            if (e.detail && e.detail.first_paint_ms) {
+                console.log(`📊 [PerformanceValidator] Captured first paint: ${e.detail.first_paint_ms.toFixed(2)}ms`);
+                this.recordMetric('firstPaint', e.detail.first_paint_ms);
+            }
+        });
+        
+        // Monitor paint timing (fallback)
         if (window.performance && window.performance.getEntriesByType) {
             const paintEntries = window.performance.getEntriesByType('paint');
             paintEntries.forEach(entry => {
@@ -72,7 +80,7 @@ class PerformanceValidator {
             });
         }
 
-        // Monitor navigation timing for initial load
+        // Monitor navigation timing for initial load (fallback)
         if (window.performance && window.performance.timing) {
             window.addEventListener('load', () => {
                 const timing = window.performance.timing;
@@ -662,14 +670,9 @@ class PerformanceValidator {
     }
 }
 
-// Initialize global instance
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.performanceValidator = new PerformanceValidator();
-    });
-} else {
-    window.performanceValidator = new PerformanceValidator();
-}
+// Initialize global instance IMMEDIATELY (no DOMContentLoaded wait)
+// This ensures the event listener is attached before task-bootstrap can emit events
+window.performanceValidator = new PerformanceValidator();
 
 // Auto-print report after 10 seconds of page load
 setTimeout(() => {

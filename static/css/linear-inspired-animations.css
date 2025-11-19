@@ -1,0 +1,513 @@
+/**
+ * CROWN⁴.6 Linear-Inspired Animations
+ * 
+ * Philosophy: "Ink flows" - smooth, natural motion that guides attention
+ * - No harsh transitions or jarring movements
+ * - Subtle, purposeful animations that add clarity
+ * - Performance-first: 60fps on all devices
+ * - Easing: cubic-bezier(0.4, 0, 0.2, 1) for natural feel
+ */
+
+/* ============================================
+   SKELETON LOADER → CONTENT TRANSITION
+   ============================================ */
+
+.tasks-loading-state {
+  opacity: 1;
+  transition: opacity 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tasks-loading-state.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Enhanced skeleton with shimmer effect */
+.task-skeleton {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  margin-bottom: var(--space-3);
+  position: relative;
+  overflow: hidden;
+}
+
+.task-skeleton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.03),
+    transparent
+  );
+  animation: skeletonShimmer 2s infinite;
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.skeleton-checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.skeleton-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skeleton-title {
+  height: 20px;
+  width: 70%;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.skeleton-meta {
+  height: 14px;
+  width: 40%;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.skeleton-width-random:nth-child(2) .skeleton-title {
+  width: 85%;
+}
+
+.skeleton-width-random:nth-child(3) .skeleton-title {
+  width: 60%;
+}
+
+.skeleton-width-random:nth-child(4) .skeleton-title {
+  width: 75%;
+}
+
+.skeleton-width-random:nth-child(5) .skeleton-title {
+  width: 68%;
+}
+
+/* ============================================
+   TASK CARD ANIMATIONS (FLIP-based)
+   ============================================ */
+
+.task-card {
+  will-change: transform, opacity;
+  transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Staggered entrance animation */
+.task-card {
+  animation: taskFadeInUp 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: calc(var(--animation-index, 0) * 25ms);
+}
+
+@keyframes taskFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hover state - subtle lift */
+.task-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 8px 24px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* Active state - slight press */
+.task-card:active {
+  transform: translateY(0);
+  transition-duration: 100ms;
+}
+
+/* ============================================
+   COMPLETION ANIMATION (Burst Effect)
+   ============================================ */
+
+.task-card.completed {
+  opacity: 0.6;
+  transition: opacity 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.task-card.completed .task-title {
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+  text-decoration-thickness: 1.5px;
+  color: var(--color-text-tertiary);
+}
+
+/* Completion particles (created dynamically via JS) */
+.completion-particle {
+  will-change: transform, opacity;
+}
+
+/* Checkbox animation */
+.task-checkbox {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.task-checkbox:checked {
+  transform: scale(1.1);
+}
+
+.task-checkbox:active {
+  transform: scale(0.95);
+}
+
+/* ============================================
+   INLINE EDITING ANIMATIONS
+   ============================================ */
+
+.task-title {
+  transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+}
+
+.task-title:hover {
+  background: rgba(255, 255, 255, 0.03);
+  cursor: text;
+}
+
+.task-title.editing {
+  background: rgba(99, 102, 241, 0.1);
+  outline: 2px solid rgba(99, 102, 241, 0.3);
+  outline-offset: -2px;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.05);
+}
+
+.task-title:focus {
+  outline: none;
+}
+
+/* ============================================
+   BADGE & METADATA ANIMATIONS
+   ============================================ */
+
+.task-assignees,
+.due-date-badge,
+.task-label,
+.priority-badge {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.task-assignees:hover,
+.due-date-badge:hover,
+.task-label:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.task-assignees:active,
+.due-date-badge:active,
+.task-label:active {
+  transform: translateY(0);
+  transition-duration: 80ms;
+}
+
+/* Empty state fade in */
+.task-assignees-empty,
+.due-date-add,
+.task-labels-empty {
+  opacity: 0;
+  transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.task-card:hover .task-assignees-empty,
+.task-card:hover .due-date-add,
+.task-card:hover .task-labels-empty {
+  opacity: 0.7;
+}
+
+.task-assignees-empty:hover,
+.due-date-add:hover,
+.task-labels-empty:hover {
+  opacity: 1 !important;
+}
+
+/* ============================================
+   JUMP TO TRANSCRIPT BUTTON
+   ============================================ */
+
+.jump-to-transcript-btn {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.jump-to-transcript-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(139, 92, 246, 0.2),
+    transparent
+  );
+  transition: left 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.jump-to-transcript-btn:hover::before {
+  left: 100%;
+}
+
+.jump-to-transcript-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+}
+
+.jump-to-transcript-btn:active {
+  transform: translateY(0);
+  transition-duration: 80ms;
+}
+
+/* ============================================
+   TASK MENU TRIGGER (Three Dots)
+   ============================================ */
+
+.task-menu-trigger {
+  opacity: 0;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+}
+
+.task-card:hover .task-menu-trigger {
+  opacity: 0.7;
+}
+
+.task-menu-trigger:hover {
+  opacity: 1 !important;
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.1);
+}
+
+.task-menu-trigger:active {
+  transform: scale(0.95);
+  transition-duration: 80ms;
+}
+
+/* ============================================
+   FILTER TABS ANIMATION
+   ============================================ */
+
+.filter-tab {
+  transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.filter-tab::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-primary);
+  transform: scaleX(0);
+  transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-tab.active::after {
+  transform: scaleX(1);
+}
+
+.filter-tab:hover:not(.active) {
+  transform: translateY(-1px);
+}
+
+/* ============================================
+   SEARCH INPUT FOCUS ANIMATION
+   ============================================ */
+
+.search-input {
+  transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-input:focus {
+  transform: scale(1.01);
+}
+
+.search-clear-btn {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-clear-btn:hover {
+  transform: rotate(90deg);
+}
+
+/* ============================================
+   SEMANTIC SEARCH TOGGLE
+   ============================================ */
+
+.semantic-search-toggle {
+  transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 10px;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(167, 139, 250, 0.8);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.semantic-search-toggle:hover {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: rgba(167, 139, 250, 1);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.semantic-search-toggle.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.6);
+  color: #c4b5fd;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.semantic-search-toggle svg {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.semantic-search-toggle.active svg {
+  transform: rotate(180deg);
+}
+
+/* ============================================
+   CONNECTION BANNER ANIMATIONS
+   ============================================ */
+
+.connection-banner {
+  transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: top;
+}
+
+.connection-banner.hidden {
+  opacity: 0;
+  transform: translateY(-10px);
+  max-height: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.connection-status-icon::before {
+  display: inline-block;
+  animation: statusPulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ============================================
+   RESPONSIVE OPTIMIZATIONS
+   ============================================ */
+
+@media (max-width: 768px) {
+  /* Reduce animation complexity on mobile */
+  .task-skeleton::before {
+    animation-duration: 3s;
+  }
+  
+  /* Faster animations for better mobile feel */
+  .task-card {
+    transition-duration: 180ms;
+  }
+  
+  .task-card:hover {
+    transform: none; /* Disable hover lift on touch devices */
+  }
+}
+
+/* ============================================
+   REDUCED MOTION PREFERENCES
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .task-skeleton::before {
+    animation: none;
+  }
+  
+  .task-card {
+    animation: none;
+  }
+}
+
+/* ============================================
+   PERFORMANCE OPTIMIZATIONS
+   ============================================ */
+
+/* GPU acceleration for animated elements */
+.task-card,
+.task-checkbox,
+.completion-particle,
+.task-title.editing,
+.jump-to-transcript-btn,
+.filter-tab,
+.search-input {
+  will-change: transform;
+}
+
+/* Remove will-change after animation */
+.task-card:not(:hover) {
+  will-change: auto;
+}

@@ -39,6 +39,13 @@ class CacheManager {
                 this.db = request.result;
                 this.isInitialized = true;
                 console.log('✅ IndexedDB initialized:', this.dbName);
+                
+                // Fire ready event for dependent modules
+                window.dispatchEvent(new CustomEvent('cacheManagerReady', { 
+                    detail: { cacheManager: this } 
+                }));
+                console.log('📡 cacheManagerReady event fired');
+                
                 resolve();
             };
 

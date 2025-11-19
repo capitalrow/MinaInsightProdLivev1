@@ -1,155 +1,144 @@
 /**
  * CROWN⁴.5 WebSocket Event Handlers
- * Connects to /tasks namespace and handles all 20 CROWN⁴.5 events.
+ * Registers 20+ event handlers with WebSocketManager for /tasks namespace.
+ * 
+ * ARCHITECTURE (refactored for single-connection ownership):
+ * - WebSocketManager owns the Socket.IO connection to /tasks
+ * - This module exports handler functions that register via wsManager.registerHandlers()
+ * - All events flow through wsManager.handleSequencedEvent() for CROWN⁴ guarantees
  */
 
 class TaskWebSocketHandlers {
     constructor() {
-        this.socket = null;
         this.connected = false;
-        this.namespace = '/tasks';
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        this.namespace = 'tasks'; // No leading slash - wsManager adds it
         this.handlers = new Map();
     }
 
     /**
-     * Connect to tasks WebSocket namespace
-     * @returns {Promise<void>}
+     * Initialize by registering handlers with WebSocketManager
+     * Call this AFTER wsManager.init() completes
+     * @returns {void}
      */
-    async connect() {
-        if (this.connected) {
-            console.log('✅ Already connected to tasks namespace');
+    init() {
+        if (!window.wsManager) {
+            console.error('❌ WebSocketManager not available - cannot register task handlers');
             return;
         }
 
-        try {
-            // Use existing socket.io connection
-            if (!window.io) {
-                console.error('❌ Socket.IO not available');
-                return;
+        // Build handler map for all CROWN⁴.5 events
+        const handlers = this._buildHandlerMap();
+        
+        // Register with WebSocketManager (routes through handleSequencedEvent)
+        window.wsManager.registerHandlers(this.namespace, handlers);
+        
+        // Listen for connection events from wsManager
+        window.wsManager.on('connection_status', (data) => {
+            if (data.namespace === this.namespace) {
+                this.connected = data.connected;
+                if (data.connected) {
+                    console.log('✅ Tasks WebSocket connected');
+                    this._emitBootstrap();
+                } else {
+                    console.log('📵 Tasks WebSocket disconnected');
+                }
             }
-
-            this.socket = window.io(this.namespace, {
-                transports: ['websocket', 'polling'],
-                reconnection: true,
-                reconnectionAttempts: this.maxReconnectAttempts,
-                reconnectionDelay: 1000
-            });
-
-            this._registerEventHandlers();
-            console.log('📡 Connected to tasks WebSocket namespace');
-
-        } catch (error) {
-            console.error('❌ Failed to connect to tasks namespace:', error);
-        }
+        });
+        
+        console.log('✅ Task handlers registered with WebSocketManager');
     }
 
     /**
-     * Register all CROWN⁴.5 event handlers
+     * Build map of all event handlers (CROWN⁴.5: 20+ events)
+     * @returns {Object} Map of event names to handler functions
      */
-    _registerEventHandlers() {
-        // Connection events
-        this.socket.on('connect', () => {
-            this.connected = true;
-            this.reconnectAttempts = 0;
-            console.log('✅ Tasks WebSocket connected');
-            
-            // Trigger bootstrap
-            this._emitBootstrap();
-        });
-
-        this.socket.on('disconnect', () => {
-            this.connected = false;
-            console.log('📵 Tasks WebSocket disconnected');
-        });
-
-        this.socket.on('reconnect', (attemptNumber) => {
-            console.log(`🔄 Reconnected after ${attemptNumber} attempts`);
-            this._emitBootstrap();
-        });
-
-        // CROWN⁴.5 Event Handlers (20 events)
+    _buildHandlerMap() {
+        const handlers = {};
+        
+        // Phase 2 Batch 1: Core CRUD Events
+        handlers['task.create.manual'] = this._handleTaskCreated.bind(this);
+        handlers['task.create.ai_accept'] = this._handleTaskCreated.bind(this);
+        handlers['task.update.core'] = this._handleTaskUpdated.bind(this);
+        handlers['task.delete.soft'] = this._handleTaskDeleted.bind(this);
+        handlers['task.restore'] = this._handleTaskRestored.bind(this);
+        
+        // Phase 2 Batch 2: Task Lifecycle Events
+        handlers['task.priority.changed'] = this._handleBatch2PriorityChanged.bind(this);
+        handlers['task.status.changed'] = this._handleBatch2StatusChanged.bind(this);
+        handlers['task.assigned'] = this._handleBatch2TaskAssigned.bind(this);
+        handlers['task.unassigned'] = this._handleBatch2TaskUnassigned.bind(this);
+        handlers['task.due_date.changed'] = this._handleBatch2DueDateChanged.bind(this);
+        handlers['task.archived'] = this._handleBatch2TaskArchived.bind(this);
         
         // 1. Bootstrap (initial data load)
-        this.on('bootstrap_response', this._handleBootstrap.bind(this));
+        handlers['bootstrap_response'] = this._handleBootstrap.bind(this);
         
-        // 2. Task Create
-        this.on('task_created', this._handleTaskCreated.bind(this));
+        // 2. Task Create (legacy)
+        handlers['task_created'] = this._handleTaskCreated.bind(this);
         
-        // 3-9. Task Update (7 variants)
-        this.on('task_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_title_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_description_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_due_date_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_assignee_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_category_updated', this._handleTaskUpdated.bind(this));
-        this.on('task_progress_updated', this._handleTaskUpdated.bind(this));
+        // 3-9. Task Update (7 variants - legacy)
+        handlers['task_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_title_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_description_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_due_date_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_assignee_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_category_updated'] = this._handleTaskUpdated.bind(this);
+        handlers['task_progress_updated'] = this._handleTaskUpdated.bind(this);
         
         // 10. Task Status Toggle
-        this.on('task_status_toggled', this._handleTaskStatusToggled.bind(this));
+        handlers['task_status_toggled'] = this._handleTaskStatusToggled.bind(this);
         
         // 11. Task Priority Change
-        this.on('task_priority_changed', this._handleTaskPriorityChanged.bind(this));
+        handlers['task_priority_changed'] = this._handleTaskPriorityChanged.bind(this);
         
         // 12. Task Labels Update
-        this.on('task_labels_updated', this._handleTaskLabelsUpdated.bind(this));
+        handlers['task_labels_updated'] = this._handleTaskLabelsUpdated.bind(this);
         
         // 13. Task Snooze
-        this.on('task_snoozed', this._handleTaskSnoozed.bind(this));
+        handlers['task_snoozed'] = this._handleTaskSnoozed.bind(this);
         
         // 14. Task Merge
-        this.on('tasks_merged', this._handleTasksMerged.bind(this));
+        handlers['tasks_merged'] = this._handleTasksMerged.bind(this);
         
         // 15. Transcript Jump
-        this.on('transcript_jump', this._handleTranscriptJump.bind(this));
+        handlers['transcript_jump'] = this._handleTranscriptJump.bind(this);
         
         // 16. Task Filter
-        this.on('filter_changed', this._handleFilterChanged.bind(this));
+        handlers['filter_changed'] = this._handleFilterChanged.bind(this);
         
         // 17. Task Refresh
-        this.on('tasks_refreshed', this._handleTasksRefreshed.bind(this));
+        handlers['tasks_refreshed'] = this._handleTasksRefreshed.bind(this);
         
         // 18. Idle Sync
-        this.on('idle_sync_complete', this._handleIdleSyncComplete.bind(this));
+        handlers['idle_sync_complete'] = this._handleIdleSyncComplete.bind(this);
         
         // 19. Offline Queue Replay
-        this.on('offline_queue_replayed', this._handleOfflineQueueReplayed.bind(this));
+        handlers['offline_queue_replayed'] = this._handleOfflineQueueReplayed.bind(this);
         
-        // 20. Task Delete
-        this.on('task_deleted', this._handleTaskDeleted.bind(this));
+        // 20. Task Delete (legacy)
+        handlers['task_deleted'] = this._handleTaskDeleted.bind(this);
         
         // Bulk operations
-        this.on('tasks_bulk_updated', this._handleTasksBulkUpdated.bind(this));
+        handlers['tasks_bulk_updated'] = this._handleTasksBulkUpdated.bind(this);
         
         // Error handling
-        this.on('error', this._handleError.bind(this));
-    }
-
-    /**
-     * Register event handler
-     * @param {string} event
-     * @param {Function} handler
-     */
-    on(event, handler) {
-        if (!this.socket) return;
+        handlers['error'] = this._handleError.bind(this);
         
-        this.socket.on(event, handler);
-        this.handlers.set(event, handler);
+        return handlers;
     }
 
     /**
-     * Emit event to server
-     * @param {string} event
-     * @param {Object} data
+     * Emit event to server via WebSocketManager
+     * @param {string} event - Event name
+     * @param {Object} data - Event data
      */
     emit(event, data) {
-        if (!this.socket || !this.connected) {
-            console.warn(`⚠️ Cannot emit ${event} - not connected`);
+        if (!window.wsManager) {
+            console.warn(`⚠️ Cannot emit ${event} - WebSocketManager not available`);
             return;
         }
         
-        this.socket.emit(event, data);
+        window.wsManager.send(this.namespace, event, data);
     }
 
     // Event Handlers
@@ -273,6 +262,12 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskCreated(data) {
+        // CROWN⁴.5 Phase 2.1 Batch 1: Telemetry tracking
+        const eventType = data.event_type || (data.data?.action === 'ai_accepted' ? 'task.create.ai_accept' : 'task.create.manual');
+        if (window.crownTelemetry && eventType.startsWith('task.create')) {
+            window.crownTelemetry.recordBatch1Event(eventType, 'received');
+        }
+        
         // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -280,10 +275,30 @@ class TaskWebSocketHandlers {
             return;
         }
         
-        const task = data.task || data;
-        console.log('✨ Task created:', task.id);
+        // CROWN⁴.5 Batch 1: Support both new events (data.data.task) and legacy (data.task)
+        const task = data.data?.task || data.task || data;
         
-        await window.taskCache.saveTask(task);
+        // Preserve CROWN⁴.5 metadata for deduplication and reconciliation
+        if (data.event_id) {
+            task._crown_event_id = data.event_id;
+            task._crown_checksum = data.checksum;
+            task._crown_sequence_num = data.sequence_num;
+            task._crown_action = data.data?.action || data.action;
+        }
+        
+        console.log('✨ Task created:', task.id, task._crown_event_id ? `(event: ${task._crown_event_id})` : '');
+        
+        try {
+            await window.taskCache.saveTask(task);
+            if (window.crownTelemetry && eventType.startsWith('task.create')) {
+                window.crownTelemetry.recordBatch1Event(eventType, 'processed');
+            }
+        } catch (error) {
+            if (window.crownTelemetry && eventType.startsWith('task.create')) {
+                window.crownTelemetry.recordBatch1Event(eventType, 'error');
+            }
+            throw error;
+        }
         
         if (window.optimisticUI) {
             window.optimisticUI._addTaskToDOM(task);
@@ -299,6 +314,12 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskUpdated(data) {
+        // CROWN⁴.5 Phase 2.1 Batch 1: Telemetry tracking
+        const eventType = data.event_type || 'task.update.core';
+        if (window.crownTelemetry && eventType === 'task.update.core') {
+            window.crownTelemetry.recordBatch1Event(eventType, 'received');
+        }
+        
         // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -306,10 +327,30 @@ class TaskWebSocketHandlers {
             return;
         }
         
-        const task = data.task || data;
-        console.log('📝 Task updated:', task.id);
+        // CROWN⁴.5 Batch 1: Support both new events (data.data.task) and legacy (data.task)
+        const task = data.data?.task || data.task || data;
         
-        await window.taskCache.saveTask(task);
+        // Preserve CROWN⁴.5 metadata for deduplication and reconciliation
+        if (data.event_id) {
+            task._crown_event_id = data.event_id;
+            task._crown_checksum = data.checksum;
+            task._crown_sequence_num = data.sequence_num;
+            task._crown_action = data.data?.action || data.action;
+        }
+        
+        console.log('📝 Task updated:', task.id, task._crown_event_id ? `(event: ${task._crown_event_id})` : '');
+        
+        try {
+            await window.taskCache.saveTask(task);
+            if (window.crownTelemetry && eventType === 'task.update.core') {
+                window.crownTelemetry.recordBatch1Event(eventType, 'processed');
+            }
+        } catch (error) {
+            if (window.crownTelemetry && eventType === 'task.update.core') {
+                window.crownTelemetry.recordBatch1Event(eventType, 'error');
+            }
+            throw error;
+        }
         
         if (window.optimisticUI) {
             window.optimisticUI._updateTaskInDOM(task.id, task);
@@ -461,20 +502,134 @@ class TaskWebSocketHandlers {
         
         const { primary_task, merged_task_ids } = data;
         
-        // Update primary task
+        // CROWN⁴.5 Event #13: task_merge animation (duplicate collapse + badge)
+        const primaryTaskCard = document.querySelector(`[data-task-id="${primary_task.id}"]`);
+        
+        if (primaryTaskCard && merged_task_ids && merged_task_ids.length > 0 && window.quietStateManager) {
+            // Animate merged tasks collapsing into primary task
+            for (const mergedTaskId of merged_task_ids) {
+                const mergedCard = document.querySelector(`[data-task-id="${mergedTaskId}"]`);
+                if (mergedCard) {
+                    try {
+                        await window.quietStateManager.queueAnimation((setCancelHandler) => {
+                            return new Promise((resolve) => {
+                                const rect1 = mergedCard.getBoundingClientRect();
+                                const rect2 = primaryTaskCard.getBoundingClientRect();
+                                
+                                const deltaX = rect2.left - rect1.left;
+                                const deltaY = rect2.top - rect1.top;
+                                
+                                // Collapse animation: shrink and move to primary task
+                                mergedCard.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+                                mergedCard.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0)`;
+                                mergedCard.style.opacity = '0';
+                                
+                                setTimeout(() => {
+                                    if (mergedCard.parentNode) {
+                                        mergedCard.remove();
+                                    }
+                                    resolve();
+                                }, 500);
+                                
+                                setCancelHandler(() => {
+                                    if (mergedCard.parentNode) {
+                                        mergedCard.remove();
+                                    }
+                                    resolve();
+                                });
+                            });
+                        }, { priority: 8, type: 'task_merge', entityId: mergedTaskId });
+                    } catch (error) {
+                        console.error('Failed to animate merge collapse:', error);
+                        if (mergedCard.parentNode) {
+                            mergedCard.remove();
+                        }
+                    }
+                }
+            }
+            
+            // Add merge badge to primary task (awaited to respect queue)
+            try {
+                await window.quietStateManager.queueAnimation((setCancelHandler) => {
+                    return new Promise((resolve) => {
+                        const badge = document.createElement('div');
+                        badge.className = 'task-merge-badge';
+                        badge.textContent = `+${merged_task_ids.length} merged`;
+                        badge.style.cssText = `
+                            position: absolute;
+                            top: 0.5rem;
+                            right: 0.5rem;
+                            padding: 0.25rem 0.5rem;
+                            background: var(--color-primary);
+                            color: white;
+                            border-radius: var(--radius-full);
+                            font-size: 0.75rem;
+                            font-weight: 600;
+                            z-index: 10;
+                            opacity: 0;
+                            transform: scale(0.5);
+                            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                        `;
+                        
+                        primaryTaskCard.style.position = 'relative';
+                        primaryTaskCard.appendChild(badge);
+                        
+                        // Animate badge in
+                        setTimeout(() => {
+                            badge.style.opacity = '1';
+                            badge.style.transform = 'scale(1)';
+                        }, 50);
+                        
+                        // Auto-remove badge after 3 seconds
+                        setTimeout(() => {
+                            badge.style.opacity = '0';
+                            badge.style.transform = 'scale(0.5)';
+                            setTimeout(() => {
+                                if (badge.parentNode) {
+                                    badge.remove();
+                                }
+                                resolve();
+                            }, 300);
+                        }, 3000);
+                        
+                        setCancelHandler(() => {
+                            if (badge.parentNode) {
+                                badge.remove();
+                            }
+                            resolve();
+                        });
+                    });
+                }, { priority: 7, type: 'merge_badge', entityId: primary_task.id });
+            } catch (error) {
+                console.error('Failed to animate merge badge:', error);
+            }
+        } else if (merged_task_ids && merged_task_ids.length > 0) {
+            // Fallback: Remove merged cards without animation if QuietStateManager unavailable
+            for (const mergedTaskId of merged_task_ids) {
+                const mergedCard = document.querySelector(`[data-task-id="${mergedTaskId}"]`);
+                if (mergedCard && mergedCard.parentNode) {
+                    mergedCard.remove();
+                }
+            }
+        }
+        
+        // Update cache and DOM
         await window.taskCache.saveTask(primary_task);
         
-        // Remove merged tasks
+        // Remove merged tasks from cache
         for (const taskId of merged_task_ids) {
             await window.taskCache.deleteTask(taskId);
-            if (window.optimisticUI) {
-                window.optimisticUI._removeTaskFromDOM(taskId);
-            }
         }
         
         // Update primary task in DOM
         if (window.optimisticUI) {
             window.optimisticUI._updateTaskInDOM(primary_task.id, primary_task);
+        }
+        
+        // Record telemetry
+        if (window.CROWNTelemetry) {
+            window.CROWNTelemetry.recordMetric('task_merge_event', 1);
+            window.CROWNTelemetry.recordMetric('tasks_merged_count', merged_task_ids.length);
         }
     }
 
@@ -603,6 +758,12 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskDeleted(data) {
+        // CROWN⁴.5 Phase 2.1 Batch 1: Telemetry tracking
+        const eventType = data.event_type || 'task.delete.soft';
+        if (window.crownTelemetry && eventType === 'task.delete.soft') {
+            window.crownTelemetry.recordBatch1Event(eventType, 'received');
+        }
+        
         // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -610,10 +771,21 @@ class TaskWebSocketHandlers {
             return;
         }
         
-        const taskId = data.task_id || data.id;
+        // CROWN⁴.5 Batch 1: Support both new events (data.data.task_id) and legacy (data.task_id)
+        const taskId = data.data?.task_id || data.task_id || data.id;
         console.log('🗑️ Task deleted:', taskId);
         
-        await window.taskCache.deleteTask(taskId);
+        try {
+            await window.taskCache.deleteTask(taskId);
+            if (window.crownTelemetry && eventType === 'task.delete.soft') {
+                window.crownTelemetry.recordBatch1Event(eventType, 'processed');
+            }
+        } catch (error) {
+            if (window.crownTelemetry && eventType === 'task.delete.soft') {
+                window.crownTelemetry.recordBatch1Event(eventType, 'error');
+            }
+            throw error;
+        }
         
         if (window.optimisticUI) {
             window.optimisticUI._removeTaskFromDOM(taskId);
@@ -621,6 +793,384 @@ class TaskWebSocketHandlers {
         
         if (window.multiTabSync) {
             window.multiTabSync.broadcastTaskDeleted(taskId);
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2 Batch 1: Handle task restored event
+     * Restores soft-deleted task (undo delete within 15s window)
+     * @param {Object} data
+     */
+    async _handleTaskRestored(data) {
+        // CROWN⁴.5 Phase 2.1 Batch 1: Telemetry tracking
+        if (window.crownTelemetry) {
+            window.crownTelemetry.recordBatch1Event('task.restore', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.restore event');
+            return;
+        }
+        
+        const task = data.data?.task || data.task || data;
+        const taskId = task.id || task.task_id;
+        
+        // Preserve CROWN⁴.5 metadata for deduplication and reconciliation
+        if (data.event_id) {
+            task._crown_event_id = data.event_id;
+            task._crown_checksum = data.checksum;
+            task._crown_sequence_num = data.sequence_num;
+            task._crown_action = 'restored';
+        }
+        
+        console.log('♻️ Task restored:', taskId, task._crown_event_id ? `(event: ${task._crown_event_id})` : '');
+        
+        try {
+            // Save restored task to cache
+            await window.taskCache.saveTask(task);
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch1Event('task.restore', 'processed');
+            }
+        } catch (error) {
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch1Event('task.restore', 'error');
+            }
+            throw error;
+        }
+        
+        // Re-add to DOM (similar to task created)
+        if (window.optimisticUI) {
+            window.optimisticUI._addTaskToDOM(task);
+        }
+        
+        // CROWN⁴.5 Multi-tab sync: Broadcast restored task to other tabs
+        // Restore is equivalent to create for UI purposes
+        if (window.multiTabSync) {
+            window.multiTabSync.broadcastTaskCreated(task);
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Shared lifecycle update helper
+     * Unified logic for applying lifecycle changes (priority, status, assignment, due date, archive)
+     * Used by both new Batch 2 events and legacy events for consistency
+     * 
+     * @param {Object} task - Updated task object (single source of truth)
+     * @param {string} eventType - Event type (e.g., 'task.priority.changed')
+     * @param {any} oldValue - Previous value (for logging/diagnostics)
+     * @param {any} newValue - New value (for logging/diagnostics)
+     * @param {Object} crownMetadata - CROWN event metadata (event_id, checksum, etc.)
+     */
+    async _applyLifecycleUpdate(task, eventType, oldValue, newValue, crownMetadata = {}) {
+        // Preserve CROWN⁴.5 metadata for deduplication and reconciliation
+        if (crownMetadata.event_id) {
+            task._crown_event_id = crownMetadata.event_id;
+            task._crown_checksum = crownMetadata.checksum;
+            task._crown_sequence_num = crownMetadata.sequence_num;
+            task._crown_action = crownMetadata.action;
+        }
+        
+        // Log lifecycle change with old/new values for diagnostics
+        const changeLog = oldValue !== undefined && newValue !== undefined 
+            ? `${oldValue} → ${newValue}` 
+            : '';
+        console.log(`🔄 ${eventType}: task ${task.id} ${changeLog}`);
+        
+        try {
+            // Save to IndexedDB cache (single source of truth)
+            await window.taskCache.saveTask(task);
+            
+            // Update DOM (full card update, optimized internally)
+            if (window.optimisticUI) {
+                window.optimisticUI._updateTaskInDOM(task.id, task);
+            }
+            
+            // Multi-tab sync
+            if (window.multiTabSync) {
+                window.multiTabSync.broadcastTaskUpdated(task);
+            }
+            
+            return { success: true };
+        } catch (error) {
+            console.error(`❌ Failed to apply lifecycle update for ${eventType}:`, error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.priority.changed event
+     * @param {Object} data - Event payload {event_id, data: {task, old_value, new_value, ...}}
+     */
+    async _handleBatch2PriorityChanged(data) {
+        // Record telemetry (received)
+        if (window.crownTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.priority.changed', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.priority.changed event');
+            return;
+        }
+        
+        // Extract task and old/new values from dual payload
+        const task = data.data?.task || data.task || data;
+        const oldValue = data.data?.old_value;
+        const newValue = data.data?.new_value;
+        
+        try {
+            // Apply lifecycle update via shared helper
+            const result = await this._applyLifecycleUpdate(task, 'task.priority.changed', oldValue, newValue, {
+                event_id: data.event_id,
+                checksum: data.checksum,
+                sequence_num: data.sequence_num,
+                action: 'priority_changed'
+            });
+            
+            // Record telemetry (processed or error)
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.priority.changed', result.success ? 'processed' : 'error');
+            }
+        } catch (error) {
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.priority.changed', 'error');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.status.changed event
+     * @param {Object} data - Event payload {event_id, data: {task, old_value, new_value, old_completed_at, new_completed_at, ...}}
+     */
+    async _handleBatch2StatusChanged(data) {
+        // Record telemetry (received)
+        if (window.crownTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.status.changed', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.status.changed event');
+            return;
+        }
+        
+        // Extract task and old/new values
+        const task = data.data?.task || data.task || data;
+        const oldValue = data.data?.old_value;
+        const newValue = data.data?.new_value;
+        
+        try {
+            // Apply lifecycle update
+            const result = await this._applyLifecycleUpdate(task, 'task.status.changed', oldValue, newValue, {
+                event_id: data.event_id,
+                checksum: data.checksum,
+                sequence_num: data.sequence_num,
+                action: 'status_changed'
+            });
+            
+            // Animate status change (visual feedback)
+            const card = document.querySelector(`[data-task-id="${task.id}"]`);
+            if (card) {
+                card.classList.add('status-changed');
+                setTimeout(() => card.classList.remove('status-changed'), 500);
+            }
+            
+            // Record telemetry
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.status.changed', result.success ? 'processed' : 'error');
+            }
+        } catch (error) {
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.status.changed', 'error');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.assigned event
+     * @param {Object} data - Event payload {event_id, data: {task, new_value (user_id), ...}}
+     */
+    async _handleBatch2TaskAssigned(data) {
+        // Record telemetry (received)
+        if (window.crownTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.assigned', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.assigned event');
+            return;
+        }
+        
+        // Extract task and assigned user
+        const task = data.data?.task || data.task || data;
+        const assignedUserId = data.data?.new_value;
+        
+        try {
+            // Apply lifecycle update
+            const result = await this._applyLifecycleUpdate(task, 'task.assigned', null, assignedUserId, {
+                event_id: data.event_id,
+                checksum: data.checksum,
+                sequence_num: data.sequence_num,
+                action: 'assigned'
+            });
+            
+            // Record telemetry
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.assigned', result.success ? 'processed' : 'error');
+            }
+        } catch (error) {
+            if (window.crownTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.assigned', 'error');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.unassigned event
+     * @param {Object} data - Event payload {event_id, data: {task, old_value (user_id), ...}}
+     */
+    async _handleBatch2TaskUnassigned(data) {
+        // Record telemetry (received)
+        if (window.CROWNTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.unassigned', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.unassigned event');
+            return;
+        }
+        
+        // Extract task and unassigned user
+        const task = data.data?.task || data.task || data;
+        const unassignedUserId = data.data?.old_value;
+        
+        try {
+            // Apply lifecycle update
+            const result = await this._applyLifecycleUpdate(task, 'task.unassigned', unassignedUserId, null, {
+                event_id: data.event_id,
+                checksum: data.checksum,
+                sequence_num: data.sequence_num,
+                action: 'unassigned'
+            });
+            
+            // Record telemetry
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.unassigned', result.success ? 'processed' : 'error');
+            }
+        } catch (error) {
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.unassigned', 'error');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.due_date.changed event
+     * @param {Object} data - Event payload {event_id, data: {task, old_value, new_value, ...}}
+     */
+    async _handleBatch2DueDateChanged(data) {
+        // Record telemetry (received)
+        if (window.CROWNTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.due_date.changed', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.due_date.changed event');
+            return;
+        }
+        
+        // Extract task and old/new due dates
+        const task = data.data?.task || data.task || data;
+        const oldValue = data.data?.old_value;
+        const newValue = data.data?.new_value;
+        
+        try {
+            // Apply lifecycle update
+            const result = await this._applyLifecycleUpdate(task, 'task.due_date.changed', oldValue, newValue, {
+                event_id: data.event_id,
+                checksum: data.checksum,
+                sequence_num: data.sequence_num,
+                action: 'due_date_changed'
+            });
+            
+            // Record telemetry
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.due_date.changed', result.success ? 'processed' : 'error');
+            }
+        } catch (error) {
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.due_date.changed', 'error');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * CROWN⁴.5 Phase 2.2 Batch 2: Handle task.archived event
+     * @param {Object} data - Event payload {event_id, data: {task, ...}}
+     */
+    async _handleBatch2TaskArchived(data) {
+        // Record telemetry (received)
+        if (window.CROWNTelemetry) {
+            window.crownTelemetry.recordBatch2Event('task.archived', 'received');
+        }
+        
+        // Process CROWN⁴.5 metadata (regression check)
+        const { shouldProcess } = await this._processCROWNMetadata(data);
+        if (!shouldProcess) {
+            console.log('⏭️ Skipping stale task.archived event');
+            return;
+        }
+        
+        // Extract task
+        const task = data.data?.task || data.task || data;
+        const taskId = task.id || task.task_id;
+        
+        try {
+            // Archive is like soft delete but preserves metadata
+            // Remove from active cache but trigger bootstrap for fresh state
+            await window.taskCache.deleteTask(taskId);
+            
+            // Remove from DOM
+            if (window.optimisticUI) {
+                window.optimisticUI._removeTaskFromDOM(taskId);
+            }
+            
+            // Multi-tab sync
+            if (window.multiTabSync) {
+                window.multiTabSync.broadcastTaskDeleted(taskId);
+            }
+            
+            // Trigger bootstrap to refresh active task list
+            if (window.taskBootstrap) {
+                await window.taskBootstrap.syncInBackground();
+            }
+            
+            console.log(`🗃️ Task archived: ${taskId}`);
+            
+            // Record telemetry (processed)
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.archived', 'processed');
+            }
+        } catch (error) {
+            if (window.CROWNTelemetry) {
+                window.crownTelemetry.recordBatch2Event('task.archived', 'error');
+            }
+            throw error;
         }
     }
 
@@ -688,26 +1238,15 @@ class TaskWebSocketHandlers {
     }
 
     /**
-     * Disconnect
+     * Disconnect (no-op since wsManager owns the connection)
      */
     disconnect() {
-        if (this.socket) {
-            this.socket.disconnect();
-            this.connected = false;
-        }
+        console.log('ℹ️ Disconnect called - WebSocketManager owns connection lifecycle');
+        this.connected = false;
     }
 }
 
-// Export singleton
+// Export singleton (initialization happens in tasks.html after wsManager.init)
 window.tasksWS = new TaskWebSocketHandlers();
 
-// Auto-connect on load
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.tasksWS.connect();
-    });
-} else {
-    window.tasksWS.connect();
-}
-
-console.log('🔌 CROWN⁴.5 WebSocket Handlers loaded');
+console.log('🔌 CROWN⁴.5 WebSocket Handlers loaded (awaiting init() call)');

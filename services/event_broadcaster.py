@@ -579,6 +579,19 @@ class EventBroadcaster:
             EventType.ARCHIVE_REVEAL: "/dashboard",
             EventType.WORKSPACE_SWITCH: "/dashboard",
             EventType.CACHE_INVALIDATE: "/dashboard",
+            # CROWN⁴.5 Phase 2 Batch 1: Core CRUD Events
+            EventType.TASK_CREATE_MANUAL: "/tasks",
+            EventType.TASK_CREATE_AI_ACCEPT: "/tasks",
+            EventType.TASK_UPDATE_CORE: "/tasks",
+            EventType.TASK_DELETE_SOFT: "/tasks",
+            EventType.TASK_RESTORE: "/tasks",
+            # CROWN⁴.5 Phase 2 Batch 2: Task Lifecycle Events
+            EventType.TASK_PRIORITY_CHANGED: "/tasks",
+            EventType.TASK_STATUS_CHANGED: "/tasks",
+            EventType.TASK_ASSIGNED: "/tasks",
+            EventType.TASK_UNASSIGNED: "/tasks",
+            EventType.TASK_DUE_DATE_CHANGED: "/tasks",
+            EventType.TASK_ARCHIVED: "/tasks",
         }
         
         return namespace_map.get(event_type, "/dashboard")

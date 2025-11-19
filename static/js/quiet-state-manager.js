@@ -188,6 +188,11 @@ class QuietStateManager {
         };
     }
 
+    // Alias for CalmScoreWidget compatibility
+    getState() {
+        return this.getStats();
+    }
+
     _calculateCalmScore() {
         const utilizationRatio = this.activeAnimations.size / this.maxConcurrent;
         const queuePressure = Math.min(this.animationQueue.length / 10, 1);

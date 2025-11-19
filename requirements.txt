@@ -53,3 +53,5 @@ celery
 flask-sqlalchemy
 sqlalchemy
 Flask-Session
+pgvector
+python-socketio[client]

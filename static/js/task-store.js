@@ -284,6 +284,30 @@ class TaskStore {
     getTask(taskId) {
         return this.tasks.get(taskId);
     }
+
+    /**
+     * Backwards-compatible helper for UI modules that expect getTaskById
+     * - Accepts string or number
+     * - Handles temp_ IDs safely
+     */
+    getTaskById(taskId) {
+        // For provisional client-side IDs (temp_...), keep as-is
+        if (typeof taskId === 'string' && taskId.startsWith('temp_')) {
+            return this.tasks.get(taskId);
+        }
+
+        // For normal IDs coming from data-attributes, coerce "417" -> 417
+        let key = taskId;
+        if (typeof taskId === 'string') {
+            const asNumber = Number(taskId);
+            if (!Number.isNaN(asNumber)) {
+                key = asNumber;
+            }
+        }
+
+        return this.tasks.get(key);
+    }
+
     
     /**
      * Get all tasks
@@ -480,11 +504,37 @@ class TaskStore {
     }
 }
 
-// Initialize global singleton when cacheManager is available
+// Initialize global singleton when cacheManager is ready
 window.taskStore = null;
 
-// Auto-initialize when cache manager is ready
-if (window.cacheManager) {
-    window.taskStore = new TaskStore(window.cacheManager, window.cacheValidator);
-    console.log('🏪 TaskStore instance created');
-}
+// Initialize TaskStore when cacheManager promise resolves
+(async function initializeTaskStore() {
+    try {
+        console.log('[TaskStore] Waiting for cacheManager to be ready...');
+        
+        // Wait for cacheManager to initialize
+        await window.cacheManagerReady;
+        
+        console.log('[TaskStore] cacheManager ready, checking dependencies...');
+        
+        // Check if cacheValidator is available
+        if (!window.cacheValidator) {
+            console.warn('⚠️ [TaskStore] cacheValidator not available, retrying in 100ms...');
+            setTimeout(initializeTaskStore, 100);
+            return;
+        }
+        
+        // Create TaskStore instance
+        window.taskStore = new TaskStore(window.cacheManager, window.cacheValidator);
+        console.log('✅ [TaskStore] TaskStore instance created');
+        
+        // Fire event to notify dependent modules
+        window.dispatchEvent(new CustomEvent('taskStoreReady', { 
+            detail: { taskStore: window.taskStore } 
+        }));
+        console.log('📡 [TaskStore] taskStoreReady event fired');
+        
+    } catch (error) {
+        console.error('❌ [TaskStore] Failed to initialize:', error);
+    }
+})();

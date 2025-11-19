@@ -5,15 +5,20 @@ REST API endpoints for task management, CRUD operations, and status updates.
 
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from models import db, Task, Meeting, User, Session, Workspace, TaskComment, EventLedger, EventType
+from models import db, Task, Meeting, User, Session, Workspace, TaskComment, EventLedger, EventType, Segment
 from datetime import datetime, date, timedelta
-from sqlalchemy import func, and_, or_, select
+from sqlalchemy import func, and_, or_, select, text
+from sqlalchemy.orm import joinedload, selectinload
 from utils.etag_helper import with_etag, compute_collection_etag
+from utils.auth import admin_required
 # server/routes/api_tasks.py
 import logging
 from app import db
 from models.summary import Summary
 from services.event_broadcaster import EventBroadcaster
+from services.event_sequencer import event_sequencer
+from services.deduper import deduper
+from services.task_embedding_service import get_embedding_service
 
 logger = logging.getLogger(__name__)
 event_broadcaster = EventBroadcaster()
@@ -39,7 +44,18 @@ def list_tasks():
         # Base query - tasks from meetings in user's workspace (exclude soft-deleted by default)
         include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
         
-        stmt = select(Task).join(Meeting).where(
+        # CROWN⁴.6 OPTIMIZATION: Eager load ALL relationships to prevent N+1 queries
+        # Performance target: <500ms for full sync with 15+ tasks
+        # - assignees: selectinload for many-to-many (more efficient than joinedload)
+        # - meeting: joinedload since we're already joining on Meeting table
+        # - assigned_to, created_by, deleted_by: joinedload for single FK relationships
+        stmt = select(Task).join(Meeting).options(
+            selectinload(Task.assignees),
+            joinedload(Task.meeting),
+            joinedload(Task.assigned_to),
+            joinedload(Task.created_by),
+            joinedload(Task.deleted_by)
+        ).where(
             Meeting.workspace_id == current_user.workspace_id
         )
         
@@ -65,13 +81,69 @@ def list_tasks():
         if meeting_id:
             stmt = stmt.where(Task.meeting_id == meeting_id)
         
+        # CROWN⁴.6: Semantic search support
+        semantic = request.args.get('semantic', 'false').lower() == 'true'
+        semantic_mode_active = False  # Track if semantic ordering was applied
+        
         if search:
-            stmt = stmt.where(
-                or_(
-                    Task.title.contains(search),
-                    Task.description.contains(search)
+            if semantic:
+                # Try semantic search with pgvector cosine similarity
+                embedding_service = get_embedding_service()
+                if embedding_service.is_available():
+                    try:
+                        # Generate embedding for search query
+                        query_embedding = embedding_service.generate_embedding(search)
+                        
+                        if query_embedding:
+                            # Use pgvector.sqlalchemy cosine_distance for similarity search
+                            # Scoped to workspace via existing Meeting join
+                            from sqlalchemy import func
+                            
+                            # Filter tasks with embeddings
+                            stmt = stmt.where(Task.embedding.isnot(None))
+                            
+                            # Order by cosine similarity (distance) - lower distance = more similar
+                            stmt = stmt.order_by(Task.embedding.cosine_distance(query_embedding))
+                            
+                            # Limit to top 50 most similar tasks
+                            stmt = stmt.limit(50)
+                            
+                            semantic_mode_active = True  # Flag to skip default ordering
+                            logger.info(f"Semantic search active for query: '{search[:50]}...'")
+                        else:
+                            # Fall back to keyword search
+                            logger.warning("Failed to generate query embedding, falling back to keyword search")
+                            stmt = stmt.where(
+                                or_(
+                                    Task.title.contains(search),
+                                    Task.description.contains(search)
+                                )
+                            )
+                    except Exception as e:
+                        logger.error(f"Semantic search failed: {e}, falling back to keyword search")
+                        # Fall back to keyword search
+                        stmt = stmt.where(
+                            or_(
+                                Task.title.contains(search),
+                                Task.description.contains(search)
+                            )
+                        )
+                else:
+                    # Embedding service not available, fall back to keyword search
+                    stmt = stmt.where(
+                        or_(
+                            Task.title.contains(search),
+                            Task.description.contains(search)
+                        )
+                    )
+            else:
+                # Regular keyword search
+                stmt = stmt.where(
+                    or_(
+                        Task.title.contains(search),
+                        Task.description.contains(search)
+                    )
                 )
-            )
         
         # Due date filters
         if due_date_filter:
@@ -96,12 +168,14 @@ def list_tasks():
         
         # Order by position (drag-drop), then priority and due date
         # CROWN⁴.5 Phase 3: Position-based ordering for drag-drop reordering
-        stmt = stmt.order_by(
-            Task.position.asc(),
-            Task.priority.desc(),
-            Task.due_date.asc().nullslast(),
-            Task.created_at.desc()
-        )
+        # CROWN⁴.6: Skip default ordering if semantic search is active (preserve cosine similarity ordering)
+        if not semantic_mode_active:
+            stmt = stmt.order_by(
+                Task.position.asc(),
+                Task.priority.desc(),
+                Task.due_date.asc().nullslast(),
+                Task.created_at.desc()
+            )
         
         # Paginate
         tasks = db.paginate(stmt, page=page, per_page=per_page, error_out=False)
@@ -126,7 +200,11 @@ def list_tasks():
 @api_tasks_bp.route('/<int:task_id>', methods=['GET'])
 @login_required
 def get_task(task_id):
-    """Get detailed task information."""
+    """Get detailed task information.
+    
+    Query Parameters:
+        detail (str): Response detail level ('mini' for prefetching, default: full)
+    """
     try:
         task = db.session.query(Task).join(Meeting).filter(
             Task.id == task_id,
@@ -136,12 +214,241 @@ def get_task(task_id):
         if not task:
             return jsonify({'success': False, 'message': 'Task not found'}), 404
         
+        # CROWN⁴.5 Phase 1.7: Support mini detail for prefetching
+        detail_level = request.args.get('detail', 'full')
+        
+        if detail_level == 'mini':
+            # Minimal payload optimized for prefetch cache warming
+            # Defensive assignees loading to prevent 500 errors
+            assignees_data = []
+            try:
+                if hasattr(task, 'assignees') and task.assignees:
+                    assignees_data = [
+                        {
+                            'id': assignee.id,
+                            'username': assignee.username,
+                            'email': assignee.email
+                        }
+                        for assignee in task.assignees
+                    ]
+            except Exception as assignee_err:
+                logger.warning(f"Failed to load assignees for task {task_id}: {assignee_err}")
+                assignees_data = []
+            
+            response = {
+                'success': True,
+                'task': task.to_dict(),
+                'meeting': {
+                    'id': task.meeting.id,
+                    'title': task.meeting.title,
+                    'date': task.meeting.created_at.isoformat() if task.meeting.created_at else None
+                } if task.meeting else None,
+                'assignees': assignees_data
+            }
+        else:
+            # Full detail (default) - include meeting info for CROWN⁴.6
+            response = {
+                'success': True,
+                'task': task.to_dict(include_relationships=True)
+            }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_tasks_bp.route('/<int:task_id>/html', methods=['GET'])
+@login_required
+def get_task_html(task_id):
+    """Get server-rendered HTML fragment for a task card (CROWN⁴.6 feature).
+    
+    Returns the complete HTML for a task card to enable fragment-based hydration
+    for optimistic inserts without page reloads. Preserves all data attributes
+    needed for emotional UI and spoken provenance features.
+    """
+    try:
+        from flask import render_template_string
+        
+        # Fetch task with all relationships eager loaded
+        task = db.session.query(Task).options(
+            joinedload(Task.meeting),
+            joinedload(Task.assigned_to),
+            selectinload(Task.assignees)
+        ).join(Meeting).filter(
+            Task.id == task_id,
+            Meeting.workspace_id == current_user.workspace_id
+        ).first()
+        
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # Render task card using macro
+        html = render_template_string(
+            "{% from 'dashboard/_task_card_macro.html' import task_card %}{{ task_card(task) }}",
+            task=task
+        )
+        
         return jsonify({
             'success': True,
+            'html': html.strip(),
             'task': task.to_dict()
         })
         
     except Exception as e:
+        logger.error(f"Error rendering task {task_id} HTML fragment: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_tasks_bp.route('/<int:task_id>/transcript-context', methods=['GET'])
+@login_required
+def get_task_transcript_context(task_id):
+    """Get transcript context for a task (CROWN⁴.6 feature).
+    
+    Returns the spoken context, speaker, and transcript snippet where this task was mentioned.
+    Used for preview tooltips and spoken provenance UI.
+    """
+    try:
+        # Fetch task and verify workspace access
+        task = db.session.query(Task).join(Meeting).filter(
+            Task.id == task_id,
+            Meeting.workspace_id == current_user.workspace_id
+        ).first()
+        
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # Check if task has transcript context
+        if not task.transcript_span or not task.extraction_context:
+            return jsonify({
+                'success': True,
+                'context': None,
+                'message': 'No transcript context available'
+            })
+        
+        # Build context response
+        transcript_span = task.transcript_span
+        extraction_context = task.extraction_context
+        
+        # Fetch the actual segment text if segment_ids are available
+        segment_texts = []
+        if transcript_span.get('segment_ids'):
+            from sqlalchemy import select
+            stmt = select(Segment).filter(Segment.id.in_(transcript_span['segment_ids']))
+            segments = db.session.execute(stmt).scalars().all()
+            segment_texts = [seg.text for seg in segments]
+        
+        context_response = {
+            'task_id': task.id,
+            'task_title': task.title,
+            'meeting_id': task.meeting_id,
+            'meeting_title': task.meeting.title if task.meeting else None,
+            'speaker': extraction_context.get('speaker'),
+            'quote': extraction_context.get('quote', ''),
+            'full_segments': segment_texts,
+            'confidence': task.confidence_score,
+            'start_ms': transcript_span.get('start_ms'),
+            'end_ms': transcript_span.get('end_ms'),
+            'start_time_formatted': format_ms_to_time(transcript_span.get('start_ms')) if transcript_span.get('start_ms') else None
+        }
+        
+        return jsonify({
+            'success': True,
+            'context': context_response
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching transcript context for task {task_id}: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+def format_ms_to_time(milliseconds):
+    """Format milliseconds to MM:SS format."""
+    if not milliseconds:
+        return "00:00"
+    total_seconds = milliseconds // 1000
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+@api_tasks_bp.route('/meeting-heatmap', methods=['GET'])
+@login_required
+def get_meeting_heatmap():
+    """Get meeting heatmap data for CROWN⁴.6 Meeting Intelligence visualization.
+    
+    Returns meetings with active task counts, sorted by task count (descending).
+    Used for the Meeting Heatmap component to show which meetings have actionable items.
+    """
+    try:
+        # Query meetings with task counts
+        from sqlalchemy import case
+        
+        # Subquery to count tasks per meeting
+        task_counts = db.session.query(
+            Task.meeting_id,
+            func.count(Task.id).label('total_tasks'),
+            func.sum(case((Task.status == 'todo', 1), else_=0)).label('todo_count'),
+            func.sum(case((Task.status == 'in_progress', 1), else_=0)).label('in_progress_count'),
+            func.sum(case((Task.status == 'completed', 1), else_=0)).label('completed_count')
+        ).filter(
+            Task.deleted_at.is_(None)
+        ).group_by(Task.meeting_id).subquery()
+        
+        # Join with meetings
+        meetings = db.session.query(
+            Meeting,
+            func.coalesce(task_counts.c.total_tasks, 0).label('total_tasks'),
+            func.coalesce(task_counts.c.todo_count, 0).label('todo_count'),
+            func.coalesce(task_counts.c.in_progress_count, 0).label('in_progress_count'),
+            func.coalesce(task_counts.c.completed_count, 0).label('completed_count')
+        ).outerjoin(
+            task_counts, Meeting.id == task_counts.c.meeting_id
+        ).filter(
+            Meeting.workspace_id == current_user.workspace_id,
+            Meeting.archived == False
+        ).order_by(
+            func.coalesce(task_counts.c.total_tasks, 0).desc(),
+            Meeting.created_at.desc()
+        ).limit(20).all()  # Limit to top 20 meetings
+        
+        # Build response
+        heatmap_data = []
+        for meeting, total, todo, in_progress, completed in meetings:
+            # Calculate active tasks (todo + in_progress)
+            active_count = todo + in_progress
+            
+            # Skip meetings with no tasks
+            if total == 0:
+                continue
+            
+            # Calculate heat intensity (0-100 scale)
+            # Primarily based on active tasks, with recency bonus
+            days_ago = (datetime.utcnow() - meeting.created_at).days if meeting.created_at else 999
+            recency_bonus = max(0, 10 - days_ago) * 2  # Up to +20 for recent meetings
+            heat_intensity = min(100, (active_count * 10) + recency_bonus)
+            
+            heatmap_data.append({
+                'meeting_id': meeting.id,
+                'meeting_title': meeting.title,
+                'created_at': meeting.created_at.isoformat() if meeting.created_at else None,
+                'total_tasks': total,
+                'active_tasks': active_count,
+                'todo_count': todo,
+                'in_progress_count': in_progress,
+                'completed_count': completed,
+                'heat_intensity': heat_intensity,
+                'days_ago': days_ago
+            })
+        
+        return jsonify({
+            'success': True,
+            'meetings': heatmap_data,
+            'total_meetings': len(heatmap_data)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching meeting heatmap: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
@@ -242,7 +549,31 @@ def create_task():
         
         db.session.commit()
         
-        # Broadcast task_update event
+        # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_CREATE_MANUAL event
+        try:
+            task_data = task.to_dict()
+            task_data['action'] = 'created'
+            task_data['meeting_title'] = meeting.title
+            
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_CREATE_MANUAL,
+                event_name=f"Task created manually: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task_data,
+                    'meeting_id': meeting.id,
+                    'workspace_id': str(current_user.workspace_id),
+                    'action': 'created'
+                },
+                workspace_id=str(current_user.workspace_id),
+                client_id=f"user_{current_user.id}"
+            )
+            # Broadcast event immediately
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_CREATE_MANUAL event: {e}")
+        
+        # Broadcast task_update event (legacy broadcast for backward compatibility)
         task_dict = task.to_dict()
         task_dict['action'] = 'created'
         task_dict['meeting_title'] = meeting.title
@@ -265,6 +596,99 @@ def create_task():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@api_tasks_bp.route('/check-duplicate', methods=['POST'])
+@login_required
+def check_duplicate():
+    """
+    Check if a task is a duplicate before creation.
+    CROWN⁴.5 Phase 1.3: Deduper active workflows with origin_hash matching.
+    Security: Only returns duplicates within user's workspace, no cross-tenant leakage.
+    """
+    try:
+        data = request.get_json()
+        
+        if not data.get('title'):
+            return jsonify({'success': False, 'message': 'Title is required'}), 400
+        
+        title = data['title'].strip()
+        description = data.get('description', '').strip() or None
+        assigned_to_id = data.get('assigned_to_id')
+        meeting_id = data.get('meeting_id')
+        session_id = data.get('session_id')
+        
+        if meeting_id:
+            meeting = db.session.query(Meeting).filter_by(
+                id=meeting_id,
+                workspace_id=current_user.workspace_id
+            ).first()
+            
+            if not meeting:
+                return jsonify({'success': False, 'message': 'Invalid meeting ID'}), 403
+        
+        duplicate_check = deduper.check_duplicate(
+            title=title,
+            description=description,
+            assigned_to_id=assigned_to_id,
+            meeting_id=meeting_id,
+            session_id=session_id,
+            use_fuzzy_matching=True
+        )
+        
+        has_workspace_duplicate = False
+        workspace_existing_task = None
+        workspace_similar_tasks = []
+        
+        if duplicate_check['existing_task']:
+            existing_task = duplicate_check['existing_task']
+            if existing_task.meeting and existing_task.meeting.workspace_id == current_user.workspace_id:
+                has_workspace_duplicate = True
+                workspace_existing_task = existing_task.to_dict()
+        
+        if duplicate_check['similar_tasks']:
+            for task, similarity in duplicate_check['similar_tasks']:
+                if task.meeting and task.meeting.workspace_id == current_user.workspace_id:
+                    task_dict = task.to_dict()
+                    task_dict['similarity'] = similarity
+                    workspace_similar_tasks.append(task_dict)
+                    has_workspace_duplicate = True
+        
+        if has_workspace_duplicate:
+            response_data = {
+                'success': True,
+                'is_duplicate': True,
+                'duplicate_type': duplicate_check['duplicate_type'],
+                'confidence': duplicate_check['confidence'],
+                'origin_hash': duplicate_check['origin_hash'],
+                'recommendation': duplicate_check['recommendation']
+            }
+            
+            if workspace_existing_task:
+                response_data['existing_task'] = workspace_existing_task
+            
+            if workspace_similar_tasks:
+                response_data['similar_tasks'] = workspace_similar_tasks
+        else:
+            response_data = {
+                'success': True,
+                'is_duplicate': False,
+                'duplicate_type': 'none',
+                'confidence': 0.0,
+                'origin_hash': duplicate_check['origin_hash'],
+                'recommendation': 'OK to create - no duplicates detected in workspace'
+            }
+        
+        logger.info(
+            f"Duplicate check (workspace {current_user.workspace_id}): "
+            f"{response_data['duplicate_type']} (confidence: {response_data['confidence']:.2f})"
+        )
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logger.error(f"Failed to check duplicate: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @api_tasks_bp.route('/<int:task_id>', methods=['PUT', 'PATCH'])
 @login_required
 def update_task(task_id):
@@ -282,6 +706,11 @@ def update_task(task_id):
         old_status = task.status
         old_labels = task.labels
         old_snoozed_until = task.snoozed_until
+        
+        # CROWN⁴.5 Phase 2 Batch 2: Track old values for lifecycle event emission
+        old_priority = task.priority
+        old_due_date = task.due_date
+        old_assigned_to_id = task.assigned_to_id
         
         # Update fields
         if 'title' in data:
@@ -335,6 +764,9 @@ def update_task(task_id):
             if not isinstance(assignee_ids, list):
                 return jsonify({'success': False, 'message': 'assignee_ids must be an array'}), 400
             
+            # CROWN⁴.5 Phase 2 Batch 2: Capture old assignee list before mutation
+            old_assignee_ids = [a.user_id for a in db.session.query(TaskAssignee).filter_by(task_id=task.id).all()]
+            
             # Validate all assignees are in workspace
             if assignee_ids:
                 valid_users = db.session.query(User).filter(
@@ -362,6 +794,10 @@ def update_task(task_id):
             
             # 3. Update assigned_to_id for backward compatibility (first assignee)
             task.assigned_to_id = assignee_ids[0] if assignee_ids else None
+        else:
+            # Track old assignee list even if not updating (for single assigned_to_id changes)
+            from models.task import TaskAssignee
+            old_assignee_ids = [a.user_id for a in db.session.query(TaskAssignee).filter_by(task_id=task.id).all()]
         
         if 'labels' in data:
             labels = data['labels']
@@ -384,7 +820,162 @@ def update_task(task_id):
         task.updated_at = datetime.now()
         db.session.commit()
         
-        # Broadcast task_update event with specific event type
+        # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_UPDATE_CORE event
+        try:
+            meeting = task.meeting
+            task_data = task.to_dict()
+            task_data['action'] = 'updated'
+            task_data['meeting_title'] = meeting.title if meeting else 'Unknown'
+            task_data['changes'] = {
+                'status_changed': old_status != task.status,
+                'old_status': old_status,
+                'new_status': task.status
+            }
+            
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_UPDATE_CORE,
+                event_name=f"Task updated: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task_data,
+                    'meeting_id': meeting.id if meeting else None,
+                    'workspace_id': str(current_user.workspace_id),
+                    'action': 'updated'
+                },
+                workspace_id=str(current_user.workspace_id),
+                client_id=f"user_{current_user.id}"
+            )
+            # Broadcast event immediately
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_UPDATE_CORE event: {e}")
+        
+        # CROWN⁴.5 Phase 2 Batch 2: Emit granular lifecycle events
+        meeting = task.meeting
+        workspace_id_str = str(current_user.workspace_id)
+        client_id = f"user_{current_user.id}"
+        
+        # 1. TASK_PRIORITY_CHANGED
+        if 'priority' in data and old_priority != task.priority:
+            try:
+                event = event_sequencer.create_event(
+                    event_type=EventType.TASK_PRIORITY_CHANGED,
+                    event_name=f"Task priority changed: {task.title}",
+                    payload={
+                        'task_id': task.id,
+                        'task': task.to_dict(),
+                        'old_value': old_priority,
+                        'new_value': task.priority,
+                        'changed_by': current_user.id,
+                        'meeting_id': meeting.id if meeting else None,
+                        'workspace_id': workspace_id_str
+                    },
+                    workspace_id=workspace_id_str,
+                    client_id=client_id
+                )
+                event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+            except Exception as e:
+                logger.error(f"Failed to emit TASK_PRIORITY_CHANGED event: {e}")
+        
+        # 2. TASK_STATUS_CHANGED
+        if 'status' in data and old_status != task.status:
+            try:
+                event = event_sequencer.create_event(
+                    event_type=EventType.TASK_STATUS_CHANGED,
+                    event_name=f"Task status changed: {task.title}",
+                    payload={
+                        'task_id': task.id,
+                        'task': task.to_dict(),
+                        'old_value': old_status,
+                        'new_value': task.status,
+                        'changed_by': current_user.id,
+                        'meeting_id': meeting.id if meeting else None,
+                        'workspace_id': workspace_id_str
+                    },
+                    workspace_id=workspace_id_str,
+                    client_id=client_id
+                )
+                event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+            except Exception as e:
+                logger.error(f"Failed to emit TASK_STATUS_CHANGED event: {e}")
+        
+        # 3. TASK_DUE_DATE_CHANGED
+        if 'due_date' in data and old_due_date != task.due_date:
+            try:
+                event = event_sequencer.create_event(
+                    event_type=EventType.TASK_DUE_DATE_CHANGED,
+                    event_name=f"Task due date changed: {task.title}",
+                    payload={
+                        'task_id': task.id,
+                        'task': task.to_dict(),
+                        'old_value': old_due_date.isoformat() if old_due_date else None,
+                        'new_value': task.due_date.isoformat() if task.due_date else None,
+                        'changed_by': current_user.id,
+                        'meeting_id': meeting.id if meeting else None,
+                        'workspace_id': workspace_id_str
+                    },
+                    workspace_id=workspace_id_str,
+                    client_id=client_id
+                )
+                event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+            except Exception as e:
+                logger.error(f"Failed to emit TASK_DUE_DATE_CHANGED event: {e}")
+        
+        # 4. TASK_ASSIGNED / TASK_UNASSIGNED (assignment delta logic)
+        if 'assigned_to_id' in data or 'assignee_ids' in data:
+            try:
+                # Get current assignee list
+                new_assignee_ids = [a.user_id for a in db.session.query(TaskAssignee).filter_by(task_id=task.id).all()]
+                
+                # Handle legacy single-assignee path (assigned_to_id only, no junction table)
+                if 'assigned_to_id' in data and 'assignee_ids' not in data:
+                    # Use old_assigned_to_id and task.assigned_to_id for diff
+                    removed_users = set([old_assigned_to_id]) if old_assigned_to_id and old_assigned_to_id != task.assigned_to_id else set()
+                    added_users = set([task.assigned_to_id]) if task.assigned_to_id and old_assigned_to_id != task.assigned_to_id else set()
+                else:
+                    # Use junction table diff for multi-assignee path
+                    removed_users = set(old_assignee_ids) - set(new_assignee_ids)
+                    added_users = set(new_assignee_ids) - set(old_assignee_ids)
+                
+                # Emit TASK_UNASSIGNED for removed users
+                for user_id in removed_users:
+                    event = event_sequencer.create_event(
+                        event_type=EventType.TASK_UNASSIGNED,
+                        event_name=f"Task unassigned: {task.title}",
+                        payload={
+                            'task_id': task.id,
+                            'task': task.to_dict(),
+                            'unassigned_user_id': user_id,
+                            'changed_by': current_user.id,
+                            'meeting_id': meeting.id if meeting else None,
+                            'workspace_id': workspace_id_str
+                        },
+                        workspace_id=workspace_id_str,
+                        client_id=client_id
+                    )
+                    event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+                
+                # Emit TASK_ASSIGNED for added users
+                for user_id in added_users:
+                    event = event_sequencer.create_event(
+                        event_type=EventType.TASK_ASSIGNED,
+                        event_name=f"Task assigned: {task.title}",
+                        payload={
+                            'task_id': task.id,
+                            'task': task.to_dict(),
+                            'assigned_user_id': user_id,
+                            'changed_by': current_user.id,
+                            'meeting_id': meeting.id if meeting else None,
+                            'workspace_id': workspace_id_str
+                        },
+                        workspace_id=workspace_id_str,
+                        client_id=client_id
+                    )
+                    event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+            except Exception as e:
+                logger.error(f"Failed to emit TASK_ASSIGNED/UNASSIGNED events: {e}")
+        
+        # Broadcast task_update event with specific event type (legacy for backward compatibility)
         meeting = task.meeting
         
         # Determine event type based on what changed
@@ -472,7 +1063,31 @@ def delete_task(task_id):
         
         db.session.commit()
         
-        # Broadcast task_delete event
+        # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_DELETE_SOFT event
+        try:
+            task_data_for_event = task.to_dict()
+            task_data_for_event['action'] = 'deleted'
+            task_data_for_event['undo_window_seconds'] = 15
+            
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_DELETE_SOFT,
+                event_name=f"Task soft deleted: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task_data_for_event,
+                    'meeting_id': meeting_id,
+                    'workspace_id': str(workspace_id),
+                    'action': 'deleted'
+                },
+                workspace_id=str(workspace_id),
+                client_id=f"user_{current_user.id}"
+            )
+            # Broadcast event immediately
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_DELETE_SOFT event: {e}")
+        
+        # Broadcast task_delete event (legacy for backward compatibility)
         event_broadcaster.broadcast_task_update(
             task_id=task.id,
             task_data=task_dict,
@@ -530,7 +1145,31 @@ def undo_delete_task(task_id):
         
         db.session.commit()
         
-        # Broadcast task_restore event
+        # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_RESTORE event
+        try:
+            task_data_restore = task.to_dict()
+            task_data_restore['action'] = 'restored'
+            task_data_restore['meeting_title'] = meeting.title if meeting else 'Unknown'
+            
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_RESTORE,
+                event_name=f"Task restored: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task_data_restore,
+                    'meeting_id': meeting.id if meeting else None,
+                    'workspace_id': str(current_user.workspace_id),
+                    'action': 'restored'
+                },
+                workspace_id=str(current_user.workspace_id),
+                client_id=f"user_{current_user.id}"
+            )
+            # Broadcast event immediately
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_RESTORE event: {e}")
+        
+        # Broadcast task_restore event (legacy for backward compatibility)
         event_broadcaster.broadcast_task_update(
             task_id=task.id,
             task_data=task_dict,
@@ -1014,6 +1653,16 @@ def update_task_status(task_id):
             return jsonify({'success': False, 'message': 'Invalid status'}), 400
         
         old_status = task.status
+        old_completed_at = task.completed_at  # Capture for completion timestamp diff
+        
+        # Early return if status unchanged (prevent spurious events and unnecessary commits)
+        if old_status == new_status:
+            return jsonify({
+                'success': True,
+                'message': 'Task status unchanged',
+                'task': task.to_dict()
+            })
+        
         task.status = new_status
         
         # Update completion fields
@@ -1024,6 +1673,30 @@ def update_task_status(task_id):
         
         task.updated_at = datetime.now()
         db.session.commit()
+        
+        # CROWN⁴.5 Phase 2 Batch 2: Emit TASK_STATUS_CHANGED event with completion metadata
+        try:
+            meeting = task.meeting
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_STATUS_CHANGED,
+                event_name=f"Task status changed: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task.to_dict(),
+                    'old_value': old_status,
+                    'new_value': task.status,
+                    'old_completed_at': old_completed_at.isoformat() if old_completed_at else None,
+                    'new_completed_at': task.completed_at.isoformat() if task.completed_at else None,
+                    'changed_by': current_user.id,
+                    'meeting_id': meeting.id if meeting else None,
+                    'workspace_id': str(current_user.workspace_id)
+                },
+                workspace_id=str(current_user.workspace_id),
+                client_id=f"user_{current_user.id}"
+            )
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_STATUS_CHANGED event: {e}")
         
         # Broadcast task_update event
         meeting = task.meeting
@@ -1501,7 +2174,31 @@ def create_task_from_proposal():
         db.session.add(task)
         db.session.commit()
         
-        # Broadcast via WebSocket
+        # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_CREATE_AI_ACCEPT event
+        try:
+            meeting = task.meeting
+            task_data = task.to_dict()
+            task_data['action'] = 'ai_accepted'
+            
+            event = event_sequencer.create_event(
+                event_type=EventType.TASK_CREATE_AI_ACCEPT,
+                event_name=f"AI task accepted: {task.title}",
+                payload={
+                    'task_id': task.id,
+                    'task': task_data,
+                    'meeting_id': task.meeting_id,
+                    'workspace_id': str(current_user.workspace_id),
+                    'action': 'ai_accepted'
+                },
+                workspace_id=str(current_user.workspace_id) if meeting and current_user.workspace_id else None,
+                client_id=f"user_{current_user.id}"
+            )
+            # Broadcast event immediately
+            event_broadcaster.emit_event(event, namespace="/tasks", room=f"workspace_{current_user.workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit TASK_CREATE_AI_ACCEPT event: {e}")
+        
+        # Broadcast via WebSocket (legacy for backward compatibility)
         event_broadcaster.broadcast_task_update(
             task_id=task.id,
             task_data={"title": task.title, "priority": task.priority},
@@ -1760,8 +2457,12 @@ def stream_ai_task_proposals():
                     context_parts.append(f"Meeting: {meeting.title}")
                     
                     # Try to get summary from session
-                    if meeting.session and hasattr(meeting.session, 'summary'):
-                        context_parts.append(f"Summary: {meeting.session.summary[:500]}")
+                    if meeting.session:
+                        summary_obj = db.session.query(Summary).filter_by(session_id=meeting.session.id).first()
+                        if summary_obj and summary_obj.summary_md:
+                            context_parts.append(f"Summary: {summary_obj.summary_md[:500]}")
+                        elif meeting.description:
+                            context_parts.append(f"Description: {meeting.description[:300]}")
                     elif meeting.description:
                         context_parts.append(f"Description: {meeting.description[:300]}")
                 else:
@@ -1774,8 +2475,12 @@ def stream_ai_task_proposals():
                         meeting_summaries = []
                         for m in recent_meetings:
                             summary_text = None
-                            if m.session and hasattr(m.session, 'summary'):
-                                summary_text = m.session.summary[:200]
+                            if m.session:
+                                summary_obj = db.session.query(Summary).filter_by(session_id=m.session.id).first()
+                                if summary_obj and summary_obj.summary_md:
+                                    summary_text = summary_obj.summary_md[:200]
+                                elif m.description:
+                                    summary_text = m.description[:200]
                             elif m.description:
                                 summary_text = m.description[:200]
                             
@@ -1795,10 +2500,10 @@ def stream_ai_task_proposals():
                         deleted_at=None
                     ).all()
                 else:
-                    # Get all workspace tasks
-                    existing_tasks = db.session.query(Task).filter_by(
-                        workspace_id=current_user.workspace_id,
-                        deleted_at=None
+                    # Get all workspace tasks via Meeting join
+                    existing_tasks = db.session.query(Task).join(Meeting).filter(
+                        Meeting.workspace_id == current_user.workspace_id,
+                        Task.deleted_at.is_(None)
                     ).order_by(Task.created_at.desc()).limit(20).all()
                 
                 existing_titles = [t.title for t in existing_tasks]
@@ -1827,7 +2532,7 @@ Format as JSON array: [{{"title": "...", "description": "...", "priority": "medi
                     return
                 
                 stream = client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
@@ -1977,6 +2682,253 @@ def add_task_comment(task_id):
         db.session.rollback()
         logger.error(f"Error adding comment to task {task_id}: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+
+@api_tasks_bp.route('/predict', methods=['POST'])
+@login_required
+def predict_task_attributes():
+    """
+    Get AI predictions for task attributes (CROWN⁴.5 PredictiveEngine).
+    
+    Provides smart defaults for:
+    - Due date (based on task type, priority, urgency indicators)
+    - Priority (based on text analysis)
+    - Assignee (based on historical patterns)
+    """
+    try:
+        from services.predictive_engine import predictive_engine
+        
+        data = request.get_json()
+        
+        if not data.get('title'):
+            return jsonify({'success': False, 'message': 'Title is required'}), 400
+        
+        # Get predictions
+        predictions = predictive_engine.get_prediction_suggestions(
+            title=data.get('title'),
+            description=data.get('description'),
+            task_type=data.get('task_type', 'action_item'),
+            user_id=current_user.id,
+            workspace_id=current_user.workspace_id,
+            meeting_id=data.get('meeting_id')
+        )
+        
+        return jsonify({
+            'success': True,
+            'predictions': predictions
+        })
+        
+    except Exception as e:
+        logger.error(f"Prediction failed: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Prediction service error'}), 500
+
+
+@api_tasks_bp.route('/predict/learn', methods=['POST'])
+@login_required
+def learn_from_correction():
+    """
+    Learn from user corrections to improve predictions (CROWN⁴.5 CognitiveSynchronizer).
+    
+    Called when user changes a predicted value to track accuracy and improve future predictions.
+    """
+    try:
+        from services.predictive_engine import predictive_engine
+        
+        data = request.get_json()
+        
+        if not all(k in data for k in ['task_id', 'field', 'predicted_value', 'actual_value']):
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        
+        # Learn from correction
+        predictive_engine.learn_from_correction(
+            task_id=data['task_id'],
+            predicted_field=data['field'],
+            predicted_value=data['predicted_value'],
+            actual_value=data['actual_value'],
+            user_id=current_user.id
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Correction recorded for learning'
+        })
+        
+    except Exception as e:
+        logger.error(f"Learning failed: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Learning service error'}), 500
+
+
+@api_tasks_bp.route('/events/recover', methods=['POST'])
+@login_required
+def recover_event_sequence():
+    """
+    Recover from event sequence drift (CROWN⁴.5 TemporalRecoveryEngine).
+    
+    Detects and re-orders drifted events using vector clocks, ensuring causal consistency.
+    """
+    try:
+        from services.temporal_recovery_engine import temporal_recovery_engine
+        
+        data = request.get_json()
+        
+        # Get time window for recovery (default 1 hour)
+        time_window_hours = data.get('time_window_hours', 1)
+        dry_run = data.get('dry_run', False)
+        
+        # Detect sequence drift
+        drift_pairs = temporal_recovery_engine.detect_sequence_drift(
+            session_id=None,  # Check all sessions in workspace
+            time_window_hours=time_window_hours
+        )
+        
+        if not drift_pairs:
+            return jsonify({
+                'success': True,
+                'message': 'No sequence drift detected',
+                'drift_detected': False,
+                'metrics': temporal_recovery_engine.get_metrics()
+            })
+        
+        # Get all events in window for reordering
+        from datetime import datetime, timedelta
+        cutoff_time = datetime.utcnow() - timedelta(hours=time_window_hours)
+        
+        stmt = select(EventLedger).where(
+            and_(
+                EventLedger.created_at >= cutoff_time,
+                EventLedger.workspace_id == str(current_user.workspace_id)
+            )
+        ).order_by(EventLedger.created_at.asc())
+        
+        events = list(db.session.execute(stmt).scalars().all())
+        
+        # Replay events in correct order
+        replay_result = temporal_recovery_engine.replay_events(events, dry_run=dry_run)
+        
+        return jsonify({
+            'success': True,
+            'drift_detected': True,
+            'drift_pairs_count': len(drift_pairs),
+            'replay_result': replay_result,
+            'metrics': temporal_recovery_engine.get_metrics()
+        })
+        
+    except Exception as e:
+        logger.error(f"Event recovery failed: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Recovery service error'}), 500
+
+
+@api_tasks_bp.route('/events/validate', methods=['GET'])
+@login_required
+def validate_event_sequence():
+    """
+    Validate event sequence integrity (CROWN⁴.5 TemporalRecoveryEngine).
+    
+    Checks for gaps, duplicates, and drift in event sequences.
+    """
+    try:
+        from services.temporal_recovery_engine import temporal_recovery_engine
+        
+        # Validate sequence for user's workspace
+        validation_result = temporal_recovery_engine.validate_event_sequence(
+            session_id=None  # Validate all sessions in workspace
+        )
+        
+        return jsonify({
+            'success': True,
+            'validation': validation_result,
+            'metrics': temporal_recovery_engine.get_metrics()
+        })
+        
+    except Exception as e:
+        logger.error(f"Event validation failed: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Validation service error'}), 500
+
+
+@api_tasks_bp.route('/ledger/compact', methods=['POST'])
+@admin_required
+def compact_event_ledger():
+    """
+    Compact event ledger by compressing old events (CROWN⁴.5 LedgerCompactor).
+    
+    **ADMIN ONLY** - Creates summaries and deletes old events to reduce database size
+    while maintaining audit trail. Scoped to admin's workspace for multi-tenant isolation.
+    """
+    try:
+        from services.ledger_compactor import ledger_compactor
+        
+        # Verify user has workspace
+        if not current_user.workspace_id:
+            return jsonify({'success': False, 'message': 'No workspace assigned'}), 400
+        
+        data = request.get_json() or {}
+        
+        # Get parameters
+        dry_run = data.get('dry_run', False)
+        batch_size = data.get('batch_size', 1000)
+        
+        # Run compaction (WORKSPACE-SCOPED)
+        result = ledger_compactor.compact_events(
+            workspace_id=current_user.workspace_id,
+            dry_run=dry_run,
+            batch_size=batch_size
+        )
+        
+        # Get workspace-scoped metrics (CRITICAL: prevents cross-tenant leakage)
+        workspace_metrics = ledger_compactor.get_metrics(workspace_id=current_user.workspace_id)
+        
+        return jsonify({
+            'success': result.get('success', False),
+            'result': result,
+            'metrics': workspace_metrics
+        })
+        
+    except Exception as e:
+        logger.error(f"Ledger compaction failed: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Compaction service error'}), 500
+
+
+@api_tasks_bp.route('/ledger/status', methods=['GET'])
+@admin_required
+def get_ledger_status():
+    """
+    Get event ledger status and metrics (CROWN⁴.5 LedgerCompactor).
+    
+    **ADMIN ONLY** - Returns compaction metrics and pending event counts
+    scoped to admin's workspace for multi-tenant isolation.
+    """
+    try:
+        from services.ledger_compactor import ledger_compactor
+        
+        # Verify user has workspace
+        if not current_user.workspace_id:
+            return jsonify({'success': False, 'message': 'No workspace assigned'}), 400
+        
+        # Get count of events ready for compaction (WORKSPACE-SCOPED)
+        events_ready_count = ledger_compactor.get_events_ready_count(
+            workspace_id=current_user.workspace_id
+        )
+        
+        # Count total events in ledger (WORKSPACE-SCOPED)
+        total_events = db.session.query(func.count(EventLedger.id)).filter(
+            EventLedger.workspace_id == str(current_user.workspace_id)
+        ).scalar()
+        
+        # Get workspace-scoped metrics (CRITICAL: prevents cross-tenant leakage)
+        workspace_metrics = ledger_compactor.get_metrics(workspace_id=current_user.workspace_id)
+        
+        return jsonify({
+            'success': True,
+            'status': {
+                'total_events': total_events,
+                'events_ready_for_compaction': events_ready_count,
+                'metrics': workspace_metrics
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get ledger status: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Status service error'}), 500
 
 
 @api_tasks_bp.route('/<int:task_id>/history', methods=['GET'])

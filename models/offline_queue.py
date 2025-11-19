@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Integer, String, DateTime, ForeignKey, Index, JSON
+from sqlalchemy import Integer, String, DateTime, ForeignKey, Index, JSON, UniqueConstraint
 from .base import Base
 
 
@@ -23,6 +23,7 @@ class OfflineQueue(Base):
     
     __table_args__ = (
         Index('ix_offline_queue_user_session', 'user_id', 'session_id'),
+        UniqueConstraint('user_id', 'session_id', name='uq_offline_queue_user_session'),
     )
     
     def to_dict(self):

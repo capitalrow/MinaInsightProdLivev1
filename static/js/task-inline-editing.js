@@ -115,6 +115,15 @@ class TaskInlineEditing {
                     // Update task via optimistic UI
                     await this.taskUI.updateTask(taskId, { title: newText });
 
+                    // Emit task updated event for CognitiveSynchronizer
+                    document.dispatchEvent(new CustomEvent('task:updated', {
+                        detail: {
+                            taskId: parseInt(taskId),
+                            updates: { title: newText },
+                            previousValues: { title: originalText }
+                        }
+                    }));
+
                     // Show saved state briefly
                     titleElement.classList.remove('saving');
                     titleElement.classList.add('saved');
@@ -170,93 +179,60 @@ class TaskInlineEditing {
         titleElement.addEventListener('keydown', handleKeydown);
     }
 
-    editPriority(badge) {
+    /**
+     * CROWN⁴.6: One-tap priority cycling with spring reorder animation
+     * Click to cycle: low → medium → high → critical → low
+     */
+    async editPriority(badge) {
         const card = badge.closest('[data-task-id]');
         if (!card) return;
 
         const taskId = card.dataset.taskId;
         const currentPriority = badge.textContent.trim().toLowerCase();
 
-        const priorities = ['low', 'medium', 'high', 'critical'];
-        const select = document.createElement('select');
-        select.className = 'inline-edit-select priority-select';
-        
-        priorities.forEach(p => {
-            const option = document.createElement('option');
-            option.value = p;
-            option.textContent = p.charAt(0).toUpperCase() + p.slice(1);
-            option.selected = p === currentPriority;
-            select.appendChild(option);
-        });
+        // Cycle through priorities
+        const priorityOrder = ['low', 'medium', 'high', 'critical'];
+        const currentIndex = priorityOrder.indexOf(currentPriority);
+        const nextIndex = (currentIndex + 1) % priorityOrder.length;
+        const newPriority = priorityOrder[nextIndex];
 
-        // Save all original attributes for restoration
-        const originalHTML = badge.innerHTML;
-        const originalClassName = badge.className;
-        const originalTitle = badge.title || `Click to change priority (current: ${currentPriority})`;
-        const originalDataTaskId = badge.dataset.taskId || taskId;
-        
-        badge.replaceWith(select);
-        select.focus();
-
-        const save = async () => {
-            const newPriority = select.value;
+        try {
+            // Optimistic update: immediately change the badge
+            badge.textContent = newPriority.charAt(0).toUpperCase() + newPriority.slice(1);
+            badge.className = `priority-badge priority-${newPriority}`;
+            badge.title = `Click to cycle priority (current: ${newPriority})`;
             
-            if (newPriority !== currentPriority) {
-                try {
-                    await this.taskUI.updatePriority(taskId, newPriority);
-                    
-                    const newBadge = document.createElement('span');
-                    newBadge.className = `priority-badge priority-${newPriority}`;
-                    newBadge.dataset.taskId = taskId;
-                    newBadge.title = `Click to change priority (current: ${newPriority})`;
-                    newBadge.textContent = newPriority.charAt(0).toUpperCase() + newPriority.slice(1);
-                    select.replaceWith(newBadge);
-                    
-                    if (window.CROWNTelemetry) {
-                        window.CROWNTelemetry.recordMetric('inline_edit_success', 1, { field: 'priority' });
-                    }
-                } catch (error) {
-                    console.error('Failed to update priority:', error);
-                    
-                    // Rollback with all attributes
-                    const restoredBadge = document.createElement('span');
-                    restoredBadge.className = originalClassName;
-                    restoredBadge.dataset.taskId = originalDataTaskId;
-                    restoredBadge.title = originalTitle;
-                    restoredBadge.innerHTML = originalHTML;
-                    select.replaceWith(restoredBadge);
-                    
-                    if (window.CROWNTelemetry) {
-                        window.CROWNTelemetry.recordMetric('inline_edit_failure', 1, { field: 'priority' });
-                    }
-                }
-            } else {
-                // No change - restore with all attributes
-                const newBadge = document.createElement('span');
-                newBadge.className = originalClassName;
-                newBadge.dataset.taskId = originalDataTaskId;
-                newBadge.title = originalTitle;
-                newBadge.innerHTML = originalHTML;
-                select.replaceWith(newBadge);
+            // Add spring animation class
+            badge.classList.add('priority-changing');
+            setTimeout(() => badge.classList.remove('priority-changing'), 300);
+
+            // Update via optimistic UI
+            await this.taskUI.updateTask(taskId, { priority: newPriority });
+
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('inline_edit_success', 1, { 
+                    field: 'priority',
+                    from: currentPriority,
+                    to: newPriority
+                });
             }
-        };
 
-        const cancel = () => {
-            // Cancel - restore with all attributes
-            const newBadge = document.createElement('span');
-            newBadge.className = originalClassName;
-            newBadge.dataset.taskId = originalDataTaskId;
-            newBadge.title = originalTitle;
-            newBadge.innerHTML = originalHTML;
-            select.replaceWith(newBadge);
-        };
+            // Trigger reorder if QuietStateManager exists
+            if (window.quietStateManager) {
+                window.quietStateManager.scheduleAnimation('task-reorder', card);
+            }
+        } catch (error) {
+            console.error('Failed to update priority:', error);
+            
+            // Rollback on error
+            badge.textContent = currentPriority.charAt(0).toUpperCase() + currentPriority.slice(1);
+            badge.className = `priority-badge priority-${currentPriority}`;
+            badge.title = `Click to cycle priority (current: ${currentPriority})`;
 
-        select.addEventListener('blur', save);
-        select.addEventListener('change', save);
-        select.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') save();
-            if (e.key === 'Escape') cancel();
-        });
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('inline_edit_failure', 1, { field: 'priority' });
+            }
+        }
     }
 
     editDueDate(badge) {

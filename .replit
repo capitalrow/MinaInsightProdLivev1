@@ -1,11 +1,8 @@
-# ✅ Stable Replit config – confirmed working on 2025-10-22
-# Runs Mina backend + frontend successfully in Preview
-
-modules = ["python-3.11", "postgresql-16", "python3", "nodejs-20"]
+modules = ["python-3.11", "python3", "nodejs-20", "postgresql-16"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["bc", "cargo", "ffmpeg", "ffmpeg-full", "freetype", "gitFull", "glibcLocales", "gnupg", "iana-etc", "jq", "k6", "libiconv", "libxcrypt", "openssl", "pkg-config", "playwright-driver", "postgresql", "rustc", "xsimd"]
+packages = ["alsa-lib", "at-spi2-atk", "atk", "bc", "cairo", "cargo", "dbus", "ffmpeg", "ffmpeg-full", "freetype", "gitFull", "glib", "glibcLocales", "gnupg", "iana-etc", "jq", "k6", "libiconv", "libxcrypt", "mesa", "nspr", "nss", "openssl", "pango", "pkg-config", "playwright-driver", "postgresql", "rustc", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXfixes", "xorg.libxcb", "xsimd"]
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -65,16 +62,16 @@ localPort = 35455
 externalPort = 3000
 
 [[ports]]
+localPort = 35967
+externalPort = 3003
+
+[[ports]]
 localPort = 36841
 externalPort = 5000
 
 [[ports]]
 localPort = 37025
 externalPort = 8099
-
-[[ports]]
-localPort = 37191
-externalPort = 3003
 
 [[ports]]
 localPort = 38017

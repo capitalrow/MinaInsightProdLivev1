@@ -18,6 +18,10 @@ class TaskBootstrap {
             sync_start: 0,
             sync_end: 0
         };
+        
+        // CROWN⁴.6: Singleton TaskGrouping instance
+        this.taskGrouping = null;
+        this.groupingThreshold = 4; // Enable grouping for 4+ tasks (lowered for testing)
     }
 
     /**
@@ -145,6 +149,19 @@ class TaskBootstrap {
             this.syncInBackground();
 
             this.initialized = true;
+
+            // CROWN⁴.6 FIX: Delay event emission to ensure PerformanceValidator listener is attached
+            // Use requestAnimationFrame to guarantee listener registration completes first
+            requestAnimationFrame(() => {
+                document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+                    detail: {
+                        cached_tasks: cachedTasks.length,
+                        first_paint_ms: firstPaintTime,
+                        meets_target: firstPaintTime < 200
+                    }
+                }));
+                console.log(`📊 [Bootstrap] Emitted first paint event: ${firstPaintTime.toFixed(2)}ms`);
+            });
 
             return {
                 success: true,
@@ -394,6 +411,8 @@ class TaskBootstrap {
      * @returns {Promise<void>}
      */
     async renderTasks(tasks, options = {}) {
+        console.log(`🔧 [TaskBootstrap] renderTasks() called with ${tasks?.length || 0} tasks`);
+        
         const container = document.getElementById('tasks-list-container');
         
         if (!container) {
@@ -403,6 +422,7 @@ class TaskBootstrap {
 
         // CROWN⁴.5: Determine state based on task count
         if (!tasks || tasks.length === 0) {
+            console.log('🔧 [TaskBootstrap] No tasks to render, checking server content');
             // SAFETY: Only show empty state if we have NO server-rendered content
             const hasServerContent = container.querySelectorAll('.task-card').length > 0;
             
@@ -415,10 +435,75 @@ class TaskBootstrap {
             return;
         }
 
+        // Log sample task to verify data structure
+        if (tasks.length > 0) {
+            const sample = tasks[0];
+            console.log('🔧 [TaskBootstrap] Sample task from renderTasks:', {
+                id: sample.id,
+                title: sample.title?.substring(0, 30),
+                is_pinned: sample.is_pinned,
+                updated_at: sample.updated_at,
+                due_date: sample.due_date,
+                meeting_id: sample.meeting_id
+            });
+        }
+
         // Render tasks with error protection
         try {
-            const tasksHTML = tasks.map((task, index) => this.renderTaskCard(task, index)).join('');
-            container.innerHTML = tasksHTML;
+            // CROWN⁴.6: Use TaskGrouping for medium lists (12-50 tasks)
+            // Virtual list will handle >50 without grouping for performance
+            console.log('🔧 [TaskBootstrap] Checking grouping conditions:', {
+                'window.TaskGrouping exists': typeof window.TaskGrouping !== 'undefined',
+                'task count': tasks.length,
+                'groupingThreshold': this.groupingThreshold,
+                'meets threshold': tasks.length >= this.groupingThreshold,
+                'below 50': tasks.length <= 50
+            });
+            
+            const useGrouping = window.TaskGrouping && 
+                               tasks.length >= this.groupingThreshold && 
+                               tasks.length <= 50;
+            
+            console.log(`🔧 [TaskBootstrap] useGrouping decision: ${useGrouping}`);
+            
+            if (useGrouping) {
+                console.log('🔧 [TaskBootstrap] Using TaskGrouping for render');
+                
+                // Initialize singleton TaskGrouping instance
+                if (!this.taskGrouping) {
+                    try {
+                        this.taskGrouping = new window.TaskGrouping(window.taskStore);
+                        console.log('✅ [TaskBootstrap] TaskGrouping singleton created successfully');
+                    } catch (error) {
+                        console.error('❌ [TaskBootstrap] Failed to create TaskGrouping instance:', error);
+                        throw error;
+                    }
+                }
+                
+                // Track task indices for proper animation
+                let globalIndex = 0;
+                
+                // Create task renderer that preserves index and returns DOM
+                const taskRenderer = (task) => {
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = this.renderTaskCard(task, globalIndex++);
+                    return wrapper.firstElementChild;
+                };
+                
+                // Render grouped sections
+                console.log('🔧 [TaskBootstrap] Calling taskGrouping.render()...');
+                const groupedContainer = this.taskGrouping.render(tasks, taskRenderer);
+                container.innerHTML = '';
+                container.appendChild(groupedContainer);
+                
+                console.log(`✅ [TaskBootstrap] Rendered ${tasks.length} tasks with grouping`);
+            } else {
+                console.log('🔧 [TaskBootstrap] Using flat list render (no grouping)');
+                // Fallback to flat list for small counts or very large (virtualized) lists
+                const tasksHTML = tasks.map((task, index) => this.renderTaskCard(task, index)).join('');
+                container.innerHTML = tasksHTML;
+                console.log(`✅ [TaskBootstrap] Rendered ${tasks.length} tasks as flat list`);
+            }
             
             // Show tasks list (hides all state overlays)
             this.showTasksList();
@@ -703,6 +788,7 @@ class TaskBootstrap {
                 if (e.target.classList.contains('task-checkbox')) return;
                 if (e.target.classList.contains('task-title')) return;
                 if (e.target.closest('.task-actions')) return;
+                if (e.target.closest('.task-menu-trigger')) return;
                 if (e.target.closest('.task-metadata')) return;
                 
                 const taskId = card.dataset.taskId;
