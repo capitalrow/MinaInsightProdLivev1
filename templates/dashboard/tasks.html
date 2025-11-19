@@ -4,7 +4,7 @@
 {% block title %}Tasks - Mina{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=5">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=6">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/linear-inspired-animations.css') }}?v=1">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-heatmap.css') }}?v=1">
@@ -568,7 +568,7 @@
 </div>
 
 <!-- Three Dots Task Actions Menu (Global Floating) - MUST BE BEFORE SCRIPTS -->
-<div id="task-menu" class="task-menu" role="menu" data-state="closed">
+<div id="task-menu" role="menu" data-state="closed">
     <button class="task-menu-item" data-action="view-details" role="menuitem">
         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>

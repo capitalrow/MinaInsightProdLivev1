@@ -355,6 +355,12 @@ class TaskActionsMenu {
         menu.style.display = '';
         menu.classList.add("visible");
         
+        // DEBUG: Verify visible class was added and log computed styles
+        console.log(`[TaskActionsMenu] Added .visible class:`, menu.classList.contains('visible'));
+        const computedStyle = window.getComputedStyle(menu);
+        console.log(`[TaskActionsMenu] Computed styles - opacity: ${computedStyle.opacity}, z-index: ${computedStyle.zIndex}, position: ${computedStyle.position}, display: ${computedStyle.display}`);
+        console.log(`[TaskActionsMenu] Menu element:`, menu);
+        
         // Activate tracked menu
         this.activeMenu = menu;
 
