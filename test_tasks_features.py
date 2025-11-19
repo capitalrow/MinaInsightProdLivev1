@@ -9,8 +9,11 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import app, socketio, db
+from models.task import Task
+from models.meeting import Meeting
 from sqlalchemy import text
 import json
+from datetime import datetime, timedelta
 
 
 @pytest.fixture
@@ -47,6 +50,39 @@ def authenticated_client(client):
             session['_fresh'] = True
     
     yield client
+
+
+# ORM-based factory helpers to avoid schema mismatch issues
+def create_test_meeting(workspace_id=1, organizer_id=1):
+    """Create a test meeting using ORM (applies all defaults automatically)."""
+    meeting = Meeting(
+        title="Test Meeting",
+        scheduled_start=datetime.now(),
+        scheduled_end=datetime.now() + timedelta(hours=1),
+        organizer_id=organizer_id,
+        workspace_id=workspace_id,
+        status="completed",
+        meeting_type="internal"  # Required field
+    )
+    db.session.add(meeting)
+    db.session.commit()
+    return meeting
+
+
+def create_test_task(meeting_id=None, workspace_id=1, created_by_id=1, **kwargs):
+    """Create a test task using ORM (applies all defaults automatically)."""
+    task_data = {
+        'title': kwargs.get('title', 'Test Task'),
+        'description': kwargs.get('description', 'Created by test'),
+        'status': kwargs.get('status', 'todo'),
+        'workspace_id': workspace_id,
+        'created_by_id': created_by_id,
+        'meeting_id': meeting_id
+    }
+    task = Task(**task_data)
+    db.session.add(task)
+    db.session.commit()
+    return task
 
 
 def test_task_3_new_task_creation(sio_client):
@@ -166,18 +202,10 @@ def test_task_5_three_dot_menu_actions(sio_client):
     print("🧪 TASK 5: THREE-DOT MENU ACTIONS TEST")
     print("="*60)
     
-    # Create a test task first
+    # Create a test task using ORM (automatically handles all schema requirements)
     with app.app_context():
-        db.session.execute(text(
-            """INSERT INTO tasks (title, description, status, workspace_id, created_by_id, task_type, priority, completion_percentage) 
-               VALUES ('Test Menu Task', 'For testing menu actions', 'todo', 1, 1, 'action_item', 'medium', 0)"""
-        ))
-        db.session.commit()
-        
-        task = db.session.execute(text(
-            "SELECT id FROM tasks WHERE title = 'Test Menu Task'"
-        )).first()
-        task_id = task[0]
+        test_task = create_test_task(title='Test Menu Task', description='For testing menu actions')
+        task_id = test_task.id
     
     print(f"Created test task: ID={task_id}")
     
@@ -286,6 +314,21 @@ def test_task_7_fifteen_tasks_display(authenticated_client):
     print("🧪 TASK 7: 15 TASKS DISPLAY TEST")
     print("="*60)
     
+    # Seed test data: Create 15 tasks with meeting links using ORM
+    print("Seeding 15 tasks...")
+    with app.app_context():
+        # Create a test meeting using ORM (handles all schema requirements)
+        meeting = create_test_meeting()
+        meeting_id = meeting.id
+        
+        # Create 15 tasks using ORM
+        for i in range(15):
+            create_test_task(
+                title=f'Test Task {i+1}',
+                meeting_id=meeting_id
+            )
+        print(f"✅ Seeded 15 tasks linked to meeting {meeting_id}")
+    
     # Request tasks page with authentication
     response = authenticated_client.get('/dashboard/tasks', follow_redirects=True)
     
@@ -308,6 +351,13 @@ def test_task_7_fifteen_tasks_display(authenticated_client):
     # Check for emotional cues
     has_emotional = 'emotional' in html.lower() or 'stress' in html.lower()
     print(f"{'✅' if has_emotional else 'ℹ️'} Emotional UI markers: {has_emotional}")
+    
+    # Cleanup
+    with app.app_context():
+        db.session.execute(text(f"DELETE FROM tasks WHERE meeting_id = {meeting_id}"))
+        db.session.execute(text(f"DELETE FROM meetings WHERE id = {meeting_id}"))
+        db.session.commit()
+        print("✅ Cleanup completed")
     
     print("="*60)
     print("✅ TASK 7 PASSED: 15 tasks display correctly!")
