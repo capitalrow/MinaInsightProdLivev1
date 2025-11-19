@@ -59,13 +59,29 @@ pytest tests/crown46/test_event_sequencing_validation.py::TestCROWN46EventSequen
 
 ---
 
-### 3. AI/Semantic Intelligence Validation (Coming Next)
-**What it will test:**
-- Semantic search accuracy (≥0.8 cosine similarity)
-- Meeting Intelligence Mode grouping (≥95% accuracy)
-- Predictive engine suggestions
-- Impact Score integration
-- AI learning from user corrections
+### 3. AI/Semantic Intelligence Validation (`test_ai_semantic_validation.py`)
+**What it tests:**
+- ✅ Semantic search accuracy (≥0.8 cosine similarity)
+- ✅ Meeting Intelligence Mode grouping (≥95% accuracy)
+- ✅ Predictive engine suggestion quality (≥70% precision)
+- ✅ Impact Score integration (≥0.85 correlation with priority)
+- ✅ AI learning feedback loop functionality
+
+**How to run:**
+```bash
+# Run AI validation tests
+pytest tests/crown46/test_ai_semantic_validation.py -v -s
+
+# Run specific AI test
+pytest tests/crown46/test_ai_semantic_validation.py::TestCROWN46AISemanticIntelligence::test_01_semantic_search_accuracy -v
+```
+
+**Success criteria:**
+- Semantic search returns results with ≥0.8 cosine similarity
+- Meeting grouping achieves ≥95% accuracy
+- Predictive suggestions have ≥70% precision
+- Impact Score correlates ≥0.85 with task priority (Spearman correlation)
+- AI feedback loop records and processes user corrections
 
 ---
 
@@ -95,7 +111,7 @@ pytest tests/crown46/test_event_sequencing_validation.py::TestCROWN46EventSequen
 |---------------------|------------|--------|---------|
 | Performance (<200ms) | `test_crown46_performance_validation.py` | ✅ Ready | `pytest tests/e2e/test_crown46_performance_validation.py` |
 | Event Sequencing | `test_event_sequencing_validation.py` | ✅ Ready | `pytest tests/crown46/test_event_sequencing_validation.py` |
-| AI/Semantic Search | TBD | 🚧 Pending | - |
+| AI/Semantic Search | `test_ai_semantic_validation.py` | ✅ Ready | `pytest tests/crown46/test_ai_semantic_validation.py` |
 | Offline/Sync | TBD | 🚧 Pending | - |
 | Emotional Design | TBD | 🚧 Pending | - |
 | Mobile Experience | TBD | 🚧 Pending | - |
@@ -138,6 +154,21 @@ jobs:
       - run: pip install -r tests/setup/requirements.txt
       - run: playwright install chromium
       - run: pytest tests/crown46/test_event_sequencing_validation.py --html=report.html
+      
+  ai-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - run: pip install -r tests/setup/requirements.txt
+      - run: playwright install chromium
+      - run: pytest tests/crown46/test_ai_semantic_validation.py --html=report.html
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ai-validation-report
+          path: report.html
 ```
 
 ---
@@ -155,6 +186,13 @@ PERFORMANCE_BUDGETS = {
     'event_latency_ms': 300,      # Target: <300ms
     'scroll_fps': 60,             # Target: 60 FPS
     'reconciliation_ms': 150      # Target: <150ms (optimistic→truth)
+}
+
+AI_ACCURACY_THRESHOLDS = {
+    'semantic_search_cosine': 0.8,     # ≥0.8 cosine similarity
+    'meeting_grouping_accuracy': 0.95,  # ≥95% grouping accuracy
+    'predictive_precision': 0.7,        # ≥70% suggestion precision
+    'impact_score_correlation': 0.85    # ≥85% correlation with priority
 }
 ```
 
