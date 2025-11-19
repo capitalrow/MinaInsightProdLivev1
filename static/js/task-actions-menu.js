@@ -431,7 +431,19 @@ class TaskActionsMenu {
 window.TaskActionsMenu = TaskActionsMenu;
 
 document.addEventListener("DOMContentLoaded", () => {
-    if (window.optimisticUI) {
-        window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
-    }
+    console.log("[TaskActionsMenu] DOMContentLoaded fired, checking for optimisticUI...");
+    console.log("[TaskActionsMenu] window.optimisticUI exists:", !!window.optimisticUI);
+    
+    const initMenu = () => {
+        if (window.optimisticUI) {
+            console.log("[TaskActionsMenu] Initializing TaskActionsMenu with optimisticUI");
+            window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
+            console.log("[TaskActionsMenu] Initialization complete");
+        } else {
+            console.warn("[TaskActionsMenu] optimisticUI not ready, retrying in 100ms...");
+            setTimeout(initMenu, 100);
+        }
+    };
+    
+    initMenu();
 });
