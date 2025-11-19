@@ -174,8 +174,14 @@ def register_tasks_namespace(socketio):
             payload = data.get('payload', {})
             
             if not event_type:
-                error_response = {'success': False, 'message': 'event_type required'}
-                emit('error', error_response)
+                error_result = {'success': False, 'message': 'event_type required'}
+                error_response = {
+                    'event_type': 'error',
+                    'result': error_result,
+                    'trace_id': data.get('trace_id'),
+                    'sequenced': False
+                }
+                emit('error', error_result)
                 return error_response
             
             # Get user ID (from authenticated session)
@@ -184,8 +190,14 @@ def register_tasks_namespace(socketio):
             workspace_id = payload.get('workspace_id', 1)  # Default to workspace 1 if not specified
             
             if not user_id:
-                error_response = {'success': False, 'message': 'user_id required'}
-                emit('error', error_response)
+                error_result = {'success': False, 'message': 'user_id required'}
+                error_response = {
+                    'event_type': event_type or 'error',
+                    'result': error_result,
+                    'trace_id': data.get('trace_id'),
+                    'sequenced': False
+                }
+                emit('error', error_result)
                 return error_response
             
             # Add vector clock to payload if provided
@@ -210,22 +222,34 @@ def register_tasks_namespace(socketio):
                 )
                 
                 if not is_valid:
-                    error_response = {
+                    error_result = {
                         'success': False,
                         'message': f'Event sequencing failed: {error_msg}',
                         'event_id': event_id
                     }
-                    emit('error', error_response)
+                    error_response = {
+                        'event_type': event_type,
+                        'result': error_result,
+                        'trace_id': data.get('trace_id'),
+                        'sequenced': True
+                    }
+                    emit('error', error_result)
                     return error_response
                 
                 # If event is buffered (no ready events), acknowledge and return
                 if not ready_events:
                     logger.debug(f"Event {event_id} buffered, waiting for gap to fill")
-                    return {
+                    buffered_result = {
                         'success': True,
                         'buffered': True,
                         'event_id': event_id,
                         'message': 'Event buffered, waiting for sequence gap to fill'
+                    }
+                    return {
+                        'event_type': event_type,
+                        'result': buffered_result,
+                        'trace_id': data.get('trace_id'),
+                        'sequenced': True
                     }
                 
                 # Process all ready events in order
@@ -258,12 +282,18 @@ def register_tasks_namespace(socketio):
                 final_result = {
                     'success': all(r.get('success', False) for r in results),
                     'events_processed': len(results),
-                    'results': results,
-                    'trace_id': data.get('trace_id')
+                    'results': results
                 }
                 
-                emit('task_event_result', final_result)
-                return final_result
+                response = {
+                    'event_type': event_type,
+                    'result': final_result,
+                    'trace_id': data.get('trace_id'),
+                    'sequenced': True
+                }
+                
+                emit('task_event_result', response)
+                return response
             
             else:
                 # Legacy path: No event_id (backward compatibility)
@@ -309,12 +339,18 @@ def register_tasks_namespace(socketio):
             
         except Exception as e:
             logger.error(f"Task event error: {e}", exc_info=True)
-            error_response = {
+            error_result = {
                 'success': False,
                 'message': 'Failed to process task event',
                 'error': str(e)
             }
-            emit('error', error_response)
+            error_response = {
+                'event_type': data.get('event_type', 'error'),
+                'result': error_result,
+                'trace_id': data.get('trace_id'),
+                'sequenced': False
+            }
+            emit('error', error_result)
             return error_response
     
     # Individual event handlers for backward compatibility

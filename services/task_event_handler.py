@@ -481,6 +481,7 @@ class TaskEventHandler:
                 title=title,
                 description=description,
                 created_by_id=user_id,
+                workspace_id=payload.get('workspace_id', 1),  # Default to workspace 1 if not provided
                 session_id=session_id,
                 status=payload.get('status', TASK_STATUS_TODO),
                 priority=payload.get('priority', TASK_PRIORITY_MEDIUM),
