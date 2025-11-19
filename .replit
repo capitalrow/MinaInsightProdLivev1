@@ -1,7 +1,4 @@
-# ✅ Stable Replit config – confirmed working on 2025-10-22
-# Runs Mina backend + frontend successfully in Preview
-
-modules = ["python-3.11", "postgresql-16", "python3", "nodejs-20"]
+modules = ["python-3.11", "python3", "nodejs-20", "postgresql-16"]
 
 [nix]
 channel = "stable-25_05"
