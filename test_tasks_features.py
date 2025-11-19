@@ -40,14 +40,19 @@ def sio_client():
 @pytest.fixture
 def authenticated_client(client):
     """Authenticated test client - uses existing user_id=1."""
+    from models import User
+    from flask_login import login_user
+    
     with app.app_context():
-        # Use existing user (assume user_id=1 exists)
-        user_id = 1
+        # Load actual user object (user_id=1 has workspace_id=1)
+        user = db.session.get(User, 1)
         
-        # Login
-        with client.session_transaction() as session:
-            session['user_id'] = user_id
-            session['_fresh'] = True
+        if user:
+            # Properly login via Flask-Login
+            with client.session_transaction() as session:
+                session['user_id'] = user.id
+                session['_user_id'] = str(user.id)  # Flask-Login compatibility
+                session['_fresh'] = True
     
     yield client
 
@@ -337,9 +342,29 @@ def test_task_7_fifteen_tasks_display(authenticated_client):
     
     html = response.data.decode('utf-8')
     
+    # Debug: Save HTML snippet to file for inspection
+    with open('/tmp/test7_html_snippet.html', 'w') as f:
+        # Find the tasks-list-container section
+        start = html.find('id="tasks-list-container"')
+        if start > 0:
+            snippet = html[start:start+2000]
+            f.write(snippet)
+            print(f"💾 Saved HTML snippet to /tmp/test7_html_snippet.html")
+    
+    # Debug: Check filter counter
+    if 'filter-counter-all' in html:
+        import re
+        counter_match = re.search(r'data-counter="all"[^>]*>\s*(\d+)', html)
+        if counter_match:
+            print(f"🔍 Filter counter shows: {counter_match.group(1)} tasks")
+    
+    # Debug: Check if empty state is shown
+    if 'tasks-empty-state' in html and 'hidden' not in html[html.find('tasks-empty-state'):html.find('tasks-empty-state')+200]:
+        print("⚠️  Empty state is visible")
+    
     # Count task cards
     task_count = html.count('data-task-id=')
-    print(f"📊 Found {task_count} tasks on page")
+    print(f"📊 Found {task_count} data-task-id attributes")
     
     assert task_count >= 15, f"Expected ≥15 tasks, found {task_count}"
     print(f"✅ All 15+ tasks displayed")
