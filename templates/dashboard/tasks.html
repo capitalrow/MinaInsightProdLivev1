@@ -626,6 +626,8 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 
 <!-- Load task page initialization (moved to external file for better CSP compatibility) -->
 <script src="{{ url_for('static', filename='js/task-page-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- Load master initialization to wire up ALL interactive features -->
+<script src="{{ url_for('static', filename='js/task-page-master-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Linear-Inspired Performance & Animations -->
 <script src="{{ url_for('static', filename='js/tasks-linear-inspired.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
