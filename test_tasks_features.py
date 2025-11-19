@@ -39,20 +39,32 @@ def sio_client():
 
 @pytest.fixture
 def authenticated_client(client):
-    """Authenticated test client - uses existing user_id=1."""
+    """Authenticated test client - simulates Flask-Login session after successful login."""
     from models import User
-    from flask_login import login_user
+    from werkzeug.security import generate_password_hash
     
     with app.app_context():
-        # Load actual user object (user_id=1 has workspace_id=1)
         user = db.session.get(User, 1)
-        
         if user:
-            # Properly login via Flask-Login
-            with client.session_transaction() as session:
-                session['user_id'] = user.id
-                session['_user_id'] = str(user.id)  # Flask-Login compatibility
-                session['_fresh'] = True
+            # Set a known test password for authentication
+            test_password = 'TestPassword123!'
+            user.password_hash = generate_password_hash(test_password)
+            db.session.commit()
+            
+            # Perform actual login through the login route
+            response = client.post('/auth/login', data={
+                'email_or_username': user.username,
+                'password': test_password
+            }, follow_redirects=False)
+            
+            # Check if login succeeded (redirects to dashboard or returns 302)
+            if response.status_code not in [200, 302]:
+                # Fallback: manually set session as Flask-Login would
+                with client.session_transaction() as session:
+                    session['_user_id'] = str(user.id)
+                    session['_fresh'] = True
+        else:
+            print("⚠️ User 1 not found in database!")
     
     yield client
 
@@ -333,9 +345,18 @@ def test_task_7_fifteen_tasks_display(authenticated_client):
                 meeting_id=meeting_id
             )
         print(f"✅ Seeded 15 tasks linked to meeting {meeting_id}")
+        
+        # Verify tasks exist in database
+        task_count_db = db.session.execute(text(f"SELECT COUNT(*) FROM tasks WHERE meeting_id = {meeting_id}")).scalar()
+        print(f"🔍 Database contains {task_count_db} tasks for meeting {meeting_id}")
     
     # Request tasks page with authentication
+    print("📤 Requesting /dashboard/tasks...")
     response = authenticated_client.get('/dashboard/tasks', follow_redirects=True)
+    
+    print(f"🔍 Response status code: {response.status_code}")
+    if response.status_code != 200:
+        print(f"⚠️  Response data (first 500 chars): {response.data[:500]}")
     
     assert response.status_code == 200, f"Page load failed: {response.status_code}"
     print("✅ Tasks page loaded")
