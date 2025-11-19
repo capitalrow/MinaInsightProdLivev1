@@ -303,9 +303,9 @@ def register_tasks_namespace(socketio):
                             'data': enhanced_result
                         }, to=f"workspace_{workspace_id}")
                 
-                # CRITICAL: Return result for Socket.IO acknowledgment callback
-                # This ensures emitWithAck receives the response
-                return enhanced_result
+                # CRITICAL: Return wrapped response for Socket.IO acknowledgment callback
+                # This ensures emitWithAck receives {event_type, result, trace_id, sequenced}
+                return response
             
         except Exception as e:
             logger.error(f"Task event error: {e}", exc_info=True)
