@@ -69,6 +69,9 @@ class Task(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     snoozed_until: Mapped[Optional[datetime]] = mapped_column(DateTime)  # CROWN⁴.5: Task snooze support
     
+    # Workspace relationship (CROWN⁴.5: Multi-workspace support)
+    workspace_id: Mapped[Optional[int]] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    
     # Relationships
     meeting_id: Mapped[Optional[int]] = mapped_column(ForeignKey("meetings.id"), nullable=True)
     meeting: Mapped[Optional["Meeting"]] = relationship(back_populates="tasks")
