@@ -20,8 +20,9 @@
         {% if task.extracted_by_ai and task.meeting %}
         <div class="task-provenance-header">
             {# Embed full context data in badge for zero-fetch preview #}
-            {% set full_quote = task.extraction_context.quote if task.extraction_context and task.extraction_context.quote else '' %}
-            {% set speaker = task.extraction_context.speaker if task.extraction_context and task.extraction_context.speaker else 'Unknown' %}
+            {# Use evidence_quote (actual DB field) instead of quote #}
+            {% set full_quote = task.extraction_context.evidence_quote if task.extraction_context and task.extraction_context.evidence_quote else '' %}
+            {% set speaker = task.extraction_context.speaker if task.extraction_context and task.extraction_context.speaker else '' %}
             {% set start_ms = task.transcript_span.start_ms if task.transcript_span and task.transcript_span.start_ms is not none else 0 %}
             <span class="provenance-badge" 
                   data-task-id="{{ task.id }}"
