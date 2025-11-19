@@ -659,6 +659,7 @@ class OptimisticUI {
             const response = await fetch(`/api/tasks/${targetTaskId}/merge`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
                 body: JSON.stringify({ source_task_id: sourceTaskId })
             });
 
