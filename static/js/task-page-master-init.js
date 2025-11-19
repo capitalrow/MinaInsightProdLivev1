@@ -11,7 +11,7 @@
     
     // Track initialization state
     const initState = {
-        taskOptimisticUI: false,
+        optimisticUI: false,
         taskSearchSort: false,
         taskInlineEditing: false,
         filterTabs: false,
@@ -128,16 +128,17 @@
                 
                 try {
                     // Update via optimistic UI
-                    if (window.taskOptimisticUI) {
-                        await window.taskOptimisticUI.updateTask(taskId, { completed });
+                    if (window.optimisticUI) {
+                        await window.optimisticUI.updateTask(taskId, { completed });
                         console.log(`[Checkbox] ✅ Task ${taskId} updated successfully`);
                     } else {
-                        console.warn('[Checkbox] taskOptimisticUI not available, falling back to direct API call');
+                        console.warn('[Checkbox] optimisticUI not available, falling back to direct API call');
                         
                         // Fallback: Direct API call
                         const response = await fetch(`/api/tasks/${taskId}`, {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
+                            credentials: 'same-origin',
                             body: JSON.stringify({ completed })
                         });
                         
@@ -201,12 +202,13 @@
                 console.log(`[Delete] Deleting task ${taskId}...`);
                 
                 // Delete via optimistic UI
-                if (window.taskOptimisticUI && typeof window.taskOptimisticUI.deleteTask === 'function') {
-                    await window.taskOptimisticUI.deleteTask(taskId);
+                if (window.optimisticUI && typeof window.optimisticUI.deleteTask === 'function') {
+                    await window.optimisticUI.deleteTask(taskId);
                 } else {
                     // Fallback: Direct API call
                     const response = await fetch(`/api/tasks/${taskId}`, {
-                        method: 'DELETE'
+                        method: 'DELETE',
+                        credentials: 'same-origin'
                     });
                     
                     if (!response.ok) {
@@ -279,13 +281,13 @@
             return false;
         }
         
-        if (!window.taskOptimisticUI) {
-            console.warn('[MasterInit] taskOptimisticUI not available, delaying TaskInlineEditing init');
+        if (!window.optimisticUI) {
+            console.warn('[MasterInit] optimisticUI not available, delaying TaskInlineEditing init');
             return false;
         }
         
         try {
-            window.taskInlineEditing = new TaskInlineEditing(window.taskOptimisticUI);
+            window.taskInlineEditing = new TaskInlineEditing(window.optimisticUI);
             initState.taskInlineEditing = true;
             console.log('[MasterInit] ✅ TaskInlineEditing initialized');
             return true;
@@ -306,13 +308,13 @@
             return false;
         }
         
-        if (!window.taskOptimisticUI) {
-            console.warn('[MasterInit] taskOptimisticUI not available, delaying TaskProposalUI init');
+        if (!window.optimisticUI) {
+            console.warn('[MasterInit] optimisticUI not available, delaying TaskProposalUI init');
             return false;
         }
         
         try {
-            window.taskProposalUI = new TaskProposalUI(window.taskOptimisticUI);
+            window.taskProposalUI = new TaskProposalUI(window.optimisticUI);
             initState.proposalUI = true;
             console.log('[MasterInit] ✅ TaskProposalUI initialized');
             return true;
@@ -337,16 +339,18 @@
         // 2. Initialize class-based features
         initTaskSearchSort();
         
-        // 3. Wait for taskOptimisticUI, then initialize dependent features
-        if (window.taskOptimisticUI) {
+        // 3. Wait for optimisticUI, then initialize dependent features
+        if (window.optimisticUI) {
+            initState.optimisticUI = true;
             initTaskInlineEditing();
             initTaskProposalUI();
         } else {
-            console.warn('[MasterInit] taskOptimisticUI not available yet, waiting for event...');
+            console.warn('[MasterInit] optimisticUI not available yet, waiting for event...');
             
-            // Listen for taskOptimisticUI ready event
-            window.addEventListener('taskOptimisticUIReady', () => {
-                console.log('[MasterInit] taskOptimisticUI is now ready, initializing dependent features...');
+            // Listen for optimisticUI ready event
+            window.addEventListener('optimisticUIReady', () => {
+                console.log('[MasterInit] optimisticUI is now ready, initializing dependent features...');
+                initState.optimisticUI = true;
                 initTaskInlineEditing();
                 initTaskProposalUI();
             }, { once: true });

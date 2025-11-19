@@ -22,7 +22,9 @@ class MeetingHeatmap {
      */
     async fetchHeatmapData() {
         try {
-            const response = await fetch('/api/tasks/meeting-heatmap');
+            const response = await fetch('/api/tasks/meeting-heatmap', {
+                credentials: 'same-origin'
+            });
             
             if (!response.ok) {
                 const errorText = await response.text();
