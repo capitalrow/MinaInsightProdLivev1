@@ -267,7 +267,7 @@ def register_tasks_namespace(socketio):
             
             else:
                 # Legacy path: No event_id (backward compatibility)
-                logger.warning(f"Event {event_type} received without event_id, bypassing sequencer")
+                logger.debug(f"Event {event_type} received without event_id, bypassing sequencer")
                 
                 # Process event without sequencing
                 result = run_async(task_event_handler.handle_event(
@@ -303,8 +303,9 @@ def register_tasks_namespace(socketio):
                             'data': enhanced_result
                         }, to=f"workspace_{workspace_id}")
                 
-                # Return result for Socket.IO acknowledgment callback
-                return response
+                # CRITICAL: Return result for Socket.IO acknowledgment callback
+                # This ensures emitWithAck receives the response
+                return enhanced_result
             
         except Exception as e:
             logger.error(f"Task event error: {e}", exc_info=True)
