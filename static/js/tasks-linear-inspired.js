@@ -918,8 +918,21 @@ class MinaTasksLinear {
      * Setup WebSocket for real-time updates
      */
     setupWebSocket() {
-        // TODO: Connect to Socket.IO for real-time task updates
-        console.log('[WebSocket] Setup pending');
+        if (!window.wsManager) {
+            console.error('[WebSocket] WebSocketManager not available');
+            return;
+        }
+        
+        if (!window.WORKSPACE_ID) {
+            console.error('[WebSocket] WORKSPACE_ID not available');
+            return;
+        }
+        
+        // Initialize WebSocketManager for /tasks namespace
+        console.log('[WebSocket] Initializing connection...');
+        window.wsManager.init(window.WORKSPACE_ID, ['tasks']);
+        
+        console.log('[WebSocket] ✅ Connected to /tasks namespace');
     }
     
     /**
