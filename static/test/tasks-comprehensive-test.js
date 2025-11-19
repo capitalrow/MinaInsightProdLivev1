@@ -56,7 +56,7 @@ class TasksPageTester {
             taskCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
             await this.sleep(500);
 
-            const threeD otBtn = taskCard.querySelector('.task-menu-trigger');
+            const threeDotBtn = taskCard.querySelector('.task-menu-trigger');
             
             if (!threeDotBtn) {
                 this.log(`Three-dot button not found on ${name} task`, 'fail');
