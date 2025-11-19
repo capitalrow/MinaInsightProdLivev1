@@ -2,7 +2,7 @@ modules = ["python-3.11", "python3", "nodejs-20", "postgresql-16"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["bc", "cargo", "ffmpeg", "ffmpeg-full", "freetype", "gitFull", "glibcLocales", "gnupg", "iana-etc", "jq", "k6", "libiconv", "libxcrypt", "openssl", "pkg-config", "playwright-driver", "postgresql", "rustc", "xsimd"]
+packages = ["bc", "cargo", "ffmpeg", "ffmpeg-full", "freetype", "gitFull", "glibcLocales", "gnupg", "iana-etc", "jq", "k6", "libiconv", "libxcrypt", "openssl", "pkg-config", "playwright-driver", "postgresql", "rustc", "xsimd", "xorg.libxcb", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXfixes", "mesa", "alsa-lib", "nspr", "nss", "dbus", "atk", "at-spi2-atk", "glib", "pango", "cairo"]
 
 [deployment]
 deploymentTarget = "autoscale"
