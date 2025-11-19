@@ -289,7 +289,8 @@ def tasks():
             .outerjoin(User, Task.assigned_to_id == User.id)\
             .options(
                 joinedload(Task.meeting).joinedload(Meeting.analytics),
-                joinedload(Task.assigned_to)
+                joinedload(Task.assigned_to),
+                joinedload(Task.extraction_context)
             )\
             .filter(
                 or_(
