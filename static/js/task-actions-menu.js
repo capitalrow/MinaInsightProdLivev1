@@ -355,6 +355,12 @@ class TaskActionsMenu {
         menu.style.display = '';
         menu.classList.add("visible");
         
+        // DEBUG: Verify visible class was added and log computed styles
+        console.log(`[TaskActionsMenu] Added .visible class:`, menu.classList.contains('visible'));
+        const computedStyle = window.getComputedStyle(menu);
+        console.log(`[TaskActionsMenu] Computed styles - opacity: ${computedStyle.opacity}, z-index: ${computedStyle.zIndex}, position: ${computedStyle.position}, display: ${computedStyle.display}`);
+        console.log(`[TaskActionsMenu] Menu element:`, menu);
+        
         // Activate tracked menu
         this.activeMenu = menu;
 
@@ -431,7 +437,19 @@ class TaskActionsMenu {
 window.TaskActionsMenu = TaskActionsMenu;
 
 document.addEventListener("DOMContentLoaded", () => {
-    if (window.optimisticUI) {
-        window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
-    }
+    console.log("[TaskActionsMenu] DOMContentLoaded fired, checking for optimisticUI...");
+    console.log("[TaskActionsMenu] window.optimisticUI exists:", !!window.optimisticUI);
+    
+    const initMenu = () => {
+        if (window.optimisticUI) {
+            console.log("[TaskActionsMenu] Initializing TaskActionsMenu with optimisticUI");
+            window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
+            console.log("[TaskActionsMenu] Initialization complete");
+        } else {
+            console.warn("[TaskActionsMenu] optimisticUI not ready, retrying in 100ms...");
+            setTimeout(initMenu, 100);
+        }
+    };
+    
+    initMenu();
 });
