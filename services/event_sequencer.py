@@ -171,7 +171,7 @@ class EventSequencer:
                 .limit(1)
                 .with_for_update()
             )
-            global_seq = (max_global_event.sequence_num if max_global_event else 0) + 1
+            global_seq = (max_global_event.sequence_num if max_global_event and max_global_event.sequence_num else 0) + 1
             
             # Get per-workspace sequence number using atomic UPSERT if workspace_id provided
             workspace_seq = None

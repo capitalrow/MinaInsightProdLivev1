@@ -289,7 +289,9 @@ class TaskEventHandler:
             ledger_event_type = event_type_map.get(event_type, EventType.TASK_UPDATE)
             
             # Create event ledger entry with sequence number
-            sequence_num = event_sequencer.get_next_sequence_num()
+            # Unpack tuple: get_next_sequence_num returns (global_seq, workspace_seq)
+            workspace_id = payload.get('workspace_id')
+            global_seq, workspace_seq = event_sequencer.get_next_sequence_num(workspace_id)
             
             event = EventLedger(
                 event_type=ledger_event_type,
@@ -297,7 +299,9 @@ class TaskEventHandler:
                 payload=payload,
                 session_id=session_id,
                 status=EventStatus.COMPLETED if success else EventStatus.FAILED,
-                sequence_num=sequence_num,
+                sequence_num=global_seq,
+                workspace_id=workspace_id,
+                workspace_sequence_num=workspace_seq,
                 created_at=datetime.utcnow(),
                 completed_at=datetime.utcnow() if success else None
             )
