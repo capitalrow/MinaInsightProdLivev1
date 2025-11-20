@@ -190,8 +190,12 @@
             const taskId = e.detail.taskId;
             console.log(`[Delete] Delete requested for task ${taskId}`);
             
-            // Show confirmation dialog
-            const confirmed = confirm('Delete this task? This action cannot be undone.');
+            // Get task title for context
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const taskTitle = taskCard?.querySelector('.task-title')?.textContent?.trim() || '';
+            
+            // Show beautiful confirmation modal
+            const confirmed = await window.taskConfirmModal.confirmDelete(taskTitle);
             
             if (!confirmed) {
                 console.log('[Delete] User cancelled delete');
@@ -224,8 +228,17 @@
                 
                 console.log(`[Delete] ✅ Task ${taskId} deleted successfully`);
                 
-                // Show success toast
-                if (window.toastManager) {
+                // Show success toast with undo functionality
+                if (window.toast) {
+                    window.toast.success('Task deleted', 5000, {
+                        undoCallback: async () => {
+                            console.log('[Delete] Undo requested');
+                            // TODO: Implement task restore from soft delete
+                            window.toast.info('Undo functionality coming soon', 2000);
+                        },
+                        undoText: 'Undo'
+                    });
+                } else if (window.toastManager) {
                     window.toastManager.show('Task deleted', 'success', 2000);
                 }
                 
@@ -292,24 +305,35 @@
             const taskId = e.detail.taskId;
             console.log(`[Menu] Change priority for task ${taskId}`);
             
-            // Simple priority selector
-            const priorities = ['low', 'medium', 'high'];
-            const currentPriority = document.querySelector(`[data-task-id="${taskId}"]`)?.dataset.priority || 'medium';
-            const currentIndex = priorities.indexOf(currentPriority);
-            const nextIndex = (currentIndex + 1) % priorities.length;
-            const newPriority = priorities[nextIndex];
+            // Show beautiful priority selector
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (!taskCard || !window.taskPrioritySelector) {
+                console.error('[Menu] Cannot show priority selector');
+                return;
+            }
+            
+            const newPriority = await window.taskPrioritySelector.show(taskCard);
+            
+            if (!newPriority) {
+                console.log('[Menu] Priority selection cancelled');
+                return;
+            }
             
             try {
                 if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
                     await window.optimisticUI.updateTask(taskId, { priority: newPriority });
                     
-                    if (window.toastManager) {
+                    if (window.toast) {
+                        window.toast.success(`Priority changed to ${newPriority}`, 2000);
+                    } else if (window.toastManager) {
                         window.toastManager.show(`Priority changed to ${newPriority}`, 'success', 2000);
                     }
                 }
             } catch (error) {
                 console.error('[Menu] Failed to update priority:', error);
-                if (window.toastManager) {
+                if (window.toast) {
+                    window.toast.error('Failed to update priority', 3000);
+                } else if (window.toastManager) {
                     window.toastManager.show('Failed to update priority', 'error', 3000);
                 }
             }
@@ -320,21 +344,37 @@
             const taskId = e.detail.taskId;
             console.log(`[Menu] Set due date for task ${taskId}`);
             
-            // Simple date picker
-            const dateStr = prompt('Enter due date (YYYY-MM-DD):');
-            if (!dateStr) return;
+            // Show beautiful date picker
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (!taskCard || !window.taskDatePicker) {
+                console.error('[Menu] Cannot show date picker');
+                return;
+            }
+            
+            const dateStr = await window.taskDatePicker.show(taskCard);
+            
+            if (dateStr === undefined) {
+                console.log('[Menu] Date selection cancelled');
+                return;
+            }
             
             try {
                 if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
-                    await window.optimisticUI.updateTask(taskId, { due_date: dateStr });
+                    const updateData = dateStr === null ? { due_date: null } : { due_date: dateStr };
+                    await window.optimisticUI.updateTask(taskId, updateData);
                     
-                    if (window.toastManager) {
-                        window.toastManager.show('Due date updated', 'success', 2000);
+                    const message = dateStr === null ? 'Due date cleared' : 'Due date updated';
+                    if (window.toast) {
+                        window.toast.success(message, 2000);
+                    } else if (window.toastManager) {
+                        window.toastManager.show(message, 'success', 2000);
                     }
                 }
             } catch (error) {
                 console.error('[Menu] Failed to update due date:', error);
-                if (window.toastManager) {
+                if (window.toast) {
+                    window.toast.error('Failed to update due date', 3000);
+                } else if (window.toastManager) {
                     window.toastManager.show('Failed to update due date', 'error', 3000);
                 }
             }
@@ -361,17 +401,40 @@
             const taskId = e.detail.taskId;
             console.log(`[Menu] Archive task ${taskId}`);
             
+            // Get task title for context
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const taskTitle = taskCard?.querySelector('.task-title')?.textContent?.trim() || '';
+            
+            // Show beautiful confirmation modal
+            const confirmed = await window.taskConfirmModal.confirmArchive(taskTitle);
+            
+            if (!confirmed) {
+                console.log('[Menu] Archive cancelled');
+                return;
+            }
+            
             try {
                 if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
                     await window.optimisticUI.updateTask(taskId, { archived: true });
                     
-                    if (window.toastManager) {
+                    if (window.toast) {
+                        window.toast.success('Task archived', 5000, {
+                            undoCallback: async () => {
+                                console.log('[Archive] Undo requested');
+                                await window.optimisticUI.updateTask(taskId, { archived: false });
+                                window.toast.info('Task restored', 2000);
+                            },
+                            undoText: 'Undo'
+                        });
+                    } else if (window.toastManager) {
                         window.toastManager.show('Task archived', 'success', 2000);
                     }
                 }
             } catch (error) {
                 console.error('[Menu] Failed to archive task:', error);
-                if (window.toastManager) {
+                if (window.toast) {
+                    window.toast.error('Failed to archive task', 3000);
+                } else if (window.toastManager) {
                     window.toastManager.show('Failed to archive task', 'error', 3000);
                 }
             }
