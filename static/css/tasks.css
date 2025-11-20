@@ -3588,7 +3588,8 @@
     max-width: 260px;
     z-index: 999999 !important;
 
-    /* Hidden state - JS sets initial transform with position */
+    /* CRITICAL: Hidden state by default - prevents phantom rendering */
+    display: none;
     opacity: 0;
     pointer-events: none;
     
@@ -3599,8 +3600,9 @@
         transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* VISIBLE STATE — Just animate opacity and scale */
+/* VISIBLE STATE — Display and animate */
 #task-menu.visible {
+    display: block !important;
     opacity: 1 !important;
     pointer-events: auto !important;
     /* Transform is set by JS with translate3d + scale(1) */

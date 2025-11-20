@@ -25,16 +25,31 @@ class TaskActionsMenu {
 
     /***************************************************************
      * Bind all menu triggers (3-dot buttons) using event delegation
-     * This ensures dynamically-loaded tasks also work
+     * DEFENSIVE: Only fires on explicit button click, not bubbled events
      ***************************************************************/
     bindTriggers() {
         // Use event delegation to handle both existing and dynamically-added triggers
         document.addEventListener("click", (evt) => {
+            // STRICT: Only trigger if we directly clicked the button or its SVG child
             const trigger = evt.target.closest(".task-menu-trigger");
+            
             if (trigger) {
+                // Validate trigger is visible and properly initialized
+                const rect = trigger.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) {
+                    console.warn('[TaskActionsMenu] Ignoring click on hidden/collapsed trigger');
+                    return;
+                }
+                
                 evt.stopPropagation();
                 evt.preventDefault();
-                console.log("[TaskActionsMenu] Three-dot clicked, taskId:", trigger.dataset.taskId);
+                
+                console.log("[TaskActionsMenu] ✅ Three-dot clicked", {
+                    taskId: trigger.dataset.taskId,
+                    triggerRect: rect,
+                    viewport: { width: window.innerWidth, height: window.innerHeight }
+                });
+                
                 this.toggleMenu(trigger);
             }
         });
@@ -102,12 +117,13 @@ class TaskActionsMenu {
             menu.style.transform = `translate3d(${x}px, ${y}px, 0) scale(0.96)`;
             menu.style.opacity = '0';
             
-            // Wait for animation to complete, then remove from DOM
+            // Wait for animation to complete, then hide completely
             setTimeout(() => {
                 try {
-                    menu.remove();
+                    menu.style.display = 'none'; // Reset to hidden state
+                    menu.classList.remove('visible');
                 } catch (e) {
-                    console.warn('[TaskActionsMenu] Error removing menu:', e);
+                    console.warn('[TaskActionsMenu] Error hiding menu:', e);
                 }
             }, 120); // Slightly longer than transition duration
             
@@ -340,10 +356,10 @@ class TaskActionsMenu {
 
         // Prepare menu for measurement (invisible but rendered)
         menu.classList.remove("visible");
+        menu.style.display = 'block'; // CRITICAL: Override display:none from CSS
         menu.style.opacity = '0';
         menu.style.pointerEvents = 'none';
-        menu.style.visibility = 'hidden'; // Prevent flash
-        menu.style.display = 'block';
+        menu.style.visibility = 'hidden'; // Prevent flash during measurement
         
         // Force reflow for accurate measurements
         void menu.offsetHeight;
@@ -402,13 +418,40 @@ class TaskActionsMenu {
 
     /********************************************************************
      * Calculate optimal position with collision detection
+     * PRODUCTION: Defensive null checks and fallback positioning
      ********************************************************************/
     calculateOptimalPosition(trigger, menuDimensions) {
+        // Validate inputs
+        if (!trigger) {
+            console.error('[TaskActionsMenu] calculateOptimalPosition: null trigger');
+            return { x: 20, y: 20, flippedX: false, flippedY: false };
+        }
+        
         const triggerRect = trigger.getBoundingClientRect();
+        
+        // Validate trigger rect
+        if (!triggerRect || triggerRect.width === 0 || triggerRect.height === 0) {
+            console.error('[TaskActionsMenu] Invalid trigger rect:', triggerRect);
+            return { x: 20, y: 20, flippedX: false, flippedY: false };
+        }
+        
         const viewport = {
-            width: window.innerWidth,
-            height: window.innerHeight
+            width: window.innerWidth || document.documentElement.clientWidth,
+            height: window.innerHeight || document.documentElement.clientHeight
         };
+        
+        console.log('[TaskActionsMenu] 📐 Position calculation:', {
+            triggerRect: {
+                top: triggerRect.top,
+                right: triggerRect.right,
+                bottom: triggerRect.bottom,
+                left: triggerRect.left,
+                width: triggerRect.width,
+                height: triggerRect.height
+            },
+            menuDimensions,
+            viewport
+        });
         
         const spacing = 10; // Gap between trigger and menu
         const edgePadding = 10; // Minimum distance from viewport edges
@@ -456,12 +499,16 @@ class TaskActionsMenu {
             x = viewport.width - menuDimensions.width - edgePadding;
         }
         
-        return {
+        const result = {
             x: Math.round(x),
             y: Math.round(y),
             flippedX,
             flippedY
         };
+        
+        console.log('[TaskActionsMenu] ✅ Calculated position:', result);
+        
+        return result;
     }
 
     /********************************************************************
