@@ -545,7 +545,7 @@ class TaskActionsMenu {
                 'set-due-date': 'due-date',
                 'assign': 'assign',
                 'labels': 'labels',
-                'jump-to-transcript': 'transcript',
+                'jump-to-transcript': 'jump-to-transcript',
                 'archive': 'archive',
                 'delete': 'delete'
             };
