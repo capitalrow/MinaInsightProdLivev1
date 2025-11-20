@@ -75,16 +75,53 @@ class TaskActionsMenu {
     }
 
     /***************************************************************
-     * Close menu
+     * Close menu with smooth exit animation
      ***************************************************************/
     closeMenu() {
         if (!this.activeMenu) return;
 
+        const menu = this.activeMenu;
+        
         try {
-            this.activeMenu.remove();
+            // Remove visible class to trigger exit animation
+            menu.classList.remove("visible");
+            
+            // Get current transform to extract position
+            const computedStyle = window.getComputedStyle(menu);
+            const transform = computedStyle.transform;
+            
+            // Extract position from transform matrix or use element position
+            let x = 0, y = 0;
+            if (transform && transform !== 'none') {
+                const matrix = new DOMMatrix(transform);
+                x = matrix.m41; // translateX
+                y = matrix.m42; // translateY
+            }
+            
+            // Animate scale down for smooth exit (100ms - snappy feel)
+            menu.style.transform = `translate3d(${x}px, ${y}px, 0) scale(0.96)`;
+            menu.style.opacity = '0';
+            
+            // Wait for animation to complete, then remove from DOM
+            setTimeout(() => {
+                try {
+                    menu.remove();
+                } catch (e) {
+                    console.warn('[TaskActionsMenu] Error removing menu:', e);
+                }
+            }, 120); // Slightly longer than transition duration
+            
         } catch (e) {
-            console.warn('[TaskActionsMenu] Error removing menu:', e);
+            console.warn('[TaskActionsMenu] Error during menu close animation:', e);
+            // Fallback: remove immediately
+            try {
+                menu.remove();
+            } catch (removeError) {
+                console.error('[TaskActionsMenu] Fatal error removing menu:', removeError);
+            }
         }
+        
+        // Clear references immediately (don't wait for animation)
         this.activeMenu = null;
 
         if (this.activeTrigger) {
@@ -268,10 +305,10 @@ class TaskActionsMenu {
     }
 
     /********************************************************************
- * NEW — Open Global Floating Command Palette (Option 2)
+ * PRODUCTION — Transform-based positioning with collision detection
  ********************************************************************/
     openGlobalMenu(trigger, taskId) {
-        // CRITICAL FIX: Validate inputs
+        // Validate inputs
         if (!trigger) {
             console.error('[TaskActionsMenu] openGlobalMenu called with null trigger');
             return;
@@ -301,65 +338,45 @@ class TaskActionsMenu {
         menu.dataset.taskId = taskId;
         menu.dataset.state = "open";
 
-        // CRITICAL FIX: Ensure menu is in DOM and temporarily visible for measurement
-        // Remove visible class first to ensure clean state
+        // Prepare menu for measurement (invisible but rendered)
         menu.classList.remove("visible");
-        
-        // Make it invisible but rendered for measurement
         menu.style.opacity = '0';
         menu.style.pointerEvents = 'none';
+        menu.style.visibility = 'hidden'; // Prevent flash
         menu.style.display = 'block';
         
-        // Force browser reflow to ensure element is rendered
+        // Force reflow for accurate measurements
         void menu.offsetHeight;
 
-        // Compute viewport positioning NOW that element is rendered
-        const rect = trigger.getBoundingClientRect();
-        const menuHeight = menu.offsetHeight || 300; // Fallback height
-        const menuWidth = menu.offsetWidth || 220;   // Fallback width
-        const viewportHeight = window.innerHeight;
-
-        console.log(`[TaskActionsMenu] Menu dimensions: ${menuWidth}x${menuHeight}`);
-
-        // Default: open BELOW and align to right of trigger
-        let top = rect.bottom + 10;
-        let left = rect.right - menuWidth;
-
-        // Open ABOVE if no space below
-        if (top + menuHeight > viewportHeight) {
-            top = rect.top - menuHeight - 10;
-        }
-
-        // CRITICAL: Prevent menu from going above viewport (negative top)
-        if (top < 10) {
-            top = 10; // Keep at least 10px from top of screen
-        }
-
-        // Prevent left off-screen
-        if (left < 10) left = 10;
-
-        // Prevent right off-screen
-        if (left + menuWidth > window.innerWidth - 10) {
-            left = window.innerWidth - menuWidth - 10;
-        }
-
-        console.log(`[TaskActionsMenu] Positioning menu at top:${top}px, left:${left}px`);
-
-        // Set final position
-        menu.style.top = `${top}px`;
-        menu.style.left = `${left}px`;
+        // Get cached or fresh dimensions
+        const menuDimensions = this.getMenuDimensions(menu);
+        const position = this.calculateOptimalPosition(trigger, menuDimensions);
         
-        // Now make it visible with transition
+        console.log(`[TaskActionsMenu] Calculated position:`, position);
+
+        // Set transform origin based on flip direction
+        const originX = position.flippedX ? 'right' : 'left';
+        const originY = position.flippedY ? 'bottom' : 'top';
+        menu.style.transformOrigin = `${originY} ${originX}`;
+        
+        // Apply initial transform with small scale for entrance animation (GPU accelerated)
+        menu.style.transform = `translate3d(${position.x}px, ${position.y}px, 0) scale(0.96)`;
+        
+        // Reset visibility properties
         menu.style.opacity = '';
         menu.style.pointerEvents = '';
-        menu.style.display = '';
-        menu.classList.add("visible");
+        menu.style.visibility = '';
         
-        // DEBUG: Verify visible class was added and log computed styles
-        console.log(`[TaskActionsMenu] Added .visible class:`, menu.classList.contains('visible'));
-        const computedStyle = window.getComputedStyle(menu);
-        console.log(`[TaskActionsMenu] Computed styles - opacity: ${computedStyle.opacity}, z-index: ${computedStyle.zIndex}, position: ${computedStyle.position}, display: ${computedStyle.display}`);
-        console.log(`[TaskActionsMenu] Menu element:`, menu);
+        // Trigger entrance animation
+        // Use requestAnimationFrame to ensure initial transform is applied before animating
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                // Animate to final scale
+                menu.style.transform = `translate3d(${position.x}px, ${position.y}px, 0) scale(1)`;
+                menu.classList.add("visible");
+                console.log(`[TaskActionsMenu] Menu visible at (${position.x}, ${position.y})`);
+            });
+        });
         
         // Activate tracked menu
         this.activeMenu = menu;
@@ -369,65 +386,136 @@ class TaskActionsMenu {
     }
 
     /********************************************************************
- * Bind actions in global floating palette to existing task handlers
- ********************************************************************/
-    bindMenuActions(menu, taskId) {
-        const items = menu.querySelectorAll(".task-menu-item");
-        
-        items.forEach(item => {
-            item.onclick = () => {
-                const action = item.dataset.action;
-                
-                // Close menu before executing
-                this.closeMenu();
-                
-                switch (action) {
-                    case "view-details":
-                        this.handleMenuAction("view-details", taskId);
-                        break;
-                    
-                    case "edit-title":
-                        this.handleMenuAction("edit", taskId);
-                        break;
-
-                    case "toggle-complete":
-                        this.handleMenuAction("toggle-status", taskId);
-                        break;
-
-                    case "set-priority":
-                        this.handleMenuAction("priority", taskId);
-                        break;
-
-                    case "set-due-date":
-                        this.handleMenuAction("due-date", taskId);
-                        break;
- 
-                    case "assign":
-                        this.handleMenuAction("assign", taskId);
-                        break;
-
-                    case "labels":
-                        this.handleMenuAction("labels", taskId);
-                        break;
-
-                    case "jump-to-transcript":
-                        this.handleMenuAction("transcript", taskId);
-                        break;
-
-                    case "archive":
-                        this.handleMenuAction("archive", taskId);
-                        break;
-
-                    case "delete":
-                        this.handleMenuAction("delete", taskId);
-                        break;
-                    
-                    default:
-                        console.warn("Unknown action:", action);
-                        break;
-                }
+     * Get or cache menu dimensions for performance
+     ********************************************************************/
+    getMenuDimensions(menu) {
+        // Cache dimensions after first measurement
+        if (!this.cachedMenuDimensions) {
+            this.cachedMenuDimensions = {
+                width: menu.offsetWidth || 220,
+                height: menu.offsetHeight || 300
             };
-        });
+            console.log(`[TaskActionsMenu] Cached menu dimensions:`, this.cachedMenuDimensions);
+        }
+        return this.cachedMenuDimensions;
+    }
+
+    /********************************************************************
+     * Calculate optimal position with collision detection
+     ********************************************************************/
+    calculateOptimalPosition(trigger, menuDimensions) {
+        const triggerRect = trigger.getBoundingClientRect();
+        const viewport = {
+            width: window.innerWidth,
+            height: window.innerHeight
+        };
+        
+        const spacing = 10; // Gap between trigger and menu
+        const edgePadding = 10; // Minimum distance from viewport edges
+        
+        let x, y;
+        let flippedX = false;
+        let flippedY = false;
+        
+        // VERTICAL POSITIONING with collision detection
+        // Try below first (default)
+        y = triggerRect.bottom + spacing;
+        
+        // Check if menu would overflow bottom
+        if (y + menuDimensions.height > viewport.height - edgePadding) {
+            // Try above
+            y = triggerRect.top - menuDimensions.height - spacing;
+            flippedY = true;
+            
+            // If still doesn't fit, clamp to viewport
+            if (y < edgePadding) {
+                y = edgePadding;
+                flippedY = false; // Reset flip state if clamped
+            }
+        }
+        
+        // HORIZONTAL POSITIONING with collision detection
+        // Try right-aligned first (default)
+        x = triggerRect.right - menuDimensions.width;
+        
+        // Check if menu would overflow left edge
+        if (x < edgePadding) {
+            // Try left-aligned with trigger
+            x = triggerRect.left;
+            flippedX = true;
+            
+            // If still doesn't fit, try right edge of trigger
+            if (x + menuDimensions.width > viewport.width - edgePadding) {
+                x = viewport.width - menuDimensions.width - edgePadding;
+                flippedX = false;
+            }
+        }
+        
+        // Final check: ensure menu doesn't overflow right edge
+        if (x + menuDimensions.width > viewport.width - edgePadding) {
+            x = viewport.width - menuDimensions.width - edgePadding;
+        }
+        
+        return {
+            x: Math.round(x),
+            y: Math.round(y),
+            flippedX,
+            flippedY
+        };
+    }
+
+    /********************************************************************
+     * PRODUCTION — Event delegation for menu actions (single listener)
+     ********************************************************************/
+    bindMenuActions(menu, taskId) {
+        // Remove old listener if exists
+        if (menu._clickHandler) {
+            menu.removeEventListener('click', menu._clickHandler);
+        }
+        
+        // Create delegated click handler
+        const clickHandler = (e) => {
+            // Find the menu item (handle clicks on button or its children)
+            const menuItem = e.target.closest('.task-menu-item');
+            if (!menuItem) return;
+            
+            const action = menuItem.dataset.action;
+            if (!action) return;
+            
+            // Prevent default and stop propagation
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Close menu before executing action
+            this.closeMenu();
+            
+            // Map action to handler
+            const actionMap = {
+                'view-details': 'view-details',
+                'edit-title': 'edit',
+                'toggle-complete': 'toggle-status',
+                'set-priority': 'priority',
+                'set-due-date': 'due-date',
+                'assign': 'assign',
+                'labels': 'labels',
+                'jump-to-transcript': 'transcript',
+                'archive': 'archive',
+                'delete': 'delete'
+            };
+            
+            const handlerAction = actionMap[action];
+            if (handlerAction) {
+                this.handleMenuAction(handlerAction, taskId);
+            } else {
+                console.warn('[TaskActionsMenu] Unknown action:', action);
+            }
+        };
+        
+        // Store handler reference for cleanup
+        menu._clickHandler = clickHandler;
+        
+        // Add single delegated event listener
+        menu.addEventListener('click', clickHandler);
     }
 }
 
