@@ -249,6 +249,171 @@
     }
     
     /**
+     * Initialize task menu action handlers
+     */
+    function initTaskMenuHandlers() {
+        console.log('[MasterInit] Initializing task menu action handlers...');
+        
+        // Edit task title
+        document.addEventListener('task:edit', (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Edit task ${taskId}`);
+            
+            // Trigger inline editing
+            if (window.taskInlineEditing && typeof window.taskInlineEditing.startEditing === 'function') {
+                window.taskInlineEditing.startEditing(taskId);
+            } else {
+                console.warn('[Menu] Inline editing not available');
+                alert('Edit functionality will be available soon');
+            }
+        });
+        
+        // Toggle task completion status
+        document.addEventListener('task:toggle-status', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Toggle status for task ${taskId}`);
+            
+            // Find the task card and checkbox
+            const card = document.querySelector(`[data-task-id="${taskId}"]`);
+            const checkbox = card?.querySelector('.task-checkbox');
+            
+            if (!checkbox) {
+                console.error('[Menu] Checkbox not found for task', taskId);
+                return;
+            }
+            
+            // Toggle the checkbox (this will trigger the existing checkbox handler)
+            checkbox.checked = !checkbox.checked;
+            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        
+        // Change priority
+        document.addEventListener('task:priority', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Change priority for task ${taskId}`);
+            
+            // Simple priority selector
+            const priorities = ['low', 'medium', 'high'];
+            const currentPriority = document.querySelector(`[data-task-id="${taskId}"]`)?.dataset.priority || 'medium';
+            const currentIndex = priorities.indexOf(currentPriority);
+            const nextIndex = (currentIndex + 1) % priorities.length;
+            const newPriority = priorities[nextIndex];
+            
+            try {
+                if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
+                    await window.optimisticUI.updateTask(taskId, { priority: newPriority });
+                    
+                    if (window.toastManager) {
+                        window.toastManager.show(`Priority changed to ${newPriority}`, 'success', 2000);
+                    }
+                }
+            } catch (error) {
+                console.error('[Menu] Failed to update priority:', error);
+                if (window.toastManager) {
+                    window.toastManager.show('Failed to update priority', 'error', 3000);
+                }
+            }
+        });
+        
+        // Set due date
+        document.addEventListener('task:due-date', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Set due date for task ${taskId}`);
+            
+            // Simple date picker
+            const dateStr = prompt('Enter due date (YYYY-MM-DD):');
+            if (!dateStr) return;
+            
+            try {
+                if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
+                    await window.optimisticUI.updateTask(taskId, { due_date: dateStr });
+                    
+                    if (window.toastManager) {
+                        window.toastManager.show('Due date updated', 'success', 2000);
+                    }
+                }
+            } catch (error) {
+                console.error('[Menu] Failed to update due date:', error);
+                if (window.toastManager) {
+                    window.toastManager.show('Failed to update due date', 'error', 3000);
+                }
+            }
+        });
+        
+        // Assign task
+        document.addEventListener('task:assign', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Assign task ${taskId}`);
+            
+            alert('Task assignment feature coming soon!');
+        });
+        
+        // Edit labels
+        document.addEventListener('task:labels', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Edit labels for task ${taskId}`);
+            
+            alert('Labels feature coming soon!');
+        });
+        
+        // Archive task
+        document.addEventListener('task:archive', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Archive task ${taskId}`);
+            
+            try {
+                if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
+                    await window.optimisticUI.updateTask(taskId, { archived: true });
+                    
+                    if (window.toastManager) {
+                        window.toastManager.show('Task archived', 'success', 2000);
+                    }
+                }
+            } catch (error) {
+                console.error('[Menu] Failed to archive task:', error);
+                if (window.toastManager) {
+                    window.toastManager.show('Failed to archive task', 'error', 3000);
+                }
+            }
+        });
+        
+        // Jump to transcript
+        document.addEventListener('task:jump', (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Jump to transcript for task ${taskId}`);
+            
+            // Find task card and get meeting ID
+            const card = document.querySelector(`[data-task-id="${taskId}"]`);
+            const meetingId = card?.dataset.meetingId;
+            const transcriptSpan = card?.dataset.transcriptSpan;
+            
+            if (!meetingId) {
+                if (window.toastManager) {
+                    window.toastManager.show('No meeting associated with this task', 'warning', 3000);
+                }
+                return;
+            }
+            
+            // Navigate to meeting transcript
+            let url = `/meetings/${meetingId}/transcript`;
+            if (transcriptSpan) {
+                try {
+                    const span = JSON.parse(transcriptSpan);
+                    if (span.start_ms !== undefined) {
+                        url += `?t=${span.start_ms}`;
+                    }
+                } catch (e) {
+                    console.error('[Menu] Failed to parse transcript span:', e);
+                }
+            }
+            
+            window.location.href = url;
+        });
+        
+        console.log('[MasterInit] ✅ Task menu handlers initialized');
+    }
+    
+    /**
      * Initialize TaskSearchSort class instance
      */
     function initTaskSearchSort() {
@@ -335,6 +500,7 @@
         initNewTaskButton();
         initCheckboxHandlers();
         initDeleteHandlers();
+        initTaskMenuHandlers();
         
         // 2. Initialize class-based features
         initTaskSearchSort();
