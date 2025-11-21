@@ -423,14 +423,15 @@ class TaskCache {
 
     /**
      * Get tasks with filtering (status, priority, search)
+     * Emits explicit cache telemetry for bootstrap path tracking
      * @param {Object} filters - Filter criteria
      * @returns {Promise<Array>}
      */
     async getFilteredTasks(filters = {}) {
         await this.init();
         const allTasks = await this.getAllTasks();
-
-        return allTasks.filter(task => {
+        
+        const filteredTasks = allTasks.filter(task => {
             // CACHE HYGIENE: Always filter out deleted tasks unless explicitly requested
             if (!filters.include_deleted && task.deleted_at) {
                 return false;
@@ -491,6 +492,10 @@ class TaskCache {
 
             return true;
         });
+        
+        // NOTE: Cache hit/miss events are emitted by getAllTasks() above,
+        // so bootstrap path (which calls this method) has correct cache telemetry
+        return filteredTasks;
     }
 
     /**

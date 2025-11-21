@@ -45,10 +45,10 @@
      * Initialize mobile gestures
      */
     function init() {
-        // Only initialize on dashboard or meetings page
-        const isDashboard = document.querySelector('.dashboard-container, .meetings-container');
-        if (!isDashboard) {
-            return; // Not on dashboard/meetings page, skip initialization
+        // Only initialize on dashboard, meetings, or tasks page
+        const isValidPage = document.querySelector('.dashboard-container, .meetings-container, .tasks-container');
+        if (!isValidPage) {
+            return; // Not on a supported page, skip initialization
         }
         
         if (!isMobileDevice()) {
@@ -90,7 +90,7 @@
      * Setup pull-to-refresh gesture
      */
     function setupPullToRefresh() {
-        const container = document.querySelector('.dashboard-container, .meetings-container') || document.body;
+        const container = document.querySelector('.dashboard-container, .meetings-container, .tasks-container') || document.body;
         
         // Create pull indicator
         pullIndicator = document.createElement('div');
