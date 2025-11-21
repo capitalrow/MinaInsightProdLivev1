@@ -672,7 +672,17 @@
     function initializeAllFeatures() {
         console.log('[MasterInit] Starting comprehensive initialization...');
         
-        // 1. Initialize non-dependent features first
+        // 1. CROWN⁴.5: Bootstrap cache-first task loading FIRST (critical for <200ms first paint)
+        if (window.taskBootstrap) {
+            console.log('[MasterInit] Starting CROWN⁴.5 cache-first bootstrap...');
+            window.taskBootstrap.bootstrap().catch(error => {
+                console.error('[MasterInit] Bootstrap failed:', error);
+            });
+        } else {
+            console.warn('[MasterInit] taskBootstrap not available');
+        }
+        
+        // 2. Initialize non-dependent features
         initFilterTabs();
         initNewTaskButton();
         initCheckboxHandlers();
@@ -680,10 +690,10 @@
         initDeleteHandlers();
         initTaskMenuHandlers();
         
-        // 2. Initialize class-based features
+        // 3. Initialize class-based features
         initTaskSearchSort();
         
-        // 3. Wait for optimisticUI, then initialize dependent features
+        // 4. Wait for optimisticUI, then initialize dependent features
         if (window.optimisticUI) {
             initState.optimisticUI = true;
             initTaskInlineEditing();
