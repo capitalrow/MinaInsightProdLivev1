@@ -334,8 +334,16 @@ class TaskBootstrap {
         const filters = this.buildFiltersFromViewState(viewState);
         const tasks = await this.cache.getFilteredTasks(filters);
 
+        // PREVENTION LAYER: Filter out deleted tasks from cache before rendering
+        // This prevents stale deleted tasks from showing on page refresh
+        const activeTasks = tasks.filter(task => !task.deleted_at);
+        
+        if (tasks.length !== activeTasks.length) {
+            console.log(`🗑️ Filtered out ${tasks.length - activeTasks.length} deleted tasks from cache`);
+        }
+
         // Apply sort
-        const sortedTasks = this.sortTasks(tasks, viewState.sort);
+        const sortedTasks = this.sortTasks(activeTasks, viewState.sort);
 
         return sortedTasks;
     }

@@ -288,6 +288,12 @@ class OptimisticUI {
                 throw new Error('Task not found');
             }
 
+            // IDEMPOTENT: Early return if already deleted (prevents error on stale cache)
+            if (task.deleted_at) {
+                console.log(`⚠️ Task ${taskId} already deleted, skipping (idempotent operation)`);
+                return;
+            }
+
             // Step 1: Soft delete - mark as deleted but keep in cache for undo
             const updates = {
                 deleted_at: new Date().toISOString(),
@@ -334,6 +340,10 @@ class OptimisticUI {
                 queueId
             });
             this._syncToServer(opId, 'update', updates, taskId);
+
+            // CACHE HYGIENE: Task already marked with deleted_at in cache (line 307)
+            // Prevention filters will hide it on page refresh while preserving undo capability
+            console.log(`✅ Task ${taskId} soft-deleted in cache (preserved for 15s undo window)`);
 
             // CROWN⁴.6: Show undo toast for single task deletion
             if (window.toastManager) {
