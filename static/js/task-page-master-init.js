@@ -415,13 +415,13 @@
             
             try {
                 if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
-                    await window.optimisticUI.updateTask(taskId, { archived: true });
+                    await window.optimisticUI.updateTask(taskId, { deleted_at: new Date().toISOString() });
                     
                     if (window.toast) {
                         window.toast.success('Task archived', 5000, {
                             undoCallback: async () => {
                                 console.log('[Archive] Undo requested');
-                                await window.optimisticUI.updateTask(taskId, { archived: false });
+                                await window.optimisticUI.updateTask(taskId, { deleted_at: null });
                                 window.toast.info('Task restored', 2000);
                             },
                             undoText: 'Undo'
