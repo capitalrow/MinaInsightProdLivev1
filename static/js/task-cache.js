@@ -509,6 +509,25 @@ class TaskCache {
     async saveTask(task) {
         await this.init();
         
+        // CRITICAL FIX: Normalize task ID first, THEN validate
+        // IndexedDB keyPath requires 'id' field to exist and be numeric
+        
+        // Step 1: Normalize string IDs to numbers (e.g., "123" -> 123, "0" -> 0)
+        if (typeof task.id === 'string') {
+            const numericId = parseInt(task.id, 10);
+            if (isNaN(numericId)) {
+                console.error('❌ CRITICAL: Task ID is non-numeric string:', task.id);
+                throw new Error(`Task ID "${task.id}" cannot be converted to number for IndexedDB storage.`);
+            }
+            task.id = numericId;
+        }
+        
+        // Step 2: Validate ID exists after normalization (catches null/undefined)
+        if (!task.id && task.id !== 0) {
+            console.error('❌ CRITICAL: Cannot save task without ID field. Task data:', task);
+            throw new Error('Task missing required "id" field for IndexedDB storage. This prevents cache persistence.');
+        }
+        
         // Ensure timestamps
         const now = new Date().toISOString();
         if (!task.created_at) task.created_at = now;
@@ -567,6 +586,40 @@ class TaskCache {
      */
     async saveTasks(tasks) {
         await this.init();
+        
+        // CRITICAL FIX: Normalize all task IDs first, THEN validate
+        
+        // Step 1: Normalize string IDs to numbers for all tasks
+        const normalizationErrors = [];
+        tasks.forEach((task, index) => {
+            if (typeof task.id === 'string') {
+                const numericId = parseInt(task.id, 10);
+                if (isNaN(numericId)) {
+                    normalizationErrors.push({ index, id: task.id, title: task.title || 'Untitled' });
+                } else {
+                    task.id = numericId;
+                }
+            }
+        });
+        
+        if (normalizationErrors.length > 0) {
+            console.error(`❌ CRITICAL: ${normalizationErrors.length} tasks have non-numeric IDs:`, normalizationErrors);
+            throw new Error(`${normalizationErrors.length} tasks have non-numeric IDs. First bad ID: "${normalizationErrors[0].id}" (task: ${normalizationErrors[0].title})`);
+        }
+        
+        // Step 2: Validate all tasks have IDs after normalization
+        const missingIdTasks = [];
+        tasks.forEach((task, index) => {
+            if (!task.id && task.id !== 0) {
+                missingIdTasks.push({ index, title: task.title || 'Untitled', data: task });
+            }
+        });
+        
+        if (missingIdTasks.length > 0) {
+            console.error(`❌ CRITICAL: ${missingIdTasks.length} tasks missing ID field:`, missingIdTasks);
+            throw new Error(`${missingIdTasks.length} tasks missing required "id" field. First missing: index ${missingIdTasks[0].index} (${missingIdTasks[0].title})`);
+        }
+        
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['tasks'], 'readwrite');
             const store = transaction.objectStore('tasks');
@@ -578,7 +631,10 @@ class TaskCache {
                 store.put(task);
             });
 
-            transaction.oncomplete = () => resolve();
+            transaction.oncomplete = () => {
+                console.log(`✅ Cached ${tasks.length} tasks to IndexedDB`);
+                resolve();
+            };
             transaction.onerror = () => reject(transaction.error);
         });
     }
