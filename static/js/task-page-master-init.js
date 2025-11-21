@@ -127,9 +127,15 @@
                 console.log(`[Checkbox] Task ${taskId} completion toggled to: ${completed}`);
                 
                 try {
+                    // Prepare correct update payload
+                    const updates = {
+                        status: completed ? 'completed' : 'todo',
+                        completed_at: completed ? new Date().toISOString() : null
+                    };
+                    
                     // Update via optimistic UI
                     if (window.optimisticUI) {
-                        await window.optimisticUI.updateTask(taskId, { completed });
+                        await window.optimisticUI.updateTask(taskId, updates);
                         console.log(`[Checkbox] ✅ Task ${taskId} updated successfully`);
                     } else {
                         console.warn('[Checkbox] optimisticUI not available, falling back to direct API call');
@@ -139,7 +145,7 @@
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
                             credentials: 'same-origin',
-                            body: JSON.stringify({ completed })
+                            body: JSON.stringify(updates)
                         });
                         
                         if (!response.ok) {
@@ -441,36 +447,62 @@
         });
         
         // Jump to transcript
-        document.addEventListener('task:jump', (e) => {
+        document.addEventListener('task:jump', async (e) => {
             const taskId = e.detail.taskId;
             console.log(`[Menu] Jump to transcript for task ${taskId}`);
             
-            // Find task card and get meeting ID
-            const card = document.querySelector(`[data-task-id="${taskId}"]`);
-            const meetingId = card?.dataset.meetingId;
-            const transcriptSpan = card?.dataset.transcriptSpan;
-            
-            if (!meetingId) {
-                if (window.toastManager) {
-                    window.toastManager.show('No meeting associated with this task', 'warning', 3000);
-                }
-                return;
-            }
-            
-            // Navigate to meeting transcript
-            let url = `/meetings/${meetingId}/transcript`;
-            if (transcriptSpan) {
-                try {
-                    const span = JSON.parse(transcriptSpan);
-                    if (span.start_ms !== undefined) {
-                        url += `?t=${span.start_ms}`;
+            try {
+                // Get full task data from cache to access session_id
+                let sessionId = null;
+                let transcriptSpan = null;
+                
+                if (window.optimisticUI?.cache) {
+                    const task = await window.optimisticUI.cache.getTask(taskId);
+                    if (task) {
+                        sessionId = task.session_id;
+                        transcriptSpan = task.transcript_span;
                     }
-                } catch (e) {
-                    console.error('[Menu] Failed to parse transcript span:', e);
+                }
+                
+                // Fallback: try to get from card dataset
+                if (!sessionId) {
+                    const card = document.querySelector(`[data-task-id="${taskId}"]`);
+                    sessionId = card?.dataset.sessionId;
+                    transcriptSpan = transcriptSpan || card?.dataset.transcriptSpan;
+                }
+                
+                if (!sessionId) {
+                    if (window.toast) {
+                        window.toast.warning('No transcript session found for this task', 3000);
+                    } else if (window.toastManager) {
+                        window.toastManager.show('No transcript session found for this task', 'warning', 3000);
+                    }
+                    return;
+                }
+                
+                // Navigate to session transcript page (correct route)
+                let url = `/sessions/${sessionId}`;
+                if (transcriptSpan) {
+                    try {
+                        const span = typeof transcriptSpan === 'string' ? JSON.parse(transcriptSpan) : transcriptSpan;
+                        if (span.start_ms !== undefined) {
+                            url += `?t=${span.start_ms}`;
+                        }
+                    } catch (e) {
+                        console.error('[Menu] Failed to parse transcript span:', e);
+                    }
+                }
+                
+                console.log(`[Menu] Navigating to session transcript: ${url}`);
+                window.location.href = url;
+            } catch (error) {
+                console.error('[Menu] Failed to jump to transcript:', error);
+                if (window.toast) {
+                    window.toast.error('Failed to navigate to transcript', 3000);
+                } else if (window.toastManager) {
+                    window.toastManager.show('Failed to navigate to transcript', 'error', 3000);
                 }
             }
-            
-            window.location.href = url;
         });
         
         console.log('[MasterInit] ✅ Task menu handlers initialized');
