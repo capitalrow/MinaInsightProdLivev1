@@ -669,17 +669,22 @@
     /**
      * Master initialization function
      */
-    function initializeAllFeatures() {
+    async function initializeAllFeatures() {
         console.log('[MasterInit] Starting comprehensive initialization...');
         
         // 1. CROWN⁴.5: Bootstrap cache-first task loading FIRST (critical for <200ms first paint)
-        if (window.taskBootstrap) {
+        // MUST await bootstrap completion before metrics can be logged accurately
+        if (window.taskBootstrap && typeof window.taskBootstrap.bootstrap === 'function') {
             console.log('[MasterInit] Starting CROWN⁴.5 cache-first bootstrap...');
-            window.taskBootstrap.bootstrap().catch(error => {
-                console.error('[MasterInit] Bootstrap failed:', error);
-            });
+            try {
+                await window.taskBootstrap.bootstrap();
+                console.log('[MasterInit] ✅ Bootstrap completed successfully');
+            } catch (error) {
+                console.error('[MasterInit] ❌ Bootstrap failed:', error);
+                // Continue initialization even if bootstrap fails
+            }
         } else {
-            console.warn('[MasterInit] taskBootstrap not available');
+            console.warn('[MasterInit] ⚠️ taskBootstrap not available - performance metrics may be incomplete');
         }
         
         // 2. Initialize non-dependent features
@@ -720,14 +725,22 @@
         }));
     }
     
-    // Start initialization when DOM is ready
+    // Start initialization when DOM is ready - properly await async initialization
     if (document.readyState === 'loading') {
         console.log('[MasterInit] DOM still loading, waiting for DOMContentLoaded...');
-        document.addEventListener('DOMContentLoaded', initializeAllFeatures);
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeAllFeatures().catch(error => {
+                console.error('[MasterInit] Initialization failed:', error);
+            });
+        });
     } else {
         console.log('[MasterInit] DOM already loaded, initializing immediately...');
-        // Wait a tick to ensure other scripts have loaded
-        setTimeout(initializeAllFeatures, 100);
+        // Wait a tick to ensure other scripts have loaded, then await initialization
+        setTimeout(() => {
+            initializeAllFeatures().catch(error => {
+                console.error('[MasterInit] Initialization failed:', error);
+            });
+        }, 100);
     }
     
 })();
