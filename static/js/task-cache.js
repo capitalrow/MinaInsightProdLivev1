@@ -395,6 +395,26 @@ class TaskCache {
                     }
                 });
                 
+                // CROWN⁴.5 FIX: Emit cache hit event for performance tracking (bulk load)
+                // This ensures cache hit rate is properly tracked when bootstrap loads all tasks
+                if (allTasks.length > 0) {
+                    window.dispatchEvent(new CustomEvent('cache:hit', {
+                        detail: { 
+                            bulkLoad: true, 
+                            taskCount: allTasks.length,
+                            cached: true 
+                        }
+                    }));
+                } else {
+                    window.dispatchEvent(new CustomEvent('cache:miss', {
+                        detail: { 
+                            bulkLoad: true, 
+                            taskCount: 0,
+                            cached: false 
+                        }
+                    }));
+                }
+                
                 resolve(allTasks);
             };
             request.onerror = () => reject(request.error);
