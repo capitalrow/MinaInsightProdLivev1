@@ -109,16 +109,17 @@ class TaskSearchSort {
         });
         
         // 2. Apply archive filter (from filter tabs: All/Active/Archived)
+        // CRITICAL: Deleted tasks should NEVER show up, regardless of filter
+        visibleTasks = visibleTasks.filter(task => !task.dataset.deletedAt);
+        
         if (this.currentFilter === 'active') {
-            // Active = not archived and not deleted
-            visibleTasks = visibleTasks.filter(task => 
-                !task.dataset.archivedAt && !task.dataset.deletedAt
-            );
+            // Active = not archived (deleted already filtered above)
+            visibleTasks = visibleTasks.filter(task => !task.dataset.archivedAt);
         } else if (this.currentFilter === 'archived') {
-            // Archived = has archived_at timestamp
+            // Archived = has archived_at timestamp (deleted already filtered above)
             visibleTasks = visibleTasks.filter(task => task.dataset.archivedAt);
         }
-        // 'all' shows everything (no filter)
+        // 'all' shows active + archived (deleted already filtered above)
         
         // 2.5. Apply quick filter (from Quick Actions Bar)
         if (this.quickFilter) {
