@@ -499,8 +499,8 @@ class TaskMenuController {
             return;
         }
 
-        // Navigate to meeting transcript
-        window.location.href = `/meetings/${task.meeting_id}#transcript`;
+        // Navigate to session transcript (sessions route uses meeting_id)
+        window.location.href = `/sessions/${task.meeting_id}#transcript`;
     }
 
     /**
