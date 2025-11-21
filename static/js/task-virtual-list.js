@@ -135,19 +135,31 @@ class VirtualList {
         const priority = task.priority || 'medium';
         const status = task.status || 'todo';
         const isCompleted = status === 'completed';
+        const isArchived = !!task.archived_at;
         const isPendingSuggest = task.emotional_state === 'pending_suggest';
         const topPosition = isVirtual ? index * this.itemHeight : 'auto';
 
         return `
-            <div class="task-card ${isPendingSuggest ? 'ai-proposal' : ''}" 
+            <div class="task-card ${isPendingSuggest ? 'ai-proposal' : ''} ${isArchived ? 'task-archived' : ''}" 
                  data-task-id="${task.id}"
                  data-index="${index}"
                  data-status="${status}"
                  data-priority="${priority}"
                  data-emotional-state="${task.emotional_state || ''}"
+                 data-archived-at="${task.archived_at || ''}"
+                 data-deleted-at="${task.deleted_at || ''}"
                  style="${isVirtual ? `position: absolute; top: ${topPosition}px; left: 0; right: 0;` : ''}">
                 <div class="task-card-header">
-                    ${isPendingSuggest ? `
+                    ${isArchived ? `
+                        <div class="archived-badge">
+                            📦 Archived
+                        </div>
+                        <button class="btn-restore-task" data-task-id="${task.id}" title="Restore task">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                        </button>
+                    ` : isPendingSuggest ? `
                         <div class="ai-proposal-badge">
                             ✨ AI Suggested
                         </div>
