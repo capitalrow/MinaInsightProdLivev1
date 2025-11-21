@@ -817,6 +817,21 @@ def update_task(task_id):
             else:
                 task.snoozed_until = None
         
+        # CROWN⁴.5: Soft delete support (archive/restore via deleted_at timestamp)
+        if 'deleted_at' in data:
+            if data['deleted_at']:
+                try:
+                    # Parse and convert to naive UTC datetime
+                    dt = datetime.fromisoformat(data['deleted_at'].replace('Z', '+00:00'))
+                    task.deleted_at = dt.replace(tzinfo=None)
+                    task.deleted_by_user_id = current_user.id
+                except (ValueError, AttributeError):
+                    return jsonify({'success': False, 'message': 'Invalid deleted_at format'}), 400
+            else:
+                # Restore from archive (undo)
+                task.deleted_at = None
+                task.deleted_by_user_id = None
+        
         task.updated_at = datetime.now()
         db.session.commit()
         
