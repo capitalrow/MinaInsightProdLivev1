@@ -291,7 +291,7 @@ class OptimisticUI {
             // IDEMPOTENT: Early return if already deleted (prevents error on stale cache)
             if (task.deleted_at) {
                 console.log(`⚠️ Task ${taskId} already deleted, skipping (idempotent operation)`);
-                return;
+                return { success: true, action: 'noop', message: 'Task already deleted' };
             }
 
             // Step 1: Soft delete - mark as deleted but keep in cache for undo
