@@ -411,6 +411,11 @@ class TaskCache {
         const allTasks = await this.getAllTasks();
 
         return allTasks.filter(task => {
+            // CACHE HYGIENE: Always filter out deleted tasks unless explicitly requested
+            if (!filters.include_deleted && task.deleted_at) {
+                return false;
+            }
+
             // Status filter
             if (filters.status && task.status !== filters.status) {
                 return false;
