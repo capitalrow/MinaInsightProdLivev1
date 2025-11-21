@@ -182,6 +182,63 @@ class TaskEventHandler:
             'error_code': 'INVALID_TASK_ID_FORMAT'
         }
     
+    @staticmethod
+    def check_workspace_access(task: Task, user_id: int) -> bool:
+        """
+        CRITICAL FIX: Validate workspace membership with fallback to ownership.
+        
+        This allows:
+        - AI-extracted tasks (created_by_id=NULL) to be updated by workspace members
+        - Tasks created by other users in the same workspace to be updated
+        - Team collaboration on shared workspace tasks
+        - Legacy tasks (workspace_id=NULL) to be accessed by original creator
+        
+        Authorization hierarchy:
+        1. Owner access: User created the task (created_by_id == user_id)
+        2. Workspace access: Task belongs to user's workspace (workspace_id match)
+        3. Legacy/NULL workspace: Allow if user is the creator
+        
+        Args:
+            task: Task instance to check access for
+            user_id: User ID requesting access
+            
+        Returns:
+            True if user has access, False otherwise
+        """
+        from models.user import User
+        
+        try:
+            # PRIORITY 1: Owner always has access (handles legacy tasks)
+            if task.created_by_id == user_id:
+                return True
+            
+            # Get the user's workspace for workspace-based authorization
+            user = db.session.get(User, user_id)
+            if not user:
+                logger.warning(f"User {user_id} not found during workspace access check")
+                return False
+            
+            # PRIORITY 2: Workspace membership access
+            # Handle NULL workspace_id gracefully (legacy tasks, AI backfills)
+            if task.workspace_id is None:
+                # Legacy task without workspace: only creator has access (already checked above)
+                logger.info(f"Task {task.id} has NULL workspace_id, access denied for non-owner")
+                return False
+            
+            # Allow access if task belongs to same workspace as user
+            if task.workspace_id == user.workspace_id:
+                return True
+            
+            # DENY: Different workspace and not the creator
+            logger.warning(f"Access denied: User {user_id} (workspace {user.workspace_id}) "
+                         f"cannot access task {task.id} (workspace {task.workspace_id}, "
+                         f"created_by {task.created_by_id})")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Workspace access check failed: {e}", exc_info=True)
+            return False
+    
     async def handle_event(
         self,
         event_type: str,
@@ -289,7 +346,9 @@ class TaskEventHandler:
             ledger_event_type = event_type_map.get(event_type, EventType.TASK_UPDATE)
             
             # Create event ledger entry with sequence number
-            sequence_num = event_sequencer.get_next_sequence_num()
+            # Unpack tuple: get_next_sequence_num returns (global_seq, workspace_seq)
+            workspace_id = payload.get('workspace_id')
+            global_seq, workspace_seq = event_sequencer.get_next_sequence_num(workspace_id)
             
             event = EventLedger(
                 event_type=ledger_event_type,
@@ -297,7 +356,9 @@ class TaskEventHandler:
                 payload=payload,
                 session_id=session_id,
                 status=EventStatus.COMPLETED if success else EventStatus.FAILED,
-                sequence_num=sequence_num,
+                sequence_num=global_seq,
+                workspace_id=workspace_id,
+                workspace_sequence_num=workspace_seq,
                 created_at=datetime.utcnow(),
                 completed_at=datetime.utcnow() if success else None
             )
@@ -553,8 +614,12 @@ class TaskEventHandler:
             new_title = payload.get('title')
             
             task = db.session.get(Task, task_id)
-            if not task or task.created_by_id != user_id:
+            if not task:
                 return {'success': False, 'error': 'Task not found'}
+            
+            # FIXED: Check workspace membership instead of ownership
+            if not self.check_workspace_access(task, user_id):
+                return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
             if new_title:
                 task.title = new_title
@@ -602,8 +667,12 @@ class TaskEventHandler:
                 task_id = validation['normalized_id']
             
             task = db.session.get(Task, task_id)
-            if not task or task.created_by_id != user_id:
+            if not task:
                 return {'success': False, 'error': 'Task not found'}
+            
+            # FIXED: Check workspace membership instead of ownership
+            if not self.check_workspace_access(task, user_id):
+                return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
             # Toggle status
             task.status = TASK_STATUS_COMPLETED if task.status == TASK_STATUS_TODO else TASK_STATUS_TODO
@@ -652,8 +721,12 @@ class TaskEventHandler:
             new_priority = payload.get('priority')
             
             task = db.session.get(Task, task_id)
-            if not task or task.created_by_id != user_id:
+            if not task:
                 return {'success': False, 'error': 'Task not found'}
+            
+            # FIXED: Check workspace membership instead of ownership
+            if not self.check_workspace_access(task, user_id):
+                return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
             if new_priority:
                 task.priority = new_priority
@@ -686,8 +759,12 @@ class TaskEventHandler:
             new_due_date = payload.get('due_date')
             
             task = db.session.get(Task, task_id)
-            if not task or task.created_by_id != user_id:
+            if not task:
                 return {'success': False, 'error': 'Task not found'}
+            
+            # FIXED: Check workspace membership instead of ownership
+            if not self.check_workspace_access(task, user_id):
+                return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
             task.due_date = datetime.fromisoformat(new_due_date) if new_due_date else None
             task.updated_at = datetime.utcnow()
@@ -722,8 +799,12 @@ class TaskEventHandler:
             assigned_to_id = payload.get('assigned_to_id')
             
             task = db.session.get(Task, task_id)
-            if not task or task.created_by_id != user_id:
+            if not task:
                 return {'success': False, 'error': 'Task not found'}
+            
+            # FIXED: Check workspace membership instead of ownership
+            if not self.check_workspace_access(task, user_id):
+                return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
             task.assigned_to_id = assigned_to_id
             task.updated_at = datetime.utcnow()
@@ -755,8 +836,12 @@ class TaskEventHandler:
             new_labels = payload.get('labels', [])
             
             task = db.session.get(Task, task_id)
-            if not task or task.created_by_id != user_id:
+            if not task:
                 return {'success': False, 'error': 'Task not found'}
+            
+            # FIXED: Check workspace membership instead of ownership
+            if not self.check_workspace_access(task, user_id):
+                return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
             task.labels = new_labels
             task.updated_at = datetime.utcnow()
@@ -788,8 +873,12 @@ class TaskEventHandler:
             snooze_until = payload.get('snooze_until')
             
             task = db.session.get(Task, task_id)
-            if not task or task.created_by_id != user_id:
+            if not task:
                 return {'success': False, 'error': 'Task not found'}
+            
+            # FIXED: Check workspace membership instead of ownership
+            if not self.check_workspace_access(task, user_id):
+                return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
             # Persist snooze time to database
             task.snoozed_until = datetime.fromisoformat(snooze_until) if snooze_until else None
@@ -836,8 +925,11 @@ class TaskEventHandler:
             if not source_task or not target_task:
                 return {'success': False, 'error': 'Tasks not found'}
             
-            if source_task.created_by_id != user_id or target_task.created_by_id != user_id:
-                return {'success': False, 'error': 'Unauthorized'}
+            # FIXED: Check workspace membership for BOTH tasks instead of ownership
+            if not self.check_workspace_access(source_task, user_id):
+                return {'success': False, 'error': 'Access denied - source task not in your workspace'}
+            if not self.check_workspace_access(target_task, user_id):
+                return {'success': False, 'error': 'Access denied - target task not in your workspace'}
             
             # Merge descriptions
             if source_task.description:
@@ -884,8 +976,12 @@ class TaskEventHandler:
             task_id = payload.get('task_id')
             
             task = db.session.get(Task, task_id)
-            if not task or task.created_by_id != user_id:
+            if not task:
                 return {'success': False, 'error': 'Task not found'}
+            
+            # FIXED: Check workspace membership instead of ownership
+            if not self.check_workspace_access(task, user_id):
+                return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
             # Queue animation
             quiet_state_manager.queue_animation(
@@ -1139,8 +1235,12 @@ class TaskEventHandler:
             task_id = payload.get('task_id')
             
             task = db.session.get(Task, task_id)
-            if not task or task.created_by_id != user_id:
+            if not task:
                 return {'success': False, 'error': 'Task not found'}
+            
+            # FIXED: Check workspace membership instead of ownership
+            if not self.check_workspace_access(task, user_id):
+                return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
             db.session.delete(task)
             

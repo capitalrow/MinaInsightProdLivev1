@@ -127,9 +127,15 @@
                 console.log(`[Checkbox] Task ${taskId} completion toggled to: ${completed}`);
                 
                 try {
+                    // Prepare correct update payload
+                    const updates = {
+                        status: completed ? 'completed' : 'todo',
+                        completed_at: completed ? new Date().toISOString() : null
+                    };
+                    
                     // Update via optimistic UI
                     if (window.optimisticUI) {
-                        await window.optimisticUI.updateTask(taskId, { completed });
+                        await window.optimisticUI.updateTask(taskId, updates);
                         console.log(`[Checkbox] ✅ Task ${taskId} updated successfully`);
                     } else {
                         console.warn('[Checkbox] optimisticUI not available, falling back to direct API call');
@@ -139,7 +145,7 @@
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
                             credentials: 'same-origin',
-                            body: JSON.stringify({ completed })
+                            body: JSON.stringify(updates)
                         });
                         
                         if (!response.ok) {
@@ -190,8 +196,12 @@
             const taskId = e.detail.taskId;
             console.log(`[Delete] Delete requested for task ${taskId}`);
             
-            // Show confirmation dialog
-            const confirmed = confirm('Delete this task? This action cannot be undone.');
+            // Get task title for context
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const taskTitle = taskCard?.querySelector('.task-title')?.textContent?.trim() || '';
+            
+            // Show beautiful confirmation modal
+            const confirmed = await window.taskConfirmModal.confirmDelete(taskTitle);
             
             if (!confirmed) {
                 console.log('[Delete] User cancelled delete');
@@ -224,8 +234,17 @@
                 
                 console.log(`[Delete] ✅ Task ${taskId} deleted successfully`);
                 
-                // Show success toast
-                if (window.toastManager) {
+                // Show success toast with undo functionality
+                if (window.toast) {
+                    window.toast.success('Task deleted', 5000, {
+                        undoCallback: async () => {
+                            console.log('[Delete] Undo requested');
+                            // TODO: Implement task restore from soft delete
+                            window.toast.info('Undo functionality coming soon', 2000);
+                        },
+                        undoText: 'Undo'
+                    });
+                } else if (window.toastManager) {
                     window.toastManager.show('Task deleted', 'success', 2000);
                 }
                 
@@ -246,6 +265,247 @@
         
         initState.deleteHandlers = true;
         console.log('[MasterInit] ✅ Delete handlers initialized');
+    }
+    
+    /**
+     * Initialize task menu action handlers
+     */
+    function initTaskMenuHandlers() {
+        console.log('[MasterInit] Initializing task menu action handlers...');
+        
+        // Edit task title
+        document.addEventListener('task:edit', (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Edit task ${taskId}`);
+            
+            // Trigger inline editing
+            if (window.taskInlineEditing && typeof window.taskInlineEditing.startEditing === 'function') {
+                window.taskInlineEditing.startEditing(taskId);
+            } else {
+                console.warn('[Menu] Inline editing not available');
+                alert('Edit functionality will be available soon');
+            }
+        });
+        
+        // Toggle task completion status
+        document.addEventListener('task:toggle-status', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Toggle status for task ${taskId}`);
+            
+            // Find the task card and checkbox
+            const card = document.querySelector(`[data-task-id="${taskId}"]`);
+            const checkbox = card?.querySelector('.task-checkbox');
+            
+            if (!checkbox) {
+                console.error('[Menu] Checkbox not found for task', taskId);
+                return;
+            }
+            
+            // Toggle the checkbox (this will trigger the existing checkbox handler)
+            checkbox.checked = !checkbox.checked;
+            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        
+        // Change priority
+        document.addEventListener('task:priority', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Change priority for task ${taskId}`);
+            
+            // Show beautiful priority selector
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (!taskCard || !window.taskPrioritySelector) {
+                console.error('[Menu] Cannot show priority selector');
+                return;
+            }
+            
+            const newPriority = await window.taskPrioritySelector.show(taskCard);
+            
+            if (!newPriority) {
+                console.log('[Menu] Priority selection cancelled');
+                return;
+            }
+            
+            try {
+                if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
+                    await window.optimisticUI.updateTask(taskId, { priority: newPriority });
+                    
+                    if (window.toast) {
+                        window.toast.success(`Priority changed to ${newPriority}`, 2000);
+                    } else if (window.toastManager) {
+                        window.toastManager.show(`Priority changed to ${newPriority}`, 'success', 2000);
+                    }
+                }
+            } catch (error) {
+                console.error('[Menu] Failed to update priority:', error);
+                if (window.toast) {
+                    window.toast.error('Failed to update priority', 3000);
+                } else if (window.toastManager) {
+                    window.toastManager.show('Failed to update priority', 'error', 3000);
+                }
+            }
+        });
+        
+        // Set due date
+        document.addEventListener('task:due-date', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Set due date for task ${taskId}`);
+            
+            // Show beautiful date picker
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (!taskCard || !window.taskDatePicker) {
+                console.error('[Menu] Cannot show date picker');
+                return;
+            }
+            
+            const dateStr = await window.taskDatePicker.show(taskCard);
+            
+            if (dateStr === undefined) {
+                console.log('[Menu] Date selection cancelled');
+                return;
+            }
+            
+            try {
+                if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
+                    const updateData = dateStr === null ? { due_date: null } : { due_date: dateStr };
+                    await window.optimisticUI.updateTask(taskId, updateData);
+                    
+                    const message = dateStr === null ? 'Due date cleared' : 'Due date updated';
+                    if (window.toast) {
+                        window.toast.success(message, 2000);
+                    } else if (window.toastManager) {
+                        window.toastManager.show(message, 'success', 2000);
+                    }
+                }
+            } catch (error) {
+                console.error('[Menu] Failed to update due date:', error);
+                if (window.toast) {
+                    window.toast.error('Failed to update due date', 3000);
+                } else if (window.toastManager) {
+                    window.toastManager.show('Failed to update due date', 'error', 3000);
+                }
+            }
+        });
+        
+        // Assign task
+        document.addEventListener('task:assign', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Assign task ${taskId}`);
+            
+            alert('Task assignment feature coming soon!');
+        });
+        
+        // Edit labels
+        document.addEventListener('task:labels', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Edit labels for task ${taskId}`);
+            
+            alert('Labels feature coming soon!');
+        });
+        
+        // Archive task
+        document.addEventListener('task:archive', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Archive task ${taskId}`);
+            
+            // Get task title for context
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const taskTitle = taskCard?.querySelector('.task-title')?.textContent?.trim() || '';
+            
+            // Show beautiful confirmation modal
+            const confirmed = await window.taskConfirmModal.confirmArchive(taskTitle);
+            
+            if (!confirmed) {
+                console.log('[Menu] Archive cancelled');
+                return;
+            }
+            
+            try {
+                if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
+                    await window.optimisticUI.updateTask(taskId, { deleted_at: new Date().toISOString() });
+                    
+                    if (window.toast) {
+                        window.toast.success('Task archived', 5000, {
+                            undoCallback: async () => {
+                                console.log('[Archive] Undo requested');
+                                await window.optimisticUI.updateTask(taskId, { deleted_at: null });
+                                window.toast.info('Task restored', 2000);
+                            },
+                            undoText: 'Undo'
+                        });
+                    } else if (window.toastManager) {
+                        window.toastManager.show('Task archived', 'success', 2000);
+                    }
+                }
+            } catch (error) {
+                console.error('[Menu] Failed to archive task:', error);
+                if (window.toast) {
+                    window.toast.error('Failed to archive task', 3000);
+                } else if (window.toastManager) {
+                    window.toastManager.show('Failed to archive task', 'error', 3000);
+                }
+            }
+        });
+        
+        // Jump to transcript
+        document.addEventListener('task:jump', async (e) => {
+            const taskId = e.detail.taskId;
+            console.log(`[Menu] Jump to transcript for task ${taskId}`);
+            
+            try {
+                // Get full task data from cache to access session_id
+                let sessionId = null;
+                let transcriptSpan = null;
+                
+                if (window.optimisticUI?.cache) {
+                    const task = await window.optimisticUI.cache.getTask(taskId);
+                    if (task) {
+                        sessionId = task.session_id;
+                        transcriptSpan = task.transcript_span;
+                    }
+                }
+                
+                // Fallback: try to get from card dataset
+                if (!sessionId) {
+                    const card = document.querySelector(`[data-task-id="${taskId}"]`);
+                    sessionId = card?.dataset.sessionId;
+                    transcriptSpan = transcriptSpan || card?.dataset.transcriptSpan;
+                }
+                
+                if (!sessionId) {
+                    if (window.toast) {
+                        window.toast.warning('No transcript session found for this task', 3000);
+                    } else if (window.toastManager) {
+                        window.toastManager.show('No transcript session found for this task', 'warning', 3000);
+                    }
+                    return;
+                }
+                
+                // Navigate to session transcript page (correct route)
+                let url = `/sessions/${sessionId}`;
+                if (transcriptSpan) {
+                    try {
+                        const span = typeof transcriptSpan === 'string' ? JSON.parse(transcriptSpan) : transcriptSpan;
+                        if (span.start_ms !== undefined) {
+                            url += `?t=${span.start_ms}`;
+                        }
+                    } catch (e) {
+                        console.error('[Menu] Failed to parse transcript span:', e);
+                    }
+                }
+                
+                console.log(`[Menu] Navigating to session transcript: ${url}`);
+                window.location.href = url;
+            } catch (error) {
+                console.error('[Menu] Failed to jump to transcript:', error);
+                if (window.toast) {
+                    window.toast.error('Failed to navigate to transcript', 3000);
+                } else if (window.toastManager) {
+                    window.toastManager.show('Failed to navigate to transcript', 'error', 3000);
+                }
+            }
+        });
+        
+        console.log('[MasterInit] ✅ Task menu handlers initialized');
     }
     
     /**
@@ -335,6 +595,7 @@
         initNewTaskButton();
         initCheckboxHandlers();
         initDeleteHandlers();
+        initTaskMenuHandlers();
         
         // 2. Initialize class-based features
         initTaskSearchSort();

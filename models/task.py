@@ -260,6 +260,7 @@ class Task(Base):
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'snoozed_until': self.snoozed_until.isoformat() if self.snoozed_until else None,
             'meeting_id': self.meeting_id,
+            'session_id': self.session_id,
             'assigned_to_id': self.assigned_to_id,
             'assignee_ids': [user.id for user in self.assignees] if self.assignees else [],
             'created_by_id': self.created_by_id,
