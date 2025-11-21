@@ -155,10 +155,10 @@ class TaskMenuController {
                 input.remove();
                 titleEl.style.display = '';
 
-                // API call
-                await this.updateTask(taskId, { title: newTitle });
+                // Use OptimisticUI system (not raw fetch!)
+                await window.optimisticUI.updateTask(taskId, { title: newTitle });
                 
-                window.toast?.success('Title updated');
+                // Toast handled by OptimisticUI system
             } catch (error) {
                 // Rollback on error
                 titleEl.textContent = currentTitle;
@@ -209,10 +209,10 @@ class TaskMenuController {
                 taskCard.classList.remove('task-completed');
             }
 
-            // API call
-            await this.updateTask(taskId, { status: newStatus ? 'completed' : 'todo' });
+            // Use OptimisticUI system (not raw fetch!)
+            await window.optimisticUI.updateTask(taskId, { status: newStatus ? 'completed' : 'todo' });
             
-            window.toast?.success(newStatus ? 'Task completed' : 'Task reopened');
+            // Toast handled by OptimisticUI system
         } catch (error) {
             // Rollback
             checkbox.checked = currentStatus;
@@ -247,9 +247,10 @@ class TaskMenuController {
                 return;
             }
 
-            await this.updateTask(taskId, { priority: newPriority });
+            // Use OptimisticUI system (not raw fetch!)
+            await window.optimisticUI.updateTask(taskId, { priority: newPriority });
             
-            // Update badge
+            // OptimisticUI will update DOM via _updateTaskInDOM, but we can update badge here for instant feedback
             const priorityBadge = taskCard?.querySelector('.task-priority-badge');
             if (priorityBadge) {
                 const priorityLabels = { high: 'High', medium: 'Medium', low: 'Low', urgent: 'Urgent' };
@@ -257,7 +258,7 @@ class TaskMenuController {
                 priorityBadge.className = `task-priority-badge priority-${newPriority}`;
             }
 
-            window.toast?.success(`Priority updated to ${newPriority.charAt(0).toUpperCase() + newPriority.slice(1)}`);
+            // Toast handled by OptimisticUI system
         } catch (error) {
             window.toast?.error('Failed to update priority');
         }
@@ -285,14 +286,10 @@ class TaskMenuController {
                 return;
             }
 
-            await this.updateTask(taskId, { due_date: newDate || null });
+            // Use OptimisticUI system (not raw fetch!)
+            await window.optimisticUI.updateTask(taskId, { due_date: newDate || null });
             
-            if (newDate) {
-                const formattedDate = new Date(newDate).toLocaleDateString();
-                window.toast?.success(`Due date set to ${formattedDate}`);
-            } else {
-                window.toast?.success('Due date cleared');
-            }
+            // Toast handled by OptimisticUI system
         } catch (error) {
             window.toast?.error('Failed to update due date');
         }
@@ -316,8 +313,9 @@ class TaskMenuController {
                 return;
             }
 
-            await this.updateTask(taskId, { assignee_ids: result });
-            window.toast?.success('Assignees updated successfully');
+            // Use OptimisticUI system (not raw fetch!)
+            await window.optimisticUI.updateTask(taskId, { assignee_ids: result });
+            // Toast handled by OptimisticUI system
         } catch (error) {
             window.toast?.error('Failed to update assignees');
         }
@@ -341,8 +339,9 @@ class TaskMenuController {
                 return;
             }
 
-            await this.updateTask(taskId, { labels: result });
-            window.toast?.success('Labels updated successfully');
+            // Use OptimisticUI system (not raw fetch!)
+            await window.optimisticUI.updateTask(taskId, { labels: result });
+            // Toast handled by OptimisticUI system
         } catch (error) {
             window.toast?.error('Failed to update labels');
         }
@@ -366,7 +365,7 @@ class TaskMenuController {
                 return;
             }
 
-            // Create duplicate
+            // Create duplicate using OptimisticUI.createTask
             const duplicateData = {
                 title: task.title ? `${task.title} [Copy]` : 'Untitled Task [Copy]',
                 description: task.description,
@@ -375,31 +374,14 @@ class TaskMenuController {
                 assignee_ids: task.assignee_ids,
                 labels: task.labels,
                 meeting_id: task.meeting_id,
-                workspace_id: task.workspace_id
+                workspace_id: task.workspace_id,
+                status: 'todo' // Reset to todo for new task
             };
 
-            const response = await fetch('/api/tasks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(duplicateData)
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to duplicate task');
-            }
-
-            const data = await response.json();
+            // Use OptimisticUI createTask (handles temp ID, cache, WebSocket broadcast)
+            await window.optimisticUI.createTask(duplicateData);
             
-            if (data.success) {
-                window.toast?.success('Task duplicated successfully');
-                
-                // Refresh task list
-                if (window.taskBootstrap) {
-                    await window.taskBootstrap.bootstrap();
-                }
-            } else {
-                throw new Error(data.error || 'Failed to duplicate task');
-            }
+            // Toast handled by OptimisticUI system
         } catch (error) {
             window.toast?.error('Failed to duplicate task');
         }
@@ -423,10 +405,10 @@ class TaskMenuController {
                 return;
             }
 
-            await this.updateTask(taskId, { snoozed_until: snoozeUntil });
+            // Use OptimisticUI system (not raw fetch!)
+            await window.optimisticUI.updateTask(taskId, { snoozed_until: snoozeUntil });
             
-            const snoozeDate = new Date(snoozeUntil).toLocaleString();
-            window.toast?.success(`Task snoozed until ${snoozeDate}`);
+            // Toast handled by OptimisticUI system
         } catch (error) {
             window.toast?.error('Failed to snooze task');
         }
@@ -530,24 +512,11 @@ class TaskMenuController {
             }
 
             try {
-                await this.updateTask(taskId, { archived: true });
+                // Use OptimisticUI archiveTask (handles archived_at + status updates)
+                await window.optimisticUI.archiveTask(taskId);
 
-                // Remove from DOM
-                if (taskCard) {
-                    taskCard.style.transition = 'opacity 0.3s ease';
-                    taskCard.style.opacity = '0';
-                    setTimeout(() => taskCard.remove(), 300);
-                }
-
-                // Show toast with undo
-                window.toast?.success('Task archived', 15000, {
-                    undoCallback: async () => {
-                        await this.updateTask(taskId, { archived: false });
-                        if (window.taskBootstrap) {
-                            await window.taskBootstrap.bootstrap();
-                        }
-                    }
-                });
+                // OptimisticUI handles DOM removal and cache updates
+                // Toast with undo handled by OptimisticUI system
             } catch (error) {
                 // Rollback
                 if (taskCard) {
@@ -588,22 +557,11 @@ class TaskMenuController {
             }
 
             try {
-                const response = await fetch(`/api/tasks/${taskId}`, {
-                    method: 'DELETE'
-                });
+                // Use OptimisticUI deleteTask (soft delete with 15s undo window)
+                await window.optimisticUI.deleteTask(taskId);
 
-                if (!response.ok) {
-                    throw new Error('Failed to delete task');
-                }
-
-                // Remove from DOM
-                if (taskCard) {
-                    taskCard.style.transition = 'opacity 0.3s ease';
-                    taskCard.style.opacity = '0';
-                    setTimeout(() => taskCard.remove(), 300);
-                }
-
-                window.toast?.success('Task deleted');
+                // OptimisticUI handles DOM removal, cache updates, and undo toast
+                // No need to manually remove from DOM or show toast
             } catch (error) {
                 // Rollback
                 if (taskCard) {
@@ -636,27 +594,9 @@ class TaskMenuController {
     }
 
     /**
-     * Helper: Update task via PATCH API
+     * REMOVED: updateTask() - All updates now go through window.optimisticUI.updateTask()
+     * This ensures proper IndexedDB caching, offline queue, WebSocket broadcasts, and rollback support
      */
-    async updateTask(taskId, updates) {
-        const response = await fetch(`/api/tasks/${taskId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updates)
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to update task');
-        }
-
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Failed to update task');
-        }
-
-        return data.task;
-    }
 
     /**
      * Helper: Client-side merge fallback
@@ -685,23 +625,16 @@ class TaskMenuController {
             ? sourceTask.priority 
             : targetTask.priority;
 
-        // Update target task
-        await this.updateTask(targetTaskId, {
+        // Update target task using OptimisticUI
+        await window.optimisticUI.updateTask(targetTaskId, {
             labels: mergedLabels,
             priority: mergedPriority
         });
 
-        // Delete source task
-        await fetch(`/api/tasks/${sourceTaskId}`, {
-            method: 'DELETE'
-        });
+        // Delete source task using OptimisticUI (soft delete with undo)
+        await window.optimisticUI.deleteTask(sourceTaskId);
 
-        window.toast?.success('Tasks merged successfully');
-
-        // Refresh task list
-        if (window.taskBootstrap) {
-            await window.taskBootstrap.bootstrap();
-        }
+        // Toast handled by OptimisticUI system
     }
 
     /**
