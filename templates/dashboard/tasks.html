@@ -690,7 +690,10 @@ console.log('[CROWN⁴.6] Loaded', window.tasks.length, 'tasks for provenance UI
 <script src="{{ url_for('static', filename='js/task-duplicate-confirmation.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-snooze-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-merge-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-action-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- NEW: Unified TaskMenuController handles all 13 actions with modern event delegation -->
+<script src="{{ url_for('static', filename='js/task-menu-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- OLD: task-action-handlers.js disabled - replaced by TaskMenuController -->
+<!-- <script src="{{ url_for('static', filename='js/task-action-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script> -->
 <script src="{{ url_for('static', filename='js/task-actions-menu.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-bulk-operations.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-drag-drop.js') }}" nonce="{{ g.csp_nonce }}"></script>

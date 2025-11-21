@@ -152,89 +152,18 @@ class TaskActionsMenu {
     }
 
     /***************************************************************
-     * ACTION HANDLERS — identical to your current implementation
-     * Nothing removed. Nothing rewritten. Zero regressions.
+     * ACTION HANDLERS — Routes to unified TaskMenuController
+     * Replaces legacy custom event system with direct controller calls
      ***************************************************************/
     async handleMenuAction(action, taskId) {
-        switch (action) {
-            case "view-details":
-                window.open(`/tasks/${taskId}`, "__blank");
-                break;
-
-            case "edit":
-                document.dispatchEvent(
-                    new CustomEvent("task:edit", { detail: { taskId } })
-                );
-                break;
-
-            case "toggle-status":
-                document.dispatchEvent(
-                    new CustomEvent("task:toggle-status", { detail: { taskId } })
-                );
-                break;
-
-            case "priority":
-                document.dispatchEvent(
-                    new CustomEvent("task:priority", { detail: { taskId } })
-                );
-                break;
-
-            case "due-date":
-                document.dispatchEvent(
-                    new CustomEvent("task:due-date", { detail: { taskId } })
-                );
-                break;
-
-            case "assign":
-                document.dispatchEvent(
-                    new CustomEvent("task:assign", { detail: { taskId } })
-                );
-                break;
-
-            case "labels":
-                document.dispatchEvent(
-                    new CustomEvent("task:labels", { detail: { taskId } })
-                );
-                break;
-
-            case "duplicate":
-                document.dispatchEvent(
-                    new CustomEvent("task:duplicate", { detail: { taskId } })
-                );
-                break;
-
-            case "snooze":
-                document.dispatchEvent(
-                    new CustomEvent("task:snooze", { detail: { taskId } })
-                );
-                break;
-
-            case "merge":
-                document.dispatchEvent(
-                    new CustomEvent("task:merge", { detail: { taskId } })
-                );
-                break;
-
-            case "jump-to-transcript":
-                document.dispatchEvent(
-                    new CustomEvent("task:jump", { detail: { taskId } })
-                );
-                break;
-
-            case "archive":
-                document.dispatchEvent(
-                    new CustomEvent("task:archive", { detail: { taskId } })
-                );
-                break;
-
-            case "delete":
-                document.dispatchEvent(
-                    new CustomEvent("task:delete", { detail: { taskId } })
-                );
-                break;
-
-            default:
-                console.warn("Unknown task menu action:", action);
+        console.log(`[TaskActionsMenu] Delegating action "${action}" to TaskMenuController`);
+        
+        // Call unified controller if available
+        if (window.taskMenuController) {
+            await window.taskMenuController.executeAction(action, taskId);
+        } else {
+            console.error('[TaskActionsMenu] TaskMenuController not initialized!');
+            window.toast?.error('Task menu system not ready. Please refresh the page.');
         }
     }
     /***************************************************************
