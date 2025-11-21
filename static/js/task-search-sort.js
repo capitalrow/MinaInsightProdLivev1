@@ -14,11 +14,11 @@ class TaskSearchSort {
         
         this.searchQuery = '';
         this.currentSort = 'default';
-        this.currentFilter = 'all';
+        this.currentFilter = 'active'; // Default to 'active' tab to hide archived tasks
         this.quickFilter = null; // Added for quick filter support
         
         this.init();
-        console.log('[TaskSearchSort] Initialized');
+        console.log('[TaskSearchSort] Initialized with default filter: active');
     }
     
     init() {
@@ -54,6 +54,30 @@ class TaskSearchSort {
             this.applyFiltersAndSort();
         });
         
+        // Apply initial filter after tasks bootstrap completes
+        document.addEventListener('task:bootstrap:complete', () => {
+            this.applyFiltersAndSort();
+            console.log('[TaskSearchSort] Initial filter applied after bootstrap: active (hiding archived tasks)');
+        });
+        
+        // Reapply filter when tasks are mutated (OptimisticUI + WebSocket sync)
+        // CRITICAL: Listen on window (not document) because OptimisticUI dispatches on window
+        const taskMutationEvents = [
+            'task:created', 
+            'task:updated', 
+            'task:deleted', 
+            'task:restored',
+            'task:completed'    // Handle completion events for filter updates
+        ];
+        taskMutationEvents.forEach(eventName => {
+            window.addEventListener(eventName, () => {
+                // Small delay to ensure DOM update completes
+                requestAnimationFrame(() => {
+                    this.applyFiltersAndSort();
+                });
+            });
+        });
+        
         // Initial count update
         this.updateCounts();
     }
@@ -84,12 +108,17 @@ class TaskSearchSort {
                    labels.includes(this.searchQuery);
         });
         
-        // 2. Apply status filter (from filter tabs)
-        if (this.currentFilter === 'pending') {
-            visibleTasks = visibleTasks.filter(task => task.dataset.status === 'pending');
-        } else if (this.currentFilter === 'completed') {
-            visibleTasks = visibleTasks.filter(task => task.dataset.status === 'completed');
+        // 2. Apply archive filter (from filter tabs: All/Active/Archived)
+        if (this.currentFilter === 'active') {
+            // Active = not archived and not deleted
+            visibleTasks = visibleTasks.filter(task => 
+                !task.dataset.archivedAt && !task.dataset.deletedAt
+            );
+        } else if (this.currentFilter === 'archived') {
+            // Archived = has archived_at timestamp
+            visibleTasks = visibleTasks.filter(task => task.dataset.archivedAt);
         }
+        // 'all' shows everything (no filter)
         
         // 2.5. Apply quick filter (from Quick Actions Bar)
         if (this.quickFilter) {

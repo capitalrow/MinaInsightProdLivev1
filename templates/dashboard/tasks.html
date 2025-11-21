@@ -57,24 +57,24 @@
         <span class="pending-count"></span>
     </div>
 
-    <!-- Filters -->
+    <!-- Filters - All/Active/Archived Tabs (Linear-style) -->
     <div class="task-filters">
-        <button class="filter-tab active" data-filter="all">
-            All Tasks
+        <button class="filter-tab" data-filter="all">
+            All
             <span class="filter-counter filter-counter-all" data-counter="all">
                 {{ tasks|length if tasks else 0 }}
             </span>
         </button>
-        <button class="filter-tab" data-filter="pending">
-            Pending
-            <span class="filter-counter filter-counter-pending" data-counter="pending">
-                {{ tasks|selectattr('completed', 'equalto', false)|list|length if tasks else 0 }}
+        <button class="filter-tab active" data-filter="active">
+            Active
+            <span class="filter-counter filter-counter-active" data-counter="active">
+                {{ tasks|selectattr('archived_at', 'none')|list|length if tasks else 0 }}
             </span>
         </button>
-        <button class="filter-tab" data-filter="completed">
-            Completed
-            <span class="filter-counter filter-counter-completed" data-counter="completed">
-                {{ tasks|selectattr('completed', 'equalto', true)|list|length if tasks else 0 }}
+        <button class="filter-tab" data-filter="archived">
+            Archived
+            <span class="filter-counter filter-counter-archived" data-counter="archived">
+                {{ tasks|selectattr('archived_at', 'defined')|selectattr('archived_at', 'ne', None)|list|length if tasks else 0 }}
             </span>
         </button>
     </div>
