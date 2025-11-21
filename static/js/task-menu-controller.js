@@ -536,15 +536,22 @@ class TaskMenuController {
     async handleDelete(taskId) {
         console.log(`[TaskMenuController] Deleting task ${taskId}`);
         
-        const task = await this.fetchTask(taskId);
-        if (!task) return;
-
         try {
+            const task = await this.fetchTask(taskId);
+            if (!task) {
+                console.error('[TaskMenuController] Task not found:', taskId);
+                return;
+            }
+
+            console.log('[TaskMenuController] Task fetched successfully:', task);
+
             // Use existing confirmation modal
             const confirmed = await window.taskConfirmModal?.confirmDelete(task.title);
             
+            console.log('[TaskMenuController] Confirmation result:', confirmed);
+            
             if (!confirmed) {
-                console.log('[TaskMenuController] Delete cancelled');
+                console.log('[TaskMenuController] Delete cancelled by user');
                 return;
             }
 
@@ -556,22 +563,25 @@ class TaskMenuController {
                 taskCard.style.pointerEvents = 'none';
             }
 
-            try {
-                // Use OptimisticUI deleteTask (soft delete with 15s undo window)
-                await window.optimisticUI.deleteTask(taskId);
+            console.log('[TaskMenuController] Calling optimisticUI.deleteTask...');
+            
+            // Use OptimisticUI deleteTask (soft delete with 15s undo window)
+            await window.optimisticUI.deleteTask(taskId);
 
-                // OptimisticUI handles DOM removal, cache updates, and undo toast
-                // No need to manually remove from DOM or show toast
-            } catch (error) {
-                // Rollback
-                if (taskCard) {
-                    taskCard.style.opacity = '';
-                    taskCard.style.pointerEvents = '';
-                }
-                throw error;
-            }
+            console.log('[TaskMenuController] Delete successful');
+            
+            // OptimisticUI handles DOM removal, cache updates, and undo toast
+            // No need to manually remove from DOM or show toast
         } catch (error) {
+            console.error('[TaskMenuController] Delete failed with error:', error);
             window.toast?.error('Failed to delete task');
+            
+            // Rollback UI changes
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (taskCard) {
+                taskCard.style.opacity = '';
+                taskCard.style.pointerEvents = '';
+            }
         }
     }
 
