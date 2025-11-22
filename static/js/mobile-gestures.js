@@ -203,10 +203,10 @@
         `;
         document.head.appendChild(spinnerStyle);
         
-        // Touch event handlers
-        container.addEventListener('touchstart', handlePullStart, { passive: true });
-        container.addEventListener('touchmove', handlePullMove, { passive: false });
-        container.addEventListener('touchend', handlePullEnd, { passive: true });
+        // Touch event handlers (tracked for PJAX lifecycle)
+        addTrackedListener(container, 'touchstart', handlePullStart, { passive: true });
+        addTrackedListener(container, 'touchmove', handlePullMove, { passive: false });
+        addTrackedListener(container, 'touchend', handlePullEnd, { passive: true });
     }
     
     /**
@@ -353,9 +353,9 @@
             return;
         }
         
-        meetingsContainer.addEventListener('touchstart', handleSwipeStart, { passive: true });
-        meetingsContainer.addEventListener('touchmove', handleSwipeMove, { passive: false });
-        meetingsContainer.addEventListener('touchend', handleSwipeEnd, { passive: true });
+        addTrackedListener(meetingsContainer, 'touchstart', handleSwipeStart, { passive: true });
+        addTrackedListener(meetingsContainer, 'touchmove', handleSwipeMove, { passive: false });
+        addTrackedListener(meetingsContainer, 'touchend', handleSwipeEnd, { passive: true });
     }
     
     /**
@@ -499,9 +499,9 @@
             return;
         }
         
-        meetingsContainer.addEventListener('touchstart', handleLongPressStart, { passive: true });
-        meetingsContainer.addEventListener('touchmove', handleLongPressMove, { passive: true });
-        meetingsContainer.addEventListener('touchend', handleLongPressEnd, { passive: true });
+        addTrackedListener(meetingsContainer, 'touchstart', handleLongPressStart, { passive: true });
+        addTrackedListener(meetingsContainer, 'touchmove', handleLongPressMove, { passive: true });
+        addTrackedListener(meetingsContainer, 'touchend', handleLongPressEnd, { passive: true });
     }
     
     /**
