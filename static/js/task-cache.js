@@ -539,6 +539,25 @@ class TaskCache {
     async saveTask(task) {
         await this.init();
         
+        // CRITICAL CACHE CORRUPTION FIX: Validate task is not an error response
+        // Gap #7: Error responses with 'error' or 'success: false' fields were being cached as tasks
+        if (!task || typeof task !== 'object') {
+            console.warn('⚠️ Attempted to save invalid task (null/non-object):', task);
+            return;
+        }
+        
+        // Reject error responses
+        if (task.error || task.success === false) {
+            console.warn('⚠️ Rejected error response from being cached as task:', task);
+            return;
+        }
+        
+        // Validate required task fields exist
+        if (!task.hasOwnProperty('title') || !task.hasOwnProperty('status')) {
+            console.warn('⚠️ Rejected object missing required task fields (title/status):', task);
+            return;
+        }
+        
         // CRITICAL FIX: Normalize task ID first, THEN validate
         // IndexedDB keyPath requires 'id' field to exist and be numeric
         
@@ -617,11 +636,44 @@ class TaskCache {
     async saveTasks(tasks) {
         await this.init();
         
+        // CRITICAL CACHE CORRUPTION FIX: Filter out invalid tasks and error responses
+        const validTasks = [];
+        const rejectedTasks = [];
+        
+        tasks.forEach((task, index) => {
+            // Validate task is not an error response
+            if (!task || typeof task !== 'object') {
+                rejectedTasks.push({ index, reason: 'null/non-object', data: task });
+                return;
+            }
+            
+            if (task.error || task.success === false) {
+                rejectedTasks.push({ index, reason: 'error response', data: task });
+                return;
+            }
+            
+            if (!task.hasOwnProperty('title') || !task.hasOwnProperty('status')) {
+                rejectedTasks.push({ index, reason: 'missing required fields', data: task });
+                return;
+            }
+            
+            validTasks.push(task);
+        });
+        
+        if (rejectedTasks.length > 0) {
+            console.warn(`⚠️ Rejected ${rejectedTasks.length} invalid tasks from bulk save:`, rejectedTasks);
+        }
+        
+        if (validTasks.length === 0) {
+            console.warn('⚠️ No valid tasks to save in bulk operation');
+            return;
+        }
+        
         // CRITICAL FIX: Normalize all task IDs first, THEN validate
         
         // Step 1: Normalize string IDs to numbers for all tasks
         const normalizationErrors = [];
-        tasks.forEach((task, index) => {
+        validTasks.forEach((task, index) => {
             if (typeof task.id === 'string') {
                 const numericId = parseInt(task.id, 10);
                 if (isNaN(numericId)) {
