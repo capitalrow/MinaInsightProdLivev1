@@ -109,7 +109,7 @@ class TaskCache {
     constructor() {
         this.db = null;
         this.dbName = 'MinaTasksDB';
-        this.version = 2; // Incremented for schema changes
+        this.version = 3; // Incremented for temp_tasks store addition
         this.ready = false;
         this.initPromise = null;
         this.nodeId = this._getOrCreateNodeId();
@@ -155,7 +155,7 @@ class TaskCache {
                 const db = event.target.result;
                 console.log('🔧 Creating IndexedDB schema for CROWN⁴.5...');
 
-                // Store 1: Tasks - Main task data with CROWN⁴.5 fields
+                // Store 1: Tasks - Main task data with CROWN⁴.5 fields (numeric IDs only)
                 if (!db.objectStoreNames.contains('tasks')) {
                     const taskStore = db.createObjectStore('tasks', { keyPath: 'id' });
                     taskStore.createIndex('status', 'status', { unique: false });
@@ -168,7 +168,17 @@ class TaskCache {
                     console.log('  ✓ Created "tasks" store');
                 }
 
-                // Store 2: Event Ledger - Stores all events with vector clocks
+                // Store 2: Temporary Tasks - Optimistic creates with string IDs (temp_*)
+                // Persists temp tasks until server responds with real numeric ID
+                // Survives page refreshes and offline mode
+                if (!db.objectStoreNames.contains('temp_tasks')) {
+                    const tempTaskStore = db.createObjectStore('temp_tasks', { keyPath: 'id' });
+                    tempTaskStore.createIndex('created_at', 'created_at', { unique: false });
+                    tempTaskStore.createIndex('status', 'status', { unique: false });
+                    console.log('  ✓ Created "temp_tasks" store (for optimistic UI persistence)');
+                }
+
+                // Store 3: Event Ledger - Stores all events with vector clocks
                 if (!db.objectStoreNames.contains('events')) {
                     const eventStore = db.createObjectStore('events', { keyPath: 'id', autoIncrement: true });
                     eventStore.createIndex('event_type', 'event_type', { unique: false });
@@ -221,6 +231,7 @@ class TaskCache {
      * 1. NOT in the offline queue (already synced/failed)
      * 2. Older than 10 minutes (safe threshold for failed operations)
      * This preserves legitimate offline tasks that are still pending sync.
+     * Updated to check temp_tasks store (v3 schema)
      * @returns {Promise<number>} Number of tasks removed
      */
     async cleanOrphanedTempTasks() {
@@ -228,20 +239,20 @@ class TaskCache {
         
         return new Promise(async (resolve, reject) => {
             try {
-                // Get all tasks with temp IDs
-                const transaction = this.db.transaction(['tasks', 'offline_queue'], 'readonly');
-                const taskStore = transaction.objectStore('tasks');
+                // Get all temp tasks from temp_tasks store and queued operations
+                const transaction = this.db.transaction(['temp_tasks', 'offline_queue'], 'readonly');
+                const tempTaskStore = transaction.objectStore('temp_tasks');
                 const queueStore = transaction.objectStore('offline_queue');
                 
-                const tasksRequest = taskStore.getAll();
+                const tempTasksRequest = tempTaskStore.getAll();
                 const queueRequest = queueStore.getAll();
                 
                 await Promise.all([
-                    new Promise(res => tasksRequest.onsuccess = res),
+                    new Promise(res => tempTasksRequest.onsuccess = res),
                     new Promise(res => queueRequest.onsuccess = res)
                 ]);
                 
-                const allTasks = tasksRequest.result || [];
+                const allTempTasks = tempTasksRequest.result || [];
                 const queuedOps = queueRequest.result || [];
                 
                 // Build set of temp IDs that are in the offline queue (should NOT be deleted)
@@ -256,55 +267,53 @@ class TaskCache {
                 const SAFE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
                 const orphanedTempIds = [];
                 
-                allTasks.forEach(task => {
-                    if (task.id && typeof task.id === 'string' && task.id.startsWith('temp_')) {
-                        // Skip if in offline queue (legitimate pending task)
-                        if (queuedTempIds.has(task.id)) {
-                            console.log(`✅ Preserving queued temp task: ${task.id}`);
-                            return;
-                        }
-                        
-                        // CRITICAL: Validate created_at timestamp (preserve if invalid to be safe)
-                        // Reject: null, undefined, 0, empty string, non-ISO strings
-                        if (!task.created_at || task.created_at === 0 || task.created_at === '0') {
-                            console.log(`✅ Preserving temp task with missing/invalid created_at: ${task.id}`);
-                            return;
-                        }
-                        
-                        // Parse timestamp and validate
-                        const createdTimestamp = new Date(task.created_at).getTime();
-                        
-                        // CRITICAL: Skip if timestamp is NaN or epoch/negative
-                        if (Number.isNaN(createdTimestamp) || createdTimestamp <= 0) {
-                            console.log(`✅ Preserving temp task with invalid timestamp: ${task.id}`);
-                            return;
-                        }
-                        
-                        // Calculate age from valid timestamp
-                        const taskAge = now - createdTimestamp;
-                        
-                        // CRITICAL: Sanity check - if age is negative or unreasonably large (>1 year), preserve
-                        const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
-                        if (taskAge < 0 || taskAge > ONE_YEAR_MS) {
-                            console.log(`✅ Preserving temp task with suspicious age: ${task.id} (age: ${taskAge}ms)`);
-                            return;
-                        }
-                        
-                        if (taskAge < SAFE_THRESHOLD_MS) {
-                            console.log(`⏳ Preserving recent temp task: ${task.id} (age: ${Math.round(taskAge/1000)}s)`);
-                            return;
-                        }
-                        
-                        // This is a confirmed orphaned temp task - safe to remove
-                        console.log(`🗑️ Orphaned temp task confirmed for deletion: ${task.id} (age: ${Math.round(taskAge/1000)}s, not in queue)`);
-                        orphanedTempIds.push(task.id);
+                allTempTasks.forEach(task => {
+                    // Skip if in offline queue (legitimate pending task)
+                    if (queuedTempIds.has(task.id)) {
+                        console.log(`✅ Preserving queued temp task: ${task.id}`);
+                        return;
                     }
+                    
+                    // CRITICAL: Validate created_at timestamp (preserve if invalid to be safe)
+                    // Reject: null, undefined, 0, empty string, non-ISO strings
+                    if (!task.created_at || task.created_at === 0 || task.created_at === '0') {
+                        console.log(`✅ Preserving temp task with missing/invalid created_at: ${task.id}`);
+                        return;
+                    }
+                    
+                    // Parse timestamp and validate
+                    const createdTimestamp = new Date(task.created_at).getTime();
+                    
+                    // CRITICAL: Skip if timestamp is NaN or epoch/negative
+                    if (Number.isNaN(createdTimestamp) || createdTimestamp <= 0) {
+                        console.log(`✅ Preserving temp task with invalid timestamp: ${task.id}`);
+                        return;
+                    }
+                    
+                    // Calculate age from valid timestamp
+                    const taskAge = now - createdTimestamp;
+                    
+                    // CRITICAL: Sanity check - if age is negative or unreasonably large (>1 year), preserve
+                    const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+                    if (taskAge < 0 || taskAge > ONE_YEAR_MS) {
+                        console.log(`✅ Preserving temp task with suspicious age: ${task.id} (age: ${taskAge}ms)`);
+                        return;
+                    }
+                    
+                    if (taskAge < SAFE_THRESHOLD_MS) {
+                        console.log(`⏳ Preserving recent temp task: ${task.id} (age: ${Math.round(taskAge/1000)}s)`);
+                        return;
+                    }
+                    
+                    // This is a confirmed orphaned temp task - safe to remove
+                    console.log(`🗑️ Orphaned temp task confirmed for deletion: ${task.id} (age: ${Math.round(taskAge/1000)}s, not in queue)`);
+                    orphanedTempIds.push(task.id);
                 });
                 
-                // Delete orphaned temp tasks
+                // Delete orphaned temp tasks from temp_tasks store
                 if (orphanedTempIds.length > 0) {
-                    const deleteTransaction = this.db.transaction(['tasks'], 'readwrite');
-                    const deleteStore = deleteTransaction.objectStore('tasks');
+                    const deleteTransaction = this.db.transaction(['temp_tasks'], 'readwrite');
+                    const deleteStore = deleteTransaction.objectStore('temp_tasks');
                     
                     orphanedTempIds.forEach(tempId => {
                         deleteStore.delete(tempId);
@@ -312,12 +321,12 @@ class TaskCache {
                     });
                     
                     deleteTransaction.oncomplete = () => {
-                        console.log(`✅ Cache hygiene: Removed ${orphanedTempIds.length} orphaned temp tasks`);
+                        console.log(`✅ Cache hygiene: Removed ${orphanedTempIds.length} orphaned temp tasks from temp_tasks store`);
                         resolve(orphanedTempIds.length);
                     };
                     deleteTransaction.onerror = () => reject(deleteTransaction.error);
                 } else {
-                    console.log('✅ No orphaned temp tasks found');
+                    console.log('✅ No orphaned temp tasks found in temp_tasks store');
                     resolve(0);
                 }
                 
@@ -374,51 +383,71 @@ class TaskCache {
 
     /**
      * Get all tasks from cache (cache-first)
-     * ENTERPRISE-GRADE: Returns ALL tasks including temp IDs (they'll be marked as "syncing" in UI)
+     * ENTERPRISE-GRADE: Returns ALL tasks from both 'tasks' and 'temp_tasks' stores
+     * Temp tasks are marked with syncing flag for UI rendering
+     * Survives page refresh - temp tasks persist until server confirms
      * @returns {Promise<Array>}
      */
     async getAllTasks() {
         await this.init();
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['tasks'], 'readonly');
-            const store = transaction.objectStore('tasks');
-            const request = store.getAll();
-
-            request.onsuccess = () => {
-                const allTasks = request.result || [];
-                
-                // Mark temp tasks with syncing flag for UI rendering
-                allTasks.forEach(task => {
-                    if (task.id && typeof task.id === 'string' && task.id.startsWith('temp_')) {
-                        task._is_syncing = true;
-                        task._sync_status = 'pending';
-                    }
-                });
-                
-                // CROWN⁴.5 FIX: Emit cache hit event for performance tracking (bulk load)
-                // This ensures cache hit rate is properly tracked when bootstrap loads all tasks
-                if (allTasks.length > 0) {
-                    window.dispatchEvent(new CustomEvent('cache:hit', {
-                        detail: { 
-                            bulkLoad: true, 
-                            taskCount: allTasks.length,
-                            cached: true 
-                        }
-                    }));
-                } else {
-                    window.dispatchEvent(new CustomEvent('cache:miss', {
-                        detail: { 
-                            bulkLoad: true, 
-                            taskCount: 0,
-                            cached: false 
-                        }
-                    }));
-                }
-                
-                resolve(allTasks);
-            };
-            request.onerror = () => reject(request.error);
+        
+        // Read from both stores in parallel for performance
+        const [realTasks, tempTasks] = await Promise.all([
+            // Get all real tasks (numeric IDs)
+            new Promise((resolve, reject) => {
+                const transaction = this.db.transaction(['tasks'], 'readonly');
+                const store = transaction.objectStore('tasks');
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result || []);
+                request.onerror = () => reject(request.error);
+            }),
+            // Get all temp tasks (string IDs)
+            new Promise((resolve, reject) => {
+                const transaction = this.db.transaction(['temp_tasks'], 'readonly');
+                const store = transaction.objectStore('temp_tasks');
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result || []);
+                request.onerror = () => reject(request.error);
+            })
+        ]);
+        
+        // Mark temp tasks with syncing flag for UI rendering
+        tempTasks.forEach(task => {
+            task._is_syncing = true;
+            task._sync_status = 'pending';
+            task._temp = true;
         });
+        
+        // Merge real tasks and temp tasks
+        const allTasks = [...realTasks, ...tempTasks];
+        
+        // Log temp tasks for debugging
+        if (tempTasks.length > 0) {
+            console.log(`📦 Loaded ${tempTasks.length} temp task(s) from temp_tasks store:`, tempTasks.map(t => t.id));
+        }
+        
+        // CROWN⁴.5 FIX: Emit cache hit event for performance tracking (bulk load)
+        // This ensures cache hit rate is properly tracked when bootstrap loads all tasks
+        if (allTasks.length > 0) {
+            window.dispatchEvent(new CustomEvent('cache:hit', {
+                detail: { 
+                    bulkLoad: true, 
+                    taskCount: allTasks.length,
+                    tempCount: tempTasks.length,
+                    cached: true 
+                }
+            }));
+        } else {
+            window.dispatchEvent(new CustomEvent('cache:miss', {
+                detail: { 
+                    bulkLoad: true, 
+                    taskCount: 0,
+                    cached: false 
+                }
+            }));
+        }
+        
+        return allTasks;
     }
 
     /**
@@ -500,11 +529,39 @@ class TaskCache {
 
     /**
      * Get single task by ID
-     * @param {number} taskId
+     * @param {number|string} taskId - Numeric ID or temp string ID
      * @returns {Promise<Object|null>}
      */
     async getTask(taskId) {
         await this.init();
+        
+        // Check temp_tasks store first for string IDs starting with 'temp_'
+        if (typeof taskId === 'string' && taskId.startsWith('temp_')) {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction(['temp_tasks'], 'readonly');
+                const store = transaction.objectStore('temp_tasks');
+                const request = store.get(taskId);
+                
+                request.onsuccess = () => {
+                    const result = request.result || null;
+                    if (result) {
+                        console.log(`📦 Retrieved temp task from temp_tasks store: ${taskId}`);
+                        window.dispatchEvent(new CustomEvent('cache:hit', {
+                            detail: { taskId, cached: true, temp: true }
+                        }));
+                    } else {
+                        console.warn(`⚠️ Temp task not found: ${taskId}`);
+                        window.dispatchEvent(new CustomEvent('cache:miss', {
+                            detail: { taskId, cached: false, temp: true }
+                        }));
+                    }
+                    resolve(result);
+                };
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        // Normal IndexedDB lookup for numeric IDs
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['tasks'], 'readonly');
             const store = transaction.objectStore('tasks');
@@ -559,13 +616,31 @@ class TaskCache {
         }
         
         // CRITICAL FIX: Handle temporary IDs from optimistic UI
-        // IndexedDB keyPath requires 'id' field to exist and be numeric
-        
-        // Skip IndexedDB storage for temporary IDs (optimistic creates)
-        // These tasks stay in-memory (DOM) until server responds with real numeric ID
+        // Store temp tasks in dedicated IndexedDB store (survives page refresh)
         if (typeof task.id === 'string' && task.id.startsWith('temp_')) {
-            console.log(`⏭️ Skipping IndexedDB cache for temporary task ID: ${task.id} (will cache when server responds)`);
-            return Promise.resolve(); // Successfully skip without throwing error
+            console.log(`💾 Storing temp task in temp_tasks store: ${task.id} (will persist to IndexedDB when server responds)`);
+            
+            // Ensure timestamps
+            const now = new Date().toISOString();
+            if (!task.created_at) task.created_at = now;
+            task.updated_at = now;
+            task._temp = true; // Mark as temporary
+            
+            // Store in temp_tasks object store (string IDs allowed)
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction(['temp_tasks'], 'readwrite');
+                const store = transaction.objectStore('temp_tasks');
+                const request = store.put(task);
+                
+                request.onsuccess = () => {
+                    console.log(`✅ Temp task persisted to temp_tasks store: ${task.id}`);
+                    resolve();
+                };
+                request.onerror = () => {
+                    console.error(`❌ Failed to store temp task: ${task.id}`, request.error);
+                    reject(request.error);
+                };
+            });
         }
         
         // Step 1: Normalize string IDs to numbers (e.g., "123" -> 123, "0" -> 0)
@@ -729,18 +804,121 @@ class TaskCache {
     }
 
     /**
-     * Delete task from cache
-     * @param {number} taskId
+     * Reconcile temporary task with real ID from server
+     * Called when server confirms task creation and returns real numeric ID
+     * CRITICAL: Transaction completes BEFORE calling saveTask() to avoid nested transaction errors
+     * @param {number} realId - Real numeric ID from server
+     * @param {string} tempId - Temporary string ID (e.g., "temp_123")
+     * @returns {Promise<void>}
+     */
+    async reconcileTempTask(realId, tempId) {
+        await this.init();
+        console.log(`🔄 Reconciling temp task: ${tempId} → ${realId}`);
+        
+        // Step 1: Atomic read + delete from temp_tasks store
+        // CRITICAL: Wait for transaction to COMPLETE before calling saveTask()
+        const tempTask = await new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['temp_tasks'], 'readwrite');
+            const tempStore = transaction.objectStore('temp_tasks');
+            let tempTaskData = null;
+            
+            // Read temp task
+            const getRequest = tempStore.get(tempId);
+            
+            getRequest.onsuccess = () => {
+                tempTaskData = getRequest.result;
+                
+                if (!tempTaskData) {
+                    console.warn(`⚠️ Temp task not found (already reconciled?): ${tempId} - treating as no-op`);
+                    // Transaction will complete and resolve null
+                    return;
+                }
+                
+                // Delete from temp_tasks atomically
+                const deleteRequest = tempStore.delete(tempId);
+                
+                deleteRequest.onsuccess = () => {
+                    console.log(`🗑️ Removed temp task from temp_tasks store: ${tempId}`);
+                };
+                deleteRequest.onerror = () => reject(deleteRequest.error);
+            };
+            getRequest.onerror = () => reject(getRequest.error);
+            
+            // Wait for transaction to COMPLETE before resolving
+            // This ensures no nested transactions when we call saveTask() later
+            transaction.oncomplete = () => {
+                console.log(`✅ Temp task delete transaction completed: ${tempId}`);
+                resolve(tempTaskData);
+            };
+            transaction.onerror = () => reject(transaction.error);
+        });
+        
+        // If temp task was missing (already reconciled), exit gracefully
+        if (!tempTask) {
+            return;
+        }
+        
+        // Step 2: Create real task with numeric ID
+        const realTask = {
+            ...tempTask,
+            id: realId,
+            _temp: false,
+            _is_syncing: false,
+            _sync_status: 'complete',
+            updated_at: new Date().toISOString()
+        };
+        
+        // Step 3: AFTER transaction completes, save through normal saveTask() path
+        // This adds checksums, metadata, and emits proper events for validators
+        // No nested transaction errors because previous transaction is complete
+        await this.saveTask(realTask);
+        
+        console.log(`✅ Reconciled temp task ${tempId} → ${realId} with full metadata`);
+        
+        // Emit event for UI updates and telemetry
+        window.dispatchEvent(new CustomEvent('task:reconciled', {
+            detail: { tempId, realId, task: realTask }
+        }));
+    }
+
+    /**
+     * Delete task from cache (handles both temp and real IDs)
+     * @param {number|string} taskId - Numeric ID or temp string ID
      * @returns {Promise<void>}
      */
     async deleteTask(taskId) {
         await this.init();
+        
+        // Handle temp task deletion (from temp_tasks store)
+        if (typeof taskId === 'string' && taskId.startsWith('temp_')) {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction(['temp_tasks'], 'readwrite');
+                const store = transaction.objectStore('temp_tasks');
+                const request = store.delete(taskId);
+                
+                request.onsuccess = () => {
+                    console.log(`🗑️ Deleted temp task from temp_tasks store: ${taskId}`);
+                    resolve();
+                };
+                request.onerror = () => {
+                    console.warn(`⚠️ Failed to delete temp task ${taskId}:`, request.error);
+                    // Don't throw, just log warning
+                    resolve();
+                };
+            });
+        }
+        
+        // Handle real task deletion (from tasks store)
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['tasks'], 'readwrite');
             const store = transaction.objectStore('tasks');
-            const request = store.delete(taskId);
+            const numericId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
+            const request = store.delete(numericId);
 
-            request.onsuccess = () => resolve();
+            request.onsuccess = () => {
+                console.log(`🗑️ Deleted task from tasks store: ${numericId}`);
+                resolve();
+            };
             request.onerror = () => reject(request.error);
         });
     }
