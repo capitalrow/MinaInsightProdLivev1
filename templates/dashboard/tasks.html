@@ -41,7 +41,7 @@
                 </svg>
                 AI Proposals
             </button>
-            <button class="btn btn-primary">
+            <button id="new-task-btn" class="btn btn-primary">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -740,7 +740,7 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 <script src="{{ url_for('static', filename='js/task-smart-selectors.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- TaskModalManager - Unified Create/Edit/View Modal -->
-<script src="{{ url_for('static', filename='js/task-modal-manager.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-modal-manager.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Meeting-Native Features -->
 <script src="{{ url_for('static', filename='js/task-transcript-navigation.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>

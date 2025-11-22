@@ -74,6 +74,17 @@ class TaskModalManager {
     }
     
     attachEventListeners() {
+        // Wire up "New Task" button
+        const newTaskBtn = document.getElementById('new-task-btn');
+        if (newTaskBtn) {
+            newTaskBtn.addEventListener('click', () => {
+                console.log('[TaskModalManager] New Task button clicked');
+                this.openCreateModal();
+            });
+        } else {
+            console.warn('[TaskModalManager] New Task button (#new-task-btn) not found');
+        }
+        
         const closeBtn = document.getElementById('task-modal-close');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => this.close());
