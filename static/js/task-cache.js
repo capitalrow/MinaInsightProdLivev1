@@ -237,6 +237,8 @@ class TaskCache {
     async cleanOrphanedTempTasks() {
         await this.init();
         
+        console.log('🧹 [Cleanup] Starting cleanOrphanedTempTasks()...');
+        
         return new Promise(async (resolve, reject) => {
             try {
                 // Get all temp tasks from temp_tasks store and queued operations
@@ -254,6 +256,14 @@ class TaskCache {
                 
                 const allTempTasks = tempTasksRequest.result || [];
                 const queuedOps = queueRequest.result || [];
+                
+                console.log(`🧹 [Cleanup] Found ${allTempTasks.length} temp tasks and ${queuedOps.length} queued operations`);
+                if (allTempTasks.length > 0) {
+                    console.log('🧹 [Cleanup] Temp tasks:', allTempTasks.map(t => ({ id: t.id, created_at: t.created_at, title: t.title })));
+                }
+                if (queuedOps.length > 0) {
+                    console.log('🧹 [Cleanup] Queued operations:', queuedOps.map(op => ({ type: op.type, temp_id: op.temp_id, data_temp_id: op.data?.temp_id })));
+                }
                 
                 // Build set of temp IDs that are in the offline queue (should NOT be deleted)
                 const queuedTempIds = new Set();
