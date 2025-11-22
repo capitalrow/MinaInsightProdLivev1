@@ -22,6 +22,15 @@ from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
 
+# Import metrics collector (lazy to avoid circular import)
+_metrics_collector = None
+def get_metrics_collector():
+    global _metrics_collector
+    if _metrics_collector is None:
+        from services.copilot_metrics_collector import copilot_metrics_collector
+        _metrics_collector = copilot_metrics_collector
+    return _metrics_collector
+
 
 @dataclass
 class StreamMetrics:
@@ -351,6 +360,14 @@ class CopilotStreamingService:
                 f"{metrics.total_latency_ms:.0f}ms total, calm_score={metrics.calm_score:.2f}"
             )
             
+            # Record metrics in collector for SLA monitoring
+            metrics_collector = get_metrics_collector()
+            if metrics_collector and metrics.first_token_latency_ms:
+                metrics_collector.record_response_latency(
+                    latency_ms=metrics.first_token_latency_ms,
+                    calm_score=metrics.calm_score
+                )
+            
             # Emit completion event
             yield {
                 'type': 'complete',
@@ -484,6 +501,14 @@ class CopilotStreamingService:
                 f"Copilot stream complete: {metrics.first_token_latency_ms:.0f}ms first token, "
                 f"{metrics.total_latency_ms:.0f}ms total, calm_score={metrics.calm_score:.2f}"
             )
+            
+            # Record metrics in collector for SLA monitoring
+            metrics_collector = get_metrics_collector()
+            if metrics_collector and metrics.first_token_latency_ms:
+                metrics_collector.record_response_latency(
+                    latency_ms=metrics.first_token_latency_ms,
+                    calm_score=metrics.calm_score
+                )
             
             # Emit completion event
             yield {
