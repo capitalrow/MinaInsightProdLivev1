@@ -41,7 +41,7 @@
                 </svg>
                 AI Proposals
             </button>
-            <button class="btn btn-primary">
+            <button id="new-task-btn" class="btn btn-primary">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -57,24 +57,24 @@
         <span class="pending-count"></span>
     </div>
 
-    <!-- Filters -->
+    <!-- Filters - All/Active/Archived Tabs (Linear-style) -->
     <div class="task-filters">
-        <button class="filter-tab active" data-filter="all">
-            All Tasks
+        <button class="filter-tab" data-filter="all">
+            All
             <span class="filter-counter filter-counter-all" data-counter="all">
                 {{ tasks|length if tasks else 0 }}
             </span>
         </button>
-        <button class="filter-tab" data-filter="pending">
-            Pending
-            <span class="filter-counter filter-counter-pending" data-counter="pending">
-                {{ tasks|selectattr('completed', 'equalto', false)|list|length if tasks else 0 }}
+        <button class="filter-tab active" data-filter="active">
+            Active
+            <span class="filter-counter filter-counter-active" data-counter="active">
+                {{ tasks|selectattr('archived_at', 'none')|list|length if tasks else 0 }}
             </span>
         </button>
-        <button class="filter-tab" data-filter="completed">
-            Completed
-            <span class="filter-counter filter-counter-completed" data-counter="completed">
-                {{ tasks|selectattr('completed', 'equalto', true)|list|length if tasks else 0 }}
+        <button class="filter-tab" data-filter="archived">
+            Archived
+            <span class="filter-counter filter-counter-archived" data-counter="archived">
+                {{ tasks|selectattr('archived_at', 'defined')|selectattr('archived_at', 'ne', None)|list|length if tasks else 0 }}
             </span>
         </button>
     </div>
@@ -254,12 +254,12 @@
     </div>
 </div>
 
-<!-- Task Creation Modal (Crown+ Glassmorphism) -->
-<div id="task-modal-overlay" class="task-modal-overlay hidden">
-    <div class="task-modal">
-        <div class="task-modal-header">
-            <h2 class="task-modal-title">Create New Task</h2>
-            <button class="task-modal-close" id="task-modal-close">
+<!-- Task Creation Modal (CROWN Design System) -->
+<div id="task-modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Create New Task</h2>
+            <button class="modal-close" id="task-modal-close" type="button">
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -267,81 +267,73 @@
         </div>
         
         <form id="task-create-form">
-            <!-- Title (Required) -->
-            <div class="task-form-group">
-                <label class="task-form-label required" for="task-title">Task Title</label>
-                <input 
-                    type="text" 
-                    id="task-title" 
-                    class="task-form-input" 
-                    placeholder="What needs to be done?"
-                    required
-                    autocomplete="off"
-                >
-            </div>
-            
-            <!-- Description (Optional) -->
-            <div class="task-form-group">
-                <label class="task-form-label" for="task-description">Description</label>
-                <textarea 
-                    id="task-description" 
-                    class="task-form-textarea" 
-                    placeholder="Add more details..."
-                ></textarea>
-            </div>
-            
-            <!-- AI Prediction Suggestions (CROWN⁴.5) -->
-            <div id="ai-prediction-banner" class="ai-prediction-banner hidden">
-                <div class="ai-prediction-banner-header">
-                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-                    </svg>
-                    <strong class="ai-prediction-title">AI Suggestions</strong>
+            <div class="modal-body">
+                <!-- Title (Required) -->
+                <div class="form-group">
+                    <label class="form-label required" for="task-title">Task Title</label>
+                    <input 
+                        type="text" 
+                        id="task-title" 
+                        class="form-input" 
+                        placeholder="What needs to be done?"
+                        required
+                        autocomplete="off"
+                    >
                 </div>
-                <div id="ai-prediction-content" class="ai-prediction-content">
-                    <!-- Predictions will be rendered here -->
+                
+                <!-- Description (Optional) -->
+                <div class="form-group">
+                    <label class="form-label" for="task-description">Description</label>
+                    <textarea 
+                        id="task-description" 
+                        class="form-input" 
+                        placeholder="Add more details..."
+                        rows="3"
+                    ></textarea>
+                </div>
+                
+                <!-- Priority -->
+                <div class="form-group">
+                    <label class="form-label" for="task-priority">Priority</label>
+                    <select id="task-priority" class="form-input" style="display: none;">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                    </select>
+                    <!-- Visual priority selector will be injected here by JavaScript -->
+                </div>
+                
+                <!-- Due Date (Optional) -->
+                <div class="form-group">
+                    <label class="form-label" for="task-due-date">Due Date</label>
+                    <input 
+                        type="date" 
+                        id="task-due-date" 
+                        class="form-input"
+                    >
+                    <!-- Date shortcuts will be injected here by JavaScript -->
+                </div>
+                
+                <!-- Assignee (Optional) -->
+                <div class="form-group">
+                    <label class="form-label" for="task-assignee">Assignee</label>
+                    <input 
+                        type="text" 
+                        id="task-assignee" 
+                        class="form-input" 
+                        placeholder="Search users..."
+                        autocomplete="off"
+                    >
+                    <!-- Assignee dropdown will be injected here by JavaScript -->
                 </div>
             </div>
             
-            <!-- Priority -->
-            <div class="task-form-group">
-                <label class="task-form-label" for="task-priority">Priority</label>
-                <select id="task-priority" class="task-form-select">
-                    <option value="low">Low</option>
-                    <option value="medium" selected>Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                </select>
-            </div>
-            
-            <!-- Due Date (Optional) -->
-            <div class="task-form-group">
-                <label class="task-form-label" for="task-due-date">Due Date</label>
-                <input 
-                    type="date" 
-                    id="task-due-date" 
-                    class="task-form-input"
-                >
-            </div>
-            
-            <!-- Assignee (Optional) -->
-            <div class="task-form-group">
-                <label class="task-form-label" for="task-assignee">Assignee</label>
-                <input 
-                    type="text" 
-                    id="task-assignee" 
-                    class="task-form-input" 
-                    placeholder="Who's responsible?"
-                    autocomplete="off"
-                >
-            </div>
-            
-            <!-- Actions -->
-            <div class="task-form-actions">
-                <button type="button" class="task-form-btn task-form-btn-cancel" id="task-form-cancel">
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="task-form-cancel">
                     Cancel
                 </button>
-                <button type="submit" class="task-form-btn task-form-btn-create" id="task-form-submit">
+                <button type="submit" class="btn btn-primary" id="task-form-submit">
                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline-block; margin-right: 8px;">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -691,7 +683,7 @@ console.log('[CROWN⁴.6] Loaded', window.tasks.length, 'tasks for provenance UI
 <script src="{{ url_for('static', filename='js/task-snooze-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='js/task-merge-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <!-- NEW: Unified TaskMenuController handles all 13 actions with modern event delegation -->
-<script src="{{ url_for('static', filename='js/task-menu-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='js/task-menu-controller.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 <!-- OLD: task-action-handlers.js disabled - replaced by TaskMenuController -->
 <!-- <script src="{{ url_for('static', filename='js/task-action-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script> -->
 <script src="{{ url_for('static', filename='js/task-actions-menu.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -725,6 +717,12 @@ window.WORKSPACE_ID = {{ current_user.workspace_id if current_user.workspace_id 
 window.CURRENT_SESSION_ID = null;
 console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, workspaceId: window.WORKSPACE_ID });
 </script>
+
+<!-- SmartSelectors - Reusable UI Components (MUST load BEFORE modal manager and master init) -->
+<script src="{{ url_for('static', filename='js/task-smart-selectors.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
+
+<!-- TaskModalManager - Unified Create/Edit/View Modal (MUST load BEFORE master init) -->
+<script src="{{ url_for('static', filename='js/task-modal-manager.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- Load task page initialization (moved to external file for better CSP compatibility) -->
 <script src="{{ url_for('static', filename='js/task-page-init.js') }}" nonce="{{ g.csp_nonce }}"></script>

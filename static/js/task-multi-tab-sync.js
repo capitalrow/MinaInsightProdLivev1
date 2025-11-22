@@ -183,6 +183,11 @@ class MultiTabSync {
                 window.optimisticUI._addTaskToDOM(task);
             }
         }
+        
+        // Dispatch event for filter reapplication
+        window.dispatchEvent(new CustomEvent('task:created', {
+            detail: { task, fromMultiTab: true }
+        }));
 
         // Show notification
         this._showNotification(`Task created in another tab: ${task.title}`);
@@ -200,6 +205,11 @@ class MultiTabSync {
         if (window.optimisticUI) {
             window.optimisticUI._updateTaskInDOM(task.id, task);
         }
+        
+        // CRITICAL: Dispatch event for filter reapplication (since _updateTaskInDOM is private and doesn't emit events)
+        window.dispatchEvent(new CustomEvent('task:updated', {
+            detail: { taskId: task.id, task, fromMultiTab: true }
+        }));
     }
 
     /**
@@ -214,6 +224,11 @@ class MultiTabSync {
         if (window.optimisticUI) {
             window.optimisticUI._removeTaskFromDOM(taskId);
         }
+        
+        // Dispatch event for filter reapplication
+        window.dispatchEvent(new CustomEvent('task:deleted', {
+            detail: { taskId, fromMultiTab: true }
+        }));
     }
 
     /**

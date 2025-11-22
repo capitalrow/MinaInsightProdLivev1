@@ -41,14 +41,70 @@
     let longPressTimer = null;
     let currentSwipeCard = null;
     
+    // Lifecycle tracking (for PJAX teardown/reinit)
+    let isInitialized = false;
+    let eventListeners = [];
+    
+    /**
+     * Add tracked event listener (for PJAX lifecycle management)
+     */
+    function addTrackedListener(element, event, handler, options) {
+        element.addEventListener(event, handler, options);
+        eventListeners.push({ element, event, handler, options });
+    }
+    
+    /**
+     * Destroy mobile gestures (cleanup for PJAX navigation)
+     */
+    function destroy() {
+        if (!isInitialized) {
+            return; // Not initialized, nothing to destroy
+        }
+        
+        console.log('📱 Destroying mobile gestures...');
+        
+        // Remove all tracked event listeners
+        eventListeners.forEach(({ element, event, handler, options }) => {
+            element.removeEventListener(event, handler, options);
+        });
+        eventListeners = [];
+        
+        // Remove pull indicator
+        if (pullIndicator && pullIndicator.parentNode) {
+            pullIndicator.parentNode.removeChild(pullIndicator);
+            pullIndicator = null;
+        }
+        
+        // Clear any active timers
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+        
+        // Reset state
+        pullRefreshActive = false;
+        selectionMode = false;
+        selectedCards.clear();
+        currentSwipeCard = null;
+        isInitialized = false;
+        
+        console.log('📱 Mobile gestures destroyed');
+    }
+    
     /**
      * Initialize mobile gestures
      */
     function init() {
-        // Only initialize on dashboard or meetings page
-        const isDashboard = document.querySelector('.dashboard-container, .meetings-container');
-        if (!isDashboard) {
-            return; // Not on dashboard/meetings page, skip initialization
+        // Prevent double initialization
+        if (isInitialized) {
+            console.log('📱 Mobile gestures already initialized, skipping');
+            return;
+        }
+        
+        // Only initialize on dashboard, meetings, or tasks page
+        const isValidPage = document.querySelector('.dashboard-container, .meetings-container, .tasks-container');
+        if (!isValidPage) {
+            return; // Not on a supported page, skip initialization
         }
         
         if (!isMobileDevice()) {
@@ -60,6 +116,8 @@
         setupPullToRefresh();
         setupSwipeToArchive();
         setupLongPress();
+        
+        isInitialized = true;
     }
     
     /**
@@ -90,7 +148,7 @@
      * Setup pull-to-refresh gesture
      */
     function setupPullToRefresh() {
-        const container = document.querySelector('.dashboard-container, .meetings-container') || document.body;
+        const container = document.querySelector('.dashboard-container, .meetings-container, .tasks-container') || document.body;
         
         // Create pull indicator
         pullIndicator = document.createElement('div');
@@ -145,10 +203,10 @@
         `;
         document.head.appendChild(spinnerStyle);
         
-        // Touch event handlers
-        container.addEventListener('touchstart', handlePullStart, { passive: true });
-        container.addEventListener('touchmove', handlePullMove, { passive: false });
-        container.addEventListener('touchend', handlePullEnd, { passive: true });
+        // Touch event handlers (tracked for PJAX lifecycle)
+        addTrackedListener(container, 'touchstart', handlePullStart, { passive: true });
+        addTrackedListener(container, 'touchmove', handlePullMove, { passive: false });
+        addTrackedListener(container, 'touchend', handlePullEnd, { passive: true });
     }
     
     /**
@@ -295,9 +353,9 @@
             return;
         }
         
-        meetingsContainer.addEventListener('touchstart', handleSwipeStart, { passive: true });
-        meetingsContainer.addEventListener('touchmove', handleSwipeMove, { passive: false });
-        meetingsContainer.addEventListener('touchend', handleSwipeEnd, { passive: true });
+        addTrackedListener(meetingsContainer, 'touchstart', handleSwipeStart, { passive: true });
+        addTrackedListener(meetingsContainer, 'touchmove', handleSwipeMove, { passive: false });
+        addTrackedListener(meetingsContainer, 'touchend', handleSwipeEnd, { passive: true });
     }
     
     /**
@@ -441,9 +499,9 @@
             return;
         }
         
-        meetingsContainer.addEventListener('touchstart', handleLongPressStart, { passive: true });
-        meetingsContainer.addEventListener('touchmove', handleLongPressMove, { passive: true });
-        meetingsContainer.addEventListener('touchend', handleLongPressEnd, { passive: true });
+        addTrackedListener(meetingsContainer, 'touchstart', handleLongPressStart, { passive: true });
+        addTrackedListener(meetingsContainer, 'touchmove', handleLongPressMove, { passive: true });
+        addTrackedListener(meetingsContainer, 'touchend', handleLongPressEnd, { passive: true });
     }
     
     /**
@@ -708,6 +766,7 @@
     // Export public API
     window.mobileGestures = {
         init,
+        destroy,
         cancelSelection,
         archiveSelected
     };
@@ -718,5 +777,26 @@
     } else {
         init();
     }
+    
+    // PJAX lifecycle hooks: reinitialize after navigation
+    // Listen for PJAX navigation events from smooth-navigation.js
+    window.addEventListener('pjax:beforeTransition', () => {
+        console.log('📱 PJAX navigation detected, destroying gestures...');
+        destroy();
+    });
+    
+    window.addEventListener('pjax:complete', () => {
+        console.log('📱 PJAX navigation complete, reinitializing gestures...');
+        // Wait a tick for DOM to settle
+        setTimeout(init, 100);
+    });
+    
+    // Also listen for custom navigation events from smooth-navigation
+    window.addEventListener('navigation:complete', () => {
+        console.log('📱 Navigation complete, checking gesture initialization...');
+        if (!isInitialized) {
+            init();
+        }
+    });
     
 })();

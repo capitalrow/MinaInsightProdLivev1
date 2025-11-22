@@ -334,8 +334,16 @@ class TaskBootstrap {
         const filters = this.buildFiltersFromViewState(viewState);
         const tasks = await this.cache.getFilteredTasks(filters);
 
+        // PREVENTION LAYER: Filter out deleted tasks from cache before rendering
+        // This prevents stale deleted tasks from showing on page refresh
+        const activeTasks = tasks.filter(task => !task.deleted_at);
+        
+        if (tasks.length !== activeTasks.length) {
+            console.log(`🗑️ Filtered out ${tasks.length - activeTasks.length} deleted tasks from cache`);
+        }
+
         // Apply sort
-        const sortedTasks = this.sortTasks(tasks, viewState.sort);
+        const sortedTasks = this.sortTasks(activeTasks, viewState.sort);
 
         return sortedTasks;
     }
@@ -689,8 +697,20 @@ class TaskBootstrap {
                         </div>
                     `}
 
-                    ${isSyncing ? `
-                        <span class="syncing-badge">
+                    ${task._sync_status === 'failed' ? `
+                        <span class="sync-status-badge failed" title="${this.escapeHtml(task._sync_error || 'Sync failed')}">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Sync Failed
+                            <button class="retry-btn" 
+                                    onclick="window.optimisticUI._retryOperation('${task._operation_id || ''}')" 
+                                    title="Retry sync">
+                                ↻
+                            </button>
+                        </span>
+                    ` : isSyncing ? `
+                        <span class="sync-status-badge syncing">
                             <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" class="spin-animation">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                             </svg>
@@ -913,12 +933,27 @@ class TaskBootstrap {
             this.lastSyncTimestamp = Date.now();
             await this.cache.setMetadata('last_sync_timestamp', this.lastSyncTimestamp);
 
-            // CROWN⁴.5: If reconciliation was needed, re-render with server data
-            if (this.needsReconciliation) {
-                console.log('🔄 Reconciliation complete - re-rendering with server data');
-                await this.renderTasks(serverTasks, { fromCache: false });
-                this.needsReconciliation = false;
-            }
+            // CROWN⁴.5: ALWAYS merge temp tasks after background sync
+            // CRITICAL FIX: This must run ALWAYS (not just when reconciliation needed)
+            // to ensure temp tasks survive page refresh
+            console.log('🔄 Merging temp tasks with server data...');
+            
+            // Get ONLY temp tasks from temp_tasks store (not getAllTasks - that would duplicate)
+            const tempTasks = await this.cache.getTempTasks();
+            
+            console.log(`📦 Found ${tempTasks.length} temp tasks to merge with ${serverTasks.length} server tasks`);
+            
+            // Always merge and render (even if tempTasks.length === 0)
+            // This ensures UI updates with latest server data + any unsynced temp tasks
+            // NO FILTERING - show ALL temp tasks until reconcileTempTask() explicitly removes them
+            // This ensures temp tasks survive refresh even if timing/title matches cause false positives
+            // reconcileTempTask() will handle cleanup when server confirms creation
+            
+            // Merge: temp tasks first (show at top as "Syncing"), then server tasks
+            const mergedTasks = [...tempTasks, ...serverTasks];
+            
+            await this.renderTasks(mergedTasks, { fromCache: false });
+            this.needsReconciliation = false;
 
             // Emit sync success event
             window.dispatchEvent(new CustomEvent('tasks:sync:success', {

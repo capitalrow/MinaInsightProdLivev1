@@ -9,7 +9,60 @@ class OptimisticUI {
         this.cache = window.taskCache;
         this.pendingOperations = new Map();
         this.operationCounter = 0;
+        this.rehydrationComplete = false;
         this._setupReconnectHandler();
+    }
+    
+    /**
+     * ENTERPRISE-GRADE: Rehydrate pending operations from IndexedDB on page load
+     * Restores ALL operation types (create/update/delete) from offline_queue
+     * This ensures retry mechanism works after page refresh
+     */
+    async rehydratePendingOperations() {
+        if (this.rehydrationComplete) {
+            console.log('✅ [Offline-First] Rehydration already complete');
+            return;
+        }
+        
+        try {
+            console.log('🔄 [Offline-First] Rehydrating pending operations from IndexedDB offline_queue...');
+            
+            // Get all pending operations from offline_queue (supports create/update/delete)
+            const operations = await this.cache.getAllPendingOperations();
+            
+            // Restore to in-memory map
+            this.pendingOperations = operations;
+            
+            console.log(`✅ [Offline-First] Rehydration complete: ${operations.size} operations restored`);
+            
+            // Log breakdown by type
+            const breakdown = { create: 0, update: 0, delete: 0, failed: 0 };
+            for (const [opId, op] of operations.entries()) {
+                breakdown[op.type] = (breakdown[op.type] || 0) + 1;
+                if (op.failed) breakdown.failed++;
+                
+                console.log(`  → ${opId}: ${op.type} (${op.failed ? 'FAILED' : 'pending'}, retries: ${op.retryCount || 0})`);
+            }
+            console.log(`📊 [Offline-First] Operations by type:`, breakdown);
+            
+            this.rehydrationComplete = true;
+            
+            // Auto-retry pending (non-failed) operations if online
+            if (window.wsManager && window.wsManager.isConnected('/tasks')) {
+                const pendingOps = Array.from(this.pendingOperations.entries())
+                    .filter(([_, op]) => !op.failed);
+                
+                if (pendingOps.length > 0) {
+                    console.log(`🔄 [Offline-First] Auto-retrying ${pendingOps.length} pending operations...`);
+                    for (const [opId, _] of pendingOps) {
+                        await this._retryOperation(opId);
+                    }
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ [Offline-First] Failed to rehydrate pending operations:', error);
+        }
     }
 
     /**
@@ -99,6 +152,7 @@ class OptimisticUI {
 
     /**
      * Retry a single operation
+     * ENTERPRISE-GRADE: Clears failed flag and re-attempts sync
      */
     async _retryOperation(opId) {
         const operation = this.pendingOperations.get(opId);
@@ -107,10 +161,27 @@ class OptimisticUI {
             return;
         }
 
-        console.log(`🔄 Retrying operation ${opId} (${operation.type})`);
+        console.log(`🔄 [Offline-First] Retrying operation ${opId} (${operation.type}, attempt #${(operation.retryCount || 0) + 1})`);
+        
+        // Clear failed flag for retry
+        operation.failed = false;
         
         try {
             if (operation.type === 'create') {
+                // Update temp task status back to pending before retry
+                if (this.cache && operation.tempId) {
+                    await this.cache.updateTempTaskStatus(operation.tempId, 'pending');
+                    
+                    // Refresh UI to show "Syncing" badge instead of "Failed"
+                    const taskCard = document.querySelector(`[data-task-id="${operation.tempId}"]`);
+                    if (taskCard) {
+                        const syncBadge = taskCard.querySelector('.sync-status-badge');
+                        if (syncBadge) {
+                            syncBadge.className = 'sync-status-badge syncing';
+                            syncBadge.innerHTML = '<span class="badge-icon spin-animation">⟳</span> Syncing';
+                        }
+                    }
+                }
                 await this._syncToServer(opId, 'create', operation.data, operation.tempId);
             } else if (operation.type === 'update') {
                 await this._syncToServer(opId, 'update', operation.data, operation.taskId);
@@ -122,16 +193,30 @@ class OptimisticUI {
                 window.toast.success('Changes saved successfully');
             }
         } catch (error) {
-            console.error(`❌ Retry failed for operation ${opId}:`, error);
+            console.error(`❌ [Offline-First] Retry failed for operation ${opId}:`, error);
+            // Operation will be marked as failed again by _reconcileFailure
         }
     }
 
     /**
      * Create task optimistically
+     * ENTERPRISE-GRADE: Waits for cache initialization to prevent race conditions
      * @param {Object} taskData
      * @returns {Promise<Object>} Created task
      */
     async createTask(taskData) {
+        // ENTERPRISE-GRADE: Wait for cache to be ready (prevents init race conditions)
+        if (window.cacheManagerReady) {
+            console.log('⏳ [Offline-First] Waiting for cacheManager to initialize...');
+            try {
+                await window.cacheManagerReady;
+                console.log('✅ [Offline-First] cacheManager ready, proceeding with task creation');
+            } catch (error) {
+                console.error('❌ [Offline-First] cacheManager initialization failed:', error);
+                throw new Error('Cache not available - please refresh the page');
+            }
+        }
+        
         const opId = this._generateOperationId();
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
@@ -143,15 +228,16 @@ class OptimisticUI {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             _optimistic: true,
-            _operation_id: opId
+            operation_id: opId  // Store for retry after refresh
         };
 
         try {
             // Step 1: Update DOM immediately (<50ms)
             this._addTaskToDOM(optimisticTask);
             
-            // Step 2: Save to IndexedDB
+            // Step 2: Save to IndexedDB (now guaranteed to be initialized)
             await this.cache.saveTask(optimisticTask);
+            console.log(`✅ [Offline-First] Temp task ${tempId} saved to IndexedDB`);
             
             // Dispatch creation event for haptics/animations
             window.dispatchEvent(new CustomEvent('task:created', {
@@ -180,19 +266,27 @@ class OptimisticUI {
 
             // Step 4: Sync to server
             // Store ORIGINAL clean data (not optimistic version) for retry
-            this.pendingOperations.set(opId, { 
+            const operation = { 
                 type: 'create', 
                 tempId, 
                 task: optimisticTask,  // Keep for rollback
                 data: taskData,  // Original clean data for retry
-                queueId  // Store queue ID to remove on success
+                queueId,  // Store queue ID to remove on success
+                timestamp: Date.now()
+            };
+            this.pendingOperations.set(opId, operation);
+            
+            // ENTERPRISE-GRADE: Persist to IndexedDB for rehydration after refresh
+            await this.cache.savePendingOperation(opId, operation).catch(err => {
+                console.error('❌ Failed to persist pending operation:', err);
             });
+            
             this._syncToServer(opId, 'create', taskData, tempId);
 
             return optimisticTask;
         } catch (error) {
-            console.error('❌ Optimistic create failed:', error);
-            this._rollbackCreate(tempId);
+            console.error('❌ [Offline-First] Optimistic create failed:', error);
+            this._rollbackCreate(tempId, error);
             throw error;
         }
     }
@@ -255,14 +349,22 @@ class OptimisticUI {
 
             // Step 4: Sync to server
             // Store clean updates data for retry
-            this.pendingOperations.set(opId, { 
+            const operation = { 
                 type: 'update', 
                 taskId, 
                 previous: currentTask,  // Keep for rollback
                 updates,  // Clean updates data for retry
                 data: updates,  // Explicit clean data reference
-                queueId  // Store queue ID to remove on success
+                queueId,  // Store queue ID to remove on success
+                timestamp: Date.now()
+            };
+            this.pendingOperations.set(opId, operation);
+            
+            // ENTERPRISE-GRADE: Persist to IndexedDB for rehydration after refresh
+            await this.cache.savePendingOperation(opId, operation).catch(err => {
+                console.error('❌ Failed to persist pending operation:', err);
             });
+            
             this._syncToServer(opId, 'update', updates, taskId);
 
             return optimisticTask;
@@ -286,6 +388,12 @@ class OptimisticUI {
             const task = await this.cache.getTask(taskId);
             if (!task) {
                 throw new Error('Task not found');
+            }
+
+            // IDEMPOTENT: Early return if already deleted (prevents error on stale cache)
+            if (task.deleted_at) {
+                console.log(`⚠️ Task ${taskId} already deleted, skipping (idempotent operation)`);
+                return { success: true, action: 'noop', message: 'Task already deleted' };
             }
 
             // Step 1: Soft delete - mark as deleted but keep in cache for undo
@@ -325,15 +433,27 @@ class OptimisticUI {
             }
 
             // Step 4: Sync to server (as update with deleted_at, not hard delete)
-            this.pendingOperations.set(opId, { 
+            const operation = { 
                 type: 'update',  // Changed from 'delete' 
                 taskId, 
                 previous: task,  // Keep for rollback
                 updates,
                 data: updates,
-                queueId
+                queueId,
+                timestamp: Date.now()
+            };
+            this.pendingOperations.set(opId, operation);
+            
+            // ENTERPRISE-GRADE: Persist to IndexedDB for rehydration after refresh
+            await this.cache.savePendingOperation(opId, operation).catch(err => {
+                console.error('❌ Failed to persist pending operation:', err);
             });
+            
             this._syncToServer(opId, 'update', updates, taskId);
+
+            // CACHE HYGIENE: Task already marked with deleted_at in cache (line 307)
+            // Prevention filters will hide it on page refresh while preserving undo capability
+            console.log(`✅ Task ${taskId} soft-deleted in cache (preserved for 15s undo window)`);
 
             // CROWN⁴.6: Show undo toast for single task deletion
             if (window.toastManager) {
@@ -931,23 +1051,28 @@ class OptimisticUI {
                                window.wsManager.sockets.tasks.connected;
             
             if (!isConnected) {
-                // Socket is disconnected or reconnecting - defer to OfflineQueueManager
-                console.log(`⏸️ WebSocket not connected, operation queued for replay (${type})`);
+                // ENTERPRISE-GRADE: HTTP fallback when WebSocket is unavailable
+                console.log(`⏸️ WebSocket not connected, attempting HTTP fallback (${type})`);
                 
-                // Emit telemetry for deferred operations
+                // Emit telemetry for HTTP fallback
                 if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordEvent('task_sync_deferred', {
+                    window.CROWNTelemetry.recordEvent('task_sync_http_fallback', {
                         type,
                         reason: 'socket_disconnected'
                     });
                 }
                 
-                // KEEP pendingOperations for reconciliation when OfflineQueueManager replays
-                // The pending operation will reconcile when the server eventually responds
-                console.log(`💾 Keeping pending operation ${opId} for later reconciliation`);
-                
-                // Don't throw - OfflineQueueManager will replay when reconnected
-                return;
+                try {
+                    const result = await this._syncViaHTTP(opId, type, data, taskId);
+                    await this._reconcileSuccess(opId, type, result, taskId);
+                    console.log(`✅ [HTTP Fallback] ${type} operation succeeded`);
+                    return;
+                } catch (httpError) {
+                    console.error(`❌ [HTTP Fallback] Failed:`, httpError);
+                    // If HTTP also fails, defer to offline queue
+                    console.log(`💾 Keeping pending operation ${opId} for later reconciliation`);
+                    return;
+                }
             }
 
             // Get user and session context
@@ -1105,6 +1230,64 @@ class OptimisticUI {
     }
 
     /**
+     * ENTERPRISE-GRADE: HTTP fallback when WebSocket is unavailable
+     * Provides resilient sync path for offline-first behavior
+     * @param {string} opId
+     * @param {string} type
+     * @param {Object} data
+     * @param {number|string} taskId
+     * @returns {Promise<Object>} Server response
+     */
+    async _syncViaHTTP(opId, type, data, taskId) {
+        console.log(`🌐 [HTTP Fallback] Syncing ${type} operation via REST API`);
+        
+        let url, method, body;
+        
+        if (type === 'create') {
+            url = '/api/tasks/';
+            method = 'POST';
+            body = {
+                ...data,
+                temp_id: taskId,
+                operation_id: opId
+            };
+        } else if (type === 'update') {
+            url = `/api/tasks/${taskId}`;
+            method = 'PUT';
+            body = {
+                ...data,
+                operation_id: opId
+            };
+        } else if (type === 'delete') {
+            url = `/api/tasks/${taskId}`;
+            method = 'DELETE';
+            body = {
+                operation_id: opId
+            };
+        }
+        
+        const response = await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(body)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: response.statusText }));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log(`✅ [HTTP Fallback] ${type} operation completed:`, result);
+        
+        return result;
+    }
+
+    /**
      * Reconcile successful server response
      * @param {string} opId
      * @param {string} type
@@ -1115,13 +1298,20 @@ class OptimisticUI {
         const operation = this.pendingOperations.get(opId);
         if (!operation) return;
 
-        // Remove from OfflineQueue since WebSocket sync succeeded
-        if (operation.queueId && this.cache) {
+        // ENTERPRISE-GRADE: Remove from both offline_queue and event queue since sync succeeded
+        if (this.cache) {
             try {
-                await this.cache.removeFromQueue(operation.queueId);
-                console.log(`🗑️ Removed queue entry ${operation.queueId} after successful WebSocket sync`);
+                // Remove from pending operations store
+                await this.cache.removePendingOperation(opId);
+                console.log(`✅ [Offline-First] Removed pending operation ${opId} from IndexedDB`);
+                
+                // Also remove from offline queue if present
+                if (operation.queueId) {
+                    await this.cache.removeFromQueue(operation.queueId);
+                    console.log(`🗑️ Removed queue entry ${operation.queueId} after successful sync`);
+                }
             } catch (error) {
-                console.warn(`⚠️ Failed to remove queue entry ${operation.queueId}:`, error);
+                console.warn(`⚠️ Failed to remove operation from IndexedDB:`, error);
             }
         }
 
@@ -1137,9 +1327,8 @@ class OptimisticUI {
                 card.classList.remove('optimistic-create');
             }
 
-            // Update cache
-            await this.cache.deleteTask(tempId);
-            await this.cache.saveTask(realTask);
+            // Reconcile temp task with real ID: remove from tempTasks Map, persist to IndexedDB
+            await this.cache.reconcileTempTask(realTask.id, tempId);
 
         } else if (type === 'update') {
             // Update with server truth
@@ -1161,6 +1350,8 @@ class OptimisticUI {
 
     /**
      * Reconcile failed server sync (rollback)
+     * ENTERPRISE-GRADE: Marks temp tasks as 'failed' instead of deleting (prevents data loss)
+     * CRITICAL: Keeps operation in pendingOperations for retry capability
      * @param {string} opId
      * @param {string} type
      * @param {number|string} taskId
@@ -1173,11 +1364,12 @@ class OptimisticUI {
             return;
         }
 
-        console.log(`🔄 Rolling back ${type} operation:`, { opId, taskId });
+        console.log(`🔄 [Offline-First] Handling ${type} failure:`, { opId, taskId, error: error.message });
 
         if (type === 'create') {
-            // Rollback create
-            await this._rollbackCreate(operation.tempId);
+            // ENTERPRISE-GRADE: Mark temp task as 'failed' instead of deleting
+            // This preserves user data across page refreshes and enables retry
+            await this._rollbackCreate(operation.tempId, error);
         } else if (type === 'update') {
             // Rollback to previous state
             await this.cache.saveTask(operation.previous);
@@ -1188,22 +1380,68 @@ class OptimisticUI {
             this._addTaskToDOM(operation.task);
         }
 
-        this.pendingOperations.delete(opId);
+        // CRITICAL FIX: DO NOT delete operation from pendingOperations
+        // Keep it so _retryOperation() can work after failure
+        // Mark it as failed for tracking
+        operation.failed = true;
+        operation.lastError = error.message;
+        operation.retryCount = (operation.retryCount || 0) + 1;
+        
+        console.log(`✅ [Offline-First] Operation ${opId} marked as failed (retry count: ${operation.retryCount})`);
+        
+        // ENTERPRISE-GRADE: Persist failed state to IndexedDB for post-refresh retry
+        if (this.cache) {
+            await this.cache.savePendingOperation(opId, operation).catch(err => {
+                console.error('❌ Failed to persist failed operation state:', err);
+            });
+        }
 
         // Show detailed error notification
         const errorMsg = error.message || 'Unknown error';
-        this._showErrorNotification(`Failed to ${type} task. Changes rolled back.`, errorMsg);
+        this._showErrorNotification(`Failed to ${type} task. You can retry when online.`, errorMsg);
         
-        console.log(`✅ Rollback complete for operation ${opId}`);
+        console.log(`✅ [Offline-First] Failure handling complete for operation ${opId}`);
     }
 
     /**
-     * Rollback task creation
+     * Rollback task creation - ENTERPRISE-GRADE offline-first pattern
+     * Marks temp task as 'failed' instead of deleting (preserves data for retry)
      * @param {string} tempId
+     * @param {Error} error
      */
-    async _rollbackCreate(tempId) {
-        this._removeTaskFromDOM(tempId);
-        await this.cache.deleteTask(tempId);
+    async _rollbackCreate(tempId, error) {
+        console.log(`🔄 [Offline-First] Marking temp task ${tempId} as FAILED (not deleting)`);
+        
+        // Update task sync_status to 'failed' in IndexedDB
+        await this.cache.updateTempTaskStatus(tempId, 'failed', error.message);
+        
+        // Update DOM to show failed state (add badge/indicator)
+        const card = document.querySelector(`[data-task-id="${tempId}"]`);
+        if (card) {
+            card.classList.remove('optimistic-create');
+            card.classList.add('sync-failed');
+            
+            // Add failed badge to card
+            const existingBadge = card.querySelector('.sync-status-badge');
+            if (existingBadge) {
+                existingBadge.remove();
+            }
+            
+            const badge = document.createElement('div');
+            badge.className = 'sync-status-badge failed';
+            badge.innerHTML = `
+                <span class="badge-icon">⚠️</span>
+                <span class="badge-text">Sync Failed</span>
+                <button class="retry-btn" onclick="window.optimisticUI._retryOperation('${card.dataset.operationId}')">
+                    Retry
+                </button>
+            `;
+            
+            const cardHeader = card.querySelector('.task-card-header') || card;
+            cardHeader.appendChild(badge);
+        }
+        
+        console.log(`✅ [Offline-First] Temp task ${tempId} marked as failed (preserved in IndexedDB)`);
     }
 
     /**

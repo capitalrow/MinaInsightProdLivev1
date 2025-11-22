@@ -22,10 +22,10 @@
     };
     
     /**
-     * Initialize filter tabs (All/Pending/Completed)
+     * Initialize filter tabs (All/Active/Archived)
      */
     function initFilterTabs() {
-        console.log('[MasterInit] Initializing filter tabs...');
+        console.log('[MasterInit] Initializing filter tabs (All/Active/Archived)...');
         
         const filterTabs = document.querySelectorAll('.filter-tab');
         
@@ -53,7 +53,7 @@
         });
         
         initState.filterTabs = true;
-        console.log('[MasterInit] ✅ Filter tabs initialized');
+        console.log('[MasterInit] ✅ Filter tabs initialized (All/Active/Archived)');
     }
     
     /**
@@ -183,6 +183,88 @@
         
         initState.checkboxHandlers = true;
         console.log('[MasterInit] ✅ Checkbox handlers initialized');
+    }
+    
+    /**
+     * Initialize restore task handlers (for archived tasks)
+     */
+    function initRestoreHandlers() {
+        console.log('[MasterInit] Initializing restore task handlers...');
+        
+        // Use event delegation for restore buttons
+        document.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('btn-restore-task') || e.target.closest('.btn-restore-task')) {
+                const btn = e.target.classList.contains('btn-restore-task') ? e.target : e.target.closest('.btn-restore-task');
+                const taskId = btn.dataset.taskId;
+                const card = btn.closest('[data-task-id]');
+                
+                if (!taskId || !card) {
+                    console.error('[Restore] No task ID or card found');
+                    return;
+                }
+                
+                console.log(`[Restore] Restoring archived task ${taskId}`);
+                
+                try {
+                    // Disable button during restore
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                    
+                    // Use OptimisticUI to unarchive
+                    if (window.optimisticUI && typeof window.optimisticUI.unarchiveTask === 'function') {
+                        await window.optimisticUI.unarchiveTask(taskId);
+                    } else if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
+                        // Fallback: Use updateTask
+                        await window.optimisticUI.updateTask(taskId, {
+                            archived_at: null,
+                            status: 'todo'
+                        });
+                    } else {
+                        // Last resort: Direct API call
+                        const response = await fetch(`/api/tasks/${taskId}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({
+                                archived_at: null,
+                                status: 'todo'
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('Failed to restore task');
+                        }
+                        
+                        // Refresh task list to show restored task
+                        if (window.taskBootstrap) {
+                            await window.taskBootstrap.bootstrap();
+                        }
+                    }
+                    
+                    console.log(`[Restore] ✅ Task ${taskId} restored successfully`);
+                    
+                    // Toast handled by OptimisticUI
+                    
+                    // Telemetry
+                    if (window.CROWNTelemetry) {
+                        window.CROWNTelemetry.recordMetric('task_restored', 1, { taskId });
+                    }
+                } catch (error) {
+                    console.error('[Restore] Failed to restore task:', error);
+                    
+                    // Re-enable button on error
+                    btn.disabled = false;
+                    btn.style.opacity = '';
+                    
+                    // Show error toast
+                    if (window.toastManager) {
+                        window.toastManager.show('Failed to restore task. Please try again.', 'error', 3000);
+                    }
+                }
+            }
+        });
+        
+        console.log('[MasterInit] ✅ Restore task handlers initialized');
     }
     
     /**
@@ -587,20 +669,61 @@
     /**
      * Master initialization function
      */
-    function initializeAllFeatures() {
+    async function initializeAllFeatures() {
         console.log('[MasterInit] Starting comprehensive initialization...');
         
-        // 1. Initialize non-dependent features first
+        // 1. CROWN⁴.5: Bootstrap cache-first task loading FIRST (critical for <200ms first paint)
+        // MUST await bootstrap completion before metrics can be logged accurately
+        if (window.taskBootstrap && typeof window.taskBootstrap.bootstrap === 'function') {
+            console.log('[MasterInit] Starting CROWN⁴.5 cache-first bootstrap...');
+            try {
+                await window.taskBootstrap.bootstrap();
+                console.log('[MasterInit] ✅ Bootstrap completed successfully');
+            } catch (error) {
+                console.error('[MasterInit] ❌ Bootstrap failed:', error);
+                // Continue initialization even if bootstrap fails
+            }
+        } else {
+            console.warn('[MasterInit] ⚠️ taskBootstrap not available - performance metrics may be incomplete');
+        }
+        
+        // 1.5. ENTERPRISE-GRADE: Rehydrate pending operations from IndexedDB
+        // This ensures retry mechanism works after page refresh
+        if (window.optimisticUI && typeof window.optimisticUI.rehydratePendingOperations === 'function') {
+            console.log('[MasterInit] Rehydrating pending operations...');
+            try {
+                await window.optimisticUI.rehydratePendingOperations();
+                console.log('[MasterInit] ✅ Pending operations rehydrated successfully');
+            } catch (error) {
+                console.error('[MasterInit] ❌ Failed to rehydrate pending operations:', error);
+            }
+        }
+        
+        // 2. Initialize TaskModalManager (requires SmartSelectors from task-smart-selectors.js)
+        if (typeof TaskModalManager !== 'undefined') {
+            console.log('[MasterInit] Initializing TaskModalManager...');
+            try {
+                window.taskModalManager = new TaskModalManager();
+                console.log('[MasterInit] ✅ TaskModalManager initialized successfully');
+            } catch (error) {
+                console.error('[MasterInit] ❌ TaskModalManager initialization failed:', error);
+            }
+        } else {
+            console.error('[MasterInit] ❌ TaskModalManager class not found - ensure task-modal-manager.js loaded before master init');
+        }
+        
+        // 3. Initialize non-dependent features
         initFilterTabs();
         initNewTaskButton();
         initCheckboxHandlers();
+        initRestoreHandlers();
         initDeleteHandlers();
         initTaskMenuHandlers();
         
-        // 2. Initialize class-based features
+        // 4. Initialize class-based features
         initTaskSearchSort();
         
-        // 3. Wait for optimisticUI, then initialize dependent features
+        // 5. Wait for optimisticUI, then initialize dependent features
         if (window.optimisticUI) {
             initState.optimisticUI = true;
             initTaskInlineEditing();
@@ -627,14 +750,22 @@
         }));
     }
     
-    // Start initialization when DOM is ready
+    // Start initialization when DOM is ready - properly await async initialization
     if (document.readyState === 'loading') {
         console.log('[MasterInit] DOM still loading, waiting for DOMContentLoaded...');
-        document.addEventListener('DOMContentLoaded', initializeAllFeatures);
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeAllFeatures().catch(error => {
+                console.error('[MasterInit] Initialization failed:', error);
+            });
+        });
     } else {
         console.log('[MasterInit] DOM already loaded, initializing immediately...');
-        // Wait a tick to ensure other scripts have loaded
-        setTimeout(initializeAllFeatures, 100);
+        // Wait a tick to ensure other scripts have loaded, then await initialization
+        setTimeout(() => {
+            initializeAllFeatures().catch(error => {
+                console.error('[MasterInit] Initialization failed:', error);
+            });
+        }, 100);
     }
     
 })();
