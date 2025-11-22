@@ -99,6 +99,7 @@ class OptimisticUI {
 
     /**
      * Retry a single operation
+     * ENTERPRISE-GRADE: Clears failed flag and re-attempts sync
      */
     async _retryOperation(opId) {
         const operation = this.pendingOperations.get(opId);
@@ -107,10 +108,17 @@ class OptimisticUI {
             return;
         }
 
-        console.log(`🔄 Retrying operation ${opId} (${operation.type})`);
+        console.log(`🔄 [Offline-First] Retrying operation ${opId} (${operation.type}, attempt #${(operation.retryCount || 0) + 1})`);
+        
+        // Clear failed flag for retry
+        operation.failed = false;
         
         try {
             if (operation.type === 'create') {
+                // Update temp task status back to pending before retry
+                if (this.cache && operation.tempId) {
+                    await this.cache.updateTempTaskStatus(operation.tempId, 'pending');
+                }
                 await this._syncToServer(opId, 'create', operation.data, operation.tempId);
             } else if (operation.type === 'update') {
                 await this._syncToServer(opId, 'update', operation.data, operation.taskId);
@@ -122,16 +130,30 @@ class OptimisticUI {
                 window.toast.success('Changes saved successfully');
             }
         } catch (error) {
-            console.error(`❌ Retry failed for operation ${opId}:`, error);
+            console.error(`❌ [Offline-First] Retry failed for operation ${opId}:`, error);
+            // Operation will be marked as failed again by _reconcileFailure
         }
     }
 
     /**
      * Create task optimistically
+     * ENTERPRISE-GRADE: Waits for cache initialization to prevent race conditions
      * @param {Object} taskData
      * @returns {Promise<Object>} Created task
      */
     async createTask(taskData) {
+        // ENTERPRISE-GRADE: Wait for cache to be ready (prevents init race conditions)
+        if (window.cacheManagerReady) {
+            console.log('⏳ [Offline-First] Waiting for cacheManager to initialize...');
+            try {
+                await window.cacheManagerReady;
+                console.log('✅ [Offline-First] cacheManager ready, proceeding with task creation');
+            } catch (error) {
+                console.error('❌ [Offline-First] cacheManager initialization failed:', error);
+                throw new Error('Cache not available - please refresh the page');
+            }
+        }
+        
         const opId = this._generateOperationId();
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
@@ -143,15 +165,16 @@ class OptimisticUI {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             _optimistic: true,
-            _operation_id: opId
+            operation_id: opId  // Store for retry after refresh
         };
 
         try {
             // Step 1: Update DOM immediately (<50ms)
             this._addTaskToDOM(optimisticTask);
             
-            // Step 2: Save to IndexedDB
+            // Step 2: Save to IndexedDB (now guaranteed to be initialized)
             await this.cache.saveTask(optimisticTask);
+            console.log(`✅ [Offline-First] Temp task ${tempId} saved to IndexedDB`);
             
             // Dispatch creation event for haptics/animations
             window.dispatchEvent(new CustomEvent('task:created', {
@@ -191,8 +214,8 @@ class OptimisticUI {
 
             return optimisticTask;
         } catch (error) {
-            console.error('❌ Optimistic create failed:', error);
-            this._rollbackCreate(tempId);
+            console.error('❌ [Offline-First] Optimistic create failed:', error);
+            this._rollbackCreate(tempId, error);
             throw error;
         }
     }
@@ -941,23 +964,28 @@ class OptimisticUI {
                                window.wsManager.sockets.tasks.connected;
             
             if (!isConnected) {
-                // Socket is disconnected or reconnecting - defer to OfflineQueueManager
-                console.log(`⏸️ WebSocket not connected, operation queued for replay (${type})`);
+                // ENTERPRISE-GRADE: HTTP fallback when WebSocket is unavailable
+                console.log(`⏸️ WebSocket not connected, attempting HTTP fallback (${type})`);
                 
-                // Emit telemetry for deferred operations
+                // Emit telemetry for HTTP fallback
                 if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordEvent('task_sync_deferred', {
+                    window.CROWNTelemetry.recordEvent('task_sync_http_fallback', {
                         type,
                         reason: 'socket_disconnected'
                     });
                 }
                 
-                // KEEP pendingOperations for reconciliation when OfflineQueueManager replays
-                // The pending operation will reconcile when the server eventually responds
-                console.log(`💾 Keeping pending operation ${opId} for later reconciliation`);
-                
-                // Don't throw - OfflineQueueManager will replay when reconnected
-                return;
+                try {
+                    const result = await this._syncViaHTTP(opId, type, data, taskId);
+                    await this._reconcileSuccess(opId, type, result, taskId);
+                    console.log(`✅ [HTTP Fallback] ${type} operation succeeded`);
+                    return;
+                } catch (httpError) {
+                    console.error(`❌ [HTTP Fallback] Failed:`, httpError);
+                    // If HTTP also fails, defer to offline queue
+                    console.log(`💾 Keeping pending operation ${opId} for later reconciliation`);
+                    return;
+                }
             }
 
             // Get user and session context
@@ -1115,6 +1143,64 @@ class OptimisticUI {
     }
 
     /**
+     * ENTERPRISE-GRADE: HTTP fallback when WebSocket is unavailable
+     * Provides resilient sync path for offline-first behavior
+     * @param {string} opId
+     * @param {string} type
+     * @param {Object} data
+     * @param {number|string} taskId
+     * @returns {Promise<Object>} Server response
+     */
+    async _syncViaHTTP(opId, type, data, taskId) {
+        console.log(`🌐 [HTTP Fallback] Syncing ${type} operation via REST API`);
+        
+        let url, method, body;
+        
+        if (type === 'create') {
+            url = '/api/tasks/';
+            method = 'POST';
+            body = {
+                ...data,
+                temp_id: taskId,
+                operation_id: opId
+            };
+        } else if (type === 'update') {
+            url = `/api/tasks/${taskId}`;
+            method = 'PUT';
+            body = {
+                ...data,
+                operation_id: opId
+            };
+        } else if (type === 'delete') {
+            url = `/api/tasks/${taskId}`;
+            method = 'DELETE';
+            body = {
+                operation_id: opId
+            };
+        }
+        
+        const response = await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(body)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: response.statusText }));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log(`✅ [HTTP Fallback] ${type} operation completed:`, result);
+        
+        return result;
+    }
+
+    /**
      * Reconcile successful server response
      * @param {string} opId
      * @param {string} type
@@ -1170,6 +1256,8 @@ class OptimisticUI {
 
     /**
      * Reconcile failed server sync (rollback)
+     * ENTERPRISE-GRADE: Marks temp tasks as 'failed' instead of deleting (prevents data loss)
+     * CRITICAL: Keeps operation in pendingOperations for retry capability
      * @param {string} opId
      * @param {string} type
      * @param {number|string} taskId
@@ -1182,11 +1270,12 @@ class OptimisticUI {
             return;
         }
 
-        console.log(`🔄 Rolling back ${type} operation:`, { opId, taskId });
+        console.log(`🔄 [Offline-First] Handling ${type} failure:`, { opId, taskId, error: error.message });
 
         if (type === 'create') {
-            // Rollback create
-            await this._rollbackCreate(operation.tempId);
+            // ENTERPRISE-GRADE: Mark temp task as 'failed' instead of deleting
+            // This preserves user data across page refreshes and enables retry
+            await this._rollbackCreate(operation.tempId, error);
         } else if (type === 'update') {
             // Rollback to previous state
             await this.cache.saveTask(operation.previous);
@@ -1197,22 +1286,61 @@ class OptimisticUI {
             this._addTaskToDOM(operation.task);
         }
 
-        this.pendingOperations.delete(opId);
+        // CRITICAL FIX: DO NOT delete operation from pendingOperations
+        // Keep it so _retryOperation() can work after failure
+        // Mark it as failed for tracking
+        operation.failed = true;
+        operation.lastError = error.message;
+        operation.retryCount = (operation.retryCount || 0) + 1;
+        
+        console.log(`✅ [Offline-First] Operation ${opId} marked as failed (retry count: ${operation.retryCount})`);
 
         // Show detailed error notification
         const errorMsg = error.message || 'Unknown error';
-        this._showErrorNotification(`Failed to ${type} task. Changes rolled back.`, errorMsg);
+        this._showErrorNotification(`Failed to ${type} task. You can retry when online.`, errorMsg);
         
-        console.log(`✅ Rollback complete for operation ${opId}`);
+        console.log(`✅ [Offline-First] Failure handling complete for operation ${opId}`);
     }
 
     /**
-     * Rollback task creation
+     * Rollback task creation - ENTERPRISE-GRADE offline-first pattern
+     * Marks temp task as 'failed' instead of deleting (preserves data for retry)
      * @param {string} tempId
+     * @param {Error} error
      */
-    async _rollbackCreate(tempId) {
-        this._removeTaskFromDOM(tempId);
-        await this.cache.deleteTask(tempId);
+    async _rollbackCreate(tempId, error) {
+        console.log(`🔄 [Offline-First] Marking temp task ${tempId} as FAILED (not deleting)`);
+        
+        // Update task sync_status to 'failed' in IndexedDB
+        await this.cache.updateTempTaskStatus(tempId, 'failed', error.message);
+        
+        // Update DOM to show failed state (add badge/indicator)
+        const card = document.querySelector(`[data-task-id="${tempId}"]`);
+        if (card) {
+            card.classList.remove('optimistic-create');
+            card.classList.add('sync-failed');
+            
+            // Add failed badge to card
+            const existingBadge = card.querySelector('.sync-status-badge');
+            if (existingBadge) {
+                existingBadge.remove();
+            }
+            
+            const badge = document.createElement('div');
+            badge.className = 'sync-status-badge failed';
+            badge.innerHTML = `
+                <span class="badge-icon">⚠️</span>
+                <span class="badge-text">Sync Failed</span>
+                <button class="retry-btn" onclick="window.optimisticUI._retryOperation('${card.dataset.operationId}')">
+                    Retry
+                </button>
+            `;
+            
+            const cardHeader = card.querySelector('.task-card-header') || card;
+            cardHeader.appendChild(badge);
+        }
+        
+        console.log(`✅ [Offline-First] Temp task ${tempId} marked as failed (preserved in IndexedDB)`);
     }
 
     /**

@@ -466,6 +466,7 @@ class TaskCache {
 
     /**
      * Get ONLY temp tasks from temp_tasks store (for reconciliation merge)
+     * ENTERPRISE-GRADE: Returns tasks with sync_status for UI rendering
      * @returns {Promise<Array>}
      */
     async getTempTasks() {
@@ -479,31 +480,40 @@ class TaskCache {
             request.onsuccess = () => {
                 const tempTasks = request.result || [];
                 
-                console.log(`📦 [DEBUG] getTempTasks() retrieved ${tempTasks.length} temp tasks from IndexedDB`);
+                console.log(`📦 [Offline-First] Retrieved ${tempTasks.length} temp tasks from IndexedDB`);
                 
-                // Log each temp task to verify contents
-                tempTasks.forEach((task, index) => {
-                    console.log(`📦 [DEBUG] Temp task ${index}:`, {
-                        id: task.id,
-                        title: task.title,
-                        status: task.status,
-                        keys: Object.keys(task),
-                        fullObject: JSON.stringify(task, null, 2)
-                    });
-                });
-                
-                // Mark temp tasks with syncing flag
+                // Mark temp tasks with appropriate sync flags based on sync_status
                 tempTasks.forEach(task => {
-                    task._is_syncing = true;
-                    task._sync_status = 'pending';
                     task._temp = true;
+                    
+                    // Map sync_status to UI flags
+                    if (task.sync_status === 'pending') {
+                        task._is_syncing = true;
+                        task._sync_status = 'pending';
+                        console.log(`📦 [Offline-First] Task ${task.id}: PENDING sync (${task.title})`);
+                    } else if (task.sync_status === 'failed') {
+                        task._is_syncing = false;
+                        task._sync_status = 'failed';
+                        task._sync_error = task.last_error || 'Unknown error';
+                        console.log(`📦 [Offline-First] Task ${task.id}: FAILED sync - ${task.last_error} (${task.title})`);
+                    } else if (task.sync_status === 'confirmed') {
+                        // Confirmed tasks should have been removed from temp_tasks, but handle gracefully
+                        task._is_syncing = false;
+                        task._sync_status = 'confirmed';
+                        console.warn(`⚠️ [Offline-First] Task ${task.id}: Already CONFIRMED but still in temp_tasks store`);
+                    } else {
+                        // Default to pending for legacy tasks without sync_status
+                        task._is_syncing = true;
+                        task._sync_status = 'pending';
+                        console.log(`📦 [Offline-First] Task ${task.id}: Legacy task, defaulting to PENDING`);
+                    }
                 });
                 
-                console.log(`📦 [DEBUG] Returning ${tempTasks.length} temp tasks with syncing flags`);
+                console.log(`📦 [Offline-First] Returning ${tempTasks.length} temp tasks with sync metadata`);
                 resolve(tempTasks);
             };
             request.onerror = () => {
-                console.error(`❌ [DEBUG] Failed to retrieve temp tasks:`, request.error);
+                console.error(`❌ [Offline-First] Failed to retrieve temp tasks:`, request.error);
                 reject(request.error);
             };
         });
@@ -677,10 +687,8 @@ class TaskCache {
         // CRITICAL FIX: Handle temporary IDs from optimistic UI
         // Store temp tasks in dedicated IndexedDB store (survives page refresh)
         if (typeof task.id === 'string' && task.id.startsWith('temp_')) {
-            console.log(`💾 [DEBUG] saveTask() called with temp ID: ${task.id}`);
-            console.log(`💾 [DEBUG] Full task object being saved:`, JSON.stringify(task, null, 2));
-            console.log(`💾 [DEBUG] Task object keys:`, Object.keys(task));
-            console.log(`💾 [DEBUG] Task title: "${task.title}", status: "${task.status}"`);
+            console.log(`💾 [Offline-First] saveTask() called with temp ID: ${task.id}`);
+            console.log(`💾 [Offline-First] Task: "${task.title}" (status: ${task.status})`);
             
             // Ensure timestamps
             const now = new Date().toISOString();
@@ -688,8 +696,20 @@ class TaskCache {
             task.updated_at = now;
             task._temp = true; // Mark as temporary
             
-            console.log(`💾 [DEBUG] After adding timestamps - keys:`, Object.keys(task));
-            console.log(`💾 [DEBUG] Final object to IndexedDB:`, JSON.stringify(task, null, 2));
+            // ENTERPRISE-GRADE: Add sync metadata for resilient offline-first behavior
+            // This metadata prevents data loss during rollback and enables retry logic
+            if (!task.sync_status) {
+                task.sync_status = 'pending'; // pending | failed | confirmed
+            }
+            if (!task.operation_id) {
+                task.operation_id = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            }
+            if (!task.retry_count) {
+                task.retry_count = 0;
+            }
+            // last_error will be set on failure
+            
+            console.log(`💾 [Offline-First] Metadata: sync_status=${task.sync_status}, operation_id=${task.operation_id}`);
             
             // Store in temp_tasks object store (string IDs allowed)
             return new Promise((resolve, reject) => {
@@ -698,12 +718,11 @@ class TaskCache {
                 const request = store.put(task);
                 
                 request.onsuccess = () => {
-                    console.log(`✅ [DEBUG] Temp task SUCCESSFULLY persisted to temp_tasks store: ${task.id}`);
-                    console.log(`✅ [DEBUG] Saved object had ${Object.keys(task).length} keys`);
+                    console.log(`✅ [Offline-First] Temp task persisted to IndexedDB: ${task.id}`);
                     resolve();
                 };
                 request.onerror = () => {
-                    console.error(`❌ [DEBUG] FAILED to store temp task: ${task.id}`, request.error);
+                    console.error(`❌ [Offline-First] FAILED to store temp task: ${task.id}`, request.error);
                     reject(request.error);
                 };
             });
@@ -1140,6 +1159,101 @@ class TaskCache {
                 resolve(queue);
             };
             request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * ENTERPRISE-GRADE: Update sync status for a temp task (offline-first resilience)
+     * Prevents data loss by marking tasks as failed instead of deleting them
+     * @param {string} tempId - Temporary task ID
+     * @param {string} status - 'pending' | 'failed' | 'confirmed'
+     * @param {string|null} error - Error message if status is 'failed'
+     * @returns {Promise<void>}
+     */
+    async updateTempTaskStatus(tempId, status, error = null) {
+        await this.init();
+        
+        console.log(`🔄 [Offline-First] Updating temp task ${tempId} status to: ${status}`);
+        
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['temp_tasks'], 'readwrite');
+            const store = transaction.objectStore('temp_tasks');
+            const getRequest = store.get(tempId);
+            
+            getRequest.onsuccess = () => {
+                const task = getRequest.result;
+                if (!task) {
+                    console.warn(`⚠️ [Offline-First] Temp task ${tempId} not found in IndexedDB`);
+                    resolve();
+                    return;
+                }
+                
+                // Update sync metadata
+                task.sync_status = status;
+                task.updated_at = new Date().toISOString();
+                
+                if (status === 'failed') {
+                    task.last_error = error || 'Unknown error';
+                    task.retry_count = (task.retry_count || 0) + 1;
+                    console.log(`❌ [Offline-First] Task ${tempId} marked as FAILED: ${error} (retry #${task.retry_count})`);
+                } else if (status === 'confirmed') {
+                    console.log(`✅ [Offline-First] Task ${tempId} marked as CONFIRMED - ready for cleanup`);
+                }
+                
+                store.put(task);
+            };
+            
+            transaction.oncomplete = () => {
+                console.log(`✅ [Offline-First] Temp task ${tempId} status updated to: ${status}`);
+                resolve();
+            };
+            transaction.onerror = () => {
+                console.error(`❌ [Offline-First] Failed to update temp task ${tempId} status:`, transaction.error);
+                reject(transaction.error);
+            };
+        });
+    }
+
+    /**
+     * ENTERPRISE-GRADE: Remove confirmed temp task after successful server reconciliation
+     * Only removes tasks that have been successfully synced to server
+     * @param {string} tempId - Temporary task ID
+     * @returns {Promise<void>}
+     */
+    async removeTempTask(tempId) {
+        await this.init();
+        
+        console.log(`🧹 [Offline-First] Removing confirmed temp task: ${tempId}`);
+        
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['temp_tasks'], 'readwrite');
+            const store = transaction.objectStore('temp_tasks');
+            
+            // Safety check: Verify task is confirmed before deletion
+            const getRequest = store.get(tempId);
+            
+            getRequest.onsuccess = () => {
+                const task = getRequest.result;
+                if (!task) {
+                    console.warn(`⚠️ [Offline-First] Temp task ${tempId} already removed`);
+                    resolve();
+                    return;
+                }
+                
+                // Only delete if confirmed (prevents accidental data loss)
+                if (task.sync_status === 'confirmed') {
+                    store.delete(tempId);
+                    console.log(`✅ [Offline-First] Confirmed temp task ${tempId} removed from IndexedDB`);
+                } else {
+                    console.warn(`⚠️ [Offline-First] Skipping removal of temp task ${tempId} - not confirmed (status: ${task.sync_status})`);
+                }
+                resolve();
+            };
+            
+            transaction.onerror = () => {
+                console.error(`❌ [Offline-First] Failed to remove temp task ${tempId}:`, transaction.error);
+                reject(transaction.error);
+            };
         });
     }
 
