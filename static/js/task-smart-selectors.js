@@ -18,10 +18,12 @@ class DatePicker {
     }
     
     init() {
+        console.log('[DatePicker] Initializing for input:', this.input.id);
         this.input.type = 'date';
         this.input.placeholder = this.options.placeholder;
         
         if (this.options.shortcuts) {
+            console.log('[DatePicker] Creating shortcuts...');
             this.createShortcuts();
         }
         
@@ -30,9 +32,12 @@ class DatePicker {
                 this.options.onChange(this.getValue());
             }
         });
+        
+        console.log('[DatePicker] Initialized successfully');
     }
     
     createShortcuts() {
+        console.log('[DatePicker] Creating shortcut buttons...');
         const container = document.createElement('div');
         container.className = 'date-picker-shortcuts';
         container.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;';
@@ -66,7 +71,9 @@ class DatePicker {
             container.appendChild(btn);
         });
         
+        console.log('[DatePicker] Appending shortcuts container to parent:', this.input.parentNode);
         this.input.parentNode.appendChild(container);
+        console.log('[DatePicker] Shortcuts created successfully');
     }
     
     formatDate(date) {

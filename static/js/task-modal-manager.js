@@ -411,7 +411,14 @@ class TaskModalManager {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('[TaskModalManager] DOM ready, initializing...');
+// Initialize immediately or on DOMContentLoaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('[TaskModalManager] DOM ready, initializing...');
+        new TaskModalManager();
+    });
+} else {
+    // DOM already loaded (script loaded late)
+    console.log('[TaskModalManager] DOM already ready, initializing immediately...');
     new TaskModalManager();
-});
+}
