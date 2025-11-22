@@ -921,26 +921,27 @@ class TaskBootstrap {
             this.lastSyncTimestamp = Date.now();
             await this.cache.setMetadata('last_sync_timestamp', this.lastSyncTimestamp);
 
-            // CROWN⁴.5: If reconciliation was needed, re-render with server data
-            // CRITICAL FIX: Merge ALL temp_tasks - reconciliation will clean them up when confirmed
-            if (this.needsReconciliation) {
-                console.log('🔄 Reconciliation complete - merging temp tasks with server data');
-                
-                // Get ONLY temp tasks from temp_tasks store (not getAllTasks - that would duplicate)
-                const tempTasks = await this.cache.getTempTasks();
-                
-                console.log(`📦 Found ${tempTasks.length} temp tasks to merge with ${serverTasks.length} server tasks`);
-                
-                // NO FILTERING - show ALL temp tasks until reconcileTempTask() explicitly removes them
-                // This ensures temp tasks survive refresh even if timing/title matches cause false positives
-                // reconcileTempTask() will handle cleanup when server confirms creation
-                
-                // Merge: temp tasks first (show at top as "Syncing"), then server tasks
-                const mergedTasks = [...tempTasks, ...serverTasks];
-                
-                await this.renderTasks(mergedTasks, { fromCache: false });
-                this.needsReconciliation = false;
-            }
+            // CROWN⁴.5: ALWAYS merge temp tasks after background sync
+            // CRITICAL FIX: This must run ALWAYS (not just when reconciliation needed)
+            // to ensure temp tasks survive page refresh
+            console.log('🔄 Merging temp tasks with server data...');
+            
+            // Get ONLY temp tasks from temp_tasks store (not getAllTasks - that would duplicate)
+            const tempTasks = await this.cache.getTempTasks();
+            
+            console.log(`📦 Found ${tempTasks.length} temp tasks to merge with ${serverTasks.length} server tasks`);
+            
+            // Always merge and render (even if tempTasks.length === 0)
+            // This ensures UI updates with latest server data + any unsynced temp tasks
+            // NO FILTERING - show ALL temp tasks until reconcileTempTask() explicitly removes them
+            // This ensures temp tasks survive refresh even if timing/title matches cause false positives
+            // reconcileTempTask() will handle cleanup when server confirms creation
+            
+            // Merge: temp tasks first (show at top as "Syncing"), then server tasks
+            const mergedTasks = [...tempTasks, ...serverTasks];
+            
+            await this.renderTasks(mergedTasks, { fromCache: false });
+            this.needsReconciliation = false;
 
             // Emit sync success event
             window.dispatchEvent(new CustomEvent('tasks:sync:success', {
