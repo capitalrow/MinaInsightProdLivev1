@@ -197,6 +197,48 @@
         opacity: 1;
     }
 }
+
+/* Lifecycle Status Indicator */
+.lifecycle-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-glass);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    animation: status-pulse 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes status-pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(1.2);
+    }
+}
+
+#lifecycle-event-text {
+    color: var(--color-text-secondary);
+    font-weight: 500;
+}
+
+/* Update header to flex layout */
+.copilot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 </style>
 {% endblock %}
 
@@ -266,8 +308,15 @@
     <!-- Center: Chat Interface -->
     <main class="copilot-main">
         <div class="copilot-header">
-            <h1 class="copilot-title text-2xl font-bold mb-1">AI Copilot</h1>
-            <p class="text-sm text-secondary">Ask questions about your meetings, tasks, and insights</p>
+            <div>
+                <h1 class="copilot-title text-2xl font-bold mb-1">AI Copilot</h1>
+                <p class="text-sm text-secondary">Ask questions about your meetings, tasks, and insights</p>
+            </div>
+            <!-- Lifecycle Status Indicator -->
+            <div id="lifecycle-status" class="lifecycle-status" style="display: none;">
+                <div class="status-indicator"></div>
+                <span id="lifecycle-event-text" class="text-xs"></span>
+            </div>
         </div>
 
         <div id="chat-messages" class="chat-messages-container">
@@ -437,6 +486,12 @@ document.addEventListener('DOMContentLoaded', () => {
         displaySmartChips(data.chips);
     });
     
+    // Listen for all lifecycle events and update status indicator
+    window.addEventListener('copilot:lifecycle', (event) => {
+        const { event: eventName, data } = event.detail;
+        updateLifecycleStatus(eventName, data);
+    });
+    
     // Bootstrap the copilot
     copilotClient.bootstrap({{ current_user.workspace_id if current_user.workspace_id else 'null' }});
 });
@@ -501,6 +556,41 @@ function displaySmartChips(chips) {
 function hideSmartChips() {
     smartChipsContainer.style.display = 'none';
     smartChipsContainer.classList.remove('calm-fade-in');
+}
+
+// Update lifecycle status indicator
+const lifecycleStatus = document.getElementById('lifecycle-status');
+const lifecycleEventText = document.getElementById('lifecycle-event-text');
+
+const LIFECYCLE_MESSAGES = {
+    'copilot_bootstrap': 'Initializing...',
+    'context_rehydrate': 'Loading context',
+    'chips_generate': 'Generating suggestions',
+    'idle_listen': 'Listening',
+    'query_detect': 'Processing query',
+    'context_merge': 'Analyzing context',
+    'reasoning_stream': 'Thinking...',
+    'response_commit': 'Finalizing response',
+    'action_trigger': 'Executing action',
+    'cross_surface_sync': 'Syncing data',
+    'context_retrain': 'Learning from interaction',
+    'idle_prompt': 'Suggesting next steps'
+};
+
+function updateLifecycleStatus(eventName, data) {
+    const message = LIFECYCLE_MESSAGES[eventName] || eventName;
+    
+    lifecycleEventText.textContent = message;
+    lifecycleStatus.style.display = 'flex';
+    lifecycleStatus.classList.add('calm-fade-in');
+    
+    // Hide status after reasoning_stream starts (let streaming UI take over)
+    if (eventName === 'reasoning_stream' || eventName === 'response_commit') {
+        setTimeout(() => {
+            lifecycleStatus.style.display = 'none';
+            lifecycleStatus.classList.remove('calm-fade-in');
+        }, 2000);
+    }
 }
 
 // Start a new streaming message container
