@@ -558,8 +558,15 @@ class TaskCache {
             return;
         }
         
-        // CRITICAL FIX: Normalize task ID first, THEN validate
+        // CRITICAL FIX: Handle temporary IDs from optimistic UI
         // IndexedDB keyPath requires 'id' field to exist and be numeric
+        
+        // Skip IndexedDB storage for temporary IDs (optimistic creates)
+        // These tasks stay in-memory (DOM) until server responds with real numeric ID
+        if (typeof task.id === 'string' && task.id.startsWith('temp_')) {
+            console.log(`⏭️ Skipping IndexedDB cache for temporary task ID: ${task.id} (will cache when server responds)`);
+            return Promise.resolve(); // Successfully skip without throwing error
+        }
         
         // Step 1: Normalize string IDs to numbers (e.g., "123" -> 123, "0" -> 0)
         if (typeof task.id === 'string') {
