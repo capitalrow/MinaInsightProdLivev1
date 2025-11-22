@@ -922,9 +922,23 @@ class TaskBootstrap {
             await this.cache.setMetadata('last_sync_timestamp', this.lastSyncTimestamp);
 
             // CROWN⁴.5: If reconciliation was needed, re-render with server data
+            // CRITICAL FIX: Merge ALL temp_tasks - reconciliation will clean them up when confirmed
             if (this.needsReconciliation) {
-                console.log('🔄 Reconciliation complete - re-rendering with server data');
-                await this.renderTasks(serverTasks, { fromCache: false });
+                console.log('🔄 Reconciliation complete - merging temp tasks with server data');
+                
+                // Get ONLY temp tasks from temp_tasks store (not getAllTasks - that would duplicate)
+                const tempTasks = await this.cache.getTempTasks();
+                
+                console.log(`📦 Found ${tempTasks.length} temp tasks to merge with ${serverTasks.length} server tasks`);
+                
+                // NO FILTERING - show ALL temp tasks until reconcileTempTask() explicitly removes them
+                // This ensures temp tasks survive refresh even if timing/title matches cause false positives
+                // reconcileTempTask() will handle cleanup when server confirms creation
+                
+                // Merge: temp tasks first (show at top as "Syncing"), then server tasks
+                const mergedTasks = [...tempTasks, ...serverTasks];
+                
+                await this.renderTasks(mergedTasks, { fromCache: false });
                 this.needsReconciliation = false;
             }
 
