@@ -687,7 +687,20 @@
             console.warn('[MasterInit] ⚠️ taskBootstrap not available - performance metrics may be incomplete');
         }
         
-        // 2. Initialize non-dependent features
+        // 2. Initialize TaskModalManager (requires SmartSelectors from task-smart-selectors.js)
+        if (typeof TaskModalManager !== 'undefined') {
+            console.log('[MasterInit] Initializing TaskModalManager...');
+            try {
+                window.taskModalManager = new TaskModalManager();
+                console.log('[MasterInit] ✅ TaskModalManager initialized successfully');
+            } catch (error) {
+                console.error('[MasterInit] ❌ TaskModalManager initialization failed:', error);
+            }
+        } else {
+            console.error('[MasterInit] ❌ TaskModalManager class not found - ensure task-modal-manager.js loaded before master init');
+        }
+        
+        // 3. Initialize non-dependent features
         initFilterTabs();
         initNewTaskButton();
         initCheckboxHandlers();
@@ -695,10 +708,10 @@
         initDeleteHandlers();
         initTaskMenuHandlers();
         
-        // 3. Initialize class-based features
+        // 4. Initialize class-based features
         initTaskSearchSort();
         
-        // 4. Wait for optimisticUI, then initialize dependent features
+        // 5. Wait for optimisticUI, then initialize dependent features
         if (window.optimisticUI) {
             initState.optimisticUI = true;
             initTaskInlineEditing();

@@ -5,8 +5,10 @@
 
 class TaskModalManager {
     constructor() {
+        console.log('[TaskModalManager] Constructor called');
+        
         this.overlay = document.getElementById('task-modal-overlay');
-        this.modal = this.overlay?.querySelector('.task-modal');
+        this.modal = this.overlay?.querySelector('.modal');
         this.form = document.getElementById('task-create-form');
         
         this.mode = null; // 'create', 'edit', 'view'
@@ -20,11 +22,20 @@ class TaskModalManager {
             labelSelector: null
         };
         
-        if (!this.overlay || !this.modal || !this.form) {
-            console.error('[TaskModalManager] Required DOM elements not found');
+        if (!this.overlay) {
+            console.error('[TaskModalManager] Modal overlay (#task-modal-overlay) not found');
+            return;
+        }
+        if (!this.modal) {
+            console.error('[TaskModalManager] Modal (.modal) not found inside overlay');
+            return;
+        }
+        if (!this.form) {
+            console.error('[TaskModalManager] Form (#task-create-form) not found');
             return;
         }
         
+        console.log('[TaskModalManager] All required DOM elements found');
         this.init();
     }
     
@@ -206,7 +217,7 @@ class TaskModalManager {
     }
     
     updateTitle(title) {
-        const titleEl = this.modal.querySelector('.task-modal-title');
+        const titleEl = this.modal.querySelector('.modal-title');
         if (titleEl) {
             titleEl.textContent = title;
         }
