@@ -226,6 +226,125 @@ class TaskCache {
     }
 
     /**
+     * ENTERPRISE-GRADE: Save pending operation to offline_queue
+     * Supports all operation types (create/update/delete)
+     * CRITICAL: Persists FULL operation object including all metadata
+     */
+    async savePendingOperation(opId, operation) {
+        await this.init();
+        
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction('offline_queue', 'readwrite');
+            const store = tx.objectStore('offline_queue');
+            
+            // CRITICAL FIX: Persist the COMPLETE operation object
+            // This includes task (for rollback), previous (for update rollback), queueId (for cleanup)
+            const queueItem = {
+                operation_id: opId,
+                // Core operation fields
+                type: operation.type,
+                data: operation.data,
+                task_id: operation.taskId,
+                temp_id: operation.tempId,
+                timestamp: operation.timestamp || Date.now(),
+                // Failure tracking
+                failed: operation.failed || false,
+                last_error: operation.lastError,
+                retry_count: operation.retryCount || 0,
+                // Rollback metadata (CRITICAL for post-refresh operations)
+                task: operation.task,  // Full optimistic task for create rollback
+                previous: operation.previous,  // Previous state for update rollback
+                updates: operation.updates,  // Update data
+                queue_id: operation.queueId  // Offline queue reference for cleanup
+            };
+            
+            const request = store.put(queueItem);
+            
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+    
+    /**
+     * ENTERPRISE-GRADE: Get all pending operations from offline_queue
+     * Returns map of operation_id -> operation for rehydration
+     * CRITICAL: Restores FULL operation object with all metadata
+     */
+    async getAllPendingOperations() {
+        await this.init();
+        
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction('offline_queue', 'readonly');
+            const store = tx.objectStore('offline_queue');
+            const request = store.getAll();
+            
+            request.onsuccess = () => {
+                const operations = new Map();
+                const items = request.result || [];
+                
+                for (const item of items) {
+                    if (item.operation_id) {
+                        // CRITICAL FIX: Restore COMPLETE operation object
+                        // Includes all metadata needed for rollback, reconciliation, and cleanup
+                        operations.set(item.operation_id, {
+                            // Core operation fields
+                            type: item.type,
+                            data: item.data,
+                            taskId: item.task_id,
+                            tempId: item.temp_id,
+                            timestamp: item.timestamp || Date.now(),
+                            // Failure tracking
+                            failed: item.failed || false,
+                            lastError: item.last_error,
+                            retryCount: item.retry_count || 0,
+                            // Rollback metadata (CRITICAL for post-refresh operations)
+                            task: item.task,  // Full optimistic task for create rollback
+                            previous: item.previous,  // Previous state for update rollback
+                            updates: item.updates,  // Update data
+                            queueId: item.queue_id  // Offline queue reference for cleanup
+                        });
+                    }
+                }
+                
+                console.log(`✅ [Offline-First] Loaded ${operations.size} pending operations from IndexedDB`);
+                resolve(operations);
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+    
+    /**
+     * ENTERPRISE-GRADE: Remove pending operation from offline_queue
+     * Called after successful sync
+     */
+    async removePendingOperation(opId) {
+        await this.init();
+        
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction('offline_queue', 'readwrite');
+            const store = tx.objectStore('offline_queue');
+            
+            // Find and delete by operation_id (not primary key)
+            const request = store.openCursor();
+            
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    if (cursor.value.operation_id === opId) {
+                        cursor.delete();
+                        resolve();
+                    } else {
+                        cursor.continue();
+                    }
+                } else {
+                    resolve(); // Not found, that's okay
+                }
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+    
+    /**
      * ENTERPRISE-GRADE: Clean orphaned temp tasks (safe, prevents data loss)
      * Only removes temp IDs that are:
      * 1. NOT in the offline queue (already synced/failed)
