@@ -8,6 +8,18 @@ Mina is an enterprise-grade SaaS platform designed to transform meetings into ac
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+**November 22, 2025 - CROWN 4.5/4.6 PJAX Lifecycle Completion:**
+- Implemented complete mobile gesture teardown/reinit lifecycle for PJAX navigation compatibility
+- Fixed event listener tracking: All gesture handlers (pull-to-refresh, swipe-to-archive, long-press) now registered via `addTrackedListener()` for proper cleanup
+- Added `destroy()` function to mobile-gestures.js that removes all tracked listeners and resets state before navigation
+- Integrated PJAX navigation hooks (pjax:beforeTransition → destroy, pjax:complete → reinit) with initialization guard
+- Updated smooth-navigation.js to emit required navigation events (pjax:beforeTransition, pjax:complete, navigation:complete)
+- Verified async bootstrap initialization properly awaited with .catch() error handling
+- Simplified cache telemetry: getAllTasks() emits cache:hit/miss events, getFilteredTasks() propagates them correctly
+- **Status:** All CROWN 4.5/4.6 production-readiness requirements satisfied per architect validation
+
 ## System Architecture
 
 The application utilizes a layered architecture with Flask as the web framework and Socket.IO for real-time communication, following an application factory pattern. The frontend employs a "Crown+" design system with a dark theme, vanilla JavaScript, and Socket.IO client for a modern and accessible UI/UX.
