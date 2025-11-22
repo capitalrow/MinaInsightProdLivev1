@@ -35,36 +35,6 @@ def get_socket_sid() -> str:
     return request.sid  # type: ignore[attr-defined]
 
 
-def run_async_with_eventlet(async_gen, callback):
-    """
-    Run async generator in eventlet-safe manner.
-    
-    Args:
-        async_gen: Async generator to iterate
-        callback: Function to call with each yielded value
-    """
-    import eventlet
-    
-    def _run():
-        """Eventlet greenlet that runs the async generator."""
-        try:
-            # Import here to avoid issues if not using eventlet
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            async def iterate():
-                async for item in async_gen:
-                    callback(item)
-            
-            loop.run_until_complete(iterate())
-            loop.close()
-        except Exception as e:
-            logger.error(f"Async generator error: {e}", exc_info=True)
-    
-    # Spawn eventlet greenlet
-    eventlet.spawn(_run)
-
-
 def register_copilot_namespace(socketio):
     """
     Register Copilot WebSocket namespace handlers.
@@ -252,35 +222,23 @@ def register_copilot_namespace(socketio):
             )
             
             def stream_task():
-                """Background task for streaming response (eventlet-safe)."""
-                import eventlet
-                
+                """Background task for streaming response (uses dedicated async thread)."""
                 try:
                     complete_message = ""
                     
-                    async def stream_to_client():
-                        nonlocal complete_message
-                        async for event in copilot_streaming_service.stream_response(
-                            user_message=user_message,
-                            context=context,
-                            workspace_id=workspace_id,
-                            user_id=current_user.id
-                        ):
-                            # Emit streaming event to specific client
-                            socketio.emit('copilot_stream', event, namespace='/copilot', to=client_sid)
-                            
-                            # Capture complete message
-                            if event.get('type') == 'complete':
-                                complete_message = event.get('message', '')
-                    
-                    # Run async generator in eventlet-compatible way
-                    # Use greenthread-local event loop
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        loop.run_until_complete(stream_to_client())
-                    finally:
-                        loop.close()
+                    # Use eventlet-safe streaming (async in dedicated thread, queue-based communication)
+                    for event in copilot_streaming_service.stream_response_eventlet_safe(
+                        user_message=user_message,
+                        context=context,
+                        workspace_id=workspace_id,
+                        user_id=current_user.id
+                    ):
+                        # Emit streaming event to specific client
+                        socketio.emit('copilot_stream', event, namespace='/copilot', to=client_sid)
+                        
+                        # Capture complete message
+                        if event.get('type') == 'complete':
+                            complete_message = event.get('message', '')
                     
                     # Event #8: response_commit - Persist reply
                     copilot_lifecycle_service.emit_event(
@@ -655,7 +613,7 @@ def _broadcast_action_result(
                     'task_updated',
                     result,
                     namespace='/tasks',
-                    room=room_name
+                    to=room_name
                 )
         
         elif action in ['add_to_calendar', 'schedule_meeting']:
@@ -666,7 +624,7 @@ def _broadcast_action_result(
                     'calendar_updated',
                     result,
                     namespace='/calendar',
-                    room=room_name
+                    to=room_name
                 )
         
         # Also broadcast to dashboard for unified updates
@@ -679,7 +637,7 @@ def _broadcast_action_result(
                     'result': result
                 },
                 namespace='/dashboard',
-                room=room_name
+                to=room_name
             )
         
         logger.debug(f"Broadcast {action} to workspace {workspace_id}")
