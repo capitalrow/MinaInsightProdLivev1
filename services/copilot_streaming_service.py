@@ -11,7 +11,11 @@ import os
 import logging
 import time
 import json
-from typing import AsyncGenerator, Dict, Any, Optional, List
+import asyncio
+import threading
+import queue
+import eventlet
+from typing import AsyncGenerator, Dict, Any, Optional, List, Callable
 from datetime import datetime
 from openai import OpenAI, AsyncOpenAI
 from dataclasses import dataclass, asdict
@@ -98,7 +102,7 @@ class CopilotStreamingService:
     """
     
     def __init__(self):
-        """Initialize OpenAI client for streaming."""
+        """Initialize OpenAI client with dedicated asyncio thread for eventlet compatibility."""
         self.api_key = os.getenv("AI_INTEGRATIONS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
         self.base_url = os.getenv("AI_INTEGRATIONS_OPENAI_BASE_URL")
         
@@ -106,15 +110,261 @@ class CopilotStreamingService:
             logger.warning("No OpenAI API key configured - streaming will be disabled")
             self.client = None
             self.async_client = None
+            self.async_loop = None
+            self.async_thread = None
         else:
-            # Initialize both sync and async clients
+            # Initialize clients
             client_kwargs = {"api_key": self.api_key}
             if self.base_url:
                 client_kwargs["base_url"] = self.base_url
                 
             self.client = OpenAI(**client_kwargs)
             self.async_client = AsyncOpenAI(**client_kwargs)
-            logger.info("OpenAI streaming client initialized")
+            
+            # Create dedicated asyncio event loop in background thread for true async streaming
+            self.async_loop = None
+            self.async_thread = threading.Thread(target=self._run_async_loop, daemon=True)
+            self.async_thread.start()
+            
+            # Wait for loop to be ready
+            timeout = 5
+            start = time.time()
+            while self.async_loop is None and (time.time() - start) < timeout:
+                time.sleep(0.01)
+            
+            if self.async_loop is None:
+                logger.error("Failed to start async event loop")
+            else:
+                logger.info("OpenAI streaming client initialized with dedicated async thread")
+    
+    def _run_async_loop(self):
+        """Run asyncio event loop in dedicated thread (eventlet-safe)."""
+        try:
+            self.async_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.async_loop)
+            self.async_loop.run_forever()
+        except Exception as e:
+            logger.error(f"Async loop error: {e}", exc_info=True)
+        finally:
+            if self.async_loop:
+                self.async_loop.close()
+    
+    def stream_response_eventlet_safe(
+        self,
+        user_message: str,
+        context: Optional[Dict[str, Any]] = None,
+        workspace_id: Optional[int] = None,
+        user_id: Optional[int] = None
+    ):
+        """
+        Stream AI response with TRUE async in dedicated thread (eventlet-safe, non-blocking).
+        
+        Uses asyncio.run_coroutine_threadsafe to execute async OpenAI streaming in
+        dedicated thread, communicating back via queue for full concurrent streaming.
+        
+        Args:
+            user_message: User's query
+            context: Optional context (meetings, tasks, embeddings)
+            workspace_id: Current workspace ID
+            user_id: Current user ID
+        
+        Yields:
+            Dict with streaming events (token-level)
+        """
+        if not self.async_client or not self.async_loop:
+            yield {
+                'type': 'error',
+                'content': 'AI streaming not configured',
+                'error': 'missing_api_key'
+            }
+            return
+        
+        # Use thread-safe queue for cross-thread communication
+        event_queue = queue.Queue()
+        
+        async def async_stream_worker():
+            """Async worker that streams from OpenAI and pushes to thread-safe queue."""
+            try:
+                async for event in self.stream_response(
+                    user_message=user_message,
+                    context=context,
+                    workspace_id=workspace_id,
+                    user_id=user_id
+                ):
+                    # Put in thread-safe queue
+                    event_queue.put(event)
+                
+                # Signal completion
+                event_queue.put(None)
+                
+            except Exception as e:
+                logger.error(f"Async stream worker error: {e}", exc_info=True)
+                event_queue.put({
+                    'type': 'error',
+                    'content': 'Streaming failed',
+                    'error': str(e)
+                })
+                event_queue.put(None)
+        
+        # Submit to dedicated asyncio thread
+        future = asyncio.run_coroutine_threadsafe(async_stream_worker(), self.async_loop)
+        
+        # Consume events from queue using non-blocking polling (eventlet-safe)
+        while True:
+            try:
+                # Non-blocking get - raises queue.Empty if no events
+                event = event_queue.get_nowait()
+                if event is None:
+                    break
+                yield event
+            except queue.Empty:
+                # No event ready - yield to eventlet hub and try again
+                eventlet.sleep(0)
+                # Check if async worker finished
+                if future.done():
+                    # Get any remaining events
+                    try:
+                        while True:
+                            event = event_queue.get_nowait()
+                            if event is None:
+                                break
+                            yield event
+                    except queue.Empty:
+                        break
+                    break
+    
+    def stream_response_sync(
+        self,
+        user_message: str,
+        context: Optional[Dict[str, Any]] = None,
+        workspace_id: Optional[int] = None,
+        user_id: Optional[int] = None
+    ):
+        """
+        Stream AI response (blocking sync - only use for non-concurrent scenarios).
+        
+        Args:
+            user_message: User's query
+            context: Optional context (meetings, tasks, embeddings)
+            workspace_id: Current workspace ID
+            user_id: Current user ID
+        
+        Yields:
+            Dict with streaming events:
+            - type: 'token' | 'section' | 'metrics' | 'complete'
+            - content: Token text or structured data
+            - section: Optional section indicator (summary, actions, insights, next_steps)
+        """
+        if not self.client:
+            yield {
+                'type': 'error',
+                'content': 'AI streaming not configured',
+                'error': 'missing_api_key'
+            }
+            return
+        
+        # Initialize metrics
+        metrics = StreamMetrics(query_received_at=time.time())
+        
+        try:
+            # Build messages with system prompt and context
+            messages = self._build_messages(user_message, context)
+            
+            # Start streaming (SYNC)
+            stream = self.client.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1500,
+                stream=True,
+                stream_options={"include_usage": True}
+            )
+            
+            current_section = None
+            buffer = ""
+            chunk_count = 0
+            
+            for chunk in stream:
+                chunk_count += 1
+                
+                # Record first token timing (handle non-content deltas)
+                if metrics.first_token_at is None:
+                    # Check for any delta (content, role, tool_calls, etc.)
+                    has_delta = (chunk.choices and len(chunk.choices) > 0 and 
+                                chunk.choices[0].delta)
+                    if has_delta:
+                        metrics.first_token_at = time.time()
+                        
+                        # Emit first token metrics
+                        yield {
+                            'type': 'metrics',
+                            'event': 'first_token',
+                            'latency_ms': metrics.first_token_latency_ms
+                        }
+                
+                # Extract delta content
+                if chunk.choices and len(chunk.choices) > 0:
+                    delta = chunk.choices[0].delta
+                    
+                    if delta.content:
+                        content = delta.content
+                        buffer += content
+                        
+                        # Detect section markers and structured content
+                        section = self._detect_section(buffer)
+                        if section and section != current_section:
+                            current_section = section
+                            yield {
+                                'type': 'section',
+                                'section': section,
+                                'content': f"\n## {section.title()}\n"
+                            }
+                        
+                        # Stream token
+                        yield {
+                            'type': 'token',
+                            'content': content,
+                            'section': current_section
+                        }
+                
+                # Capture usage data when available (usually at stream end)
+                if hasattr(chunk, 'usage') and chunk.usage:
+                    if chunk.usage.prompt_tokens is not None:
+                        metrics.prompt_tokens = chunk.usage.prompt_tokens
+                    if chunk.usage.completion_tokens is not None:
+                        metrics.completion_tokens = chunk.usage.completion_tokens
+                        metrics.total_tokens = chunk.usage.completion_tokens
+            
+            # Mark completion
+            metrics.stream_complete_at = time.time()
+            
+            # Emit final metrics
+            yield {
+                'type': 'metrics',
+                'event': 'complete',
+                **metrics.to_dict()
+            }
+            
+            # Log performance
+            logger.info(
+                f"Copilot stream complete: {metrics.first_token_latency_ms:.0f}ms first token, "
+                f"{metrics.total_latency_ms:.0f}ms total, calm_score={metrics.calm_score:.2f}"
+            )
+            
+            # Emit completion event
+            yield {
+                'type': 'complete',
+                'message': buffer,
+                'metrics': metrics.to_dict()
+            }
+            
+        except Exception as e:
+            logger.error(f"Copilot streaming error: {e}", exc_info=True)
+            yield {
+                'type': 'error',
+                'content': 'Failed to generate response',
+                'error': str(e)
+            }
     
     async def stream_response(
         self,
