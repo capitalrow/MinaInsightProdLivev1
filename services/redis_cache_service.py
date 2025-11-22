@@ -1,5 +1,5 @@
 """
-🚀 REDIS CACHE SERVICE: High-performance caching and session management
+🚀 REDIS CACHE SERVICE: High-performance caching and session management with circuit breaker protection
 Provides distributed caching, session persistence, and performance optimization
 """
 
@@ -21,6 +21,13 @@ try:
 except ImportError:
     redis = None
     REDIS_AVAILABLE = False
+
+try:
+    from services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpenError
+    CIRCUIT_BREAKER_AVAILABLE = True
+except ImportError:
+    CIRCUIT_BREAKER_AVAILABLE = False
+    CircuitBreakerOpenError = Exception
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +74,18 @@ class RedisCacheService:
         self.stats = CacheStats(last_reset=time.time())
         self.stats_lock = threading.RLock()
         
+        # Initialize circuit breaker for Redis operations
+        if CIRCUIT_BREAKER_AVAILABLE:
+            cb_config = CircuitBreakerConfig(
+                failure_threshold=5,    # Open circuit after 5 failures
+                recovery_timeout=30,    # Try recovery after 30 seconds
+                success_threshold=3,    # Close after 3 successes
+                request_timeout=5       # 5 second timeout for Redis operations
+            )
+            self.circuit_breaker = CircuitBreaker("redis_cache", cb_config)
+        else:
+            self.circuit_breaker = None
+        
         # Key prefixes for different data types
         self.key_prefixes = {
             'session': 'mina:session:',
@@ -83,7 +102,7 @@ class RedisCacheService:
         
         self._initialize_redis()
         
-        logger.info("🚀 Redis Cache Service initialized")
+        logger.info("🚀 Redis Cache Service initialized with circuit breaker protection")
     
     def _initialize_redis(self):
         """Initialize Redis connection"""
@@ -122,13 +141,28 @@ class RedisCacheService:
         return REDIS_AVAILABLE and self.is_connected and self.client is not None
     
     def get(self, key: str, prefix: str = 'temp') -> Optional[Any]:
-        """Get value from cache"""
+        """Get value from cache with circuit breaker protection"""
         if not self.is_available():
             return None
         
         try:
             full_key = self._build_key(key, prefix)
-            raw_value = self.client.get(full_key)  # type: ignore
+            
+            # Execute with circuit breaker protection if available
+            def _get_from_cache():
+                raw_value = self.client.get(full_key)  # type: ignore
+                return raw_value
+            
+            if self.circuit_breaker:
+                try:
+                    raw_value = self.circuit_breaker.call(_get_from_cache)
+                except CircuitBreakerOpenError:
+                    logger.warning(f"🔴 Redis circuit breaker OPEN - cache unavailable for key {key}")
+                    with self.stats_lock:
+                        self.stats.errors += 1
+                    return None
+            else:
+                raw_value = _get_from_cache()
             
             with self.stats_lock:
                 self.stats.total_requests += 1
@@ -150,7 +184,7 @@ class RedisCacheService:
             return None
     
     def set(self, key: str, value: Any, ttl: Optional[int] = None, prefix: str = 'temp') -> bool:
-        """Set value in cache"""
+        """Set value in cache with circuit breaker protection"""
         if not self.is_available():
             return False
         
@@ -161,7 +195,20 @@ class RedisCacheService:
             # Use appropriate TTL
             cache_ttl = ttl or self._get_default_ttl(prefix)
             
-            result = self.client.setex(full_key, cache_ttl, serialized_value)  # type: ignore
+            # Execute with circuit breaker protection if available
+            def _set_in_cache():
+                return self.client.setex(full_key, cache_ttl, serialized_value)  # type: ignore
+            
+            if self.circuit_breaker:
+                try:
+                    result = self.circuit_breaker.call(_set_in_cache)
+                except CircuitBreakerOpenError:
+                    logger.warning(f"🔴 Redis circuit breaker OPEN - cache unavailable for key {key}")
+                    with self.stats_lock:
+                        self.stats.errors += 1
+                    return False
+            else:
+                result = _set_in_cache()
             
             with self.stats_lock:
                 self.stats.sets += 1
