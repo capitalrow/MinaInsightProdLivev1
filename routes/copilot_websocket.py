@@ -14,12 +14,18 @@ Events:
 import logging
 import asyncio
 import json
-from typing import Dict, Any, Optional
+import time
+from typing import Dict, Any, Optional, List
 from flask import request
 from flask_socketio import emit, join_room, leave_room
 from flask_login import current_user
 from services.copilot_streaming_service import copilot_streaming_service
 from services.event_broadcaster import event_broadcaster
+from services.copilot_lifecycle_service import (
+    copilot_lifecycle_service,
+    LifecycleEvent
+)
+from services.copilot_memory_service import copilot_memory_service
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +35,34 @@ def get_socket_sid() -> str:
     return request.sid  # type: ignore[attr-defined]
 
 
-def run_async(coro):
-    """Helper to run async functions in sync context with eventlet compatibility."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+def run_async_with_eventlet(async_gen, callback):
+    """
+    Run async generator in eventlet-safe manner.
+    
+    Args:
+        async_gen: Async generator to iterate
+        callback: Function to call with each yielded value
+    """
+    import eventlet
+    
+    def _run():
+        """Eventlet greenlet that runs the async generator."""
+        try:
+            # Import here to avoid issues if not using eventlet
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            async def iterate():
+                async for item in async_gen:
+                    callback(item)
+            
+            loop.run_until_complete(iterate())
+            loop.close()
+        except Exception as e:
+            logger.error(f"Async generator error: {e}", exc_info=True)
+    
+    # Spawn eventlet greenlet
+    eventlet.spawn(_run)
 
 
 def register_copilot_namespace(socketio):
@@ -74,6 +100,12 @@ def register_copilot_namespace(socketio):
             client_id = get_socket_sid()
             logger.info(f"Copilot client disconnected: {client_id}")
             
+            # Cleanup lifecycle session for this client
+            if current_user.is_authenticated:
+                session_id = f"copilot_{current_user.id}_{client_id}"
+                copilot_lifecycle_service.destroy_session(session_id)
+                logger.debug(f"Destroyed lifecycle session: {session_id}")
+            
             # Leave workspace room on disconnect
             if current_user.is_authenticated and current_user.workspace_id:
                 room_name = f"copilot_workspace_{current_user.workspace_id}"
@@ -93,7 +125,8 @@ def register_copilot_namespace(socketio):
         Args:
             data: {
                 'workspace_id': int,
-                'load_context': bool (default True)
+                'load_context': bool (default True),
+                'session_id': str (optional)
             }
         """
         try:
@@ -103,8 +136,16 @@ def register_copilot_namespace(socketio):
             
             workspace_id = data.get('workspace_id') or current_user.workspace_id
             load_context = data.get('load_context', True)
+            session_id = data.get('session_id') or f"copilot_{current_user.id}_{get_socket_sid()}"
             
-            logger.info(f"Copilot bootstrap: user={current_user.id}, workspace={workspace_id}")
+            logger.info(f"Copilot bootstrap: user={current_user.id}, workspace={workspace_id}, session={session_id}")
+            
+            # Create lifecycle session (Event #1)
+            lifecycle_state = copilot_lifecycle_service.create_session(
+                session_id=session_id,
+                user_id=current_user.id,
+                workspace_id=workspace_id
+            )
             
             # Join workspace room for cross-surface sync
             if workspace_id:
@@ -117,13 +158,42 @@ def register_copilot_namespace(socketio):
             if load_context:
                 context = _build_user_context(current_user.id, workspace_id)
             
+            # Emit Event #1: copilot_bootstrap
+            copilot_lifecycle_service.emit_event(
+                session_id=session_id,
+                event=LifecycleEvent.COPILOT_BOOTSTRAP,
+                data={'context': context}
+            )
+            
+            # Emit Event #2: context_rehydrate
+            copilot_lifecycle_service.emit_event(
+                session_id=session_id,
+                event=LifecycleEvent.CONTEXT_REHYDRATE,
+                data={'active_sessions': True}
+            )
+            
             # Emit bootstrap complete with context
             emit('copilot_bootstrap_complete', {
                 'event': 'copilot_bootstrap',
                 'context': context,
                 'workspace_id': workspace_id,
                 'user_id': current_user.id,
-                'timestamp': asyncio.get_event_loop().time() if hasattr(asyncio, 'get_event_loop') else None
+                'session_id': session_id,
+                'timestamp': time.time()
+            })
+            
+            # Generate adaptive chips (Event #3)
+            chips = _generate_contextual_chips(context, current_user.id, workspace_id)
+            copilot_lifecycle_service.emit_event(
+                session_id=session_id,
+                event=LifecycleEvent.CHIPS_GENERATE,
+                data={'chips': chips}
+            )
+            
+            # Emit chips to client
+            emit('copilot_chips_generated', {
+                'chips': chips,
+                'session_id': session_id
             })
             
         except Exception as e:
@@ -154,19 +224,42 @@ def register_copilot_namespace(socketio):
             
             workspace_id = current_user.workspace_id
             context_data = data.get('context', {})
-            session_id = data.get('session_id')
+            session_id = data.get('session_id') or f"copilot_{current_user.id}_{get_socket_sid()}"
             client_sid = get_socket_sid()
             
-            logger.info(f"Copilot query: user={current_user.id}, message='{user_message[:50]}...'")
+            logger.info(f"Copilot query: user={current_user.id}, message='{user_message[:50]}...', session={session_id}")
             
-            # Build context from workspace data
+            # Event #5: query_detect
+            copilot_lifecycle_service.emit_event(
+                session_id=session_id,
+                event=LifecycleEvent.QUERY_DETECT,
+                data={'message': user_message}
+            )
+            
+            # Event #6: context_merge - Build context from workspace data
             context = _build_query_context(current_user.id, workspace_id, context_data)
+            copilot_lifecycle_service.emit_event(
+                session_id=session_id,
+                event=LifecycleEvent.CONTEXT_MERGE,
+                data={'context_keys': list(context.keys())}
+            )
             
-            # Stream response using background task (eventlet-safe)
+            # Event #7: reasoning_stream - Stream response using background task (eventlet-safe)
+            copilot_lifecycle_service.emit_event(
+                session_id=session_id,
+                event=LifecycleEvent.REASONING_STREAM,
+                data={'started': True}
+            )
+            
             def stream_task():
-                """Background task for streaming response."""
+                """Background task for streaming response (eventlet-safe)."""
+                import eventlet
+                
                 try:
+                    complete_message = ""
+                    
                     async def stream_to_client():
+                        nonlocal complete_message
                         async for event in copilot_streaming_service.stream_response(
                             user_message=user_message,
                             context=context,
@@ -175,9 +268,44 @@ def register_copilot_namespace(socketio):
                         ):
                             # Emit streaming event to specific client
                             socketio.emit('copilot_stream', event, namespace='/copilot', to=client_sid)
+                            
+                            # Capture complete message
+                            if event.get('type') == 'complete':
+                                complete_message = event.get('message', '')
                     
-                    # Run async generator
-                    run_async(stream_to_client())
+                    # Run async generator in eventlet-compatible way
+                    # Use greenthread-local event loop
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(stream_to_client())
+                    finally:
+                        loop.close()
+                    
+                    # Event #8: response_commit - Persist reply
+                    copilot_lifecycle_service.emit_event(
+                        session_id=session_id,
+                        event=LifecycleEvent.RESPONSE_COMMIT,
+                        data={'message_length': len(complete_message)}
+                    )
+                    
+                    # Event #11: context_retrain - Learn from interaction
+                    copilot_lifecycle_service.emit_event(
+                        session_id=session_id,
+                        event=LifecycleEvent.CONTEXT_RETRAIN,
+                        data={'started': True}
+                    )
+                    
+                    # Store conversation and update embeddings
+                    copilot_memory_service.retrain_context(
+                        user_id=current_user.id,
+                        workspace_id=workspace_id,
+                        interaction_data={
+                            'message': user_message,
+                            'response': complete_message,
+                            'success': True
+                        }
+                    )
                     
                 except Exception as e:
                     logger.error(f"Stream task error: {e}", exc_info=True)
@@ -218,10 +346,22 @@ def register_copilot_namespace(socketio):
                 return
             
             action = data.get('action')
+            if not action:
+                emit('copilot_action_result', {'success': False, 'error': 'Action is required'})
+                return
+                
             parameters = data.get('parameters', {})
             workspace_id = data.get('workspace_id') or current_user.workspace_id
+            session_id = data.get('session_id') or f"copilot_{current_user.id}_{get_socket_sid()}"
             
-            logger.info(f"Copilot action: user={current_user.id}, action={action}")
+            logger.info(f"Copilot action: user={current_user.id}, action={action}, session={session_id}")
+            
+            # Event #9: action_trigger - Execute mutation
+            copilot_lifecycle_service.emit_event(
+                session_id=session_id,
+                event=LifecycleEvent.ACTION_TRIGGER,
+                data={'action': action, 'parameters': parameters}
+            )
             
             # Execute action and get result
             result = _execute_copilot_action(
@@ -231,8 +371,13 @@ def register_copilot_namespace(socketio):
                 workspace_id=workspace_id
             )
             
-            # Broadcast to other surfaces if action succeeded
+            # Event #10: cross_surface_sync - Broadcast to other pages
             if result.get('success'):
+                copilot_lifecycle_service.emit_event(
+                    session_id=session_id,
+                    event=LifecycleEvent.CROSS_SURFACE_SYNC,
+                    data={'action': action, 'broadcast': True}
+                )
                 _broadcast_action_result(
                     action=action,
                     result=result,
@@ -244,7 +389,8 @@ def register_copilot_namespace(socketio):
                 'action': action,
                 'success': result.get('success', False),
                 'result': result,
-                'timestamp': asyncio.get_event_loop().time() if hasattr(asyncio, 'get_event_loop') else None
+                'session_id': session_id,
+                'timestamp': time.time()
             })
             
         except Exception as e:
@@ -346,6 +492,77 @@ def _build_query_context(
     return context
 
 
+def _generate_contextual_chips(
+    context: Dict[str, Any],
+    user_id: int,
+    workspace_id: Optional[int]
+) -> List[Dict[str, str]]:
+    """
+    Generate adaptive quick-action chips based on workspace context (Event #3).
+    
+    Chips adapt dynamically based on:
+    - Overdue tasks
+    - Upcoming deadlines
+    - Recent meetings
+    - Activity patterns
+    
+    Args:
+        context: Workspace context from bootstrap
+        user_id: Current user ID
+        workspace_id: Current workspace ID
+    
+    Returns:
+        List of chip objects with text and action
+    """
+    from datetime import datetime
+    
+    chips = []
+    
+    # Always include base chips
+    chips.append({'text': "What's due today?", 'action': 'query'})
+    
+    # Check for overdue tasks
+    recent_tasks = context.get('recent_tasks', [])
+    overdue_count = sum(
+        1 for t in recent_tasks 
+        if t.get('status') != 'completed' and 
+           t.get('due_date') and 
+           t['due_date'] < datetime.utcnow().isoformat()
+    )
+    
+    if overdue_count > 0:
+        chips.insert(0, {
+            'text': f"Show {overdue_count} overdue tasks",
+            'action': 'query',
+            'priority': 'high'
+        })
+    
+    # Recent meetings chip
+    recent_meetings = context.get('recent_meetings', [])
+    if recent_meetings:
+        chips.append({
+            'text': "Summarize yesterday's meetings",
+            'action': 'query'
+        })
+    
+    # Tasks due today
+    tasks_today = context.get('activity', {}).get('tasks_today', 0)
+    if tasks_today > 0:
+        chips.append({
+            'text': f"Review {tasks_today} tasks due today",
+            'action': 'query'
+        })
+    
+    # General insights
+    chips.extend([
+        {'text': "Show blockers", 'action': 'query'},
+        {'text': "What decisions were made?", 'action': 'query'}
+    ])
+    
+    # Limit to 6 chips
+    return chips[:6]
+
+
 def _execute_copilot_action(
     action: str,
     parameters: Dict[str, Any],
@@ -422,26 +639,47 @@ def _broadcast_action_result(
     Broadcast action result to other surfaces for cross-surface sync.
     
     Channels:
-    - mina.tasks - Task updates
-    - mina.calendar - Calendar events
-    - mina.analytics - Analytics updates
+    - /tasks - Task namespace
+    - /calendar - Calendar namespace
+    - /dashboard - Dashboard namespace
     """
+    from app import socketio
+    
     try:
-        # Determine broadcast channel based on action
+        # Determine broadcast namespace and event based on action
         if action in ['create_task', 'mark_done', 'update_task']:
-            event_broadcaster.broadcast_event(
-                event_type='task_updated',
-                data=result,
-                workspace_id=workspace_id,
-                channel='mina.tasks'
-            )
+            # Broadcast to tasks namespace
+            if workspace_id:
+                room_name = f"workspace_{workspace_id}"
+                socketio.emit(
+                    'task_updated',
+                    result,
+                    namespace='/tasks',
+                    room=room_name
+                )
         
         elif action in ['add_to_calendar', 'schedule_meeting']:
-            event_broadcaster.broadcast_event(
-                event_type='calendar_updated',
-                data=result,
-                workspace_id=workspace_id,
-                channel='mina.calendar'
+            # Broadcast to calendar namespace
+            if workspace_id:
+                room_name = f"workspace_{workspace_id}"
+                socketio.emit(
+                    'calendar_updated',
+                    result,
+                    namespace='/calendar',
+                    room=room_name
+                )
+        
+        # Also broadcast to dashboard for unified updates
+        if workspace_id:
+            room_name = f"workspace_{workspace_id}"
+            socketio.emit(
+                'copilot_action_completed',
+                {
+                    'action': action,
+                    'result': result
+                },
+                namespace='/dashboard',
+                room=room_name
             )
         
         logger.debug(f"Broadcast {action} to workspace {workspace_id}")

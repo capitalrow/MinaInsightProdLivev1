@@ -615,6 +615,12 @@ def create_app() -> Flask:
         # Initialize event broadcaster with socketio instance
         event_broadcaster.set_socketio(socketio)
         
+        # Initialize copilot idle detection service
+        from services.copilot_idle_detection import copilot_idle_detection_service
+        copilot_idle_detection_service.set_socketio(socketio)
+        copilot_idle_detection_service.start_monitoring()
+        app.logger.info("✅ Copilot idle detection monitoring started")
+        
         # Register namespace handlers
         register_dashboard_namespace(socketio)
         register_tasks_namespace(socketio)
