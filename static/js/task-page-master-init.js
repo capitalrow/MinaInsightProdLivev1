@@ -687,6 +687,18 @@
             console.warn('[MasterInit] ⚠️ taskBootstrap not available - performance metrics may be incomplete');
         }
         
+        // 1.5. ENTERPRISE-GRADE: Rehydrate pending operations from IndexedDB
+        // This ensures retry mechanism works after page refresh
+        if (window.optimisticUI && typeof window.optimisticUI.rehydratePendingOperations === 'function') {
+            console.log('[MasterInit] Rehydrating pending operations...');
+            try {
+                await window.optimisticUI.rehydratePendingOperations();
+                console.log('[MasterInit] ✅ Pending operations rehydrated successfully');
+            } catch (error) {
+                console.error('[MasterInit] ❌ Failed to rehydrate pending operations:', error);
+            }
+        }
+        
         // 2. Initialize TaskModalManager (requires SmartSelectors from task-smart-selectors.js)
         if (typeof TaskModalManager !== 'undefined') {
             console.log('[MasterInit] Initializing TaskModalManager...');
