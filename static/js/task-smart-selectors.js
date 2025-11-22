@@ -40,7 +40,14 @@ class DatePicker {
         console.log('[DatePicker] Creating shortcut buttons...');
         const container = document.createElement('div');
         container.className = 'date-picker-shortcuts';
-        container.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;';
+        container.style.cssText = `
+            display: flex !important;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+            padding: 4px 0;
+            visibility: visible !important;
+        `;
         
         const shortcuts = [
             { label: 'Today', getValue: () => this.formatDate(new Date()) },
@@ -62,7 +69,7 @@ class DatePicker {
             btn.type = 'button';
             btn.textContent = shortcut.label;
             btn.className = 'date-shortcut-btn';
-            btn.style.cssText = 'padding: 4px 12px; border: 1px solid var(--color-border, #e0e0e0); border-radius: 4px; background: white; cursor: pointer; font-size: 12px;';
+            btn.style.cssText = 'display: inline-block !important; padding: 8px 16px; border: 1px solid #cbd5e0; border-radius: 6px; background: #ffffff; cursor: pointer; font-size: 14px; font-weight: 500; color: #2d3748; transition: all 0.2s ease; visibility: visible !important;';
             
             btn.addEventListener('click', () => {
                 this.setValue(shortcut.getValue());
