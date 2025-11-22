@@ -1,18 +1,20 @@
 """
 Enterprise-Grade OpenAI Client Manager
-Centralized, robust initialization and management of OpenAI clients
+Centralized, robust initialization and management of OpenAI clients with circuit breaker protection
 """
 
 import os
 import logging
 from typing import Optional
 from openai import OpenAI
-from openai._exceptions import OpenAIError
+from openai._exceptions import OpenAIError, RateLimitError, APIConnectionError, APITimeoutError
+from services.circuit_breaker import get_openai_circuit_breaker, CircuitBreakerOpenError
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
 
 class OpenAIClientManager:
-    """Centralized OpenAI client management with robust error handling"""
+    """Centralized OpenAI client management with robust error handling and circuit breaker protection"""
     
     _instance: Optional['OpenAIClientManager'] = None
     _client: Optional[OpenAI] = None
@@ -27,7 +29,9 @@ class OpenAIClientManager:
             self._initialized = True
             self._api_key = None
             self._initialization_error = None
-            logger.info("OpenAI Client Manager initialized")
+            from services.circuit_breaker import get_openai_circuit_breaker
+            self._circuit_breaker = get_openai_circuit_breaker()
+            logger.info("✅ OpenAI Client Manager initialized with circuit breaker protection")
     
     def get_client(self, force_reinit: bool = False) -> Optional[OpenAI]:
         """
@@ -127,7 +131,7 @@ class OpenAIClientManager:
     
     async def transcribe_audio_async(self, audio_file, model: str = "whisper-1", **kwargs) -> Optional[str]:
         """
-        Async transcribe audio with robust error handling
+        Async transcribe audio with robust error handling, circuit breaker protection, and automatic retries.
         
         Args:
             audio_file: Audio file object or path
@@ -139,7 +143,7 @@ class OpenAIClientManager:
         """
         client = self.get_client()
         if not client:
-            logger.error("OpenAI client not available for transcription")
+            logger.error("❌ OpenAI client not available for transcription")
             return None
         
         try:
@@ -157,19 +161,64 @@ class OpenAIClientManager:
             if "temperature" in kwargs:
                 clean_kwargs["temperature"] = kwargs["temperature"]
             
-            response = client.audio.transcriptions.create(**clean_kwargs)
-            return getattr(response, "text", "") or ""
+            # Execute with circuit breaker protection if available, otherwise direct call
+            if self._circuit_breaker:
+                def _transcribe():
+                    return self._transcribe_with_retry(client, clean_kwargs)
+                result = self._circuit_breaker.call(_transcribe)
+            else:
+                # Fallback when circuit breaker unavailable
+                result = self._transcribe_with_retry(client, clean_kwargs)
             
+            logger.info(f"✅ Async transcription successful ({len(result or '')} chars)")
+            return result
+            
+        except CircuitBreakerOpenError:
+            logger.error("🔴 Circuit breaker OPEN - OpenAI service unavailable")
+            return None
+        except RateLimitError as e:
+            logger.error(f"❌ OpenAI rate limit exceeded after retries: {e}")
+            return None
+        except (APIConnectionError, APITimeoutError) as e:
+            logger.error(f"❌ OpenAI connection failed after retries: {e}")
+            return None
         except OpenAIError as e:
-            logger.error(f"OpenAI transcription error: {e}")
+            logger.error(f"❌ OpenAI transcription error: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected transcription error: {e}")
+            logger.error(f"❌ Unexpected transcription error: {e}", exc_info=True)
             return None
+
+    @retry(
+        retry=retry_if_exception_type((RateLimitError, APIConnectionError, APITimeoutError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True
+    )
+    def _transcribe_with_retry(self, client: OpenAI, clean_kwargs: dict) -> Optional[str]:
+        """
+        Internal method to transcribe with automatic retry for transient errors.
+        
+        Args:
+            client: OpenAI client instance
+            clean_kwargs: Cleaned transcription parameters
+            
+        Returns:
+            Transcribed text or None if failed
+        """
+        try:
+            response = client.audio.transcriptions.create(**clean_kwargs)
+            return getattr(response, "text", "") or ""
+        except RateLimitError:
+            logger.warning("⚠️ OpenAI rate limit hit, retrying with exponential backoff")
+            raise
+        except (APIConnectionError, APITimeoutError) as e:
+            logger.warning(f"⚠️ OpenAI connection issue ({type(e).__name__}), retrying")
+            raise
 
     def transcribe_audio(self, audio_file, model: str = "whisper-1", **kwargs) -> Optional[str]:
         """
-        Transcribe audio with robust error handling
+        Transcribe audio with robust error handling, circuit breaker protection, and automatic retries.
         
         Args:
             audio_file: Audio file object or path
@@ -181,7 +230,7 @@ class OpenAIClientManager:
         """
         client = self.get_client()
         if not client:
-            logger.error("OpenAI client not available for transcription")
+            logger.error("❌ OpenAI client not available for transcription")
             return None
         
         try:
@@ -199,14 +248,32 @@ class OpenAIClientManager:
             if "temperature" in kwargs:
                 clean_kwargs["temperature"] = kwargs["temperature"]
             
-            response = client.audio.transcriptions.create(**clean_kwargs)
-            return getattr(response, "text", "") or ""
+            # Execute with circuit breaker protection if available, otherwise direct call
+            if self._circuit_breaker:
+                def _transcribe():
+                    return self._transcribe_with_retry(client, clean_kwargs)
+                result = self._circuit_breaker.call(_transcribe)
+            else:
+                # Fallback when circuit breaker unavailable
+                result = self._transcribe_with_retry(client, clean_kwargs)
             
+            logger.info(f"✅ Transcription successful ({len(result or '')} chars)")
+            return result
+            
+        except CircuitBreakerOpenError:
+            logger.error("🔴 Circuit breaker OPEN - OpenAI service unavailable")
+            return None
+        except RateLimitError as e:
+            logger.error(f"❌ OpenAI rate limit exceeded after retries: {e}")
+            return None
+        except (APIConnectionError, APITimeoutError) as e:
+            logger.error(f"❌ OpenAI connection failed after retries: {e}")
+            return None
         except OpenAIError as e:
-            logger.error(f"OpenAI transcription error: {e}")
+            logger.error(f"❌ OpenAI transcription error: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected transcription error: {e}")
+            logger.error(f"❌ Unexpected transcription error: {e}", exc_info=True)
             return None
 
 # Global singleton instance
