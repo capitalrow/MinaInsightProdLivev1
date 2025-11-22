@@ -479,6 +479,19 @@ class TaskCache {
             request.onsuccess = () => {
                 const tempTasks = request.result || [];
                 
+                console.log(`📦 [DEBUG] getTempTasks() retrieved ${tempTasks.length} temp tasks from IndexedDB`);
+                
+                // Log each temp task to verify contents
+                tempTasks.forEach((task, index) => {
+                    console.log(`📦 [DEBUG] Temp task ${index}:`, {
+                        id: task.id,
+                        title: task.title,
+                        status: task.status,
+                        keys: Object.keys(task),
+                        fullObject: JSON.stringify(task, null, 2)
+                    });
+                });
+                
                 // Mark temp tasks with syncing flag
                 tempTasks.forEach(task => {
                     task._is_syncing = true;
@@ -486,9 +499,13 @@ class TaskCache {
                     task._temp = true;
                 });
                 
+                console.log(`📦 [DEBUG] Returning ${tempTasks.length} temp tasks with syncing flags`);
                 resolve(tempTasks);
             };
-            request.onerror = () => reject(request.error);
+            request.onerror = () => {
+                console.error(`❌ [DEBUG] Failed to retrieve temp tasks:`, request.error);
+                reject(request.error);
+            };
         });
     }
 
@@ -660,13 +677,19 @@ class TaskCache {
         // CRITICAL FIX: Handle temporary IDs from optimistic UI
         // Store temp tasks in dedicated IndexedDB store (survives page refresh)
         if (typeof task.id === 'string' && task.id.startsWith('temp_')) {
-            console.log(`💾 Storing temp task in temp_tasks store: ${task.id} (will persist to IndexedDB when server responds)`);
+            console.log(`💾 [DEBUG] saveTask() called with temp ID: ${task.id}`);
+            console.log(`💾 [DEBUG] Full task object being saved:`, JSON.stringify(task, null, 2));
+            console.log(`💾 [DEBUG] Task object keys:`, Object.keys(task));
+            console.log(`💾 [DEBUG] Task title: "${task.title}", status: "${task.status}"`);
             
             // Ensure timestamps
             const now = new Date().toISOString();
             if (!task.created_at) task.created_at = now;
             task.updated_at = now;
             task._temp = true; // Mark as temporary
+            
+            console.log(`💾 [DEBUG] After adding timestamps - keys:`, Object.keys(task));
+            console.log(`💾 [DEBUG] Final object to IndexedDB:`, JSON.stringify(task, null, 2));
             
             // Store in temp_tasks object store (string IDs allowed)
             return new Promise((resolve, reject) => {
@@ -675,11 +698,12 @@ class TaskCache {
                 const request = store.put(task);
                 
                 request.onsuccess = () => {
-                    console.log(`✅ Temp task persisted to temp_tasks store: ${task.id}`);
+                    console.log(`✅ [DEBUG] Temp task SUCCESSFULLY persisted to temp_tasks store: ${task.id}`);
+                    console.log(`✅ [DEBUG] Saved object had ${Object.keys(task).length} keys`);
                     resolve();
                 };
                 request.onerror = () => {
-                    console.error(`❌ Failed to store temp task: ${task.id}`, request.error);
+                    console.error(`❌ [DEBUG] FAILED to store temp task: ${task.id}`, request.error);
                     reject(request.error);
                 };
             });
