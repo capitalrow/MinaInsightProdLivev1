@@ -27,6 +27,10 @@ from services.copilot_lifecycle_service import (
 )
 from services.copilot_memory_service import copilot_memory_service
 from services.copilot_intent_classifier import copilot_intent_classifier
+from services.copilot_chip_generator import copilot_chip_generator
+from services.copilot_security import copilot_security, AuditAction
+from services.copilot_error_handler import copilot_error_handler, CopilotError, ErrorCategory
+from services.copilot_metrics_collector import copilot_metrics_collector
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +79,10 @@ def register_copilot_namespace(socketio):
             if current_user.is_authenticated:
                 session_id = f"copilot_{current_user.id}_{client_id}"
                 copilot_lifecycle_service.destroy_session(session_id)
+                
+                # Mark session inactive in metrics collector
+                copilot_metrics_collector.track_session(session_id, active=False)
+                
                 logger.debug(f"Destroyed lifecycle session: {session_id}")
             
             # Leave workspace room on disconnect
@@ -103,6 +111,12 @@ def register_copilot_namespace(socketio):
         try:
             if not current_user.is_authenticated:
                 emit('error', {'message': 'Authentication required'})
+                copilot_security.audit_log_event(
+                    action=AuditAction.AUTH,
+                    user_id=None,
+                    details={'event': 'copilot_bootstrap', 'result': 'unauthorized'},
+                    success=False
+                )
                 return
             
             workspace_id = data.get('workspace_id') or current_user.workspace_id
@@ -110,6 +124,17 @@ def register_copilot_namespace(socketio):
             session_id = data.get('session_id') or f"copilot_{current_user.id}_{get_socket_sid()}"
             
             logger.info(f"Copilot bootstrap: user={current_user.id}, workspace={workspace_id}, session={session_id}")
+            
+            # Track session in metrics
+            copilot_metrics_collector.track_session(session_id, active=True)
+            
+            # Audit successful bootstrap
+            copilot_security.audit_log_event(
+                action=AuditAction.AUTH,
+                user_id=current_user.id,
+                details={'event': 'copilot_bootstrap', 'session_id': session_id, 'workspace_id': workspace_id},
+                success=True
+            )
             
             # Create lifecycle session (Event #1)
             lifecycle_state = copilot_lifecycle_service.create_session(
@@ -142,6 +167,25 @@ def register_copilot_namespace(socketio):
                 event=LifecycleEvent.CONTEXT_REHYDRATE,
                 data={'active_sessions': True}
             )
+            
+            # Event #3: Generate smart chips
+            chips = copilot_chip_generator.generate_chips(
+                user_id=current_user.id,
+                workspace_id=workspace_id,
+                context={'page': 'dashboard'}
+            )
+            
+            copilot_lifecycle_service.emit_event(
+                session_id=session_id,
+                event=LifecycleEvent.CHIPS_GENERATE,
+                data={'chips': [chip.to_dict() for chip in chips]}
+            )
+            
+            # Broadcast chips to client
+            emit('copilot_chips_generated', {
+                'chips': [chip.to_dict() for chip in chips],
+                'session_id': session_id
+            })
             
             # Emit bootstrap complete with context
             emit('copilot_bootstrap_complete', {
@@ -200,6 +244,17 @@ def register_copilot_namespace(socketio):
             
             logger.info(f"Copilot query: user={current_user.id}, message='{user_message[:50]}...', session={session_id}")
             
+            # Sanitize user input for security
+            user_message = copilot_security.sanitize_input(user_message)
+            
+            # Audit query
+            copilot_security.audit_log_event(
+                action=AuditAction.QUERY,
+                user_id=current_user.id,
+                details={'session_id': session_id, 'message_preview': user_message[:100]},
+                success=True
+            )
+            
             # Classify intent (Task 5: Intent Classification)
             classification = copilot_intent_classifier.classify(user_message)
             logger.debug(f"Intent classified: {classification.intent.value}, confidence={classification.confidence:.2f}")
@@ -225,7 +280,11 @@ def register_copilot_namespace(socketio):
             copilot_lifecycle_service.emit_event(
                 session_id=session_id,
                 event=LifecycleEvent.CONTEXT_MERGE,
-                data={'context_keys': list(context.keys())}
+                data={
+                    'context_keys': list(context.keys()),
+                    'intent': classification.intent.value,
+                    'has_entities': len(classification.entities) > 0
+                }
             )
             
             # Event #7: reasoning_stream - Stream response using background task (eventlet-safe)
@@ -292,6 +351,20 @@ def register_copilot_namespace(socketio):
             
         except Exception as e:
             logger.error(f"Copilot query error: {e}", exc_info=True)
+            
+            # Handle error with graceful degradation
+            error_response = copilot_error_handler.handle_error(
+                error=e,
+                context={'session_id': session_id, 'user_message': user_message[:100] if 'user_message' in locals() else ''},
+                user_id=current_user.id
+            )
+            
+            # Record error in metrics
+            copilot_metrics_collector.record_error(
+                error_type=type(e).__name__,
+                severity='high'
+            )
+            
             emit('copilot_stream', {
                 'type': 'error',
                 'content': 'Failed to process query',
