@@ -1,11 +1,15 @@
 """
 Enterprise-Grade OpenAI Client Manager
 Centralized, robust initialization and management of OpenAI clients with circuit breaker protection
+Includes ThreadPoolExecutor for true async transcription support
 """
 
 import os
 import logging
+import asyncio
+import threading
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 from openai import OpenAI
 from openai._exceptions import OpenAIError, RateLimitError, APIConnectionError, APITimeoutError
 from services.circuit_breaker import get_openai_circuit_breaker, CircuitBreakerOpenError
@@ -31,7 +35,27 @@ class OpenAIClientManager:
             self._initialization_error = None
             from services.circuit_breaker import get_openai_circuit_breaker
             self._circuit_breaker = get_openai_circuit_breaker()
-            logger.info("✅ OpenAI Client Manager initialized with circuit breaker protection")
+            
+            # Initialize ThreadPoolExecutor for true async transcription
+            try:
+                max_workers = int(os.environ.get("OPENAI_EXECUTOR_MAX_WORKERS", "15"))
+                # Validate range: 1-50 workers
+                max_workers = max(1, min(50, max_workers))
+            except (ValueError, TypeError):
+                logger.warning("Invalid OPENAI_EXECUTOR_MAX_WORKERS, using default: 15")
+                max_workers = 15
+            
+            self._executor = ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="OpenAI-Worker"
+            )
+            self._executor_lock = threading.Lock()
+            self._active_tasks = 0
+            self._total_tasks_submitted = 0
+            self._total_tasks_completed = 0
+            self._total_tasks_failed = 0
+            
+            logger.info(f"✅ OpenAI Client Manager initialized with circuit breaker protection and {max_workers} worker threads")
     
     def get_client(self, force_reinit: bool = False) -> Optional[OpenAI]:
         """
@@ -131,7 +155,8 @@ class OpenAIClientManager:
     
     async def transcribe_audio_async(self, audio_file, model: str = "whisper-1", **kwargs) -> Optional[str]:
         """
-        Async transcribe audio with robust error handling, circuit breaker protection, and automatic retries.
+        TRUE async transcription using ThreadPoolExecutor to offload blocking OpenAI SDK calls.
+        Now supports concurrent transcription without blocking the event loop!
         
         Args:
             audio_file: Audio file object or path
@@ -145,6 +170,11 @@ class OpenAIClientManager:
         if not client:
             logger.error("❌ OpenAI client not available for transcription")
             return None
+        
+        # Track executor stats
+        with self._executor_lock:
+            self._active_tasks += 1
+            self._total_tasks_submitted += 1
         
         try:
             # Clean kwargs to avoid unsupported parameters
@@ -161,32 +191,58 @@ class OpenAIClientManager:
             if "temperature" in kwargs:
                 clean_kwargs["temperature"] = kwargs["temperature"]
             
-            # Execute with circuit breaker protection if available, otherwise direct call
-            if self._circuit_breaker:
-                def _transcribe():
+            # Define blocking transcription callable
+            def _blocking_transcribe():
+                """Blocking transcription call to run in executor thread."""
+                if self._circuit_breaker:
+                    def _transcribe():
+                        return self._transcribe_with_retry(client, clean_kwargs)
+                    return self._circuit_breaker.call(_transcribe)
+                else:
+                    # Fallback when circuit breaker unavailable
                     return self._transcribe_with_retry(client, clean_kwargs)
-                result = self._circuit_breaker.call(_transcribe)
-            else:
-                # Fallback when circuit breaker unavailable
-                result = self._transcribe_with_retry(client, clean_kwargs)
             
-            logger.info(f"✅ Async transcription successful ({len(result or '')} chars)")
+            # Offload blocking call to thread pool executor
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(self._executor, _blocking_transcribe)
+            
+            # Update stats on success
+            with self._executor_lock:
+                self._active_tasks -= 1
+                self._total_tasks_completed += 1
+            
+            logger.info(f"✅ TRUE async transcription successful ({len(result or '')} chars)")
             return result
             
         except CircuitBreakerOpenError:
             logger.error("🔴 Circuit breaker OPEN - OpenAI service unavailable")
+            with self._executor_lock:
+                self._active_tasks -= 1
+                self._total_tasks_failed += 1
             return None
         except RateLimitError as e:
             logger.error(f"❌ OpenAI rate limit exceeded after retries: {e}")
+            with self._executor_lock:
+                self._active_tasks -= 1
+                self._total_tasks_failed += 1
             return None
         except (APIConnectionError, APITimeoutError) as e:
             logger.error(f"❌ OpenAI connection failed after retries: {e}")
+            with self._executor_lock:
+                self._active_tasks -= 1
+                self._total_tasks_failed += 1
             return None
         except OpenAIError as e:
             logger.error(f"❌ OpenAI transcription error: {e}")
+            with self._executor_lock:
+                self._active_tasks -= 1
+                self._total_tasks_failed += 1
             return None
         except Exception as e:
             logger.error(f"❌ Unexpected transcription error: {e}", exc_info=True)
+            with self._executor_lock:
+                self._active_tasks -= 1
+                self._total_tasks_failed += 1
             return None
 
     @retry(
@@ -275,6 +331,40 @@ class OpenAIClientManager:
         except Exception as e:
             logger.error(f"❌ Unexpected transcription error: {e}", exc_info=True)
             return None
+    
+    def shutdown(self, wait: bool = True, timeout: float = 30.0) -> None:
+        """
+        Gracefully shutdown the thread pool executor.
+        
+        Args:
+            wait: Whether to wait for pending tasks to complete
+            timeout: Maximum time to wait for shutdown (seconds)
+        """
+        if hasattr(self, '_executor'):
+            logger.info(f"🔄 Shutting down OpenAI executor (wait={wait}, timeout={timeout}s)")
+            self._executor.shutdown(wait=wait, cancel_futures=not wait)
+            logger.info("✅ OpenAI executor shutdown complete")
+    
+    def get_executor_stats(self) -> dict:
+        """
+        Get executor health and performance statistics.
+        
+        Returns:
+            Dictionary with executor metrics
+        """
+        with self._executor_lock:
+            return {
+                'active_tasks': self._active_tasks,
+                'total_submitted': self._total_tasks_submitted,
+                'total_completed': self._total_tasks_completed,
+                'total_failed': self._total_tasks_failed,
+                'success_rate': (
+                    self._total_tasks_completed / self._total_tasks_submitted 
+                    if self._total_tasks_submitted > 0 
+                    else 1.0
+                ),
+                'max_workers': self._executor._max_workers if hasattr(self, '_executor') else 0,
+            }
 
 # Global singleton instance
 openai_manager = OpenAIClientManager()
