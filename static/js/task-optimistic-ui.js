@@ -1147,9 +1147,8 @@ class OptimisticUI {
                 card.classList.remove('optimistic-create');
             }
 
-            // Update cache
-            await this.cache.deleteTask(tempId);
-            await this.cache.saveTask(realTask);
+            // Reconcile temp task with real ID: remove from tempTasks Map, persist to IndexedDB
+            await this.cache.reconcileTempTask(realTask.id, tempId);
 
         } else if (type === 'update') {
             // Update with server truth
