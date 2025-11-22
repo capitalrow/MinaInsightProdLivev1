@@ -272,15 +272,19 @@ class TaskCache {
                     if (op.data && op.data.temp_id) queuedTempIds.add(op.data.temp_id);
                 });
                 
-                // Find orphaned temp tasks (NOT in queue, older than 10 minutes)
+                console.log(`🧹 [Cleanup] Found ${queuedTempIds.size} temp IDs in offline queue`);
+                
+                // Find orphaned temp tasks (older than 10 minutes AND not in queue)
                 const now = Date.now();
                 const SAFE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
                 const orphanedTempIds = [];
                 
                 allTempTasks.forEach(task => {
+                    console.log(`🧹 [Cleanup] Evaluating temp task: ${task.id} (created: ${task.created_at})`);
+                    
                     // Skip if in offline queue (legitimate pending task)
                     if (queuedTempIds.has(task.id)) {
-                        console.log(`✅ Preserving queued temp task: ${task.id}`);
+                        console.log(`✅ [Cleanup] Preserving queued temp task: ${task.id}`);
                         return;
                     }
                     
@@ -458,6 +462,34 @@ class TaskCache {
         }
         
         return allTasks;
+    }
+
+    /**
+     * Get ONLY temp tasks from temp_tasks store (for reconciliation merge)
+     * @returns {Promise<Array>}
+     */
+    async getTempTasks() {
+        await this.init();
+        
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['temp_tasks'], 'readonly');
+            const store = transaction.objectStore('temp_tasks');
+            const request = store.getAll();
+            
+            request.onsuccess = () => {
+                const tempTasks = request.result || [];
+                
+                // Mark temp tasks with syncing flag
+                tempTasks.forEach(task => {
+                    task._is_syncing = true;
+                    task._sync_status = 'pending';
+                    task._temp = true;
+                });
+                
+                resolve(tempTasks);
+            };
+            request.onerror = () => reject(request.error);
+        });
     }
 
     /**
