@@ -41,10 +41,66 @@
     let longPressTimer = null;
     let currentSwipeCard = null;
     
+    // Lifecycle tracking (for PJAX teardown/reinit)
+    let isInitialized = false;
+    let eventListeners = [];
+    
+    /**
+     * Add tracked event listener (for PJAX lifecycle management)
+     */
+    function addTrackedListener(element, event, handler, options) {
+        element.addEventListener(event, handler, options);
+        eventListeners.push({ element, event, handler, options });
+    }
+    
+    /**
+     * Destroy mobile gestures (cleanup for PJAX navigation)
+     */
+    function destroy() {
+        if (!isInitialized) {
+            return; // Not initialized, nothing to destroy
+        }
+        
+        console.log('📱 Destroying mobile gestures...');
+        
+        // Remove all tracked event listeners
+        eventListeners.forEach(({ element, event, handler, options }) => {
+            element.removeEventListener(event, handler, options);
+        });
+        eventListeners = [];
+        
+        // Remove pull indicator
+        if (pullIndicator && pullIndicator.parentNode) {
+            pullIndicator.parentNode.removeChild(pullIndicator);
+            pullIndicator = null;
+        }
+        
+        // Clear any active timers
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+        
+        // Reset state
+        pullRefreshActive = false;
+        selectionMode = false;
+        selectedCards.clear();
+        currentSwipeCard = null;
+        isInitialized = false;
+        
+        console.log('📱 Mobile gestures destroyed');
+    }
+    
     /**
      * Initialize mobile gestures
      */
     function init() {
+        // Prevent double initialization
+        if (isInitialized) {
+            console.log('📱 Mobile gestures already initialized, skipping');
+            return;
+        }
+        
         // Only initialize on dashboard, meetings, or tasks page
         const isValidPage = document.querySelector('.dashboard-container, .meetings-container, .tasks-container');
         if (!isValidPage) {
@@ -60,6 +116,8 @@
         setupPullToRefresh();
         setupSwipeToArchive();
         setupLongPress();
+        
+        isInitialized = true;
     }
     
     /**
@@ -708,6 +766,7 @@
     // Export public API
     window.mobileGestures = {
         init,
+        destroy,
         cancelSelection,
         archiveSelected
     };
@@ -718,5 +777,26 @@
     } else {
         init();
     }
+    
+    // PJAX lifecycle hooks: reinitialize after navigation
+    // Listen for PJAX navigation events from smooth-navigation.js
+    window.addEventListener('pjax:beforeTransition', () => {
+        console.log('📱 PJAX navigation detected, destroying gestures...');
+        destroy();
+    });
+    
+    window.addEventListener('pjax:complete', () => {
+        console.log('📱 PJAX navigation complete, reinitializing gestures...');
+        // Wait a tick for DOM to settle
+        setTimeout(init, 100);
+    });
+    
+    // Also listen for custom navigation events from smooth-navigation
+    window.addEventListener('navigation:complete', () => {
+        console.log('📱 Navigation complete, checking gesture initialization...');
+        if (!isInitialized) {
+            init();
+        }
+    });
     
 })();

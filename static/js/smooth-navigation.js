@@ -121,6 +121,11 @@
             
             this.isNavigating = true;
             console.log(`🎬 Navigating to: ${url}`);
+            
+            // Emit PJAX beforeTransition event for lifecycle hooks (e.g., mobile gestures)
+            window.dispatchEvent(new CustomEvent('pjax:beforeTransition', {
+                detail: { url, sourceElement }
+            }));
 
             // Create transition overlay
             const overlay = this.createTransitionOverlay();
@@ -224,7 +229,12 @@
                 y: 0,
                 duration: 0.6,
                 ease: 'power3.out',
-                stagger: 0.05
+                stagger: 0.05,
+                onComplete: () => {
+                    // Emit navigation complete event for lifecycle hooks (e.g., mobile gestures reinit)
+                    window.dispatchEvent(new CustomEvent('navigation:complete'));
+                    window.dispatchEvent(new CustomEvent('pjax:complete'));
+                }
             });
         }
     }
