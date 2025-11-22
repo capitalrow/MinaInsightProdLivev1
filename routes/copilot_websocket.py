@@ -26,6 +26,7 @@ from services.copilot_lifecycle_service import (
     LifecycleEvent
 )
 from services.copilot_memory_service import copilot_memory_service
+from services.copilot_intent_classifier import copilot_intent_classifier
 
 logger = logging.getLogger(__name__)
 
@@ -199,15 +200,28 @@ def register_copilot_namespace(socketio):
             
             logger.info(f"Copilot query: user={current_user.id}, message='{user_message[:50]}...', session={session_id}")
             
+            # Classify intent (Task 5: Intent Classification)
+            classification = copilot_intent_classifier.classify(user_message)
+            logger.debug(f"Intent classified: {classification.intent.value}, confidence={classification.confidence:.2f}")
+            
             # Event #5: query_detect
             copilot_lifecycle_service.emit_event(
                 session_id=session_id,
                 event=LifecycleEvent.QUERY_DETECT,
-                data={'message': user_message}
+                data={
+                    'message': user_message,
+                    'intent': classification.intent.value,
+                    'confidence': classification.confidence,
+                    'entities': [e.to_dict() for e in classification.entities]
+                }
             )
             
             # Event #6: context_merge - Build context from workspace data
             context = _build_query_context(current_user.id, workspace_id, context_data)
+            
+            # Add intent classification to context for response generation
+            context['intent'] = classification.to_dict()
+            
             copilot_lifecycle_service.emit_event(
                 session_id=session_id,
                 event=LifecycleEvent.CONTEXT_MERGE,

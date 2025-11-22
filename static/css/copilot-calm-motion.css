@@ -1,0 +1,230 @@
+/**
+ * CROWN⁹ Calm Motion Framework
+ * 
+ * Cubic-bezier easing functions and transition standards for emotional coherence
+ * All animations: 200-400ms with calm score ≥0.95
+ */
+
+:root {
+  /* Calm Motion Easing (CROWN⁹ Standard) */
+  --ease-calm: cubic-bezier(0.4, 0.0, 0.2, 1);
+  --ease-calm-in: cubic-bezier(0.4, 0.0, 1, 1);
+  --ease-calm-out: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-calm-in-out: cubic-bezier(0.4, 0.0, 0.2, 1);
+  
+  /* Duration Standards (200-400ms) */
+  --duration-micro: 200ms;
+  --duration-small: 250ms;
+  --duration-medium: 300ms;
+  --duration-large: 350ms;
+  --duration-xlarge: 400ms;
+  
+  /* Calm Motion Delays */
+  --delay-none: 0ms;
+  --delay-tiny: 50ms;
+  --delay-small: 100ms;
+  --delay-medium: 150ms;
+  
+  /* Opacity Transitions */
+  --opacity-hidden: 0;
+  --opacity-dimmed: 0.6;
+  --opacity-visible: 1;
+}
+
+/* === Core Calm Motion Classes === */
+
+.calm-fade-in {
+  animation: calmFadeIn var(--duration-medium) var(--ease-calm-out) forwards;
+}
+
+.calm-fade-out {
+  animation: calmFadeOut var(--duration-medium) var(--ease-calm-in) forwards;
+}
+
+.calm-slide-up {
+  animation: calmSlideUp var(--duration-medium) var(--ease-calm-out) forwards;
+}
+
+.calm-slide-down {
+  animation: calmSlideDown var(--duration-medium) var(--ease-calm-out) forwards;
+}
+
+.calm-scale-in {
+  animation: calmScaleIn var(--duration-small) var(--ease-calm-out) forwards;
+}
+
+.calm-pulse {
+  animation: calmPulse var(--duration-large) var(--ease-calm-in-out) infinite;
+}
+
+/* === Keyframe Animations === */
+
+@keyframes calmFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes calmFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes calmSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes calmSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes calmScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes calmPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* === Transition Utilities === */
+
+.transition-calm {
+  transition: all var(--duration-medium) var(--ease-calm);
+}
+
+.transition-calm-opacity {
+  transition: opacity var(--duration-medium) var(--ease-calm);
+}
+
+.transition-calm-transform {
+  transition: transform var(--duration-medium) var(--ease-calm);
+}
+
+.transition-calm-colors {
+  transition: background-color var(--duration-medium) var(--ease-calm),
+              color var(--duration-medium) var(--ease-calm),
+              border-color var(--duration-medium) var(--ease-calm);
+}
+
+/* === Copilot-Specific Calm Animations === */
+
+.copilot-message-enter {
+  animation: calmSlideUp var(--duration-medium) var(--ease-calm-out) forwards;
+}
+
+.copilot-token-stream {
+  animation: calmFadeIn var(--duration-micro) var(--ease-calm-out) forwards;
+}
+
+.copilot-chip-appear {
+  animation: calmScaleIn var(--duration-small) var(--ease-calm-out) forwards;
+}
+
+.copilot-thinking {
+  animation: calmPulse var(--duration-xlarge) var(--ease-calm-in-out) infinite;
+}
+
+.copilot-section-divider {
+  animation: calmFadeIn var(--duration-large) var(--ease-calm-out) forwards;
+}
+
+/* === Stagger Animations === */
+
+.calm-stagger-children > * {
+  opacity: 0;
+  animation: calmFadeIn var(--duration-medium) var(--ease-calm-out) forwards;
+}
+
+.calm-stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.calm-stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.calm-stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.calm-stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.calm-stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.calm-stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+
+/* === Hover States with Calm Motion === */
+
+.calm-hover-lift {
+  transition: transform var(--duration-small) var(--ease-calm),
+              box-shadow var(--duration-small) var(--ease-calm);
+}
+
+.calm-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.calm-hover-scale {
+  transition: transform var(--duration-small) var(--ease-calm);
+}
+
+.calm-hover-scale:hover {
+  transform: scale(1.02);
+}
+
+/* === Loading States === */
+
+.calm-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.06) 25%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.06) 75%
+  );
+  background-size: 200% 100%;
+  animation: calmShimmer 2s var(--ease-calm-in-out) infinite;
+}
+
+@keyframes calmShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* === Accessibility: Respect prefers-reduced-motion === */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
