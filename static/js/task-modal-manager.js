@@ -422,14 +422,5 @@ class TaskModalManager {
     }
 }
 
-// Initialize immediately or on DOMContentLoaded
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        console.log('[TaskModalManager] DOM ready, initializing...');
-        new TaskModalManager();
-    });
-} else {
-    // DOM already loaded (script loaded late)
-    console.log('[TaskModalManager] DOM already ready, initializing immediately...');
-    new TaskModalManager();
-}
+// Note: TaskModalManager is now manually instantiated in task-page-master-init.js
+// This ensures proper initialization order after SmartSelectors are loaded
