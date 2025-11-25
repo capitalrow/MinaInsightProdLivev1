@@ -390,6 +390,8 @@ def get_meeting_heatmap():
         # Query meetings with task counts
         from sqlalchemy import case
         
+        logger.debug(f"[MeetingHeatmap] User workspace_id: {current_user.workspace_id} (type: {type(current_user.workspace_id).__name__})")
+        
         # Subquery to count tasks per meeting
         task_counts = db.session.query(
             Task.meeting_id,
@@ -417,6 +419,8 @@ def get_meeting_heatmap():
             func.coalesce(task_counts.c.total_tasks, 0).desc(),
             Meeting.created_at.desc()
         ).limit(20).all()  # Limit to top 20 meetings
+        
+        logger.debug(f"[MeetingHeatmap] Found {len(meetings)} meetings with task data")
         
         # Build response
         heatmap_data = []
