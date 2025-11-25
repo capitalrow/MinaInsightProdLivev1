@@ -4,20 +4,42 @@
 {% block title %}Tasks - Mina{% endblock %}
 
 {% block extra_css %}
+<style>
+/* CROWN⁴.6: Critical CSS for <200ms First Paint */
+.tasks-container{max-width:1200px;margin:0 auto;padding:1.5rem}
+.tasks-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
+.tasks-title{font-size:1.75rem;font-weight:700;color:var(--text-primary,#1a1a2e)}
+.task-filters{display:flex;gap:0.5rem;margin-bottom:1rem}
+.filter-tab{padding:0.5rem 1rem;border-radius:8px;border:none;background:var(--bg-secondary,#f5f5f7);cursor:pointer;transition:all 0.15s}
+.filter-tab.active{background:var(--primary,#6366f1);color:white}
+.tasks-list-container{min-height:200px}
+.task-card{display:flex;align-items:flex-start;padding:1rem;background:var(--card-bg,#fff);border-radius:12px;margin-bottom:0.75rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);transition:transform 0.15s,box-shadow 0.15s}
+.task-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.task-checkbox{width:20px;height:20px;border-radius:50%;border:2px solid var(--border,#e0e0e0);margin-right:1rem;cursor:pointer;flex-shrink:0}
+.task-title{font-weight:500;color:var(--text-primary,#1a1a2e);margin-bottom:0.25rem}
+.task-meta{font-size:0.875rem;color:var(--text-secondary,#6b7280)}
+.skeleton-pulse{animation:skeleton-pulse 1.5s ease-in-out infinite}
+@keyframes skeleton-pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.task-skeleton{display:flex;align-items:center;padding:1rem;background:#fff;border-radius:12px;margin-bottom:0.75rem}
+.skeleton-checkbox{width:20px;height:20px;border-radius:50%;background:#e5e7eb;margin-right:1rem}
+.skeleton-content{flex:1}
+.skeleton-title{height:18px;background:#e5e7eb;border-radius:4px;width:70%;margin-bottom:8px}
+.skeleton-meta{height:14px;background:#e5e7eb;border-radius:4px;width:40%}
+</style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=6">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/linear-inspired-animations.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-heatmap.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-context-preview.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-intelligence-mode.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/semantic-search.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/stress-indicators.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/dev-performance-panel.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-completion-ux.css') }}?v=3">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-confirmation-modal.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-date-picker.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-priority-selector.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-action-modals.css') }}?v=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/linear-inspired-animations.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-heatmap.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-context-preview.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-intelligence-mode.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/semantic-search.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/stress-indicators.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dev-performance-panel.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-completion-ux.css') }}?v=3" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-confirmation-modal.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-date-picker.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-priority-selector.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-action-modals.css') }}?v=1" media="print" onload="this.media='all'">
 {% endblock %}
 
 {% block content %}
@@ -656,58 +678,59 @@ window.tasks = {{ tasks_json|tojson|safe if tasks_json else '[]' }};
 console.log('[CROWN⁴.6] Loaded', window.tasks.length, 'tasks for provenance UI');
 </script>
 
-<!-- CROWN⁴.5 Frontend Modules (crown-telemetry and websocket-manager loaded in base.html) -->
-<script src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-animation-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-search-sort.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-detail-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<!-- CROWN⁴.6: TaskGrouping MUST load BEFORE task-bootstrap.js -->
-<script src="{{ url_for('static', filename='js/task-grouping.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<!-- CROWN⁴.6: PerformanceValidator MUST load BEFORE task-bootstrap.js to capture first paint event -->
-<script src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<!-- CROWN⁴.5 Phase 1.7: PrefetchController with Task Adapter -->
-<script src="{{ url_for('static', filename='js/prefetch-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-prefetch-adapter.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-bootstrap.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-merge-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-inline-editing.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-confirmation-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-date-picker.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-priority-selector.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-assignee-selector.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-labels-editor.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-duplicate-confirmation.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-snooze-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-merge-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<!-- NEW: Unified TaskMenuController handles all 13 actions with modern event delegation -->
-<script src="{{ url_for('static', filename='js/task-menu-controller.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-<!-- OLD: task-action-handlers.js disabled - replaced by TaskMenuController -->
-<!-- <script src="{{ url_for('static', filename='js/task-action-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script> -->
-<script src="{{ url_for('static', filename='js/task-actions-menu.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-bulk-operations.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-drag-drop.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-proposal-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-idle-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/predictive-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/cognitive-synchronizer.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-websocket-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-virtual-list.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-clustering.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<!-- task-grouping.js moved above task-bootstrap.js for proper dependency loading -->
-<script src="{{ url_for('static', filename='js/haptic-feedback.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<!-- performance-validator.js moved above task-bootstrap.js to capture first paint event -->
-<script src="{{ url_for('static', filename='js/task-keyboard-shortcuts.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- CROWN⁴.6: Early First Paint marker - records timing before any scripts block -->
+<script nonce="{{ g.csp_nonce }}">
+window.__FIRST_PAINT_START = performance.now();
+requestAnimationFrame(function(){requestAnimationFrame(function(){
+    window.__FIRST_PAINT_TIME = performance.now() - window.__FIRST_PAINT_START;
+    console.log('⚡ First Paint:', Math.round(window.__FIRST_PAINT_TIME) + 'ms');
+})});
+</script>
+
+<!-- CROWN⁴.5 Frontend Modules - ALL deferred for <200ms First Paint -->
+<script defer src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-animation-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-search-sort.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-detail-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-grouping.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/prefetch-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-prefetch-adapter.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-bootstrap.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-merge-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-inline-editing.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-confirmation-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-date-picker.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-priority-selector.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-assignee-selector.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-labels-editor.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-duplicate-confirmation.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-snooze-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-merge-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-menu-controller.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-actions-menu.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-bulk-operations.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-drag-drop.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-proposal-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-idle-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/predictive-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/cognitive-synchronizer.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-websocket-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-virtual-list.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-clustering.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/haptic-feedback.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-keyboard-shortcuts.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.5 Phase 2: Cache-First Architecture -->
-<script src="{{ url_for('static', filename='js/indexeddb-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-store.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/temporal-recovery-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/indexeddb-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-store.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/temporal-recovery-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- Set user context variables (needs template rendering) -->
 <script nonce="{{ g.csp_nonce }}">
@@ -718,38 +741,37 @@ window.CURRENT_SESSION_ID = null;
 console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, workspaceId: window.WORKSPACE_ID });
 </script>
 
-<!-- SmartSelectors - Reusable UI Components (MUST load BEFORE modal manager and master init) -->
-<script src="{{ url_for('static', filename='js/task-smart-selectors.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
+<!-- SmartSelectors - Reusable UI Components -->
+<script defer src="{{ url_for('static', filename='js/task-smart-selectors.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
 
-<!-- TaskModalManager - Unified Create/Edit/View Modal (MUST load BEFORE master init) -->
-<script src="{{ url_for('static', filename='js/task-modal-manager.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
+<!-- TaskModalManager - Unified Create/Edit/View Modal -->
+<script defer src="{{ url_for('static', filename='js/task-modal-manager.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
 
-<!-- Load task page initialization (moved to external file for better CSP compatibility) -->
-<script src="{{ url_for('static', filename='js/task-page-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<!-- Load master initialization to wire up ALL interactive features -->
-<script src="{{ url_for('static', filename='js/task-page-master-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- Task page initialization -->
+<script defer src="{{ url_for('static', filename='js/task-page-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-page-master-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Linear-Inspired Performance & Animations -->
-<script src="{{ url_for('static', filename='js/tasks-linear-inspired.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/emotional-task-ui.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/spoken-provenance-ui.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/tasks-linear-inspired.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/emotional-task-ui.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/spoken-provenance-ui.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Meeting-Native Features -->
-<script src="{{ url_for('static', filename='js/task-transcript-navigation.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-spoken-provenance.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/meeting-heatmap.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/task-context-preview.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/meeting-intelligence-mode.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/semantic-search.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/stress-indicators.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/dev-performance-panel.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-transcript-navigation.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-spoken-provenance.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/meeting-heatmap.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-context-preview.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/meeting-intelligence-mode.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/semantic-search.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/stress-indicators.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/dev-performance-panel.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6 Task 5: Perfect Completion UX -->
-<script src="{{ url_for('static', filename='js/task-completion-ux.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-completion-ux.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Mobile Gestures (swipe-to-complete/snooze, long-press context) -->
-<script src="{{ url_for('static', filename='js/task-mobile-gestures.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-mobile-gestures.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: AI Partner Nudges (gentle PredictiveEngine suggestions) -->
-<script src="{{ url_for('static', filename='js/ai-partner-nudges.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/ai-partner-nudges.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 {% endblock %}
