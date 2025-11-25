@@ -1007,21 +1007,37 @@ class OptimisticUI {
 
     /**
      * Update task counters
+     * CROWN⁴.6: Counters must match HTML data-counter attributes: all, active, archived
      */
     _updateCounters() {
         const cards = document.querySelectorAll('.task-card');
         const counters = {
             all: cards.length,
+            active: 0,
+            archived: 0,
             todo: 0,
             in_progress: 0,
-            completed: 0,
-            overdue: 0
+            pending: 0,
+            completed: 0
         };
 
         cards.forEach(card => {
-            const status = card.dataset.status || 'todo';
+            const status = (card.dataset.status || 'todo').toLowerCase();
+            const archivedAt = card.dataset.archivedAt;
+            
+            // Count by status
             if (counters[status] !== undefined) {
                 counters[status]++;
+            }
+            
+            // CROWN⁴.6: Active = todo, in_progress, pending (not completed/archived)
+            const isArchived = archivedAt || status === 'archived';
+            const isCompleted = status === 'completed';
+            
+            if (isArchived) {
+                counters.archived++;
+            } else if (!isCompleted) {
+                counters.active++;
             }
         });
 
