@@ -62,40 +62,53 @@ class PerformanceValidator {
     }
 
     setupPerformanceObservers() {
-        // CROWN⁴.6: Use early First Paint marker from inline script
-        if (window.__FIRST_PAINT_TIME !== undefined) {
-            console.log(`⚡ [PerformanceValidator] Using early First Paint: ${Math.round(window.__FIRST_PAINT_TIME)}ms`);
+        const self = this;
+        
+        // CROWN⁴.6: Use PerformanceObserver for accurate FCP measurement
+        if ('PerformanceObserver' in window) {
+            try {
+                const paintObserver = new PerformanceObserver((entryList) => {
+                    for (const entry of entryList.getEntries()) {
+                        if (entry.name === 'first-contentful-paint' && self.metrics.firstPaint.length === 0) {
+                            console.log(`⚡ [PerformanceValidator] FCP via Observer: ${Math.round(entry.startTime)}ms`);
+                            self.recordMetric('firstPaint', entry.startTime);
+                            paintObserver.disconnect();
+                        }
+                    }
+                });
+                paintObserver.observe({ type: 'paint', buffered: true });
+            } catch (e) {
+                console.warn('Paint PerformanceObserver not supported:', e);
+            }
+        }
+        
+        // Fallback: Check for early inline marker from <head>
+        if (window.__FIRST_PAINT_TIME !== undefined && this.metrics.firstPaint.length === 0) {
+            console.log(`⚡ [PerformanceValidator] Using head marker: ${Math.round(window.__FIRST_PAINT_TIME)}ms`);
             this.recordMetric('firstPaint', window.__FIRST_PAINT_TIME);
         }
+        
+        // Fallback: Poll for paint entries after a short delay (browser may not have recorded yet)
+        setTimeout(() => {
+            if (this.metrics.firstPaint.length === 0 && window.performance && window.performance.getEntriesByType) {
+                const paintEntries = window.performance.getEntriesByType('paint');
+                for (const entry of paintEntries) {
+                    if (entry.name === 'first-contentful-paint') {
+                        console.log(`⚡ [PerformanceValidator] FCP via poll: ${Math.round(entry.startTime)}ms`);
+                        this.recordMetric('firstPaint', entry.startTime);
+                        break;
+                    }
+                }
+            }
+        }, 100);
         
         // Listen for task bootstrap completion event (fallback)
         document.addEventListener('task:bootstrap:complete', (e) => {
             if (e.detail && e.detail.first_paint_ms && this.metrics.firstPaint.length === 0) {
-                console.log(`📊 [PerformanceValidator] Captured first paint: ${e.detail.first_paint_ms.toFixed(2)}ms`);
+                console.log(`📊 [PerformanceValidator] Bootstrap first paint: ${e.detail.first_paint_ms.toFixed(2)}ms`);
                 this.recordMetric('firstPaint', e.detail.first_paint_ms);
             }
         });
-        
-        // Monitor paint timing from Performance API (fallback)
-        if (window.performance && window.performance.getEntriesByType && this.metrics.firstPaint.length === 0) {
-            const paintEntries = window.performance.getEntriesByType('paint');
-            paintEntries.forEach(entry => {
-                if (entry.name === 'first-contentful-paint') {
-                    this.recordMetric('firstPaint', entry.startTime);
-                }
-            });
-        }
-
-        // Monitor navigation timing for initial load (fallback)
-        if (window.performance && window.performance.timing && this.metrics.firstPaint.length === 0) {
-            window.addEventListener('load', () => {
-                if (this.metrics.firstPaint.length === 0) {
-                    const timing = window.performance.timing;
-                    const firstPaint = timing.domContentLoadedEventEnd - timing.navigationStart;
-                    this.recordMetric('firstPaint', firstPaint);
-                }
-            });
-        }
 
         // Monitor DOM mutations
         this.observeDOMMutations();

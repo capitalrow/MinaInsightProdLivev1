@@ -206,9 +206,15 @@ def get_task(task_id):
         detail (str): Response detail level ('mini' for prefetching, default: full)
     """
     try:
-        task = db.session.query(Task).join(Meeting).filter(
+        # Use outerjoin to support tasks without meetings
+        # Filter by workspace_id from task OR meeting (for tasks without meeting_id)
+        workspace_id_str = str(current_user.workspace_id)
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            or_(
+                Task.workspace_id == workspace_id_str,
+                Meeting.workspace_id == current_user.workspace_id
+            )
         ).first()
         
         if not task:
