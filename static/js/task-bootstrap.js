@@ -150,18 +150,18 @@ class TaskBootstrap {
 
             this.initialized = true;
 
-            // CROWN⁴.6 FIX: Delay event emission to ensure PerformanceValidator listener is attached
-            // Use requestAnimationFrame to guarantee listener registration completes first
-            requestAnimationFrame(() => {
-                document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
-                    detail: {
-                        cached_tasks: cachedTasks.length,
-                        first_paint_ms: firstPaintTime,
-                        meets_target: firstPaintTime < 200
-                    }
-                }));
-                console.log(`📊 [Bootstrap] Emitted first paint event: ${firstPaintTime.toFixed(2)}ms`);
-            });
+            // CROWN⁴.6: Emit bootstrap complete event SYNCHRONOUSLY
+            // Performance validator uses addEventListener at load time, so it's already listening
+            // Synchronous dispatch ensures the metric is recorded before the 5-second report
+            document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+                detail: {
+                    cached_tasks: cachedTasks.length,
+                    first_paint_ms: firstPaintTime,
+                    cache_load_ms: cacheLoadTime,
+                    meets_target: firstPaintTime < 200
+                }
+            }));
+            console.log(`📊 [Bootstrap] Emitted first paint event: ${firstPaintTime.toFixed(2)}ms`);
 
             return {
                 success: true,
