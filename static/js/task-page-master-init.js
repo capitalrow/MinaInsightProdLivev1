@@ -6,7 +6,12 @@
 
 (function() {
     'use strict';
-    
+
+    if (window.__tasksPageMasterInitialized) {
+        console.log('[MasterInit] Skipping duplicate initialization; already initialized');
+        return;
+    }
+
     console.log('[MasterInit] ========== Tasks Page Master Initialization STARTING ==========');
     
     // Track initialization state
@@ -25,6 +30,7 @@
      * Initialize filter tabs (All/Active/Archived)
      */
     function initFilterTabs() {
+        if (window.__taskFilterTabsReady) return;
         console.log('[MasterInit] Initializing filter tabs (All/Active/Archived)...');
         
         const filterTabs = document.querySelectorAll('.filter-tab');
@@ -53,6 +59,7 @@
         });
         
         initState.filterTabs = true;
+        window.__taskFilterTabsReady = true;
         console.log('[MasterInit] ✅ Filter tabs initialized (All/Active/Archived)');
     }
     
@@ -60,47 +67,43 @@
      * Initialize "New Task" button
      */
     function initNewTaskButton() {
+        if (window.__taskNewButtonsReady) return;
         console.log('[MasterInit] Initializing New Task button...');
         
-        // Find all "New Task" buttons (header + empty state)
-        const newTaskButtons = document.querySelectorAll('.btn-primary');
-        
+        const newTaskButtons = [
+            document.getElementById('new-task-btn'),
+            document.getElementById('empty-state-create-btn')
+        ].filter(Boolean);
+
         newTaskButtons.forEach(btn => {
-            if (btn.textContent.includes('New Task') || btn.textContent.includes('first task')) {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    console.log('[NewTask] Button clicked, opening modal...');
-                    
-                    // Dispatch event to open task creation modal
-                    document.dispatchEvent(new CustomEvent('task:create-new'));
-                    
-                    // If task modal manager exists, use it
-                    if (window.taskModalManager && typeof window.taskModalManager.openCreateModal === 'function') {
-                        window.taskModalManager.openCreateModal();
-                    } else {
-                        // Fallback: Try to show modal overlay directly
-                        const modalOverlay = document.getElementById('task-modal-overlay');
-                        if (modalOverlay) {
-                            modalOverlay.classList.remove('hidden');
-                            console.log('[NewTask] Modal overlay shown');
-                        } else {
-                            console.warn('[NewTask] No modal overlay found - modal system may not be loaded');
-                            // Show a simple toast instead
-                            if (window.toastManager) {
-                                window.toastManager.show('Task creation modal not ready. Please refresh the page.', 'warning', 3000);
-                            }
-                        }
+            if (btn.dataset.bound === 'new-task') return;
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('[NewTask] Button clicked, opening modal...');
+
+                document.dispatchEvent(new CustomEvent('task:create-new'));
+
+                if (window.taskModalManager?.openCreateModal) {
+                    window.taskModalManager.openCreateModal();
+                } else {
+                    const modalOverlay = document.getElementById('task-modal-overlay');
+                    if (modalOverlay) {
+                        modalOverlay.classList.remove('hidden');
+                        console.log('[NewTask] Modal overlay shown');
+                    } else if (window.toastManager) {
+                        window.toastManager.show('Task creation modal not ready. Please refresh the page.', 'warning', 3000);
                     }
-                    
-                    // Telemetry
-                    if (window.CROWNTelemetry) {
-                        window.CROWNTelemetry.recordMetric('new_task_button_clicked', 1);
-                    }
-                });
-            }
+                }
+
+                if (window.CROWNTelemetry) {
+                    window.CROWNTelemetry.recordMetric('new_task_button_clicked', 1);
+                }
+            });
+            btn.dataset.bound = 'new-task';
         });
-        
+
         initState.newTaskButton = true;
+        window.__taskNewButtonsReady = true;
         console.log('[MasterInit] ✅ New Task button initialized');
     }
     
@@ -108,6 +111,7 @@
      * Initialize task checkbox toggles
      */
     function initCheckboxHandlers() {
+        if (window.__taskCheckboxHandlersReady) return;
         console.log('[MasterInit] Initializing checkbox handlers...');
         
         // Use event delegation for dynamic task cards
@@ -182,6 +186,7 @@
         });
         
         initState.checkboxHandlers = true;
+        window.__taskCheckboxHandlersReady = true;
         console.log('[MasterInit] ✅ Checkbox handlers initialized');
     }
     
@@ -189,6 +194,7 @@
      * Initialize restore task handlers (for archived tasks)
      */
     function initRestoreHandlers() {
+        if (window.__taskRestoreHandlersReady) return;
         console.log('[MasterInit] Initializing restore task handlers...');
         
         // Use event delegation for restore buttons
@@ -265,12 +271,14 @@
         });
         
         console.log('[MasterInit] ✅ Restore task handlers initialized');
+        window.__taskRestoreHandlersReady = true;
     }
     
     /**
      * Initialize delete confirmation handlers
      */
     function initDeleteHandlers() {
+        if (window.__taskDeleteHandlersReady) return;
         console.log('[MasterInit] Initializing delete handlers...');
         
         // Listen for delete events from task menu
@@ -283,7 +291,12 @@
             const taskTitle = taskCard?.querySelector('.task-title')?.textContent?.trim() || '';
             
             // Show beautiful confirmation modal
-            const confirmed = await window.taskConfirmModal.confirmDelete(taskTitle);
+            let confirmed = true;
+            if (window.taskConfirmModal?.confirmDelete) {
+                confirmed = await window.taskConfirmModal.confirmDelete(taskTitle);
+            } else {
+                confirmed = window.confirm('Are you sure you want to delete this task?');
+            }
             
             if (!confirmed) {
                 console.log('[Delete] User cancelled delete');
@@ -346,6 +359,7 @@
         });
         
         initState.deleteHandlers = true;
+        window.__taskDeleteHandlersReady = true;
         console.log('[MasterInit] ✅ Delete handlers initialized');
     }
     
@@ -353,6 +367,7 @@
      * Initialize task menu action handlers
      */
     function initTaskMenuHandlers() {
+        if (window.__taskMenuHandlersReady) return;
         console.log('[MasterInit] Initializing task menu action handlers...');
         
         // Edit task title
@@ -494,7 +509,12 @@
             const taskTitle = taskCard?.querySelector('.task-title')?.textContent?.trim() || '';
             
             // Show beautiful confirmation modal
-            const confirmed = await window.taskConfirmModal.confirmArchive(taskTitle);
+            let confirmed = true;
+            if (window.taskConfirmModal?.confirmArchive) {
+                confirmed = await window.taskConfirmModal.confirmArchive(taskTitle);
+            } else {
+                confirmed = window.confirm('Archive this task?');
+            }
             
             if (!confirmed) {
                 console.log('[Menu] Archive cancelled');
@@ -588,6 +608,7 @@
         });
         
         console.log('[MasterInit] ✅ Task menu handlers initialized');
+        window.__taskMenuHandlersReady = true;
     }
     
     /**
@@ -604,6 +625,7 @@
         try {
             window.taskSearchSort = new TaskSearchSort();
             initState.taskSearchSort = true;
+            window.__taskSearchSortReady = true;
             console.log('[MasterInit] ✅ TaskSearchSort initialized');
             return true;
         } catch (error) {
@@ -631,6 +653,7 @@
         try {
             window.taskInlineEditing = new TaskInlineEditing(window.optimisticUI);
             initState.taskInlineEditing = true;
+            window.__taskInlineEditingReady = true;
             console.log('[MasterInit] ✅ TaskInlineEditing initialized');
             return true;
         } catch (error) {
@@ -658,6 +681,7 @@
         try {
             window.taskProposalUI = new TaskProposalUI(window.optimisticUI);
             initState.proposalUI = true;
+            window.__taskProposalUIReady = true;
             console.log('[MasterInit] ✅ TaskProposalUI initialized');
             return true;
         } catch (error) {
@@ -741,6 +765,8 @@
         }
         
         // Log initialization summary
+        window.__tasksPageMasterInitialized = true;
+        window.__tasksPageInitState = initState;
         console.log('[MasterInit] Initialization status:', initState);
         console.log('[MasterInit] ========== Tasks Page Master Initialization COMPLETE ==========');
         
