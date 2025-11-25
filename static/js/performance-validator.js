@@ -62,16 +62,22 @@ class PerformanceValidator {
     }
 
     setupPerformanceObservers() {
-        // CROWN⁴.6 FIX: Listen for task bootstrap completion event
+        // CROWN⁴.6: Use early First Paint marker from inline script
+        if (window.__FIRST_PAINT_TIME !== undefined) {
+            console.log(`⚡ [PerformanceValidator] Using early First Paint: ${Math.round(window.__FIRST_PAINT_TIME)}ms`);
+            this.recordMetric('firstPaint', window.__FIRST_PAINT_TIME);
+        }
+        
+        // Listen for task bootstrap completion event (fallback)
         document.addEventListener('task:bootstrap:complete', (e) => {
-            if (e.detail && e.detail.first_paint_ms) {
+            if (e.detail && e.detail.first_paint_ms && this.metrics.firstPaint.length === 0) {
                 console.log(`📊 [PerformanceValidator] Captured first paint: ${e.detail.first_paint_ms.toFixed(2)}ms`);
                 this.recordMetric('firstPaint', e.detail.first_paint_ms);
             }
         });
         
-        // Monitor paint timing (fallback)
-        if (window.performance && window.performance.getEntriesByType) {
+        // Monitor paint timing from Performance API (fallback)
+        if (window.performance && window.performance.getEntriesByType && this.metrics.firstPaint.length === 0) {
             const paintEntries = window.performance.getEntriesByType('paint');
             paintEntries.forEach(entry => {
                 if (entry.name === 'first-contentful-paint') {
@@ -81,11 +87,13 @@ class PerformanceValidator {
         }
 
         // Monitor navigation timing for initial load (fallback)
-        if (window.performance && window.performance.timing) {
+        if (window.performance && window.performance.timing && this.metrics.firstPaint.length === 0) {
             window.addEventListener('load', () => {
-                const timing = window.performance.timing;
-                const firstPaint = timing.domContentLoadedEventEnd - timing.navigationStart;
-                this.recordMetric('firstPaint', firstPaint);
+                if (this.metrics.firstPaint.length === 0) {
+                    const timing = window.performance.timing;
+                    const firstPaint = timing.domContentLoadedEventEnd - timing.navigationStart;
+                    this.recordMetric('firstPaint', firstPaint);
+                }
             });
         }
 
