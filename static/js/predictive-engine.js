@@ -480,6 +480,177 @@ class PredictiveEngine {
             initialized: this.initialized
         };
     }
+
+    /**
+     * CROWN⁴.6: Analyze a task and emit AI partner nudge suggestions
+     * @param {Object} task - Task to analyze
+     * @returns {Object} - Analysis results with suggestions
+     */
+    async analyzeTaskForNudges(task) {
+        if (!this.initialized) {
+            await this.init();
+        }
+
+        const suggestions = [];
+
+        const dueDatePrediction = this.predictDueDate(task);
+        if (dueDatePrediction.confidence >= 70 && !task.due_date) {
+            suggestions.push({
+                type: 'due_date_suggestion',
+                confidence: dueDatePrediction.confidence / 100,
+                data: {
+                    taskId: task.id,
+                    taskTitle: task.title,
+                    suggestedDate: this._formatDate(dueDatePrediction.dueDate),
+                    suggestedDueDate: dueDatePrediction.dueDate.toISOString(),
+                    reasoning: dueDatePrediction.reasoning
+                }
+            });
+        }
+
+        const priorityPrediction = this.predictPriority(task);
+        if (priorityPrediction.confidence >= 75 && 
+            priorityPrediction.priority === 'high' && 
+            task.priority !== 'high' && 
+            task.priority !== 'urgent') {
+            suggestions.push({
+                type: 'priority_suggestion',
+                confidence: priorityPrediction.confidence / 100,
+                data: {
+                    taskId: task.id,
+                    taskTitle: task.title,
+                    suggestedPriority: priorityPrediction.priority,
+                    meetingTitle: task.meeting?.title || 'a recent meeting',
+                    reasoning: priorityPrediction.reasoning
+                }
+            });
+        }
+
+        if (task.extracted_by_ai && task.transcript_span?.speaker_name) {
+            suggestions.push({
+                type: 'smart_assignee',
+                confidence: 0.8,
+                data: {
+                    taskId: task.id,
+                    taskTitle: task.title,
+                    speakerName: task.transcript_span.speaker_name,
+                    userId: null
+                }
+            });
+        }
+
+        for (const suggestion of suggestions) {
+            if (suggestion.confidence >= 0.7) {
+                this._emitNudge(suggestion);
+            }
+        }
+
+        return {
+            taskId: task.id,
+            suggestions,
+            analyzed_at: new Date().toISOString()
+        };
+    }
+
+    /**
+     * Check for overdue tasks and emit cleanup suggestions
+     */
+    async checkForNudgeOpportunities() {
+        if (!this.cache) return;
+
+        try {
+            const tasks = await this.cache.getAllTasks();
+            const now = new Date();
+            
+            const overdueTasks = tasks.filter(t => 
+                t.status !== 'completed' && 
+                t.due_date && 
+                new Date(t.due_date) < now
+            );
+
+            for (const task of overdueTasks.slice(0, 3)) {
+                this._emitNudge({
+                    type: 'overdue_nudge',
+                    confidence: 0.9,
+                    data: {
+                        taskId: task.id,
+                        taskTitle: task.title,
+                        dueDate: task.due_date
+                    }
+                });
+            }
+
+            const completedTasks = tasks.filter(t => 
+                t.status === 'completed' && 
+                !t.archived_at
+            );
+
+            if (completedTasks.length >= 5) {
+                this._emitNudge({
+                    type: 'cleanup_suggestion',
+                    confidence: 0.85,
+                    data: {
+                        completedCount: completedTasks.length
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('[PredictiveEngine] Error checking for nudge opportunities:', error);
+        }
+    }
+
+    /**
+     * Emit a nudge event for AI Partner Nudges to handle
+     * @param {Object} suggestion
+     */
+    _emitNudge(suggestion) {
+        window.dispatchEvent(new CustomEvent('prediction:ready', {
+            detail: {
+                type: suggestion.type,
+                data: suggestion.data,
+                confidence: suggestion.confidence
+            }
+        }));
+        console.log('[PredictiveEngine] Emitted nudge:', suggestion.type);
+    }
+
+    /**
+     * Record user feedback on a nudge (accepted/rejected)
+     * @param {Object} feedback - { nudge_type, accepted, data }
+     */
+    recordFeedback(feedback) {
+        console.log('[PredictiveEngine] Nudge feedback:', feedback);
+
+        try {
+            const feedbackLog = JSON.parse(localStorage.getItem('mina_nudge_feedback') || '[]');
+            feedbackLog.push({
+                ...feedback,
+                timestamp: Date.now()
+            });
+            if (feedbackLog.length > 100) {
+                feedbackLog.shift();
+            }
+            localStorage.setItem('mina_nudge_feedback', JSON.stringify(feedbackLog));
+        } catch (e) {
+            console.warn('[PredictiveEngine] Failed to record feedback:', e);
+        }
+    }
+
+    /**
+     * Format date for user display
+     * @param {Date} date
+     * @returns {string}
+     */
+    _formatDate(date) {
+        const now = new Date();
+        const diff = Math.ceil((date - now) / (1000 * 60 * 60 * 24));
+        
+        if (diff === 0) return 'today';
+        if (diff === 1) return 'tomorrow';
+        if (diff <= 7) return `in ${diff} days`;
+        
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
 }
 
 // Export singleton
