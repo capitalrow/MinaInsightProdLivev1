@@ -46,6 +46,22 @@ def get_socket_sid() -> str:
 
 def run_async(coro):
     """Helper to run async functions in sync context with eventlet compatibility."""
+    try:
+        # Check if there's already a running event loop
+        loop = asyncio.get_running_loop()
+        # If we're here, a loop is running - use nest_asyncio or return immediately
+        # For eventlet, we should avoid running async in the main thread
+        import nest_asyncio  # type: ignore
+        nest_asyncio.apply()
+        return loop.run_until_complete(coro)
+    except RuntimeError:
+        # No running loop, create a new one (normal sync context)
+        pass
+    except ImportError:
+        # nest_asyncio not available - log and skip
+        return None
+    
+    # Create new loop for sync context
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -262,6 +278,10 @@ def register_tasks_namespace(socketio):
                         session_id=session_id
                     ))
                     
+                    # Handle None result from run_async
+                    if result is None:
+                        result = {'success': False, 'error': 'Async execution failed'}
+                    
                     # CROWN⁴.5: Enhance response with event_id and checksum
                     enhanced_result = task_event_handler._enhance_response_with_crown_metadata(
                         response=result,
@@ -306,6 +326,10 @@ def register_tasks_namespace(socketio):
                     user_id=user_id,
                     session_id=session_id
                 ))
+                
+                # Handle None result from run_async
+                if result is None:
+                    result = {'success': False, 'error': 'Async execution failed'}
                 
                 # CROWN⁴.5: Enhance response with checksum (no event_id for legacy path)
                 enhanced_result = task_event_handler._enhance_response_with_crown_metadata(
