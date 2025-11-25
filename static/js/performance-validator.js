@@ -430,7 +430,8 @@ class PerformanceValidator {
             const telemetrySummary = window.CROWNTelemetry.getSummary();
             
             // Add Bootstrap/First Paint from telemetry
-            if (telemetrySummary.bootstrap) {
+            // CROWN⁴.6: Only add bootstrap if actually measured (not 'not_measured' status)
+            if (telemetrySummary.bootstrap && telemetrySummary.bootstrap.status !== 'not_measured') {
                 report.metrics.bootstrap = {
                     target: this.targets.firstPaint,
                     actual: telemetrySummary.bootstrap.time,
@@ -469,7 +470,10 @@ class PerformanceValidator {
         // Bootstrap / First Paint
         if (report.metrics.bootstrap || report.metrics.firstPaint) {
             const metric = report.metrics.bootstrap || report.metrics.firstPaint;
-            console.log(`${metric.passed ? '✅' : '❌'} First Paint: ${metric.actual?.toFixed(0) || 'N/A'}ms (target: ≤${metric.target}ms)`);
+            const actualValue = typeof metric.actual === 'number' ? `${metric.actual.toFixed(0)}ms` : 'N/A';
+            console.log(`${metric.passed ? '✅' : '❌'} First Paint: ${actualValue} (target: ≤${metric.target}ms)`);
+        } else {
+            console.log(`⏳ First Paint: Not measured yet (target: ≤${this.targets.firstPaint}ms)`);
         }
 
         // Mutation Apply

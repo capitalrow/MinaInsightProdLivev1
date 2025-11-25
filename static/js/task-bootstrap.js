@@ -150,18 +150,24 @@ class TaskBootstrap {
 
             this.initialized = true;
 
-            // CROWN⁴.6: Emit bootstrap complete event SYNCHRONOUSLY
-            // Performance validator uses addEventListener at load time, so it's already listening
-            // Synchronous dispatch ensures the metric is recorded before the 5-second report
-            document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
-                detail: {
-                    cached_tasks: cachedTasks.length,
-                    first_paint_ms: firstPaintTime,
-                    cache_load_ms: cacheLoadTime,
-                    meets_target: firstPaintTime < 200
-                }
-            }));
-            console.log(`📊 [Bootstrap] Emitted first paint event: ${firstPaintTime.toFixed(2)}ms`);
+            // CROWN⁴.6: Emit bootstrap complete event AFTER paint
+            // Use double-rAF to ensure browser has actually painted the DOM
+            // This gives telemetry subscribers time to attach and captures true visual completion
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const actualFirstPaint = performance.now() - this.perf.cache_load_start;
+                    document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+                        detail: {
+                            cached_tasks: cachedTasks.length,
+                            first_paint_ms: actualFirstPaint,
+                            cache_load_ms: cacheLoadTime,
+                            meets_target: actualFirstPaint < 200,
+                            source: 'cache'
+                        }
+                    }));
+                    console.log(`📊 [Bootstrap] Emitted first paint event: ${actualFirstPaint.toFixed(2)}ms (after paint)`);
+                });
+            });
 
             return {
                 success: true,
@@ -826,6 +832,7 @@ class TaskBootstrap {
     /**
      * Update task counters in UI
      * CRITICAL: This must ALWAYS calculate counts from ALL tasks, not filtered subset
+     * CROWN⁴.6: Counters must match HTML data-counter attributes: all, active, archived
      * @param {Array} tasks - Currently displayed tasks (may be filtered)
      */
     async updateCounters(tasks) {
@@ -833,14 +840,35 @@ class TaskBootstrap {
         // The 'tasks' parameter might be filtered, which would give wrong counts
         const allTasks = await this.cache.getAllTasks();
         
+        // CROWN⁴.6: Define what counts as "active" - todo, in_progress, pending (not completed/archived)
+        const isActive = (t) => {
+            const status = (t.status || '').toLowerCase();
+            const isArchivedTask = t.archived_at || status === 'archived';
+            const isCompleted = status === 'completed';
+            return !isArchivedTask && !isCompleted;
+        };
+        
+        const isArchived = (t) => {
+            const status = (t.status || '').toLowerCase();
+            return t.archived_at || status === 'archived';
+        };
+        
         const counters = {
+            // Matches HTML data-counter="all" - total non-deleted tasks
             all: allTasks.length,
-            pending: allTasks.filter(t => t.status === 'todo' || t.status === 'in_progress').length,
+            // Matches HTML data-counter="active" - todo, in_progress, pending (not completed/archived)
+            active: allTasks.filter(isActive).length,
+            // Matches HTML data-counter="archived" - archived tasks
+            archived: allTasks.filter(isArchived).length,
+            // Additional counters for internal use
             todo: allTasks.filter(t => t.status === 'todo').length,
             in_progress: allTasks.filter(t => t.status === 'in_progress').length,
+            pending: allTasks.filter(t => t.status === 'pending').length,
             completed: allTasks.filter(t => t.status === 'completed').length,
-            overdue: allTasks.filter(t => this.isDueDateOverdue(t.due_date) && t.status !== 'completed').length
+            overdue: allTasks.filter(t => this.isDueDateOverdue(t.due_date) && isActive(t)).length
         };
+        
+        console.log('[TaskBootstrap] Counter update:', { all: counters.all, active: counters.active, archived: counters.archived });
 
         // Update counter badges with emotional pulse animation
         Object.entries(counters).forEach(([key, count]) => {
@@ -1000,6 +1028,7 @@ class TaskBootstrap {
      */
     async fallbackToServer() {
         console.log('⚠️ Falling back to server-only loading...');
+        const fallbackStart = performance.now();
         
         try {
             const response = await fetch('/api/tasks/', {
@@ -1018,6 +1047,23 @@ class TaskBootstrap {
             const tasks = data.tasks || [];
 
             await this.renderTasks(tasks, { fromCache: false });
+            
+            // CROWN⁴.6: Emit bootstrap complete event using double-rAF for fallback path
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const firstPaintTime = performance.now() - fallbackStart;
+                    document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+                        detail: {
+                            cached_tasks: 0,
+                            first_paint_ms: firstPaintTime,
+                            cache_load_ms: 0,
+                            meets_target: firstPaintTime < 200,
+                            source: 'server_fallback'
+                        }
+                    }));
+                    console.log(`📊 [Fallback] Emitted first paint event: ${firstPaintTime.toFixed(2)}ms`);
+                });
+            });
 
             return {
                 success: true,
@@ -1027,6 +1073,24 @@ class TaskBootstrap {
             };
         } catch (error) {
             console.error('❌ Fallback failed:', error);
+            
+            // CROWN⁴.6: Still emit event on error so First Paint is recorded (with error state)
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const firstPaintTime = performance.now() - fallbackStart;
+                    document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+                        detail: {
+                            cached_tasks: 0,
+                            first_paint_ms: firstPaintTime,
+                            cache_load_ms: 0,
+                            meets_target: false,
+                            source: 'error',
+                            error: error.message
+                        }
+                    }));
+                    console.log(`📊 [Error] Emitted first paint event: ${firstPaintTime.toFixed(2)}ms`);
+                });
+            });
             
             // CROWN⁴.5: Show error state on complete failure
             this.showErrorState(error.message || 'Unable to load tasks from server. Please check your connection.');
