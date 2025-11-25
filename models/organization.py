@@ -97,7 +97,7 @@ class Team(db.Model):
     
     # Foreign keys
     organization_id = Column(Integer, ForeignKey('organizations.id'), nullable=False)
-    created_by_user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -149,7 +149,7 @@ class OrganizationMembership(db.Model):
     id = Column(Integer, primary_key=True)
     
     # Foreign keys
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     organization_id = Column(Integer, ForeignKey('organizations.id'), nullable=False)
     
     # Role and permissions
@@ -157,7 +157,7 @@ class OrganizationMembership(db.Model):
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Invitation and joining
-    invited_by_user_id = Column(Integer, ForeignKey('user.id'))
+    invited_by_user_id = Column(Integer, ForeignKey('users.id'))
     invitation_token = Column(String(255), unique=True)
     invitation_expires_at = Column(DateTime)
     joined_at = Column(DateTime)
@@ -212,7 +212,7 @@ class TeamMembership(db.Model):
     id = Column(Integer, primary_key=True)
     
     # Foreign keys
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     team_id = Column(Integer, ForeignKey('teams.id'), nullable=False)
     
     # Role and permissions
@@ -220,7 +220,7 @@ class TeamMembership(db.Model):
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Invitation and joining
-    invited_by_user_id = Column(Integer, ForeignKey('user.id'))
+    invited_by_user_id = Column(Integer, ForeignKey('users.id'))
     invitation_token = Column(String(255), unique=True)
     invitation_expires_at = Column(DateTime)
     joined_at = Column(DateTime)
