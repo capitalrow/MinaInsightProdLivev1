@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/copilot.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/copilot-calm-motion.css') }}">
 <!-- Highlight.js for code syntax highlighting -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 <style>
@@ -115,6 +116,129 @@
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Smart Chips Styling */
+.calm-chip {
+    position: relative;
+    overflow: hidden;
+}
+
+.calm-chip::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.calm-chip:active::after {
+    width: 300px;
+    height: 300px;
+}
+
+/* Streaming Message Styling */
+.streaming-message .message-avatar {
+    animation: calm-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.section-container {
+    margin-bottom: var(--space-4);
+}
+
+.section-header {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-primary);
+    margin-bottom: var(--space-2);
+    text-transform: capitalize;
+}
+
+/* Calm Animations */
+@keyframes calm-pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.05);
+    }
+}
+
+.calm-slide-in {
+    animation: calm-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes calm-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.calm-fade-in {
+    animation: calm-fade-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes calm-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Lifecycle Status Indicator */
+.lifecycle-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-glass);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    animation: status-pulse 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes status-pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(1.2);
+    }
+}
+
+#lifecycle-event-text {
+    color: var(--color-text-secondary);
+    font-weight: 500;
+}
+
+/* Update header to flex layout */
+.copilot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 </style>
 {% endblock %}
 
@@ -184,8 +308,15 @@
     <!-- Center: Chat Interface -->
     <main class="copilot-main">
         <div class="copilot-header">
-            <h1 class="copilot-title text-2xl font-bold mb-1">AI Copilot</h1>
-            <p class="text-sm text-secondary">Ask questions about your meetings, tasks, and insights</p>
+            <div>
+                <h1 class="copilot-title text-2xl font-bold mb-1">AI Copilot</h1>
+                <p class="text-sm text-secondary">Ask questions about your meetings, tasks, and insights</p>
+            </div>
+            <!-- Lifecycle Status Indicator -->
+            <div id="lifecycle-status" class="lifecycle-status" style="display: none;">
+                <div class="status-indicator"></div>
+                <span id="lifecycle-event-text" class="text-xs"></span>
+            </div>
         </div>
 
         <div id="chat-messages" class="chat-messages-container">
@@ -210,6 +341,11 @@
         </div>
 
         <div class="chat-input-container">
+            <!-- Smart Chips (Predictive Actions from Backend) -->
+            <div id="smart-chips-container" class="mb-3" style="display: none;">
+                <div id="smart-chips" class="calm-animate" style="display: flex; gap: var(--space-2); flex-wrap: wrap;"></div>
+            </div>
+            
             <!-- Suggested Prompts -->
             <div id="suggested-prompts" class="mb-3" style="display: flex; gap: var(--space-2); flex-wrap: wrap;">
                 <button class="prompt-chip" data-prompt="What's due today?">What's due today?</button>
@@ -301,17 +437,64 @@
     </aside>
 </div>
 
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/copilot-streaming.js') }}" nonce="{{ g.csp_nonce }}"></script>
+
 <script nonce="{{ g.csp_nonce }}">
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 const chatMessages = document.getElementById('chat-messages');
 const suggestedPrompts = document.getElementById('suggested-prompts');
+const smartChipsContainer = document.getElementById('smart-chips-container');
+const smartChips = document.getElementById('smart-chips');
 
-// Get CSRF token from meta tag
-function getCSRFToken() {
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    return meta ? meta.getAttribute('content') : '';
-}
+// Initialize CROWN⁹ Copilot Streaming Client
+let copilotClient = null;
+let currentStreamingMessage = null;
+let currentSection = 'summary';
+
+// Initialize WebSocket connection
+document.addEventListener('DOMContentLoaded', () => {
+    copilotClient = new CopilotStreamingClient();
+    
+    // Setup callbacks
+    copilotClient.onBootstrapComplete = (context) => {
+        console.log('[UI] Bootstrap complete with context:', context);
+    };
+    
+    copilotClient.onStreamToken = (token, section) => {
+        appendTokenToStream(token, section || 'summary');
+    };
+    
+    copilotClient.onStreamSection = (sectionName, content) => {
+        startNewSection(sectionName);
+    };
+    
+    copilotClient.onStreamComplete = (message, metrics) => {
+        finalizeStreamingMessage();
+        console.log('[UI] Stream complete:', metrics);
+    };
+    
+    copilotClient.onError = (errorData) => {
+        console.error('[UI] Copilot error:', errorData);
+        addErrorMessage(errorData.error || errorData.message || 'An error occurred');
+    };
+    
+    // Listen for chips_generated event
+    copilotClient.socket.on('copilot_chips_generated', (data) => {
+        console.log('[UI] Chips received:', data);
+        displaySmartChips(data.chips);
+    });
+    
+    // Listen for all lifecycle events and update status indicator
+    window.addEventListener('copilot:lifecycle', (event) => {
+        const { event: eventName, data } = event.detail;
+        updateLifecycleStatus(eventName, data);
+    });
+    
+    // Bootstrap the copilot
+    copilotClient.bootstrap({{ current_user.workspace_id if current_user.workspace_id else 'null' }});
+});
 
 // Auto-resize textarea
 chatInput.addEventListener('input', function() {
@@ -319,39 +502,178 @@ chatInput.addEventListener('input', function() {
     this.style.height = Math.min(this.scrollHeight, 120) + 'px';
 });
 
-// Send message
-async function sendMessage(message) {
-    if (!message.trim()) return;
+// Send message via WebSocket streaming
+function sendMessage(message) {
+    if (!message.trim() || !copilotClient || !copilotClient.connected) {
+        if (!copilotClient || !copilotClient.connected) {
+            addErrorMessage('Not connected. Please wait...');
+        }
+        return;
+    }
 
     addUserMessage(message);
     chatInput.value = '';
     chatInput.style.height = 'auto';
     
     hideSuggestedPrompts();
-    const loadingId = addLoadingMessage();
+    hideSmartChips();
+    
+    // Start streaming message container
+    currentStreamingMessage = startStreamingMessage();
+    currentSection = 'summary';
+    
+    // Send query via WebSocket
+    copilotClient.sendQuery(message, {});
+}
 
-    try {
-        const response = await fetch('/copilot/api/chat', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({ message })
-        });
-
-        const data = await response.json();
-        removeLoadingMessage(loadingId);
+// Display smart chips from backend
+function displaySmartChips(chips) {
+    if (!chips || chips.length === 0) return;
+    
+    smartChips.innerHTML = '';
+    
+    chips.forEach(chip => {
+        const chipEl = document.createElement('button');
+        chipEl.className = 'prompt-chip calm-chip calm-animate';
+        chipEl.textContent = chip.text;
+        chipEl.dataset.prompt = chip.action_data?.prompt || chip.text;
+        chipEl.dataset.chipType = chip.chip_type;
         
-        if (data.success) {
-            addAssistantMessage(data.response);
-        } else {
-            addErrorMessage(data.error || 'Failed to get response');
-        }
-    } catch (error) {
-        removeLoadingMessage(loadingId);
-        addErrorMessage('Network error. Please try again.');
+        chipEl.addEventListener('click', () => {
+            sendMessage(chipEl.dataset.prompt);
+        });
+        
+        smartChips.appendChild(chipEl);
+    });
+    
+    smartChipsContainer.style.display = 'block';
+    // Trigger calm animation
+    requestAnimationFrame(() => {
+        smartChipsContainer.classList.add('calm-fade-in');
+    });
+}
+
+function hideSmartChips() {
+    smartChipsContainer.style.display = 'none';
+    smartChipsContainer.classList.remove('calm-fade-in');
+}
+
+// Update lifecycle status indicator
+const lifecycleStatus = document.getElementById('lifecycle-status');
+const lifecycleEventText = document.getElementById('lifecycle-event-text');
+
+const LIFECYCLE_MESSAGES = {
+    'copilot_bootstrap': 'Initializing...',
+    'context_rehydrate': 'Loading context',
+    'chips_generate': 'Generating suggestions',
+    'idle_listen': 'Listening',
+    'query_detect': 'Processing query',
+    'context_merge': 'Analyzing context',
+    'reasoning_stream': 'Thinking...',
+    'response_commit': 'Finalizing response',
+    'action_trigger': 'Executing action',
+    'cross_surface_sync': 'Syncing data',
+    'context_retrain': 'Learning from interaction',
+    'idle_prompt': 'Suggesting next steps'
+};
+
+function updateLifecycleStatus(eventName, data) {
+    const message = LIFECYCLE_MESSAGES[eventName] || eventName;
+    
+    lifecycleEventText.textContent = message;
+    lifecycleStatus.style.display = 'flex';
+    lifecycleStatus.classList.add('calm-fade-in');
+    
+    // Hide status after reasoning_stream starts (let streaming UI take over)
+    if (eventName === 'reasoning_stream' || eventName === 'response_commit') {
+        setTimeout(() => {
+            lifecycleStatus.style.display = 'none';
+            lifecycleStatus.classList.remove('calm-fade-in');
+        }, 2000);
     }
+}
+
+// Start a new streaming message container
+function startStreamingMessage() {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message-assistant streaming-message calm-animate';
+    messageDiv.innerHTML = `
+        <div class="message-avatar calm-pulse">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+        </div>
+        <div class="message-content">
+            <div class="section-container section-summary"></div>
+        </div>
+    `;
+    chatMessages.appendChild(messageDiv);
+    scrollToBottom();
+    return messageDiv;
+}
+
+// Append token to current streaming message
+function appendTokenToStream(token, section) {
+    if (!currentStreamingMessage) return;
+    
+    const contentDiv = currentStreamingMessage.querySelector('.message-content');
+    let sectionContainer = contentDiv.querySelector(`.section-${section}`);
+    
+    if (!sectionContainer) {
+        sectionContainer = document.createElement('div');
+        sectionContainer.className = `section-container section-${section}`;
+        contentDiv.appendChild(sectionContainer);
+    }
+    
+    // Append token with calm typing effect
+    const textNode = document.createTextNode(token);
+    sectionContainer.appendChild(textNode);
+    
+    scrollToBottom();
+}
+
+// Start a new section in the streaming response
+function startNewSection(sectionName) {
+    if (!currentStreamingMessage) return;
+    
+    currentSection = sectionName;
+    const contentDiv = currentStreamingMessage.querySelector('.message-content');
+    
+    let sectionContainer = contentDiv.querySelector(`.section-${sectionName}`);
+    if (!sectionContainer) {
+        sectionContainer = document.createElement('div');
+        sectionContainer.className = `section-container section-${sectionName} calm-slide-in`;
+        
+        // Add section header
+        const header = document.createElement('h4');
+        header.className = 'section-header';
+        header.textContent = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+        sectionContainer.appendChild(header);
+        
+        contentDiv.appendChild(sectionContainer);
+    }
+}
+
+// Finalize streaming message (remove pulsing, process markdown)
+function finalizeStreamingMessage() {
+    if (!currentStreamingMessage) return;
+    
+    // Remove streaming indicators
+    currentStreamingMessage.classList.remove('streaming-message');
+    const avatar = currentStreamingMessage.querySelector('.message-avatar');
+    if (avatar) {
+        avatar.classList.remove('calm-pulse');
+    }
+    
+    // Process markdown in each section
+    const sections = currentStreamingMessage.querySelectorAll('.section-container');
+    sections.forEach(section => {
+        const rawText = section.textContent;
+        section.innerHTML = processMarkdown(rawText);
+    });
+    
+    currentStreamingMessage = null;
+    scrollToBottom();
 }
 
 function addUserMessage(text) {

@@ -64,6 +64,15 @@ class MinaDashboard {
         console.log(`   ├─ Cache hydration: ${this.performanceMetrics.cacheHydrationTime?.toFixed(0) || 'N/A'}ms`);
         console.log(`   └─ Network fetch: ${this.performanceMetrics.networkFetchTime?.toFixed(0) || 'N/A'}ms`);
         
+        // Emit bootstrap complete event for PerformanceValidator
+        document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+            detail: {
+                first_paint_ms: this.performanceMetrics.totalBootstrapTime,
+                cache_hydration_ms: this.performanceMetrics.cacheHydrationTime,
+                network_fetch_ms: this.performanceMetrics.networkFetchTime
+            }
+        }));
+        
         // Record bootstrap metrics in telemetry
         if (this.telemetry) {
             await this.telemetry.recordBootstrap(this.performanceMetrics);

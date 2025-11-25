@@ -609,18 +609,26 @@ def create_app() -> Flask:
         from routes.tasks_websocket import register_tasks_namespace
         from routes.analytics_websocket import register_analytics_namespace
         from routes.meetings_websocket import register_meetings_namespace
+        from routes.copilot_websocket import register_copilot_namespace
         from services.event_broadcaster import event_broadcaster
         
         # Initialize event broadcaster with socketio instance
         event_broadcaster.set_socketio(socketio)
+        
+        # Initialize copilot idle detection service
+        from services.copilot_idle_detection import copilot_idle_detection_service
+        copilot_idle_detection_service.set_socketio(socketio)
+        copilot_idle_detection_service.start_monitoring()
+        app.logger.info("✅ Copilot idle detection monitoring started")
         
         # Register namespace handlers
         register_dashboard_namespace(socketio)
         register_tasks_namespace(socketio)
         register_analytics_namespace(socketio)
         register_meetings_namespace(socketio)
+        register_copilot_namespace(socketio)
         
-        app.logger.info("✅ CROWN⁴ WebSocket namespaces registered: /dashboard, /tasks, /analytics, /meetings")
+        app.logger.info("✅ CROWN⁴ WebSocket namespaces registered: /dashboard, /tasks, /analytics, /meetings, /copilot")
     except Exception as e:
         app.logger.warning(f"Failed to register CROWN⁴ WebSocket namespaces: {e}")
 
