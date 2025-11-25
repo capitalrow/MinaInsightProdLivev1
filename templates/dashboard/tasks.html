@@ -746,4 +746,10 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 
 <!-- CROWN⁴.6 Task 5: Perfect Completion UX -->
 <script src="{{ url_for('static', filename='js/task-completion-ux.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
+
+<!-- CROWN⁴.6: Mobile Gestures (swipe-to-complete/snooze, long-press context) -->
+<script src="{{ url_for('static', filename='js/task-mobile-gestures.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+
+<!-- CROWN⁴.6: AI Partner Nudges (gentle PredictiveEngine suggestions) -->
+<script src="{{ url_for('static', filename='js/ai-partner-nudges.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 {% endblock %}
