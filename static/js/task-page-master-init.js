@@ -751,21 +751,25 @@
     }
     
     // Start initialization when DOM is ready - properly await async initialization
-    if (document.readyState === 'loading') {
-        console.log('[MasterInit] DOM still loading, waiting for DOMContentLoaded...');
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeAllFeatures().catch(error => {
-                console.error('[MasterInit] Initialization failed:', error);
-            });
+    // CROWN⁴.6: Use window load event to ensure all deferred scripts have executed
+    const startInit = () => {
+        console.log('[MasterInit] Starting deferred initialization...');
+        console.log('[MasterInit] taskBootstrap available:', !!window.taskBootstrap);
+        initializeAllFeatures().catch(error => {
+            console.error('[MasterInit] Initialization failed:', error);
         });
+    };
+    
+    if (document.readyState === 'complete') {
+        console.log('[MasterInit] Document already complete, initializing immediately...');
+        // Small delay to ensure all module initializations complete
+        setTimeout(startInit, 50);
     } else {
-        console.log('[MasterInit] DOM already loaded, initializing immediately...');
-        // Wait a tick to ensure other scripts have loaded, then await initialization
-        setTimeout(() => {
-            initializeAllFeatures().catch(error => {
-                console.error('[MasterInit] Initialization failed:', error);
-            });
-        }, 100);
+        console.log('[MasterInit] Waiting for window load event...');
+        window.addEventListener('load', () => {
+            console.log('[MasterInit] Window load event fired');
+            startInit();
+        });
     }
     
 })();
