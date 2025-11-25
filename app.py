@@ -28,12 +28,9 @@ from server.routes.memory_api import memory_bp
 #from routes.integrations import integrations_bp
 #from routes.teams import teams_bp
 #from routes.comments import comments_bp
-from server.models.memory_store import MemoryStore
 import openai
-import numpy as np
-import psycopg2
 from flask_migrate import Migrate
-from models import db, Segment, Comment 
+from models import db
 from datetime import datetime
 from services import memory_persistence as mem
 
