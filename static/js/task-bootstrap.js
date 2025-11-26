@@ -949,7 +949,22 @@ class TaskBootstrap {
             const syncTime = this.perf.sync_end - this.perf.sync_start;
             console.log(`✅ Background sync completed in ${syncTime.toFixed(2)}ms (${serverTasks.length} tasks)`);
 
-            // Update cache with server data
+            // CROWN⁴.6 FIX: Don't save empty results to cache if we already have tasks
+            // This prevents wiping out server-rendered content from cache
+            const container = document.getElementById('tasks-list-container');
+            const hasExistingTasks = container && container.querySelectorAll('.task-card').length > 0;
+            
+            if (serverTasks.length === 0 && hasExistingTasks) {
+                console.warn('⚠️ Sync returned 0 tasks but DOM has content - preserving cache');
+                // Don't save empty to cache, don't re-render
+                // Just emit event and return
+                window.dispatchEvent(new CustomEvent('tasks:sync:success', {
+                    detail: { tasks: serverTasks, sync_time_ms: syncTime, preserved_cache: true }
+                }));
+                return;
+            }
+            
+            // Update cache with server data (only if we have data OR truly empty)
             await this.cache.saveTasks(serverTasks);
             
             // CROWN⁴.5: Store server checksum for future validation
