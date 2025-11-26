@@ -771,7 +771,8 @@
         initRestoreHandlers();
         initDeleteHandlers();
         initTaskMenuHandlers();
-        
+        initTaskActionsMenu();
+
         // 4. Initialize class-based features
         initTaskSearchSort();
         
