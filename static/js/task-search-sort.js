@@ -11,7 +11,13 @@ class TaskSearchSort {
         this.visibleCountEl = document.getElementById('visible-task-count');
         this.totalCountEl = document.getElementById('total-task-count');
         this.tasksContainer = document.getElementById('tasks-list-container');
-        
+
+        // Ledger-backed cache + broadcast channel hooks
+        this.cache = window.taskCache || window.optimisticUI?.cache || null;
+        this.broadcast = window.broadcastSync || null;
+        this.viewStateKey = 'tasks_page';
+        this.isApplyingRemoteState = false;
+
         this.searchQuery = '';
         this.currentSort = 'default';
         this.currentFilter = 'active'; // Default to 'active' tab to hide archived tasks
@@ -22,6 +28,8 @@ class TaskSearchSort {
         this.handleSortChange = null;
 
         this.init();
+        this.hydrateFromViewState();
+        this.registerCrossTabSync();
         console.log('[TaskSearchSort] Initialized with default filter: active');
     }
 
@@ -34,6 +42,25 @@ class TaskSearchSort {
             searchTimeout = setTimeout(() => {
                 this.searchQuery = e.target.value.toLowerCase().trim();
                 this.updateClearButton();
+                this.safeApplyFiltersAndSort();
+            }, 150); // 150ms debounce for smooth performance
+        });
+
+        // Clear button
+        this.searchClearBtn?.addEventListener('click', () => {
+            this.searchInput.value = '';
+            this.searchQuery = '';
+            this.updateClearButton();
+            this.safeApplyFiltersAndSort();
+            this.searchInput.focus();
+        });
+
+        // Sort selector
+        this.sortSelect?.addEventListener('change', (e) => {
+            this.currentSort = e.target.value;
+            this.safeApplyFiltersAndSort();
+        });
+
                 this.applyFiltersAndSort();
                 document.dispatchEvent(new CustomEvent('task:search', { detail: { query: this.searchQuery } }));
             }, 150);
@@ -70,12 +97,12 @@ class TaskSearchSort {
         // Listen for filter tab changes
         document.addEventListener('filterChanged', (e) => {
             this.currentFilter = e.detail.filter;
-            this.applyFiltersAndSort();
+            this.safeApplyFiltersAndSort();
         });
         
         // Apply initial filter after tasks bootstrap completes
         document.addEventListener('task:bootstrap:complete', () => {
-            this.applyFiltersAndSort();
+            this.safeApplyFiltersAndSort();
             console.log('[TaskSearchSort] Initial filter applied after bootstrap: active (hiding archived tasks)');
         });
         
@@ -92,13 +119,115 @@ class TaskSearchSort {
             window.addEventListener(eventName, () => {
                 // Small delay to ensure DOM update completes
                 requestAnimationFrame(() => {
-                    this.applyFiltersAndSort();
+                    this.safeApplyFiltersAndSort();
                 });
             });
         });
         
         // Initial count update
         this.updateCounts();
+    }
+
+    /**
+     * Safely execute async filter/sort pipeline without throwing in event listeners
+     */
+    safeApplyFiltersAndSort() {
+        this.applyFiltersAndSort().catch(error => console.error('[TaskSearchSort] applyFiltersAndSort failed:', error));
+    }
+
+    /**
+     * Load persisted view state from IndexedDB and reapply locally
+     */
+    async hydrateFromViewState() {
+        if (!this.cache?.getViewState) return;
+
+        try {
+            const viewState = await this.cache.getViewState(this.viewStateKey);
+            if (!viewState) return;
+
+            this.isApplyingRemoteState = true;
+            if (viewState.search) {
+                this.searchQuery = viewState.search.toLowerCase();
+                if (this.searchInput) this.searchInput.value = viewState.search;
+                this.updateClearButton();
+            }
+
+            if (viewState.filter || viewState.status) {
+                this.currentFilter = viewState.filter || viewState.status || this.currentFilter;
+                this.setActiveFilterTab(this.currentFilter);
+            }
+
+            if (viewState.sort) {
+                this.currentSort = this.mapSortConfigToKey(viewState.sort);
+                if (this.sortSelect) this.sortSelect.value = this.currentSort;
+            }
+
+            await this.applyFiltersAndSort();
+        } catch (error) {
+            console.error('[TaskSearchSort] Failed to hydrate view state:', error);
+        } finally {
+            this.isApplyingRemoteState = false;
+        }
+    }
+
+    /**
+     * Register BroadcastChannel + idle visibility sync
+     */
+    registerCrossTabSync() {
+        if (this.broadcast?.on) {
+            this.broadcast.on(this.broadcast.EVENTS.FILTER_APPLY, async (payload) => {
+                if (!payload) return;
+                this.isApplyingRemoteState = true;
+                if (payload.filter) {
+                    this.currentFilter = payload.filter;
+                    this.setActiveFilterTab(payload.filter);
+                }
+                await this.applyFiltersAndSort();
+                this.isApplyingRemoteState = false;
+            });
+
+            this.broadcast.on(this.broadcast.EVENTS.SEARCH_QUERY, async (payload) => {
+                if (!payload?.query) return;
+                this.isApplyingRemoteState = true;
+                this.searchQuery = payload.query.toLowerCase();
+                if (this.searchInput) this.searchInput.value = payload.query;
+                this.updateClearButton();
+                await this.applyFiltersAndSort();
+                this.isApplyingRemoteState = false;
+            });
+
+            this.broadcast.on(this.broadcast.EVENTS.UI_STATE_SYNC, async (payload) => {
+                if (!payload) return;
+                this.isApplyingRemoteState = true;
+                if (payload.search !== undefined) {
+                    this.searchQuery = payload.search?.toLowerCase() || '';
+                    if (this.searchInput) this.searchInput.value = payload.search || '';
+                    this.updateClearButton();
+                }
+                if (payload.filter) {
+                    this.currentFilter = payload.filter;
+                    this.setActiveFilterTab(payload.filter);
+                }
+                if (payload.sort) {
+                    this.currentSort = this.mapSortConfigToKey(payload.sort);
+                    if (this.sortSelect) this.sortSelect.value = this.currentSort;
+                }
+                await this.applyFiltersAndSort();
+                this.isApplyingRemoteState = false;
+            });
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                // Idle callback keeps main thread free when returning to tab
+                const resync = () => this.hydrateFromViewState();
+                if ('requestIdleCallback' in window) {
+                    window.requestIdleCallback(resync, { timeout: 1000 });
+                } else {
+                    setTimeout(resync, 250);
+                }
+            }
+        });
     }
     
     updateClearButton() {
@@ -109,28 +238,41 @@ class TaskSearchSort {
         }
     }
     
-    applyFiltersAndSort() {
+    async applyFiltersAndSort() {
+        // Prefer ledger-backed cache rendering when available
+        if (this.cache?.getAllTasks && window.taskBootstrap?.renderTasks) {
+            const allTasks = await this.cache.getAllTasks();
+            const nonDeleted = allTasks.filter(task => !task.deleted_at);
+            const filteredTasks = this.filterTasksData(nonDeleted);
+            const sortedTasks = this.sortTaskData(filteredTasks, this.currentSort);
+
+            await window.taskBootstrap.renderTasks(sortedTasks, { fromCache: true });
+            this.updateCounts(sortedTasks.length, nonDeleted.length);
+            await this.persistViewState();
+            return;
+        }
+
         const tasks = Array.from(this.tasksContainer?.querySelectorAll('.task-card') || []);
-        
+
         // 1. Apply search filter
         let visibleTasks = tasks.filter(task => {
             if (!this.searchQuery) return true;
-            
+
             const title = task.querySelector('.task-title')?.textContent.toLowerCase() || '';
             const assignee = task.querySelector('.task-assignee')?.textContent.toLowerCase() || '';
             const labels = Array.from(task.querySelectorAll('.task-label'))
                 .map(label => label.textContent.toLowerCase())
                 .join(' ');
-            
-            return title.includes(this.searchQuery) || 
-                   assignee.includes(this.searchQuery) || 
+
+            return title.includes(this.searchQuery) ||
+                   assignee.includes(this.searchQuery) ||
                    labels.includes(this.searchQuery);
         });
-        
+
         // 2. Apply archive filter (from filter tabs: All/Active/Archived)
         // CRITICAL: Deleted tasks should NEVER show up, regardless of filter
         visibleTasks = visibleTasks.filter(task => !task.dataset.deletedAt);
-        
+
         if (this.currentFilter === 'active') {
             // Active = not archived (deleted already filtered above)
             visibleTasks = visibleTasks.filter(task => !task.dataset.archivedAt);
@@ -139,17 +281,17 @@ class TaskSearchSort {
             visibleTasks = visibleTasks.filter(task => task.dataset.archivedAt);
         }
         // 'all' shows active + archived (deleted already filtered above)
-        
+
         // 2.5. Apply quick filter (from Quick Actions Bar)
         if (this.quickFilter) {
             visibleTasks = this.applyQuickFilterLogic(visibleTasks, this.quickFilter);
         }
-        
+
         // 3. Apply sorting
         if (this.currentSort !== 'default') {
             visibleTasks = this.sortTasks(visibleTasks, this.currentSort);
         }
-        
+
         // 4. Update DOM visibility
         tasks.forEach(task => {
             if (visibleTasks.includes(task)) {
@@ -159,9 +301,124 @@ class TaskSearchSort {
                 task.style.display = 'none';
             }
         });
-        
-        // 5. Update counts
+
+        // 5. Update counts and persist view state
         this.updateCounts(visibleTasks.length, tasks.length);
+        await this.persistViewState();
+    }
+
+    filterTasksData(tasks) {
+        return tasks.filter(task => {
+            if (this.currentFilter === 'active' && task.archived_at) return false;
+            if (this.currentFilter === 'archived' && !task.archived_at) return false;
+
+            if (this.quickFilter) {
+                const passesQuickFilter = this.applyQuickFilterLogic([task], this.quickFilter).length > 0;
+                if (!passesQuickFilter) return false;
+            }
+
+            if (this.searchQuery) {
+                const title = task.title?.toLowerCase() || '';
+                const assignee = (task.assigned_to?.username || task.assigned_to?.email || '')?.toLowerCase();
+                const labels = Array.isArray(task.labels) ? task.labels.join(' ').toLowerCase() : '';
+                if (!title.includes(this.searchQuery) &&
+                    !assignee.includes(this.searchQuery) &&
+                    !labels.includes(this.searchQuery)) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+    }
+
+    sortTaskData(tasks, sortKey) {
+        const sortConfig = this.mapSortKeyToConfig(sortKey);
+        if (!sortConfig) return tasks;
+
+        const sortable = [...tasks];
+        if (window.taskBootstrap?.sortTasks) {
+            return window.taskBootstrap.sortTasks(sortable, sortConfig);
+        }
+
+        return sortable;
+    }
+
+    mapSortKeyToConfig(sortKey) {
+        switch (sortKey) {
+            case 'priority':
+                return { field: 'priority', direction: 'desc' };
+            case 'priority-reverse':
+                return { field: 'priority', direction: 'asc' };
+            case 'due-date':
+                return { field: 'due_date', direction: 'asc' };
+            case 'due-date-reverse':
+                return { field: 'due_date', direction: 'desc' };
+            case 'created':
+                return { field: 'created_at', direction: 'desc' };
+            case 'created-reverse':
+                return { field: 'created_at', direction: 'asc' };
+            case 'title':
+                return { field: 'title', direction: 'asc' };
+            case 'title-reverse':
+                return { field: 'title', direction: 'desc' };
+            default:
+                return { field: 'created_at', direction: 'desc' };
+        }
+    }
+
+    mapSortConfigToKey(sortConfig) {
+        if (!sortConfig) return this.currentSort;
+
+        const { field, direction } = sortConfig;
+        const dir = direction === 'asc' ? 'asc' : 'desc';
+        if (field === 'priority') return dir === 'asc' ? 'priority-reverse' : 'priority';
+        if (field === 'due_date') return dir === 'asc' ? 'due-date' : 'due-date-reverse';
+        if (field === 'title') return dir === 'asc' ? 'title' : 'title-reverse';
+        if (field === 'created_at') return dir === 'asc' ? 'created-reverse' : 'created';
+        return 'default';
+    }
+
+    async persistViewState() {
+        if (!this.cache?.setViewState || this.isApplyingRemoteState) return;
+
+        const viewState = {
+            filter: this.currentFilter,
+            status: this.currentFilter,
+            search: this.searchQuery,
+            sort: this.mapSortKeyToConfig(this.currentSort)
+        };
+
+        try {
+            await this.cache.setViewState(this.viewStateKey, viewState);
+        } catch (error) {
+            console.warn('[TaskSearchSort] Failed to persist view state:', error);
+        }
+
+        this.broadcastState(viewState);
+    }
+
+    broadcastState(viewState) {
+        if (this.broadcast?.broadcast) {
+            this.broadcast.broadcast(this.broadcast.EVENTS.FILTER_APPLY, viewState);
+            this.broadcast.broadcast(this.broadcast.EVENTS.SEARCH_QUERY, { query: this.searchQuery });
+            this.broadcast.broadcast(this.broadcast.EVENTS.UI_STATE_SYNC, viewState);
+        }
+
+        if (window.multiTabSync?.broadcastFilterChanged) {
+            window.multiTabSync.broadcastFilterChanged(viewState);
+        }
+    }
+
+    setActiveFilterTab(filter) {
+        const tabs = document.querySelectorAll('.filter-tab');
+        tabs.forEach(tab => {
+            if (tab.dataset.filter === filter) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
     }
     
     sortTasks(tasks, sortType) {
@@ -249,31 +506,34 @@ class TaskSearchSort {
         today.setHours(0, 0, 0, 0);
         const nextWeek = new Date(today);
         nextWeek.setDate(nextWeek.getDate() + 7);
-        
+
         return tasks.filter(task => {
+            const getValue = (prop, datasetKey) => task?.dataset ? task.dataset[datasetKey] : task?.[prop];
+            const priority = getValue('priority', 'priority');
+            const dueDateStr = getValue('due_date', 'dueDate');
+            const assignedTo = getValue('assigned_to', 'assignedTo');
+
             switch (filter) {
                 case 'high-priority':
-                    return task.dataset.priority === 'high';
-                
+                    return priority === 'high';
+
                 case 'today': {
-                    const dueDateStr = task.dataset.dueDate;
                     if (!dueDateStr) return false;
                     const dueDate = new Date(dueDateStr);
                     dueDate.setHours(0, 0, 0, 0);
                     return dueDate.getTime() === today.getTime();
                 }
-                
+
                 case 'this-week': {
-                    const dueDateStr = task.dataset.dueDate;
                     if (!dueDateStr) return false;
                     const dueDate = new Date(dueDateStr);
                     dueDate.setHours(0, 0, 0, 0);
                     return dueDate >= today && dueDate < nextWeek;
                 }
-                
+
                 case 'unassigned':
-                    return !task.dataset.assignedTo || task.dataset.assignedTo === '';
-                
+                    return !assignedTo || assignedTo === '';
+
                 default:
                     return true;
             }
@@ -282,29 +542,29 @@ class TaskSearchSort {
     
     // Public API for external updates
     refresh() {
-        this.applyFiltersAndSort();
+        this.safeApplyFiltersAndSort();
     }
-    
+
     clearSearch() {
         this.searchInput.value = '';
         this.searchQuery = '';
         this.updateClearButton();
-        this.applyFiltersAndSort();
+        this.safeApplyFiltersAndSort();
     }
-    
+
     setFilter(filter) {
         this.currentFilter = filter;
-        this.applyFiltersAndSort();
+        this.safeApplyFiltersAndSort();
     }
-    
+
     setQuickFilter(filter) {
         this.quickFilter = filter;
-        this.applyFiltersAndSort();
+        this.safeApplyFiltersAndSort();
     }
-    
+
     clearQuickFilter() {
         this.quickFilter = null;
-        this.applyFiltersAndSort();
+        this.safeApplyFiltersAndSort();
     }
 }
 

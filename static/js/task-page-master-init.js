@@ -153,8 +153,9 @@
                 
                 const taskId = card.dataset.taskId;
                 const completed = checkbox.checked;
-                
+
                 console.log(`[Checkbox] Task ${taskId} completion toggled to: ${completed}`);
+
                 dispatchTaskEvent('task_update:status_toggle', { taskId, completed });
                 
                 try {
@@ -163,14 +164,18 @@
                         status: completed ? 'completed' : 'todo',
                         completed_at: completed ? new Date().toISOString() : null
                     };
-                    
-                    // Update via optimistic UI
-                    if (window.optimisticUI) {
-                        await window.optimisticUI.updateTask(taskId, updates);
+                    let updatedTask = null;
+
+                    // Update via optimistic UI (ledger-backed + reconciliation aware)
+                    if (window.optimisticUI?.toggleTaskStatus) {
+                        updatedTask = await window.optimisticUI.toggleTaskStatus(taskId);
+                        console.log(`[Checkbox] ✅ Task ${taskId} toggled via optimisticUI.toggleTaskStatus`);
+                    } else if (window.optimisticUI?.updateTask) {
+                        updatedTask = await window.optimisticUI.updateTask(taskId, updates);
                         console.log(`[Checkbox] ✅ Task ${taskId} updated successfully`);
                     } else {
                         console.warn('[Checkbox] optimisticUI not available, falling back to direct API call');
-                        
+
                         // Fallback: Direct API call
                         const response = await fetch(`/api/tasks/${taskId}`, {
                             method: 'PATCH',
@@ -178,11 +183,11 @@
                             credentials: 'same-origin',
                             body: JSON.stringify(updates)
                         });
-                        
+
                         if (!response.ok) {
                             throw new Error('Failed to update task');
                         }
-                        
+
                         // Update UI manually
                         if (completed) {
                             card.classList.add('completed');
@@ -191,8 +196,26 @@
                             card.classList.remove('completed');
                             card.dataset.status = 'pending';
                         }
+
+                        updatedTask = { id: taskId, ...updates };
                     }
-                    
+
+                    // Broadcast cross-tab + refresh local sort/filter counts
+                    if (window.broadcastSync?.broadcast) {
+                        window.broadcastSync.broadcast(window.broadcastSync.EVENTS.TASK_UPDATE, {
+                            taskId,
+                            changes: updates
+                        });
+                    }
+
+                    if (window.multiTabSync?.broadcastTaskUpdated) {
+                        window.multiTabSync.broadcastTaskUpdated(updatedTask || { id: taskId, ...updates });
+                    }
+
+                    if (window.taskSearchSort?.refresh) {
+                        window.taskSearchSort.refresh();
+                    }
+
                     // Telemetry
                     if (window.CROWNTelemetry) {
                         window.CROWNTelemetry.recordMetric('task_checkbox_toggled', 1, { taskId, completed });
