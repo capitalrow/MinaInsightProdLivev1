@@ -11,20 +11,39 @@ class TaskTranscriptNavigation {
 
     init() {
         console.log('[TaskTranscriptNavigation] Initializing...');
-        
+
         // Listen for "jump-to-transcript" actions from task menus
         document.addEventListener('click', (e) => {
-            const jumpBtn = e.target.closest('[data-action="jump-to-transcript"]');
-            if (jumpBtn) {
-                e.preventDefault();
-                const taskId = jumpBtn.closest('.task-menu')?.dataset.taskId;
-                if (taskId) {
-                    this.jumpToTranscript(taskId);
-                }
-            }
+            const jumpBtn = e.target.closest('[data-action="jump-to-transcript"], .jump-to-transcript-btn');
+            if (!jumpBtn) return;
+
+            e.preventDefault();
+
+            const taskId = jumpBtn.dataset.taskId
+                || jumpBtn.closest('[data-task-id]')?.dataset.taskId
+                || jumpBtn.closest('.task-menu')?.dataset.taskId;
+
+            if (!taskId) return;
+
+            this.emitJumpEvent(taskId);
+            this.jumpToTranscript(taskId);
         });
-        
+
         console.log('[TaskTranscriptNavigation] Initialized successfully');
+    }
+
+    emitJumpEvent(taskId) {
+        document.dispatchEvent(new CustomEvent('task:jump-to-transcript', {
+            detail: { taskId }
+        }));
+
+        if (window.eventSequencerBridge?.recordEvent) {
+            try {
+                window.eventSequencerBridge.recordEvent('task:jump-to-transcript', { taskId });
+            } catch (err) {
+                console.warn('[TaskTranscriptNavigation] Unable to forward jump event to sequencer bridge', err);
+            }
+        }
     }
 
     /**
