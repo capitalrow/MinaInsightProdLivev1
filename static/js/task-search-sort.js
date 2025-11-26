@@ -23,6 +23,10 @@ class TaskSearchSort {
         this.currentFilter = 'active'; // Default to 'active' tab to hide archived tasks
         this.quickFilter = null; // Added for quick filter support
 
+        this.handleSearchInput = null;
+        this.handleSearchClear = null;
+        this.handleSortChange = null;
+
         this.init();
         this.hydrateFromViewState();
         this.registerCrossTabSync();
@@ -30,9 +34,10 @@ class TaskSearchSort {
     }
 
     init() {
-        // Search input handler with debouncing
+        // Delegated search handler with debouncing
         let searchTimeout;
-        this.searchInput?.addEventListener('input', (e) => {
+        this.handleSearchInput = (e) => {
+            if (e.target.id !== 'task-search-input') return;
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 this.searchQuery = e.target.value.toLowerCase().trim();
@@ -56,6 +61,39 @@ class TaskSearchSort {
             this.safeApplyFiltersAndSort();
         });
 
+                this.applyFiltersAndSort();
+                document.dispatchEvent(new CustomEvent('task:search', { detail: { query: this.searchQuery } }));
+            }, 150);
+        };
+
+        // Delegated clear button handler
+        this.handleSearchClear = (e) => {
+            const btn = e.target.closest('#search-clear-btn');
+            if (!btn) return;
+            e.preventDefault();
+            this.searchInput = this.searchInput || document.getElementById('task-search-input');
+            if (this.searchInput) {
+                this.searchInput.value = '';
+            }
+            this.searchQuery = '';
+            this.updateClearButton();
+            this.applyFiltersAndSort();
+            this.searchInput?.focus();
+            document.dispatchEvent(new CustomEvent('task:search-cleared'));
+        };
+
+        // Delegated sort selector handler
+        this.handleSortChange = (e) => {
+            if (e.target.id !== 'task-sort-select') return;
+            this.currentSort = e.target.value;
+            this.applyFiltersAndSort();
+            document.dispatchEvent(new CustomEvent('task:sort', { detail: { sort: this.currentSort } }));
+        };
+
+        document.addEventListener('input', this.handleSearchInput);
+        document.addEventListener('click', this.handleSearchClear);
+        document.addEventListener('change', this.handleSortChange);
+        
         // Listen for filter tab changes
         document.addEventListener('filterChanged', (e) => {
             this.currentFilter = e.detail.filter;

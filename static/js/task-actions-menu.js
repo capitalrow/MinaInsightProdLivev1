@@ -157,13 +157,30 @@ class TaskActionsMenu {
      ***************************************************************/
     async handleMenuAction(action, taskId) {
         console.log(`[TaskActionsMenu] Delegating action "${action}" to TaskMenuController`);
-        
+
+        const start = performance.now();
+        window.dispatchEvent(new CustomEvent('task-menu:action', { detail: { action, taskId } }));
+        window.CROWNTelemetry?.recordMetric('task_menu_action_selected', 1, { action, taskId });
+
         // Call unified controller if available
         if (window.taskMenuController) {
             await window.taskMenuController.executeAction(action, taskId);
         } else {
             console.error('[TaskActionsMenu] TaskMenuController not initialized!');
             window.toast?.error('Task menu system not ready. Please refresh the page.');
+        }
+
+        const duration = performance.now() - start;
+        window.CROWNTelemetry?.recordMetric('task_menu_action_duration_ms', duration, { action, taskId });
+
+        try {
+            if (window.reconciliationCycle?.runCycle) {
+                window.reconciliationCycle.runCycle();
+            } else {
+                window.dispatchEvent(new CustomEvent('task-menu:reconcile', { detail: { action, taskId, duration } }));
+            }
+        } catch (reconcileError) {
+            console.warn('[TaskActionsMenu] Failed to trigger reconciliation after action', reconcileError);
         }
     }
     /***************************************************************
@@ -363,6 +380,10 @@ class TaskActionsMenu {
         // Activate tracked menu
         this.activeMenu = menu;
 
+        if (window.CROWNTelemetry) {
+            window.CROWNTelemetry.recordMetric('task_menu_opened', 1, { taskId });
+        }
+
         // Bind actions
         this.bindMenuActions(menu, taskId);
     }
@@ -505,13 +526,20 @@ class TaskActionsMenu {
             // Map action to handler
             const actionMap = {
                 'view-details': 'view-details',
+                'edit': 'edit',
                 'edit-title': 'edit',
+                'toggle-status': 'toggle-status',
                 'toggle-complete': 'toggle-status',
+                'priority': 'priority',
                 'set-priority': 'priority',
+                'due-date': 'due-date',
                 'set-due-date': 'due-date',
                 'assign': 'assign',
                 'labels': 'labels',
                 'jump-to-transcript': 'jump-to-transcript',
+                'duplicate': 'duplicate',
+                'snooze': 'snooze',
+                'merge': 'merge',
                 'archive': 'archive',
                 'delete': 'delete'
             };
@@ -537,20 +565,59 @@ class TaskActionsMenu {
  ***************************************************************/
 window.TaskActionsMenu = TaskActionsMenu;
 
-document.addEventListener("DOMContentLoaded", () => {
-    console.log("[TaskActionsMenu] DOMContentLoaded fired, checking for optimisticUI...");
-    console.log("[TaskActionsMenu] window.optimisticUI exists:", !!window.optimisticUI);
-    
-    const initMenu = () => {
-        if (window.optimisticUI) {
-            console.log("[TaskActionsMenu] Initializing TaskActionsMenu with optimisticUI");
-            window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
-            console.log("[TaskActionsMenu] Initialization complete");
-        } else {
-            console.warn("[TaskActionsMenu] optimisticUI not ready, retrying in 100ms...");
-            setTimeout(initMenu, 100);
-        }
+(function bootstrapTaskActionsMenu() {
+    let retryTimer = null;
+
+    const markReady = (instance, source = 'bootstrap') => {
+        window.taskActionsMenu = instance;
+        window.__taskActionsMenuReady = true;
+        window.dispatchEvent(new CustomEvent('taskActionsMenu:ready', {
+            detail: { source }
+        }));
+        console.log(`[TaskActionsMenu] Ready via ${source}`);
+        return instance;
     };
-    
-    initMenu();
-});
+
+    const attemptInit = (source) => {
+        if (window.__taskActionsMenuReady || window.taskActionsMenu) {
+            return window.taskActionsMenu;
+        }
+
+        if (!window.TaskActionsMenu) {
+            console.error('[TaskActionsMenu] Class not available when attempting init');
+            return null;
+        }
+
+        if (!window.optimisticUI || !window.taskStore) {
+            console.warn('[TaskActionsMenu] Dependencies missing (optimisticUI/taskStore); waiting...');
+            if (!retryTimer) {
+                retryTimer = setTimeout(() => {
+                    retryTimer = null;
+                    attemptInit(source || 'retry');
+                }, 120);
+            }
+            return null;
+        }
+
+        console.log('[TaskActionsMenu] Initializing with optimisticUI + taskStore ready');
+        return markReady(new TaskActionsMenu(window.optimisticUI), source || 'auto');
+    };
+
+    const ensureAfterDom = (source) => {
+        const init = () => attemptInit(source || 'dom');
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init, { once: true });
+        } else {
+            init();
+        }
+
+        window.addEventListener('taskStoreReady', () => attemptInit('taskStoreReady'));
+        window.addEventListener('optimisticUIReady', () => attemptInit('optimisticUIReady'));
+
+        return window.taskActionsMenu;
+    };
+
+    window.bootstrapTaskActionsMenu = ensureAfterDom;
+    ensureAfterDom('bootstrap');
+})();

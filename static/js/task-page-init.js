@@ -112,8 +112,33 @@
         }
     };
 
+    const markActionsMenuReady = (source = 'task-page-init') => {
+        if (INIT_FLAGS.actionsMenu) return;
+        INIT_FLAGS.actionsMenu = true;
+        window.__taskActionsMenuReady = true;
+        console.log(`✅ Task actions menu initialized successfully (${source})`);
+
+        if (window.tasksWS?.init) {
+            try {
+                window.tasksWS.init();
+                console.log('✅ Task WebSocket handlers initialized');
+            } catch (wsError) {
+                console.error('❌ Failed to initialize WebSocket handlers:', wsError);
+            }
+        }
+    };
+
     const ensureTaskActionsMenu = () => {
-        if (INIT_FLAGS.actionsMenu || window.__taskActionsMenuReady) return;
+        if (INIT_FLAGS.actionsMenu || window.__taskActionsMenuReady || window.taskActionsMenu) {
+            markActionsMenuReady('already-ready');
+            return;
+        }
+
+        const readyHandler = (evt) => {
+            markActionsMenuReady(evt?.detail?.source || 'event-ready');
+        };
+
+        window.addEventListener('taskActionsMenu:ready', readyHandler, { once: true });
 
         if (!window.TaskActionsMenu) {
             console.error('❌ TaskActionsMenu class not available!');
@@ -126,21 +151,15 @@
             return;
         }
 
+        if (typeof window.bootstrapTaskActionsMenu === 'function') {
+            window.bootstrapTaskActionsMenu('task-page-init');
+            return;
+        }
+
         const start = () => {
             try {
                 window.taskActionsMenu = new window.TaskActionsMenu(window.optimisticUI);
-                INIT_FLAGS.actionsMenu = true;
-                window.__taskActionsMenuReady = true;
-                console.log('✅ Task actions menu initialized successfully');
-
-                if (window.tasksWS?.init) {
-                    try {
-                        window.tasksWS.init();
-                        console.log('✅ Task WebSocket handlers initialized');
-                    } catch (wsError) {
-                        console.error('❌ Failed to initialize WebSocket handlers:', wsError);
-                    }
-                }
+                markActionsMenuReady('direct-init');
             } catch (error) {
                 console.error('❌ Failed to initialize TaskActionsMenu:', error);
             }

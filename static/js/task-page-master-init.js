@@ -25,6 +25,19 @@
         deleteHandlers: false,
         proposalUI: false
     };
+
+    const dispatchTaskEvent = (eventName, detail = {}) => {
+        document.dispatchEvent(new CustomEvent(eventName, { detail }));
+
+        // Optional bridge to the backend EventSequencer
+        if (window.eventSequencerBridge?.recordEvent) {
+            try {
+                window.eventSequencerBridge.recordEvent(eventName, detail);
+            } catch (err) {
+                console.warn('[MasterInit] Failed to record event with sequencer bridge', err);
+            }
+        }
+    };
     
     /**
      * Initialize filter tabs (All/Active/Archived)
@@ -33,30 +46,29 @@
         if (window.__taskFilterTabsReady) return;
         console.log('[MasterInit] Initializing filter tabs (All/Active/Archived)...');
         
-        const filterTabs = document.querySelectorAll('.filter-tab');
-        
-        filterTabs.forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                e.preventDefault();
-                
-                const filter = tab.dataset.filter;
-                console.log(`[FilterTabs] Switching to filter: ${filter}`);
-                
-                // Update active state
-                filterTabs.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                
-                // Dispatch custom event for TaskSearchSort to listen
-                document.dispatchEvent(new CustomEvent('filterChanged', {
-                    detail: { filter }
-                }));
-                
-                // Telemetry
-                if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordMetric('filter_tab_clicked', 1, { filter });
-                }
-            });
-        });
+        const handleFilterClick = (e) => {
+            const tab = e.target.closest('.filter-tab');
+            if (!tab) return;
+
+            e.preventDefault();
+
+            const filter = tab.dataset.filter;
+            const filterTabs = document.querySelectorAll('.filter-tab');
+
+            console.log(`[FilterTabs] Switching to filter: ${filter}`);
+
+            filterTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            dispatchTaskEvent('filterChanged', { filter });
+            dispatchTaskEvent('task:filter-changed', { filter });
+
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('filter_tab_clicked', 1, { filter });
+            }
+        };
+
+        document.addEventListener('click', handleFilterClick);
         
         initState.filterTabs = true;
         window.__taskFilterTabsReady = true;
@@ -70,41 +82,55 @@
         if (window.__taskNewButtonsReady) return;
         console.log('[MasterInit] Initializing New Task button...');
         
-        const newTaskButtons = [
-            document.getElementById('new-task-btn'),
-            document.getElementById('empty-state-create-btn')
-        ].filter(Boolean);
+        const delegatedHandler = (e) => {
+            const btn = e.target.closest('#new-task-btn, #empty-state-create-btn');
+            if (!btn) return;
 
-        newTaskButtons.forEach(btn => {
-            if (btn.dataset.bound === 'new-task') return;
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                console.log('[NewTask] Button clicked, opening modal...');
+            e.preventDefault();
+            console.log('[NewTask] Button clicked, opening modal...');
 
-                document.dispatchEvent(new CustomEvent('task:create-new'));
+            dispatchTaskEvent('task:create-new', { source: btn.id || 'tasks-header' });
 
-                if (window.taskModalManager?.openCreateModal) {
-                    window.taskModalManager.openCreateModal();
-                } else {
-                    const modalOverlay = document.getElementById('task-modal-overlay');
-                    if (modalOverlay) {
-                        modalOverlay.classList.remove('hidden');
-                        console.log('[NewTask] Modal overlay shown');
-                    } else if (window.toastManager) {
-                        window.toastManager.show('Task creation modal not ready. Please refresh the page.', 'warning', 3000);
-                    }
+            if (window.taskModalManager?.openCreateModal) {
+                window.taskModalManager.openCreateModal();
+            } else {
+                const modalOverlay = document.getElementById('task-modal-overlay');
+                if (modalOverlay) {
+                    modalOverlay.classList.remove('hidden');
+                    console.log('[NewTask] Modal overlay shown');
+                } else if (window.toastManager) {
+                    window.toastManager.show('Task creation modal not ready. Please refresh the page.', 'warning', 3000);
                 }
+            }
 
-                if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordMetric('new_task_button_clicked', 1);
-                }
-            });
-            btn.dataset.bound = 'new-task';
-        });
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('new_task_button_clicked', 1);
+            }
+        };
+
+        document.addEventListener('click', delegatedHandler);
 
         initState.newTaskButton = true;
         window.__taskNewButtonsReady = true;
         console.log('[MasterInit] ✅ New Task button initialized');
+    }
+
+    /**
+     * Initialize delegated task menu trigger events
+     */
+    function initTaskMenuTriggers() {
+        if (window.__taskMenuTriggerDelegationReady) return;
+
+        document.addEventListener('click', (e) => {
+            const trigger = e.target.closest('.task-menu-trigger');
+            if (!trigger) return;
+
+            const taskId = trigger.dataset.taskId;
+            dispatchTaskEvent('task:menu-open', { taskId });
+        });
+
+        window.__taskMenuTriggerDelegationReady = true;
+        console.log('[MasterInit] ✅ Task menu trigger delegation initialized');
     }
     
     /**
@@ -130,6 +156,8 @@
 
                 console.log(`[Checkbox] Task ${taskId} completion toggled to: ${completed}`);
 
+                dispatchTaskEvent('task_update:status_toggle', { taskId, completed });
+                
                 try {
                     // Prepare correct update payload
                     const updates = {
@@ -761,11 +789,13 @@
         // 3. Initialize non-dependent features
         initFilterTabs();
         initNewTaskButton();
+        initTaskMenuTriggers();
         initCheckboxHandlers();
         initRestoreHandlers();
         initDeleteHandlers();
         initTaskMenuHandlers();
-        
+        initTaskActionsMenu();
+
         // 4. Initialize class-based features
         initTaskSearchSort();
         
