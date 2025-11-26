@@ -19,6 +19,7 @@ from services.event_broadcaster import EventBroadcaster
 from services.event_sequencer import event_sequencer
 from services.deduper import deduper
 from services.task_embedding_service import get_embedding_service
+from services.cache_validator import CacheValidator
 
 logger = logging.getLogger(__name__)
 event_broadcaster = EventBroadcaster()
@@ -180,9 +181,24 @@ def list_tasks():
         # Paginate
         tasks = db.paginate(stmt, page=page, per_page=per_page, error_out=False)
         
-        return jsonify({
+        # CROWN⁴.5: Generate checksum for cache validation
+        task_dicts = [task.to_dict() for task in tasks.items]
+        checksum = None
+        if task_dicts:
+            try:
+                # Generate aggregate checksum from individual task checksums
+                sorted_tasks = sorted(task_dicts, key=lambda t: t.get('id', 0))
+                item_checksums = [CacheValidator.generate_checksum(t) for t in sorted_tasks]
+                import hashlib
+                aggregate_data = ''.join(item_checksums)
+                checksum = hashlib.sha256(aggregate_data.encode('utf-8')).hexdigest()
+            except Exception as checksum_err:
+                logger.warning(f"Failed to generate checksum: {checksum_err}")
+                checksum = None
+        
+        response = {
             'success': True,
-            'tasks': [task.to_dict() for task in tasks.items],
+            'tasks': task_dicts,
             'pagination': {
                 'page': tasks.page,
                 'pages': tasks.pages,
@@ -191,7 +207,12 @@ def list_tasks():
                 'has_next': tasks.has_next,
                 'has_prev': tasks.has_prev
             }
-        })
+        }
+        
+        if checksum:
+            response['checksum'] = checksum
+        
+        return jsonify(response)
         
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
