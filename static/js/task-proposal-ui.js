@@ -1,10 +1,13 @@
 class TaskProposalUI {
     constructor(taskUI) {
-        this.taskUI = taskUI;
+        this.taskUI = taskUI || window.optimisticUI;
         this.currentStream = null;
         this.currentAbortController = null;
         this.proposalContainer = null;
+        this.acceptedProposals = new Map();
         this.init();
+        this._bindGenerateButtons();
+        this._registerReconciliationHandlers();
         console.log('[TaskProposalUI] Initialized');
     }
 
@@ -20,6 +23,37 @@ class TaskProposalUI {
                 await this.startProposalStream(e.target);
             } else if (e.target.classList.contains('btn-stop-stream')) {
                 this.stopStream();
+            }
+        });
+    }
+
+    _bindGenerateButtons() {
+        const buttons = document.querySelectorAll('.btn-generate-proposals');
+        buttons.forEach((btn) => {
+            if (btn.dataset.bound === 'ai-proposals-direct') return;
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.startProposalStream(btn);
+            });
+            btn.dataset.bound = 'ai-proposals-direct';
+        });
+    }
+
+    _registerReconciliationHandlers() {
+        window.addEventListener('reconcile:complete', (event) => {
+            const { type, taskId } = event.detail || {};
+            if (type !== 'create') return;
+
+            const entry = this.acceptedProposals.get(taskId);
+            if (!entry) return;
+
+            const { card } = entry;
+            card.classList.remove('proposal-optimistic');
+            card.classList.add('proposal-reconciled');
+
+            const statusEl = card.querySelector('.proposal-status');
+            if (statusEl) {
+                statusEl.textContent = 'Synced to workspace';
             }
         });
     }
@@ -245,7 +279,18 @@ class TaskProposalUI {
         if (!content) return;
 
         const proposalCard = document.createElement('div');
-        proposalCard.className = 'task-card ai-proposal proposal-enter';
+        const confidence = typeof task.confidence === 'number'
+            ? task.confidence
+            : (typeof task.confidence_score === 'number' ? task.confidence_score : null);
+        const confidencePercent = confidence !== null ? Math.round(confidence * 100) : null;
+        const glowClass = confidencePercent !== null
+            ? (confidencePercent >= 85 ? 'proposal-glow-strong' : confidencePercent >= 60 ? 'proposal-glow-medium' : 'proposal-glow-low')
+            : '';
+
+        proposalCard.className = `task-card ai-proposal proposal-enter ${glowClass}`.trim();
+        if (confidencePercent !== null) {
+            proposalCard.dataset.confidence = confidencePercent;
+        }
         proposalCard.innerHTML = `
             <div class="ai-proposal-badge">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -264,6 +309,7 @@ class TaskProposalUI {
                         ${task.priority || 'medium'}
                     </span>
                     ${task.category ? `<span class="category-badge">${this.escapeHtml(task.category)}</span>` : ''}
+                    ${confidencePercent !== null ? `<span class="confidence-pill">${confidencePercent}% confidence</span>` : ''}
                 </div>
             </div>
             <div class="ai-proposal-actions">
@@ -329,6 +375,7 @@ class TaskProposalUI {
             // Check if this is a new proposal (no taskId)
             const proposalData = button.dataset.proposal;
             let result;
+            let payload;
 
             if (taskId) {
                 // Existing task - just accept
@@ -340,19 +387,38 @@ class TaskProposalUI {
             } else if (proposalData) {
                 // New proposal - create task
                 const proposal = JSON.parse(proposalData);
-                const response = await fetch('/api/tasks', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: proposal.title,
-                        description: proposal.description || '',
-                        priority: proposal.priority || 'medium',
-                        category: proposal.category || '',
-                        status: 'todo',
-                        meeting_id: this.getCurrentMeetingId()
-                    })
-                });
-                result = await response.json();
+                payload = {
+                    title: proposal.title,
+                    description: proposal.description || '',
+                    priority: proposal.priority || 'medium',
+                    category: proposal.category || '',
+                    status: 'todo',
+                    meeting_id: this.getCurrentMeetingId(),
+                    source: 'task_nlp:proposed'
+                };
+
+                const dedupeResult = await this._checkDuplicate(payload);
+                payload.origin_hash = dedupeResult?.origin_hash || await this._generateOriginHash(payload);
+
+                if (dedupeResult?.is_duplicate && dedupeResult.existing_task) {
+                    this._highlightDuplicate(card, dedupeResult.existing_task, dedupeResult.confidence);
+                    button.textContent = originalText;
+                    button.disabled = false;
+                    return;
+                }
+
+                if (this.taskUI?.createTask) {
+                    const optimisticTask = await this.taskUI.createTask(payload);
+                    result = { success: true, task: optimisticTask };
+                    this._morphProposalToTask(card, optimisticTask, payload.origin_hash);
+                } else {
+                    const response = await fetch('/api/tasks', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    result = await response.json();
+                }
             } else {
                 throw new Error('No task ID or proposal data');
             }
@@ -385,6 +451,10 @@ class TaskProposalUI {
                 // Show toast notification
                 if (window.ToastNotifications) {
                     window.ToastNotifications.show('Task added successfully', 'success');
+                }
+
+                if (result.task?.id) {
+                    this.acceptedProposals.set(result.task.id, { card, originHash: payload?.origin_hash });
                 }
             } else {
                 throw new Error(result.message || 'Failed to accept proposal');
@@ -476,6 +546,84 @@ class TaskProposalUI {
         // Extract meeting ID from page context or button dataset
         const button = document.querySelector('.btn-generate-proposals');
         return button ? parseInt(button.dataset.meetingId) : null;
+    }
+
+    async _checkDuplicate(payload) {
+        try {
+            const response = await fetch('/api/tasks/check-duplicate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: payload.title,
+                    description: payload.description,
+                    meeting_id: payload.meeting_id
+                })
+            });
+
+            if (!response.ok) return null;
+            return await response.json();
+        } catch (error) {
+            console.warn('[TaskProposalUI] Duplicate check failed:', error);
+            return null;
+        }
+    }
+
+    async _generateOriginHash(payload) {
+        try {
+            const text = `${payload.title || ''}|${payload.description || ''}|${payload.meeting_id || ''}|${payload.category || ''}`;
+            const encoder = new TextEncoder();
+            const data = encoder.encode(text);
+            const buffer = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (error) {
+            console.warn('[TaskProposalUI] Failed to generate origin_hash:', error);
+            return null;
+        }
+    }
+
+    _highlightDuplicate(card, existingTask, confidence) {
+        card.classList.add('proposal-duplicate');
+        const status = card.querySelector('.proposal-status') || document.createElement('div');
+        status.className = 'proposal-status duplicate';
+        status.innerHTML = `Duplicate detected${confidence ? ` (${Math.round(confidence * 100)}% match)` : ''}. Opening existing task…`;
+        if (!card.contains(status)) {
+            card.querySelector('.ai-proposal-actions')?.before(status);
+        }
+
+        if (window.toastManager) {
+            window.toastManager.show('Similar task already exists. Jumping to it.', 'warning');
+        }
+
+        if (existingTask?.id) {
+            window.dispatchEvent(new CustomEvent('task:duplicate-detected', { detail: existingTask }));
+        }
+    }
+
+    _morphProposalToTask(card, optimisticTask, originHash) {
+        card.classList.add('proposal-optimistic');
+        card.dataset.taskId = optimisticTask.id;
+        card.dataset.originHash = originHash || '';
+
+        const status = document.createElement('div');
+        status.className = 'proposal-status syncing';
+        status.textContent = 'Syncing to workspace…';
+        card.querySelector('.ai-proposal-actions')?.before(status);
+
+        const badge = card.querySelector('.ai-proposal-badge');
+        if (badge) {
+            badge.textContent = 'Accepted';
+            badge.classList.add('accepted');
+        }
+
+        const acceptBtn = card.querySelector('.btn-accept-proposal');
+        const rejectBtn = card.querySelector('.btn-reject-proposal');
+        if (acceptBtn) acceptBtn.remove();
+        if (rejectBtn) rejectBtn.remove();
+
+        const content = card.querySelector('.task-content');
+        if (content) {
+            content.classList.add('proposal-to-task');
+        }
     }
 }
 
