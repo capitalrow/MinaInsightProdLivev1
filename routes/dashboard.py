@@ -283,10 +283,6 @@ def tasks():
         # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
         # CROWN⁴.6: Eager load meeting, analytics, and assigned_to relationships for spoken provenance + Impact Score
         # Use distinct(Task.id) to avoid duplicate rows from analytics join (works with JSON columns)
-        # CRITICAL: tasks.workspace_id is VARCHAR, but users/meetings/sessions.workspace_id are INTEGER
-        # Cast current_user.workspace_id to string for Task.workspace_id comparison
-        workspace_id_str = str(current_user.workspace_id)
-        
         all_tasks = db.session.query(Task)\
             .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
             .outerjoin(Session, Task.session_id == Session.id)\
@@ -297,7 +293,7 @@ def tasks():
             )\
             .filter(
                 or_(
-                    Task.workspace_id == workspace_id_str,  # VARCHAR comparison (tasks.workspace_id is VARCHAR)
+                    Task.workspace_id == current_user.workspace_id,
                     Meeting.workspace_id == current_user.workspace_id,  # INTEGER comparison
                     Session.workspace_id == current_user.workspace_id,  # INTEGER comparison
                 )
