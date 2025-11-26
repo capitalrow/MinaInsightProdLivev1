@@ -21,6 +21,19 @@ class TaskTranscriptNavigation {
 
             e.preventDefault();
             this.handleJumpClick(jumpBtn);
+            const jumpBtn = e.target.closest('[data-action="jump-to-transcript"], .jump-to-transcript-btn');
+            if (!jumpBtn) return;
+
+            e.preventDefault();
+
+            const taskId = jumpBtn.dataset.taskId
+                || jumpBtn.closest('[data-task-id]')?.dataset.taskId
+                || jumpBtn.closest('.task-menu')?.dataset.taskId;
+
+            if (!taskId) return;
+
+            this.emitJumpEvent(taskId);
+            this.jumpToTranscript(taskId);
         });
 
         console.log('[TaskTranscriptNavigation] Initialized successfully');
@@ -80,6 +93,17 @@ class TaskTranscriptNavigation {
             }
         } catch (err) {
             console.warn('[TaskTranscriptNavigation] Unable to persist return state', err);
+    emitJumpEvent(taskId) {
+        document.dispatchEvent(new CustomEvent('task:jump-to-transcript', {
+            detail: { taskId }
+        }));
+
+        if (window.eventSequencerBridge?.recordEvent) {
+            try {
+                window.eventSequencerBridge.recordEvent('task:jump-to-transcript', { taskId });
+            } catch (err) {
+                console.warn('[TaskTranscriptNavigation] Unable to forward jump event to sequencer bridge', err);
+            }
         }
     }
 
