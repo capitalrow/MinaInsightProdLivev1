@@ -477,26 +477,26 @@ class OptimisticUI {
     }
 
     /**
-     * Archive task (soft delete for completed tasks)
+     * Archive task (mark as completed - Task model has no archived_at column)
      * @param {number|string} taskId
      * @returns {Promise<Object>}
      */
     async archiveTask(taskId) {
         return this.updateTask(taskId, {
-            archived_at: new Date().toISOString(),
-            status: 'archived'
+            status: 'completed',
+            completed_at: new Date().toISOString()
         });
     }
 
     /**
-     * Unarchive task (restore from archive)
+     * Unarchive task (restore to todo status)
      * @param {number|string} taskId
      * @returns {Promise<Object>}
      */
     async unarchiveTask(taskId) {
         return this.updateTask(taskId, {
-            archived_at: null,
-            status: 'todo'
+            status: 'todo',
+            completed_at: null
         });
     }
 
@@ -524,8 +524,12 @@ class OptimisticUI {
             const container = document.getElementById('tasks-list-container');
             if (container) {
                 const tasks = await this.cache.getTasks();
-                // Filter out deleted and archived tasks
-                const activeTasks = tasks.filter(t => !t.deleted_at && !t.archived_at);
+                // Filter out deleted tasks and archived (completed/cancelled) tasks
+                const activeTasks = tasks.filter(t => {
+                    if (t.deleted_at) return false;
+                    const status = (t.status || '').toLowerCase();
+                    return status !== 'completed' && status !== 'cancelled';
+                });
                 await window.taskBootstrap.renderTasks(activeTasks, { fromCache: true });
             }
         }
@@ -1023,20 +1027,20 @@ class OptimisticUI {
 
         cards.forEach(card => {
             const status = (card.dataset.status || 'todo').toLowerCase();
-            const archivedAt = card.dataset.archivedAt;
             
             // Count by status
             if (counters[status] !== undefined) {
                 counters[status]++;
             }
             
-            // CROWN⁴.6: Active = todo, in_progress, pending (not completed/archived)
-            const isArchived = archivedAt || status === 'archived';
+            // CROWN⁴.6: Active = NOT completed and NOT cancelled (Task model has no archived_at)
+            // Archived = completed or cancelled
             const isCompleted = status === 'completed';
+            const isCancelled = status === 'cancelled';
             
-            if (isArchived) {
+            if (isCompleted || isCancelled) {
                 counters.archived++;
-            } else if (!isCompleted) {
+            } else {
                 counters.active++;
             }
         });
