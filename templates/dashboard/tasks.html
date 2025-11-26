@@ -80,6 +80,9 @@
     </div>
 
     <!-- Filters - All/Active/Archived Tabs (Linear-style) -->
+    <!-- CROWN⁴.6: Fixed counters to use status field (Task model has no archived_at column) -->
+    <!-- Active = todo, in_progress, pending, blocked (not completed/cancelled) -->
+    <!-- Archived = completed or cancelled tasks -->
     <div class="task-filters">
         <button class="filter-tab" data-filter="all">
             All
@@ -90,13 +93,15 @@
         <button class="filter-tab active" data-filter="active">
             Active
             <span class="filter-counter filter-counter-active" data-counter="active">
-                {{ tasks|selectattr('archived_at', 'none')|list|length if tasks else 0 }}
+                {{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }}
             </span>
         </button>
         <button class="filter-tab" data-filter="archived">
             Archived
             <span class="filter-counter filter-counter-archived" data-counter="archived">
-                {{ tasks|selectattr('archived_at', 'defined')|selectattr('archived_at', 'ne', None)|list|length if tasks else 0 }}
+                {% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}
+                {% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}
+                {{ completed_count + cancelled_count }}
             </span>
         </button>
     </div>

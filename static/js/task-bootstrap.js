@@ -840,17 +840,18 @@ class TaskBootstrap {
         // The 'tasks' parameter might be filtered, which would give wrong counts
         const allTasks = await this.cache.getAllTasks();
         
-        // CROWN⁴.6: Define what counts as "active" - todo, in_progress, pending (not completed/archived)
+        // CROWN⁴.6: Define what counts as "active" - todo, in_progress, pending, blocked (not completed/cancelled)
+        // Note: Task model has no archived_at column - use status field
         const isActive = (t) => {
             const status = (t.status || '').toLowerCase();
-            const isArchivedTask = t.archived_at || status === 'archived';
-            const isCompleted = status === 'completed';
-            return !isArchivedTask && !isCompleted;
+            // Active = NOT completed and NOT cancelled
+            return status !== 'completed' && status !== 'cancelled';
         };
         
+        // Archived = completed or cancelled tasks
         const isArchived = (t) => {
             const status = (t.status || '').toLowerCase();
-            return t.archived_at || status === 'archived';
+            return status === 'completed' || status === 'cancelled';
         };
         
         const counters = {
