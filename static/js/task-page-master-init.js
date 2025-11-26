@@ -25,6 +25,30 @@
         deleteHandlers: false,
         proposalUI: false
     };
+
+    function initTaskActionsMenu() {
+        if (window.__taskActionsMenuReady || window.taskActionsMenu) return;
+
+        if (typeof window.bootstrapTaskActionsMenu === 'function') {
+            window.bootstrapTaskActionsMenu('task-page-master-init');
+            return;
+        }
+
+        if (window.TaskActionsMenu && window.optimisticUI && window.taskStore) {
+            try {
+                window.taskActionsMenu = new window.TaskActionsMenu(window.optimisticUI);
+                window.__taskActionsMenuReady = true;
+                console.log('[MasterInit] ✅ TaskActionsMenu initialized (master path)');
+            } catch (error) {
+                console.error('[MasterInit] Failed to initialize TaskActionsMenu from master init:', error);
+            }
+            return;
+        }
+
+        console.warn('[MasterInit] TaskActionsMenu dependencies not ready; retrying when ready events fire');
+        window.addEventListener('taskStoreReady', initTaskActionsMenu, { once: true });
+        window.addEventListener('optimisticUIReady', initTaskActionsMenu, { once: true });
+    }
     
     /**
      * Initialize filter tabs (All/Active/Archived)
@@ -743,7 +767,8 @@
         initRestoreHandlers();
         initDeleteHandlers();
         initTaskMenuHandlers();
-        
+        initTaskActionsMenu();
+
         // 4. Initialize class-based features
         initTaskSearchSort();
         
