@@ -225,7 +225,7 @@ def _validate_socketio_origin(origin):
 
 socketio = SocketIO(
     cors_allowed_origins=_validate_socketio_origin,  # Custom validator for pattern matching
-    async_mode="eventlet",  # Changed from threading to eventlet for proper WebSocket support
+    async_mode=os.getenv("SOCKETIO_ASYNC_MODE", "eventlet"),  # Default to eventlet, overridable for tests
     ping_timeout=60,
     ping_interval=25,
     path="/socket.io",
