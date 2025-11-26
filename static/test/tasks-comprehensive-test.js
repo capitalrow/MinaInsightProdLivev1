@@ -345,6 +345,85 @@ class TasksPageTester {
         this.log('Look for red error messages in the console', 'info');
     }
 
+    async test09TaskSearchSortBindings() {
+        console.log('\n' + '='.repeat(80));
+        console.log('TEST 9: TaskSearchSort bindings & cache sync');
+        console.log('='.repeat(80));
+
+        const controller = window.getTaskSearchSort?.();
+        if (!controller) {
+            this.log('TaskSearchSort instance not found', 'fail');
+            return;
+        }
+
+        const searchInput = document.querySelector('#task-search-input');
+        const sortSelect = document.querySelector('#task-sort-select');
+        const filterTabs = document.querySelectorAll('.filter-tab');
+
+        if (!searchInput || !sortSelect || filterTabs.length === 0) {
+            this.log('Search/sort controls missing', 'fail');
+            return;
+        }
+
+        const uniqueQuery = 'sync-check';
+        searchInput.value = uniqueQuery;
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await this.sleep(500);
+
+        const viewState = window.optimisticUI?.cache?.getViewState
+            ? await window.optimisticUI.cache.getViewState('tasks_page')
+            : window.taskCache?.getViewState
+                ? await window.taskCache.getViewState('tasks_page')
+                : null;
+
+        if (viewState && viewState.search === uniqueQuery) {
+            this.log('Search persisted to ledger-backed view state', 'pass');
+        } else if (viewState) {
+            this.log(`Search view state mismatch (expected ${uniqueQuery}, got ${viewState.search})`, 'fail');
+        } else {
+            this.log('View state cache not available', 'warning');
+        }
+
+        // Sort ordering check
+        const firstTitleBefore = document.querySelector('.task-card .task-title')?.textContent || '';
+        sortSelect.value = 'title';
+        sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        await this.sleep(500);
+
+        const firstTitleAfter = document.querySelector('.task-card .task-title')?.textContent || '';
+        if (firstTitleAfter !== firstTitleBefore) {
+            this.log('Sort select reorders virtual list', 'pass');
+        } else {
+            this.log('Sort select did not visibly reorder tasks (may be identical titles)', 'warning');
+        }
+
+        // Filter tab sync
+        const archivedTab = document.querySelector('.filter-tab[data-filter="archived"]');
+        if (archivedTab) {
+            archivedTab.click();
+            await this.sleep(400);
+
+            if (controller.currentFilter === 'archived') {
+                this.log('Filter tab click updates TaskSearchSort state', 'pass');
+            } else {
+                this.log('TaskSearchSort did not update currentFilter from tab click', 'fail');
+            }
+
+            const activeTab = document.querySelector('.filter-tab[data-filter="active"]');
+            if (activeTab) {
+                activeTab.click();
+                await this.sleep(200);
+            }
+        } else {
+            this.log('Archived filter tab not present', 'warning');
+        }
+
+        // Clear search to avoid cascading effects on following tests
+        searchInput.value = '';
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await this.sleep(400);
+    }
+
     generateReport() {
         console.log('\n' + '='.repeat(80));
         console.log('TEST REPORT SUMMARY');
@@ -396,6 +475,7 @@ class TasksPageTester {
             await this.test06ResponsiveMobile();
             await this.test07EdgeCaseRapidClicking();
             await this.test08ConsoleErrors();
+            await this.test09TaskSearchSortBindings();
         } catch (error) {
             console.error('Error during testing:', error);
             this.log(`Test suite error: ${error.message}`, 'fail');
