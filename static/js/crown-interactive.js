@@ -164,6 +164,14 @@ class CrownModal {
             this.prefersReducedMotion = e.matches;
         });
     }
+    
+    canOpenModal() {
+        if (window.modalManager && window.modalManager.isOpen()) {
+            console.log('[CrownModal] Another modal is active, queuing request');
+            return false;
+        }
+        return true;
+    }
 
     handleTabKey(e) {
         if (!this.activeModal) return;
@@ -211,6 +219,10 @@ class CrownModal {
             showClose = true,
             buttons = []
         } = options;
+
+        if (!this.canOpenModal()) {
+            return null;
+        }
 
         this.previousFocus = document.activeElement;
 
