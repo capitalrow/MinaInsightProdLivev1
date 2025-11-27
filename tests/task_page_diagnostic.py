@@ -212,16 +212,26 @@ class TaskPageDiagnostic:
                 # Step 7: Test menu trigger
                 print("\n🖱️ Step 7: Testing menu trigger...")
                 
-                # Use JavaScript to click menu trigger (avoids visibility issues)
+                # Use JavaScript to simulate hover (making trigger visible) and then click
                 menu_result = await page.evaluate('''() => {
-                    const trigger = document.querySelector('.task-menu-trigger');
+                    const taskCard = document.querySelector('.task-card');
+                    if (!taskCard) return { success: false, error: 'No task card found' };
+                    
+                    // Force trigger visible by simulating hover (set opacity to 1)
+                    const trigger = taskCard.querySelector('.task-menu-trigger');
                     if (!trigger) return { success: false, error: 'No menu trigger found' };
                     
-                    // Get task ID from the trigger's data attribute or parent
-                    const taskCard = trigger.closest('.task-card');
-                    const taskId = taskCard ? taskCard.dataset.taskId : null;
+                    // Make trigger visible (simulating hover effect)
+                    trigger.style.opacity = '1';
+                    trigger.style.visibility = 'visible';
                     
-                    // Click the trigger
+                    // Force layout recalculation
+                    void trigger.offsetHeight;
+                    
+                    // Get task ID
+                    const taskId = taskCard.dataset.taskId;
+                    
+                    // Now click the trigger
                     trigger.click();
                     
                     // Wait and check if menu appeared
@@ -238,12 +248,16 @@ class TaskPageDiagnostic:
                                             style.visibility !== 'hidden' &&
                                             parseFloat(style.opacity) > 0;
                             
+                            // Also check the trigger's bounding rect
+                            const triggerRect = trigger.getBoundingClientRect();
+                            
                             resolve({
                                 success: true,
                                 menuVisible: isVisible,
                                 menuDisplay: style.display,
                                 menuOpacity: style.opacity,
-                                taskId: taskId
+                                taskId: taskId,
+                                triggerDimensions: { width: triggerRect.width, height: triggerRect.height }
                             });
                         }, 500);
                     });
