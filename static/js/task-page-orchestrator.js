@@ -76,6 +76,17 @@ class TasksPageOrchestrator {
                     elapsed
                 }
             }));
+            
+            // Also dispatch dependencies-ready for TaskMenuController
+            document.dispatchEvent(new CustomEvent('tasks:dependencies-ready', {
+                detail: {
+                    modules: this.modules,
+                    status: this.getModuleStatus(),
+                    elapsed
+                }
+            }));
+            
+            console.log('[Orchestrator] Module status:', this.getModuleStatus());
 
             return this.modules;
 
@@ -216,13 +227,19 @@ class TasksPageOrchestrator {
             ['TaskConfirmModal', 'taskConfirmModal'],
             ['TaskDatePicker', 'taskDatePicker'],
             ['TaskPrioritySelector', 'taskPrioritySelector'],
+            ['TaskAssigneeSelector', 'taskAssigneeSelector'],
+            ['TaskLabelsEditor', 'taskLabelsEditor'],
             ['TaskSnoozeModal', 'taskSnoozeModal'],
             ['TaskMergeModal', 'taskMergeModal'],
             ['TaskDuplicateConfirmation', 'taskDuplicateConfirmation']
         ];
 
+        const failedModules = [];
+        
         for (const [className, instanceName] of helpers) {
             if (window[instanceName]) {
+                this.modules[instanceName] = window[instanceName];
+                console.log(`[Orchestrator]   ✓ ${className} (already exists)`);
                 continue;
             }
             
@@ -230,12 +247,48 @@ class TasksPageOrchestrator {
             if (Constructor) {
                 try {
                     window[instanceName] = new Constructor();
+                    this.modules[instanceName] = window[instanceName];
                     console.log(`[Orchestrator]   ✓ ${className}`);
                 } catch (e) {
                     console.warn(`[Orchestrator]   ✗ ${className}: ${e.message}`);
+                    failedModules.push(className);
                 }
+            } else {
+                console.warn(`[Orchestrator]   ✗ ${className}: Constructor not available`);
+                failedModules.push(className);
             }
         }
+        
+        if (failedModules.length > 0) {
+            console.error('[Orchestrator] ❌ Failed to initialize modules:', failedModules.join(', '));
+        }
+        
+        return failedModules;
+    }
+    
+    /**
+     * Check if all critical dependencies are ready
+     */
+    isReady() {
+        const critical = ['optimisticUI', 'taskMenuController', 'taskActionsMenu'];
+        return critical.every(mod => !!this.modules[mod] || !!window[mod]);
+    }
+    
+    /**
+     * Get the status of all modules
+     */
+    getModuleStatus() {
+        const allModules = [
+            'taskCache', 'taskBootstrap', 'optimisticUI', 'taskMenuController', 'taskActionsMenu',
+            'taskConfirmModal', 'taskDatePicker', 'taskPrioritySelector', 'taskAssigneeSelector',
+            'taskLabelsEditor', 'taskSnoozeModal', 'taskMergeModal', 'taskDuplicateConfirmation', 'toast'
+        ];
+        
+        const status = {};
+        for (const mod of allModules) {
+            status[mod] = !!window[mod];
+        }
+        return status;
     }
 }
 
