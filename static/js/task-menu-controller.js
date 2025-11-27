@@ -678,11 +678,22 @@ class TaskMenuController {
     }
 }
 
-// Initialize on DOM ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+// Export class for orchestrator
+window.TaskMenuController = TaskMenuController;
+
+// Auto-instantiate only if orchestrator hasn't taken over
+if (!window._orchestratorActive) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!window.taskMenuController) {
+                window.taskMenuController = new TaskMenuController();
+                console.log('[TaskMenuController] Auto-instantiated on DOMContentLoaded');
+            }
+        });
+    } else if (!window.taskMenuController) {
         window.taskMenuController = new TaskMenuController();
-    });
+        console.log('[TaskMenuController] Auto-instantiated (DOM ready)');
+    }
 } else {
-    window.taskMenuController = new TaskMenuController();
+    console.log('[TaskMenuController] Class loaded (awaiting orchestrator)');
 }

@@ -1198,10 +1198,16 @@ class TaskBootstrap {
     }
 }
 
-// Export singleton
-window.taskBootstrap = new TaskBootstrap();
+// Export class for orchestrator
+window.TaskBootstrap = TaskBootstrap;
 
-console.log('🚀 CROWN⁴.5 TaskBootstrap loaded');
+// Auto-instantiate only if taskCache is ready and orchestrator hasn't taken over
+if (window.taskCache && window.taskCache.ready && !window._orchestratorActive) {
+    window.taskBootstrap = new TaskBootstrap();
+    console.log('🚀 CROWN⁴.5 TaskBootstrap loaded (auto-instantiated)');
+} else {
+    console.log('🚀 CROWN⁴.5 TaskBootstrap class loaded (awaiting orchestrator)');
+}
 
 // ========================================
 // CROWN⁴.5 Empty/Loading/Error State Event Handlers
