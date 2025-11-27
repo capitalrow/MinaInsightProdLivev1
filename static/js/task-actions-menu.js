@@ -537,20 +537,32 @@ class TaskActionsMenu {
  ***************************************************************/
 window.TaskActionsMenu = TaskActionsMenu;
 
-document.addEventListener("DOMContentLoaded", () => {
-    console.log("[TaskActionsMenu] DOMContentLoaded fired, checking for optimisticUI...");
-    console.log("[TaskActionsMenu] window.optimisticUI exists:", !!window.optimisticUI);
-    
-    const initMenu = () => {
-        if (window.optimisticUI) {
-            console.log("[TaskActionsMenu] Initializing TaskActionsMenu with optimisticUI");
-            window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
-            console.log("[TaskActionsMenu] Initialization complete");
-        } else {
-            console.warn("[TaskActionsMenu] optimisticUI not ready, retrying in 100ms...");
-            setTimeout(initMenu, 100);
-        }
-    };
-    
-    initMenu();
-});
+// Let orchestrator handle initialization for proper dependency ordering
+// Only auto-initialize if orchestrator is not active
+if (!window._orchestratorActive) {
+    document.addEventListener("DOMContentLoaded", () => {
+        console.log("[TaskActionsMenu] DOMContentLoaded fired");
+        
+        // Wait for tasks:ready event from orchestrator
+        const initMenu = () => {
+            if (window.taskActionsMenu) {
+                console.log("[TaskActionsMenu] Already initialized by orchestrator");
+                return;
+            }
+            
+            if (window.optimisticUI && window.taskMenuController) {
+                console.log("[TaskActionsMenu] Dependencies ready, initializing...");
+                window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
+                console.log("[TaskActionsMenu] Initialization complete");
+            } else {
+                console.log("[TaskActionsMenu] Awaiting dependencies (optimisticUI:", !!window.optimisticUI, ", taskMenuController:", !!window.taskMenuController, ")");
+                setTimeout(initMenu, 100);
+            }
+        };
+        
+        // Give orchestrator a chance to take over first
+        setTimeout(initMenu, 50);
+    });
+} else {
+    console.log("[TaskActionsMenu] Class loaded (awaiting orchestrator)");
+}
