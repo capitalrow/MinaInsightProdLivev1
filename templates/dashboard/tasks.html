@@ -746,6 +746,9 @@ window.CURRENT_SESSION_ID = null;
 console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, workspaceId: window.WORKSPACE_ID });
 </script>
 
+<!-- Global Modal Manager - Prevents modal stacking on mobile -->
+<script defer src="{{ url_for('static', filename='js/modal-manager.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+
 <!-- SmartSelectors - Reusable UI Components -->
 <script defer src="{{ url_for('static', filename='js/task-smart-selectors.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
 

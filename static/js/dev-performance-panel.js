@@ -21,16 +21,33 @@ class DevPerformancePanel {
     }
     
     checkDevEnvironment() {
-        // Check multiple signals for development mode
+        // Explicit server-provided flag takes priority
+        if (typeof window.__MINA_ENV__ !== 'undefined') {
+            return window.__MINA_ENV__ === 'development';
+        }
+        
+        // Fallback: strict hostname whitelist for development
         const hostname = window.location.hostname;
-        const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-        const isDevReplit = hostname.includes('.riker.replit.dev') || hostname.includes('repl.co');
-        const hasDevFlag = window.MINA_DEV_MODE === true;
+        const devHosts = [
+            'localhost',
+            '127.0.0.1',
+            '0.0.0.0'
+        ];
         
-        // In production (.replit.app or custom domains), hide dev panel
-        const isProdReplit = hostname.includes('.replit.app') && !hostname.includes('dev');
+        // Check if it's a known dev host
+        if (devHosts.includes(hostname)) {
+            return true;
+        }
         
-        return isLocalhost || isDevReplit || hasDevFlag || !isProdReplit;
+        // Check for Replit dev environment patterns
+        if (hostname.includes('.riker.replit.dev') || 
+            hostname.includes('.repl.co') ||
+            hostname.includes('.picard.replit.dev')) {
+            return true;
+        }
+        
+        // Everything else (including .replit.app and custom domains) is production
+        return false;
     }
 
     init() {
