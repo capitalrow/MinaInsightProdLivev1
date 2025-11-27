@@ -62,6 +62,23 @@ class WebSocketManager {
     }
     
     /**
+     * Check if connected to a specific namespace (or any namespace if none specified)
+     * @param {string} [namespace] - Optional namespace to check (e.g., 'tasks', '/tasks')
+     * @returns {boolean} True if connected
+     */
+    getConnectionStatus(namespace) {
+        if (!namespace) {
+            return this.isConnected;
+        }
+        
+        // Normalize namespace (remove leading slash if present)
+        const normalizedNs = namespace.startsWith('/') ? namespace.slice(1) : namespace;
+        const socket = this.sockets[normalizedNs];
+        
+        return socket && socket.connected;
+    }
+    
+    /**
      * Connect to a specific namespace
      * @param {string} namespace - Namespace name (e.g., 'dashboard', 'tasks')
      */
