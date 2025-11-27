@@ -96,19 +96,23 @@ class MeetingHeatmap {
 
     /**
      * Render a single meeting card
+     * Mobile-optimized: horizontal layout with title+date on left, stats on right
      */
     renderMeetingCard(meeting) {
         const heatClass = this.getHeatClass(meeting.heat_intensity);
         const isSelected = this.selectedMeetingId === meeting.meeting_id;
         
-        // Format date
         const dateStr = this.formatMeetingDate(meeting.created_at, meeting.days_ago);
+        const totalTasks = meeting.active_tasks || 0;
         
         return `
             <div class="heatmap-meeting-card ${heatClass} ${isSelected ? 'selected' : ''}" 
                  data-meeting-id="${meeting.meeting_id}"
-                 data-heat="${meeting.heat_intensity}">
-                <div class="meeting-card-glow"></div>
+                 data-heat="${meeting.heat_intensity}"
+                 role="button"
+                 tabindex="0"
+                 aria-label="${this.escapeHtml(meeting.meeting_title)}, ${totalTasks} tasks, ${dateStr}">
+                <div class="meeting-card-glow" aria-hidden="true"></div>
                 <div class="meeting-card-content">
                     <div class="meeting-card-header">
                         <h4 class="meeting-card-title" title="${this.escapeHtml(meeting.meeting_title)}">
@@ -117,24 +121,12 @@ class MeetingHeatmap {
                         <span class="meeting-card-date">${dateStr}</span>
                     </div>
                     <div class="meeting-card-stats">
-                        <div class="stat-badge stat-active" title="${meeting.active_tasks} active tasks">
-                            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+                        <div class="stat-badge stat-active" title="${totalTasks} active tasks">
+                            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
                             </svg>
-                            <span>${meeting.active_tasks}</span>
+                            <span>${totalTasks} tasks</span>
                         </div>
-                        ${meeting.todo_count > 0 ? `
-                            <div class="stat-badge stat-todo" title="${meeting.todo_count} to do">
-                                <span class="stat-dot"></span>
-                                <span>${meeting.todo_count}</span>
-                            </div>
-                        ` : ''}
-                        ${meeting.in_progress_count > 0 ? `
-                            <div class="stat-badge stat-progress" title="${meeting.in_progress_count} in progress">
-                                <span class="stat-dot"></span>
-                                <span>${meeting.in_progress_count}</span>
-                            </div>
-                        ` : ''}
                     </div>
                 </div>
             </div>
