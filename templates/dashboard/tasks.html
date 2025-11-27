@@ -27,19 +27,22 @@
 .skeleton-meta{height:14px;background:#e5e7eb;border-radius:4px;width:40%}
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=6">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/linear-inspired-animations.css') }}?v=1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/linear-inspired-animations.css') }}?v=1" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-heatmap.css') }}?v=2">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-context-preview.css') }}?v=1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-intelligence-mode.css') }}?v=1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/semantic-search.css') }}?v=1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/stress-indicators.css') }}?v=1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/dev-performance-panel.css') }}?v=1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-completion-ux.css') }}?v=3" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-confirmation-modal.css') }}?v=1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-date-picker.css') }}?v=1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-priority-selector.css') }}?v=1" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-action-modals.css') }}?v=1" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-context-preview.css') }}?v=1" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-intelligence-mode.css') }}?v=1" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/semantic-search.css') }}?v=1" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/stress-indicators.css') }}?v=1" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dev-performance-panel.css') }}?v=1" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-completion-ux.css') }}?v=3" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-confirmation-modal.css') }}?v=1" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-date-picker.css') }}?v=1" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-priority-selector.css') }}?v=1" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-action-modals.css') }}?v=1" media="print" data-async-css>
+<script nonce="{{ csp_nonce }}">
+(function(){var a=document.querySelectorAll('link[data-async-css]');a.forEach(function(l){l.onload=function(){l.media='all'};if(l.sheet)l.media='all'})})();
+</script>
 {% endblock %}
 
 {% block content %}
