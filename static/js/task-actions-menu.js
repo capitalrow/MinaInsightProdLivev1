@@ -537,32 +537,26 @@ class TaskActionsMenu {
  ***************************************************************/
 window.TaskActionsMenu = TaskActionsMenu;
 
-// Let orchestrator handle initialization for proper dependency ordering
-// Only auto-initialize if orchestrator is not active
-if (!window._orchestratorActive) {
-    document.addEventListener("DOMContentLoaded", () => {
-        console.log("[TaskActionsMenu] DOMContentLoaded fired");
+// Auto-initialize with retry logic for dependencies
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("[TaskActionsMenu] DOMContentLoaded fired");
+    
+    const initMenu = () => {
+        if (window.taskActionsMenu) {
+            console.log("[TaskActionsMenu] Already initialized");
+            return;
+        }
         
-        // Wait for tasks:ready event from orchestrator
-        const initMenu = () => {
-            if (window.taskActionsMenu) {
-                console.log("[TaskActionsMenu] Already initialized by orchestrator");
-                return;
-            }
-            
-            if (window.optimisticUI && window.taskMenuController) {
-                console.log("[TaskActionsMenu] Dependencies ready, initializing...");
-                window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
-                console.log("[TaskActionsMenu] Initialization complete");
-            } else {
-                console.log("[TaskActionsMenu] Awaiting dependencies (optimisticUI:", !!window.optimisticUI, ", taskMenuController:", !!window.taskMenuController, ")");
-                setTimeout(initMenu, 100);
-            }
-        };
-        
-        // Give orchestrator a chance to take over first
-        setTimeout(initMenu, 50);
-    });
-} else {
-    console.log("[TaskActionsMenu] Class loaded (awaiting orchestrator)");
-}
+        if (window.optimisticUI) {
+            console.log("[TaskActionsMenu] Dependencies ready, initializing...");
+            window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
+            console.log("[TaskActionsMenu] Initialization complete");
+        } else {
+            console.log("[TaskActionsMenu] Awaiting optimisticUI...");
+            setTimeout(initMenu, 100);
+        }
+    };
+    
+    // Start initialization with short delay to allow other modules to load
+    setTimeout(initMenu, 50);
+});

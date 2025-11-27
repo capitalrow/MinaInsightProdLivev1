@@ -1,11 +1,13 @@
 /**
  * CROWN⁴.6 TasksPageOrchestrator - Unified Module Initialization
  * 
- * Solves script loading race conditions by:
- * 1. Waiting for IndexedDB/TaskCache to be ready
- * 2. Instantiating modules in correct dependency order
- * 3. Registering them on window
- * 4. Dispatching tasks:ready event for downstream consumers
+ * Loaded LAST after all task module scripts. Ensures:
+ * 1. TaskCache is initialized (IndexedDB ready)
+ * 2. All critical modules are instantiated in correct dependency order
+ * 3. Fires tasks:ready event when all modules are ready
+ * 
+ * This orchestrator doesn't prevent modules from auto-initializing -
+ * it ensures they ARE initialized even if auto-init failed.
  */
 
 class TasksPageOrchestrator {
@@ -13,15 +15,8 @@ class TasksPageOrchestrator {
         this.initialized = false;
         this.initPromise = null;
         this.modules = {};
-        
-        // Signal to other modules that orchestrator is managing initialization
-        window._orchestratorActive = true;
     }
 
-    /**
-     * Initialize all task page modules in correct dependency order
-     * @returns {Promise} Resolves when all modules are ready
-     */
     async init() {
         if (this.initialized) {
             console.log('[Orchestrator] Already initialized');
@@ -47,53 +42,21 @@ class TasksPageOrchestrator {
             await this._waitForTaskCache();
             console.log('[Orchestrator] ✅ TaskCache ready');
 
-            // Step 2: Initialize TaskBootstrap (depends on TaskCache)
-            console.log('[Orchestrator] Step 2: Initializing TaskBootstrap...');
-            if (typeof TaskBootstrap !== 'undefined' && !window.taskBootstrap) {
-                window.taskBootstrap = new TaskBootstrap();
-                this.modules.taskBootstrap = window.taskBootstrap;
-                console.log('[Orchestrator] ✅ TaskBootstrap created');
-            } else if (window.taskBootstrap) {
-                this.modules.taskBootstrap = window.taskBootstrap;
-                console.log('[Orchestrator] ✅ TaskBootstrap already exists');
-            }
+            // Step 2: Ensure TaskBootstrap exists (depends on TaskCache)
+            console.log('[Orchestrator] Step 2: Ensuring TaskBootstrap...');
+            await this._ensureTaskBootstrap();
 
-            // Step 3: Initialize OptimisticUI (depends on TaskCache)
-            console.log('[Orchestrator] Step 3: Initializing OptimisticUI...');
-            if (typeof OptimisticUI !== 'undefined' && !window.optimisticUI) {
-                window.optimisticUI = new OptimisticUI();
-                this.modules.optimisticUI = window.optimisticUI;
-                console.log('[Orchestrator] ✅ OptimisticUI created');
-            } else if (window.optimisticUI) {
-                this.modules.optimisticUI = window.optimisticUI;
-                console.log('[Orchestrator] ✅ OptimisticUI already exists');
-            }
+            // Step 3: Ensure OptimisticUI exists (depends on TaskCache)
+            console.log('[Orchestrator] Step 3: Ensuring OptimisticUI...');
+            await this._ensureOptimisticUI();
 
-            // Step 4: Initialize TaskMenuController
-            console.log('[Orchestrator] Step 4: Initializing TaskMenuController...');
-            if (typeof TaskMenuController !== 'undefined' && !window.taskMenuController) {
-                window.taskMenuController = new TaskMenuController();
-                this.modules.taskMenuController = window.taskMenuController;
-                console.log('[Orchestrator] ✅ TaskMenuController created');
-            } else if (window.taskMenuController) {
-                this.modules.taskMenuController = window.taskMenuController;
-                console.log('[Orchestrator] ✅ TaskMenuController already exists');
-            }
+            // Step 4: Ensure TaskMenuController exists
+            console.log('[Orchestrator] Step 4: Ensuring TaskMenuController...');
+            await this._ensureTaskMenuController();
 
-            // Step 5: Initialize TaskActionsMenu (depends on OptimisticUI, TaskMenuController)
-            console.log('[Orchestrator] Step 5: Initializing TaskActionsMenu...');
-            if (typeof TaskActionsMenu !== 'undefined' && !window.taskActionsMenu) {
-                if (window.optimisticUI) {
-                    window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
-                    this.modules.taskActionsMenu = window.taskActionsMenu;
-                    console.log('[Orchestrator] ✅ TaskActionsMenu created');
-                } else {
-                    console.warn('[Orchestrator] ⚠️ Cannot create TaskActionsMenu - OptimisticUI not available');
-                }
-            } else if (window.taskActionsMenu) {
-                this.modules.taskActionsMenu = window.taskActionsMenu;
-                console.log('[Orchestrator] ✅ TaskActionsMenu already exists');
-            }
+            // Step 5: Ensure TaskActionsMenu exists (depends on OptimisticUI, TaskMenuController)
+            console.log('[Orchestrator] Step 5: Ensuring TaskActionsMenu...');
+            await this._ensureTaskActionsMenu();
 
             // Step 6: Initialize helper modules
             console.log('[Orchestrator] Step 6: Initializing helper modules...');
@@ -104,6 +67,7 @@ class TasksPageOrchestrator {
             
             const elapsed = Math.round(performance.now() - startTime);
             console.log(`[Orchestrator] ========== All Modules Ready in ${elapsed}ms ==========`);
+            console.log('[Orchestrator] Modules:', Object.keys(this.modules).join(', '));
 
             // Dispatch ready event for downstream consumers
             document.dispatchEvent(new CustomEvent('tasks:ready', {
@@ -121,11 +85,7 @@ class TasksPageOrchestrator {
         }
     }
 
-    /**
-     * Wait for TaskCache to be initialized
-     */
     async _waitForTaskCache() {
-        // If taskCache exists and has init method, call it
         if (window.taskCache) {
             if (window.taskCache.ready) {
                 return window.taskCache;
@@ -136,7 +96,6 @@ class TasksPageOrchestrator {
             }
         }
 
-        // Wait for taskCache to appear (max 5 seconds)
         return new Promise((resolve, reject) => {
             const maxWait = 5000;
             const startTime = Date.now();
@@ -167,64 +126,124 @@ class TasksPageOrchestrator {
         });
     }
 
-    /**
-     * Initialize helper modules (confirmation modals, pickers, etc.)
-     */
+    async _ensureTaskBootstrap() {
+        if (window.taskBootstrap) {
+            this.modules.taskBootstrap = window.taskBootstrap;
+            console.log('[Orchestrator] ✅ TaskBootstrap already exists');
+            return;
+        }
+        
+        if (typeof TaskBootstrap !== 'undefined') {
+            window.taskBootstrap = new TaskBootstrap();
+            this.modules.taskBootstrap = window.taskBootstrap;
+            console.log('[Orchestrator] ✅ TaskBootstrap created');
+        } else if (typeof window.TaskBootstrap !== 'undefined') {
+            window.taskBootstrap = new window.TaskBootstrap();
+            this.modules.taskBootstrap = window.taskBootstrap;
+            console.log('[Orchestrator] ✅ TaskBootstrap created (from window.TaskBootstrap)');
+        } else {
+            console.warn('[Orchestrator] ⚠️ TaskBootstrap class not available');
+        }
+    }
+
+    async _ensureOptimisticUI() {
+        if (window.optimisticUI) {
+            this.modules.optimisticUI = window.optimisticUI;
+            console.log('[Orchestrator] ✅ OptimisticUI already exists');
+            return;
+        }
+        
+        if (typeof OptimisticUI !== 'undefined') {
+            window.optimisticUI = new OptimisticUI();
+            this.modules.optimisticUI = window.optimisticUI;
+            console.log('[Orchestrator] ✅ OptimisticUI created');
+        } else if (typeof window.OptimisticUI !== 'undefined') {
+            window.optimisticUI = new window.OptimisticUI();
+            this.modules.optimisticUI = window.optimisticUI;
+            console.log('[Orchestrator] ✅ OptimisticUI created (from window.OptimisticUI)');
+        } else {
+            console.warn('[Orchestrator] ⚠️ OptimisticUI class not available');
+        }
+    }
+
+    async _ensureTaskMenuController() {
+        if (window.taskMenuController) {
+            this.modules.taskMenuController = window.taskMenuController;
+            console.log('[Orchestrator] ✅ TaskMenuController already exists');
+            return;
+        }
+        
+        if (typeof TaskMenuController !== 'undefined') {
+            window.taskMenuController = new TaskMenuController();
+            this.modules.taskMenuController = window.taskMenuController;
+            console.log('[Orchestrator] ✅ TaskMenuController created');
+        } else if (typeof window.TaskMenuController !== 'undefined') {
+            window.taskMenuController = new window.TaskMenuController();
+            this.modules.taskMenuController = window.taskMenuController;
+            console.log('[Orchestrator] ✅ TaskMenuController created (from window.TaskMenuController)');
+        } else {
+            console.warn('[Orchestrator] ⚠️ TaskMenuController class not available');
+        }
+    }
+
+    async _ensureTaskActionsMenu() {
+        if (window.taskActionsMenu) {
+            this.modules.taskActionsMenu = window.taskActionsMenu;
+            console.log('[Orchestrator] ✅ TaskActionsMenu already exists');
+            return;
+        }
+        
+        if (!window.optimisticUI) {
+            console.warn('[Orchestrator] ⚠️ Cannot create TaskActionsMenu - OptimisticUI not available');
+            return;
+        }
+        
+        if (typeof TaskActionsMenu !== 'undefined') {
+            window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
+            this.modules.taskActionsMenu = window.taskActionsMenu;
+            console.log('[Orchestrator] ✅ TaskActionsMenu created');
+        } else if (typeof window.TaskActionsMenu !== 'undefined') {
+            window.taskActionsMenu = new window.TaskActionsMenu(window.optimisticUI);
+            this.modules.taskActionsMenu = window.taskActionsMenu;
+            console.log('[Orchestrator] ✅ TaskActionsMenu created (from window.TaskActionsMenu)');
+        } else {
+            console.warn('[Orchestrator] ⚠️ TaskActionsMenu class not available');
+        }
+    }
+
     async _initHelperModules() {
-        // Task Confirmation Modal
-        if (typeof TaskConfirmModal !== 'undefined' && !window.taskConfirmModal) {
-            window.taskConfirmModal = new TaskConfirmModal();
-            console.log('[Orchestrator]   ✓ TaskConfirmModal');
-        }
+        const helpers = [
+            ['TaskConfirmModal', 'taskConfirmModal'],
+            ['TaskDatePicker', 'taskDatePicker'],
+            ['TaskPrioritySelector', 'taskPrioritySelector'],
+            ['TaskSnoozeModal', 'taskSnoozeModal'],
+            ['TaskMergeModal', 'taskMergeModal'],
+            ['TaskDuplicateConfirmation', 'taskDuplicateConfirmation']
+        ];
 
-        // Task Date Picker
-        if (typeof TaskDatePicker !== 'undefined' && !window.taskDatePicker) {
-            window.taskDatePicker = new TaskDatePicker();
-            console.log('[Orchestrator]   ✓ TaskDatePicker');
-        }
-
-        // Task Priority Selector
-        if (typeof TaskPrioritySelector !== 'undefined' && !window.taskPrioritySelector) {
-            window.taskPrioritySelector = new TaskPrioritySelector();
-            console.log('[Orchestrator]   ✓ TaskPrioritySelector');
-        }
-
-        // Task Snooze Modal
-        if (typeof TaskSnoozeModal !== 'undefined' && !window.taskSnoozeModal) {
-            window.taskSnoozeModal = new TaskSnoozeModal();
-            console.log('[Orchestrator]   ✓ TaskSnoozeModal');
-        }
-
-        // Task Merge Modal
-        if (typeof TaskMergeModal !== 'undefined' && !window.taskMergeModal) {
-            window.taskMergeModal = new TaskMergeModal();
-            console.log('[Orchestrator]   ✓ TaskMergeModal');
-        }
-
-        // Task Duplicate Confirmation
-        if (typeof TaskDuplicateConfirmation !== 'undefined' && !window.taskDuplicateConfirmation) {
-            window.taskDuplicateConfirmation = new TaskDuplicateConfirmation();
-            console.log('[Orchestrator]   ✓ TaskDuplicateConfirmation');
+        for (const [className, instanceName] of helpers) {
+            if (window[instanceName]) {
+                continue;
+            }
+            
+            const Constructor = window[className] || (typeof eval(className) !== 'undefined' ? eval(className) : null);
+            if (Constructor) {
+                try {
+                    window[instanceName] = new Constructor();
+                    console.log(`[Orchestrator]   ✓ ${className}`);
+                } catch (e) {
+                    console.warn(`[Orchestrator]   ✗ ${className}: ${e.message}`);
+                }
+            }
         }
     }
 }
 
-// Create orchestrator and expose ready promise
+// Create orchestrator instance
 window.tasksOrchestrator = new TasksPageOrchestrator();
 
-// Auto-initialize when DOM is ready and all scripts have loaded
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        // Small delay to ensure all deferred scripts have executed
-        setTimeout(() => {
-            window.tasksReady = window.tasksOrchestrator.init();
-        }, 10);
-    });
-} else {
-    // DOM already loaded, but wait a tick for other scripts
-    setTimeout(() => {
-        window.tasksReady = window.tasksOrchestrator.init();
-    }, 10);
-}
+// Initialize immediately since we're loaded last
+// All deferred scripts should have executed by now
+window.tasksReady = window.tasksOrchestrator.init();
 
-console.log('[Orchestrator] TasksPageOrchestrator loaded - awaiting DOM ready');
+console.log('[Orchestrator] TasksPageOrchestrator loaded - initializing immediately');
