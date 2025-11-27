@@ -48,7 +48,7 @@ class OptimisticUI {
             this.rehydrationComplete = true;
             
             // Auto-retry pending (non-failed) operations if online
-            if (window.wsManager && window.wsManager.isConnected('/tasks')) {
+            if (window.wsManager && window.wsManager.getConnectionStatus('/tasks')) {
                 const pendingOps = Array.from(this.pendingOperations.entries())
                     .filter(([_, op]) => !op.failed);
                 
