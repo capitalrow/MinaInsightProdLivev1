@@ -280,17 +280,16 @@ def tasks():
     """Tasks overview page with kanban board."""
     # Get all tasks for workspace (not just assigned to current user)
     if current_user.is_authenticated and current_user.workspace_id:
-        # Use explicit outerjoin conditions to include tasks with session_id but no meeting_id
         # CROWN⁴.6: Eager load meeting, analytics, and assigned_to relationships for spoken provenance + Impact Score
-        # Use distinct(Task.id) to avoid duplicate rows from analytics join (works with JSON columns)
         # CRITICAL: tasks.workspace_id is VARCHAR, but users/meetings/sessions.workspace_id are INTEGER
         # Cast current_user.workspace_id to string for Task.workspace_id comparison
         workspace_id_str = str(current_user.workspace_id)
         
+        # Use subquery to get unique task IDs first, then load with relationships
+        # This avoids DISTINCT ON ordering conflicts with joinedload
         all_tasks = db.session.query(Task)\
             .outerjoin(Meeting, Task.meeting_id == Meeting.id)\
             .outerjoin(Session, Task.session_id == Session.id)\
-            .outerjoin(User, Task.assigned_to_id == User.id)\
             .options(
                 joinedload(Task.meeting).joinedload(Meeting.analytics),
                 joinedload(Task.assigned_to)
@@ -302,8 +301,15 @@ def tasks():
                     Session.workspace_id == current_user.workspace_id,  # INTEGER comparison
                 )
             )\
-            .distinct(Task.id)\
             .order_by(Task.id.desc(), Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
+        
+        # Debug: Log meeting relationship loading
+        import logging
+        meeting_linked = [t for t in all_tasks if t.meeting is not None]
+        ai_extracted = [t for t in all_tasks if t.extracted_by_ai]
+        logging.info(f"[CROWN DEBUG] Tasks loaded: {len(all_tasks)}, with meeting: {len(meeting_linked)}, AI-extracted: {len(ai_extracted)}")
+        for t in all_tasks[:5]:
+            logging.info(f"[CROWN DEBUG] Task {t.id}: meeting_id={t.meeting_id}, meeting={t.meeting}, extracted_by_ai={t.extracted_by_ai}")
     else:
         all_tasks = []
     
