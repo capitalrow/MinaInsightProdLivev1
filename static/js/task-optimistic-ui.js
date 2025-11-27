@@ -1494,10 +1494,10 @@ class OptimisticUI {
 // Export class for orchestrator
 window.OptimisticUI = OptimisticUI;
 
-// Auto-instantiate only if taskCache is ready and orchestrator hasn't taken over
-if (window.taskCache && window.taskCache.ready && !window._orchestratorActive) {
+// Auto-instantiate if taskCache is ready
+if (window.taskCache && window.taskCache.ready) {
     window.optimisticUI = new OptimisticUI();
     console.log('⚡ CROWN⁴.5 OptimisticUI loaded (auto-instantiated)');
 } else {
-    console.log('⚡ CROWN⁴.5 OptimisticUI class loaded (awaiting orchestrator)');
+    console.log('⚡ CROWN⁴.5 OptimisticUI class loaded (orchestrator will instantiate)');
 }
