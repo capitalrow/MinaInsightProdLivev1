@@ -833,75 +833,27 @@ class TaskBootstrap {
 
     /**
      * Update task counters in UI
-     * CRITICAL: This must ALWAYS calculate counts from ALL tasks, not filtered subset
-     * CROWN⁴.6: Counters must match HTML data-counter attributes: all, active, archived
-     * @param {Array} tasks - Currently displayed tasks (may be filtered)
+     * CROWN⁴.6: Delegates to _updateCountersFromDOM() for single source of truth
+     * Kept for backward compatibility with external callers
+     * @param {Array} tasks - Ignored, DOM is source of truth
+     * @deprecated Use _updateCountersFromDOM() directly for sync updates
      */
     async updateCounters(tasks) {
-        // Fetch ALL tasks from cache to get correct totals
-        // The 'tasks' parameter might be filtered, which would give wrong counts
-        const allTasks = await this.cache.getAllTasks();
-        
-        // CROWN⁴.6: Define what counts as "active" - todo, in_progress, pending, blocked (not completed/cancelled)
-        // Note: Task model has no archived_at column - use status field
-        const isActive = (t) => {
-            const status = (t.status || '').toLowerCase();
-            // Active = NOT completed and NOT cancelled
-            return status !== 'completed' && status !== 'cancelled';
-        };
-        
-        // Archived = completed or cancelled tasks
-        const isArchived = (t) => {
-            const status = (t.status || '').toLowerCase();
-            return status === 'completed' || status === 'cancelled';
-        };
-        
-        const counters = {
-            // Matches HTML data-counter="all" - total non-deleted tasks
-            all: allTasks.length,
-            // Matches HTML data-counter="active" - todo, in_progress, pending (not completed/archived)
-            active: allTasks.filter(isActive).length,
-            // Matches HTML data-counter="archived" - archived tasks
-            archived: allTasks.filter(isArchived).length,
-            // Additional counters for internal use
-            todo: allTasks.filter(t => t.status === 'todo').length,
-            in_progress: allTasks.filter(t => t.status === 'in_progress').length,
-            pending: allTasks.filter(t => t.status === 'pending').length,
-            completed: allTasks.filter(t => t.status === 'completed').length,
-            overdue: allTasks.filter(t => this.isDueDateOverdue(t.due_date) && isActive(t)).length
-        };
-        
-        console.log('[TaskBootstrap] Counter update:', { all: counters.all, active: counters.active, archived: counters.archived });
-
-        // Update counter badges with emotional pulse animation
-        Object.entries(counters).forEach(([key, count]) => {
-            const badge = document.querySelector(`[data-counter="${key}"]`);
-            if (badge) {
-                const oldCount = parseInt(badge.textContent, 10) || 0;
-                badge.textContent = count;
-                
-                // Add CROWN⁴.5 emotional pulse animation on counter change
-                if (oldCount !== count && window.emotionalAnimations) {
-                    window.emotionalAnimations.pulse(badge, {
-                        emotion_cue: 'counter_update'
-                    });
-                } else {
-                    // Fallback: simple CSS animation
-                    badge.classList.remove('counter-pulse');
-                    void badge.offsetWidth; // Trigger reflow
-                    badge.classList.add('counter-pulse');
-                }
-            }
-        });
+        // CROWN⁴.6 FIX: Delegate to DOM-based counter for single source of truth
+        // This eliminates race conditions between cache and DOM state
+        console.log('[TaskBootstrap] updateCounters() delegating to _updateCountersFromDOM() for consistency');
+        this._updateCountersFromDOM();
     }
 
     /**
      * CROWN⁴.6: Synchronous DOM-based counter update
-     * Counts visible .task-card elements directly - no async/cache dependency
-     * Ensures counters always match what user sees on screen
+     * Counts ALL .task-card elements (including hidden filtered ones)
+     * Counter badges show totals for each category across all tasks
+     * Filtering only affects visibility, not counter totals
      */
     _updateCountersFromDOM() {
-        const cards = document.querySelectorAll('.task-card:not([style*="display: none"])');
+        // Count ALL task cards, including ones hidden by filter
+        const cards = document.querySelectorAll('.task-card');
         const counters = {
             all: cards.length,
             active: 0,
@@ -913,10 +865,12 @@ class TaskBootstrap {
         };
 
         cards.forEach(card => {
-            const status = (card.dataset.status || 'todo').toLowerCase();
+            // Safe status extraction with fallback
+            const rawStatus = card.dataset?.status;
+            const status = rawStatus ? rawStatus.toLowerCase().trim() : 'todo';
             
-            // Count by status
-            if (counters[status] !== undefined) {
+            // Count by status (for future use)
+            if (counters.hasOwnProperty(status)) {
                 counters[status]++;
             }
             
@@ -934,15 +888,20 @@ class TaskBootstrap {
 
         console.log('[TaskBootstrap] DOM counter update:', { all: counters.all, active: counters.active, archived: counters.archived });
 
-        // Update counter badges with animation
+        // Update counter badges with emotional animation
         Object.entries(counters).forEach(([key, count]) => {
             const badge = document.querySelector(`[data-counter="${key}"]`);
             if (badge) {
                 const oldCount = parseInt(badge.textContent, 10) || 0;
                 badge.textContent = count;
                 
-                // Add pulse animation on counter change
-                if (oldCount !== count) {
+                // Add CROWN⁴.5 emotional pulse animation on counter change
+                if (oldCount !== count && window.emotionalAnimations) {
+                    window.emotionalAnimations.pulse(badge, {
+                        emotion_cue: 'counter_update'
+                    });
+                } else if (oldCount !== count) {
+                    // Fallback: simple CSS animation
                     badge.classList.remove('counter-pulse');
                     void badge.offsetWidth; // Trigger reflow
                     badge.classList.add('counter-pulse');

@@ -1011,46 +1011,42 @@ class OptimisticUI {
 
     /**
      * Update task counters
-     * CROWN⁴.6: Counters must match HTML data-counter attributes: all, active, archived
+     * CROWN⁴.6: Delegates to TaskBootstrap for single source of truth
+     * Ensures consistent counter updates across optimistic UI, cache, and server paths
      */
     _updateCounters() {
-        const cards = document.querySelectorAll('.task-card');
-        const counters = {
-            all: cards.length,
-            active: 0,
-            archived: 0,
-            todo: 0,
-            in_progress: 0,
-            pending: 0,
-            completed: 0
-        };
+        // CROWN⁴.6 FIX: Delegate to TaskBootstrap's DOM-based counter method
+        // This ensures counters are always consistent with visible DOM state
+        if (window.taskBootstrap && typeof window.taskBootstrap._updateCountersFromDOM === 'function') {
+            window.taskBootstrap._updateCountersFromDOM();
+        } else {
+            // Fallback: direct DOM counting if TaskBootstrap not ready
+            const cards = document.querySelectorAll('.task-card');
+            const counters = {
+                all: cards.length,
+                active: 0,
+                archived: 0
+            };
 
-        cards.forEach(card => {
-            const status = (card.dataset.status || 'todo').toLowerCase();
-            
-            // Count by status
-            if (counters[status] !== undefined) {
-                counters[status]++;
-            }
-            
-            // CROWN⁴.6: Active = NOT completed and NOT cancelled (Task model has no archived_at)
-            // Archived = completed or cancelled
-            const isCompleted = status === 'completed';
-            const isCancelled = status === 'cancelled';
-            
-            if (isCompleted || isCancelled) {
-                counters.archived++;
-            } else {
-                counters.active++;
-            }
-        });
+            cards.forEach(card => {
+                const status = (card.dataset?.status || 'todo').toLowerCase().trim();
+                const isCompleted = status === 'completed';
+                const isCancelled = status === 'cancelled';
+                
+                if (isCompleted || isCancelled) {
+                    counters.archived++;
+                } else {
+                    counters.active++;
+                }
+            });
 
-        Object.entries(counters).forEach(([key, count]) => {
-            const badge = document.querySelector(`[data-counter="${key}"]`);
-            if (badge) {
-                badge.textContent = count;
-            }
-        });
+            Object.entries(counters).forEach(([key, count]) => {
+                const badge = document.querySelector(`[data-counter="${key}"]`);
+                if (badge) {
+                    badge.textContent = count;
+                }
+            });
+        }
     }
 
     /**
