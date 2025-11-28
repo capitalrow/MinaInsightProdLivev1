@@ -672,6 +672,46 @@
     async function initializeAllFeatures() {
         console.log('[MasterInit] Starting comprehensive initialization...');
         
+        // 0. CRITICAL: Initialize WebSocket connection to /tasks namespace FIRST
+        // This MUST happen before any task operations to ensure real-time sync works
+        if (window.wsManager && window.WORKSPACE_ID) {
+            console.log('[MasterInit] Initializing /tasks WebSocket connection...');
+            try {
+                // Check if already connected to tasks namespace
+                const isTasksConnected = window.wsManager.getConnectionStatus('tasks');
+                if (!isTasksConnected) {
+                    window.wsManager.init(window.WORKSPACE_ID, ['tasks']);
+                    console.log('[MasterInit] ✅ /tasks WebSocket namespace initialized');
+                    
+                    // Wait briefly for connection to establish
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Verify connection
+                    const connected = window.wsManager.getConnectionStatus('tasks');
+                    if (connected) {
+                        console.log('[MasterInit] ✅ /tasks WebSocket confirmed connected');
+                    } else {
+                        console.warn('[MasterInit] ⚠️ /tasks WebSocket not yet connected - operations will use HTTP fallback');
+                    }
+                } else {
+                    console.log('[MasterInit] ✅ /tasks WebSocket already connected');
+                }
+                
+                // Initialize TaskWebSocketHandlers if available
+                if (window.tasksWS && typeof window.tasksWS.init === 'function') {
+                    window.tasksWS.init();
+                    console.log('[MasterInit] ✅ TaskWebSocketHandlers initialized');
+                }
+            } catch (error) {
+                console.error('[MasterInit] ❌ WebSocket initialization failed:', error);
+                console.log('[MasterInit] Task operations will use HTTP fallback');
+            }
+        } else {
+            console.warn('[MasterInit] ⚠️ wsManager or WORKSPACE_ID not available');
+            console.log('[MasterInit] wsManager:', !!window.wsManager);
+            console.log('[MasterInit] WORKSPACE_ID:', window.WORKSPACE_ID);
+        }
+        
         // 1. CROWN⁴.5: Bootstrap cache-first task loading FIRST (critical for <200ms first paint)
         // MUST await bootstrap completion before metrics can be logged accurately
         if (window.taskBootstrap && typeof window.taskBootstrap.bootstrap === 'function') {
