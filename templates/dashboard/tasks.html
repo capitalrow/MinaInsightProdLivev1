@@ -695,6 +695,9 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){
 })});
 </script>
 
+<!-- CSRF Protection - MUST load before other scripts to patch window.fetch -->
+<script src="{{ url_for('static', filename='js/csrf.js') }}" nonce="{{ g.csp_nonce }}"></script>
+
 <!-- CROWN⁴.5 Frontend Modules - ALL deferred for <200ms First Paint -->
 <script defer src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>

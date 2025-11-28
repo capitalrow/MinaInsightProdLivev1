@@ -62,6 +62,10 @@ class TasksPageOrchestrator {
             console.log('[Orchestrator] Step 6: Initializing helper modules...');
             await this._initHelperModules();
 
+            // Step 7: Wire WebSocket events for real-time sync
+            console.log('[Orchestrator] Step 7: Wiring WebSocket events...');
+            this._wireWebSocketEvents();
+
             // Mark as initialized
             this.initialized = true;
             
@@ -289,6 +293,95 @@ class TasksPageOrchestrator {
             status[mod] = !!window[mod];
         }
         return status;
+    }
+    
+    /**
+     * Wire WebSocket events for real-time task synchronization
+     * Subscribes to task:updated and task:deleted events from server
+     */
+    _wireWebSocketEvents() {
+        if (!window.wsManager) {
+            console.warn('[Orchestrator] ⚠️ WebSocketManager not available for event wiring');
+            return;
+        }
+        
+        const tasksSocket = window.wsManager.sockets?.tasks;
+        if (!tasksSocket) {
+            console.warn('[Orchestrator] ⚠️ Tasks WebSocket not connected yet');
+            // Retry when socket connects
+            window.wsManager.on('connection_status', (data) => {
+                if (data.namespace === '/tasks' && data.connected) {
+                    this._wireWebSocketEvents();
+                }
+            });
+            return;
+        }
+        
+        console.log('[Orchestrator] 🔌 Wiring WebSocket task events...');
+        
+        // Listen for task updates from server (other users/tabs)
+        tasksSocket.on('task_updated', async (data) => {
+            console.log('[Orchestrator] 📥 Received task_updated event:', data);
+            try {
+                const task = data.task || data;
+                if (task && task.id) {
+                    // Update cache
+                    if (window.taskCache) {
+                        await window.taskCache.saveTask(task);
+                    }
+                    // Update DOM via OptimisticUI
+                    if (window.optimisticUI?._updateTaskInDOM) {
+                        window.optimisticUI._updateTaskInDOM(task.id, task);
+                    }
+                    console.log(`[Orchestrator] ✅ Task ${task.id} synced from server`);
+                }
+            } catch (error) {
+                console.error('[Orchestrator] ❌ Failed to process task_updated:', error);
+            }
+        });
+        
+        // Listen for task deletions from server
+        tasksSocket.on('task_deleted', async (data) => {
+            console.log('[Orchestrator] 📥 Received task_deleted event:', data);
+            try {
+                const taskId = data.task_id || data.id;
+                if (taskId) {
+                    // Remove from cache
+                    if (window.taskCache) {
+                        await window.taskCache.deleteTask(taskId);
+                    }
+                    // Remove from DOM
+                    const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+                    if (taskCard) {
+                        taskCard.remove();
+                    }
+                    console.log(`[Orchestrator] ✅ Task ${taskId} removed (synced from server)`);
+                }
+            } catch (error) {
+                console.error('[Orchestrator] ❌ Failed to process task_deleted:', error);
+            }
+        });
+        
+        // Listen for new tasks created by other users
+        tasksSocket.on('task_created', async (data) => {
+            console.log('[Orchestrator] 📥 Received task_created event:', data);
+            try {
+                const task = data.task || data;
+                if (task && task.id) {
+                    // Only add if not already present (avoid duplicates from own creates)
+                    const existing = document.querySelector(`[data-task-id="${task.id}"]`);
+                    if (!existing && window.optimisticUI?._addTaskToDOM) {
+                        await window.taskCache?.saveTask(task);
+                        window.optimisticUI._addTaskToDOM(task);
+                        console.log(`[Orchestrator] ✅ New task ${task.id} added from server`);
+                    }
+                }
+            } catch (error) {
+                console.error('[Orchestrator] ❌ Failed to process task_created:', error);
+            }
+        });
+        
+        console.log('[Orchestrator] ✅ WebSocket task events wired successfully');
     }
 }
 
