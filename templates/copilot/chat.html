@@ -320,22 +320,15 @@
         </div>
 
         <div id="chat-messages" class="chat-messages-container">
-            <!-- Welcome Message -->
-            <div class="message-assistant">
+            <!-- Dynamic Welcome Message (will be replaced by JavaScript) -->
+            <div id="welcome-message" class="message-assistant calm-animate">
                 <div class="message-avatar">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                     </svg>
                 </div>
-                <div class="message-content">
-                    <p class="mb-2">Hello! I'm your AI Copilot for Mina. I can help you:</p>
-                    <ul class="text-sm" style="list-style: disc; margin-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1);">
-                        <li>Find information from your meetings and transcripts</li>
-                        <li>Summarize discussions and extract key decisions</li>
-                        <li>Manage tasks and track action items</li>
-                        <li>Identify risks, blockers, and follow-ups</li>
-                    </ul>
-                    <p class="mt-3 text-sm text-secondary">Try asking "What's due today?" or use a quick action from the sidebar.</p>
+                <div class="message-content" id="welcome-content">
+                    <p class="mb-2">Loading...</p>
                 </div>
             </div>
         </div>
@@ -453,8 +446,90 @@ let copilotClient = null;
 let currentStreamingMessage = null;
 let currentSection = 'summary';
 
+// ============ Dynamic Greeting System (CROWN⁹ Personalization) ============
+
+/**
+ * Generate time-of-day based greeting with activity context
+ */
+function generateDynamicGreeting() {
+    const hour = new Date().getHours();
+    const username = '{{ current_user.username if current_user.username else "there" }}';
+    
+    // Time-based greetings
+    let greeting, icon, suggestion;
+    
+    if (hour >= 5 && hour < 12) {
+        greeting = `Good morning, ${username}!`;
+        icon = '☀️';
+        suggestion = 'Let me help you prepare for the day ahead.';
+    } else if (hour >= 12 && hour < 17) {
+        greeting = `Good afternoon, ${username}!`;
+        icon = '🌤️';
+        suggestion = 'Need a quick summary of your morning meetings?';
+    } else if (hour >= 17 && hour < 21) {
+        greeting = `Good evening, ${username}!`;
+        icon = '🌆';
+        suggestion = 'Let me help you wrap up the day.';
+    } else {
+        greeting = `Hey ${username}!`;
+        icon = '🌙';
+        suggestion = 'Working late? I can help you review your day.';
+    }
+    
+    // Day-specific context
+    const dayOfWeek = new Date().getDay();
+    let dayContext = '';
+    
+    if (dayOfWeek === 1) { // Monday
+        dayContext = "Let's start the week strong. ";
+    } else if (dayOfWeek === 5) { // Friday
+        dayContext = "End of week - want me to summarize this week's progress? ";
+    } else if (dayOfWeek === 0 || dayOfWeek === 6) { // Weekend
+        dayContext = "Working on the weekend? ";
+    }
+    
+    return {
+        greeting,
+        icon,
+        dayContext,
+        suggestion
+    };
+}
+
+/**
+ * Render dynamic welcome message with personalization
+ */
+function renderDynamicWelcome() {
+    const { greeting, icon, dayContext, suggestion } = generateDynamicGreeting();
+    const welcomeContent = document.getElementById('welcome-content');
+    
+    if (!welcomeContent) return;
+    
+    welcomeContent.innerHTML = `
+        <p class="mb-2"><span style="font-size: 1.2em;">${icon}</span> ${greeting} I'm your AI Copilot for Mina.</p>
+        <p class="text-sm mb-3">${dayContext}${suggestion}</p>
+        <p class="text-sm mb-2">I can help you:</p>
+        <ul class="text-sm" style="list-style: disc; margin-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1);">
+            <li>Find information from your meetings and transcripts</li>
+            <li>Summarize discussions and extract key decisions</li>
+            <li>Manage tasks and track action items</li>
+            <li>Identify risks, blockers, and follow-ups</li>
+        </ul>
+        <p class="mt-3 text-sm text-secondary">Try asking "What's due today?" or use a quick action from the sidebar.</p>
+    `;
+    
+    // Add calm entrance animation
+    const welcomeMessage = document.getElementById('welcome-message');
+    if (welcomeMessage) {
+        welcomeMessage.classList.add('calm-fade-in');
+    }
+}
+
 // Initialize WebSocket connection
 document.addEventListener('DOMContentLoaded', () => {
+    // Render dynamic greeting first
+    renderDynamicWelcome();
+    
     copilotClient = new CopilotStreamingClient();
     
     // Setup callbacks
@@ -477,13 +552,38 @@ document.addEventListener('DOMContentLoaded', () => {
     
     copilotClient.onError = (errorData) => {
         console.error('[UI] Copilot error:', errorData);
-        addErrorMessage(errorData.error || errorData.message || 'An error occurred');
+        // Handle offline queue notification differently
+        if (errorData.type === 'queued_offline') {
+            showOfflineNotification(errorData.message);
+        } else {
+            addErrorMessage(errorData.error || errorData.message || 'An error occurred');
+        }
+    };
+    
+    // Handle connection status changes (offline resilience)
+    copilotClient.onConnectionChange = (status) => {
+        console.log('[UI] Connection status:', status);
+        updateConnectionIndicator(status);
     };
     
     // Listen for chips_generated event
     copilotClient.socket.on('copilot_chips_generated', (data) => {
         console.log('[UI] Chips received:', data);
         displaySmartChips(data.chips);
+    });
+    
+    // Listen for cross-surface sync events (CROWN⁹ Event #10)
+    copilotClient.socket.on('copilot_sync', (data) => {
+        console.log('[UI] Cross-surface sync received:', data);
+        handleCrossSurfaceSync(data);
+    });
+    
+    // Listen for action completion with tick flash animation
+    copilotClient.socket.on('copilot_action_result', (data) => {
+        console.log('[UI] Action result:', data);
+        if (data.success) {
+            showActionSuccessFlash(data.action, data.result);
+        }
     });
     
     // Listen for all lifecycle events and update status indicator
@@ -502,15 +602,12 @@ chatInput.addEventListener('input', function() {
     this.style.height = Math.min(this.scrollHeight, 120) + 'px';
 });
 
-// Send message via WebSocket streaming
+// Send message via WebSocket streaming (with offline resilience)
 function sendMessage(message) {
-    if (!message.trim() || !copilotClient || !copilotClient.connected) {
-        if (!copilotClient || !copilotClient.connected) {
-            addErrorMessage('Not connected. Please wait...');
-        }
+    if (!message.trim() || !copilotClient) {
         return;
     }
-
+    
     addUserMessage(message);
     chatInput.value = '';
     chatInput.style.height = 'auto';
@@ -518,12 +615,141 @@ function sendMessage(message) {
     hideSuggestedPrompts();
     hideSmartChips();
     
-    // Start streaming message container
-    currentStreamingMessage = startStreamingMessage();
-    currentSection = 'summary';
+    // Start streaming message container (will be replaced if offline)
+    if (copilotClient.connected) {
+        currentStreamingMessage = startStreamingMessage();
+        currentSection = 'summary';
+    }
     
-    // Send query via WebSocket
+    // Send query via WebSocket (will queue if offline)
     copilotClient.sendQuery(message, {});
+}
+
+// ============ Connection Status & Offline Resilience UI ============
+
+/**
+ * Update connection indicator in UI
+ */
+function updateConnectionIndicator(status) {
+    let indicator = document.getElementById('connection-indicator');
+    
+    // Create indicator if not exists
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'connection-indicator';
+        indicator.style.cssText = `
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: var(--radius-lg);
+            font-size: 12px;
+            z-index: 1001;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        `;
+        document.body.appendChild(indicator);
+    }
+    
+    if (status.connected) {
+        indicator.className = 'connected';
+        indicator.style.background = 'rgba(34, 197, 94, 0.1)';
+        indicator.style.border = '1px solid var(--color-success)';
+        indicator.style.color = 'var(--color-success)';
+        
+        if (status.queueReplayed) {
+            indicator.innerHTML = `
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M5 13l4 4L19 7" stroke="currentColor" fill="none" stroke-width="2"/>
+                </svg>
+                <span>Synced</span>
+            `;
+            // Hide after 3 seconds when synced
+            setTimeout(() => {
+                indicator.style.opacity = '0';
+                setTimeout(() => indicator.remove(), 300);
+            }, 3000);
+        } else {
+            indicator.style.opacity = '0';
+            setTimeout(() => indicator.remove(), 300);
+        }
+    } else if (status.reconnecting) {
+        indicator.className = 'reconnecting';
+        indicator.style.background = 'rgba(251, 191, 36, 0.1)';
+        indicator.style.border = '1px solid var(--color-warning)';
+        indicator.style.color = 'var(--color-warning)';
+        indicator.style.opacity = '1';
+        indicator.innerHTML = `
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="animation: spin 1s linear infinite;">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span>Reconnecting (${status.attempt || 1})...</span>
+        `;
+    } else {
+        indicator.className = 'disconnected';
+        indicator.style.background = 'rgba(239, 68, 68, 0.1)';
+        indicator.style.border = '1px solid var(--color-error)';
+        indicator.style.color = 'var(--color-error)';
+        indicator.style.opacity = '1';
+        
+        const queueMsg = status.queuedMessages > 0 ? ` (${status.queuedMessages} queued)` : '';
+        indicator.innerHTML = `
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3"/>
+            </svg>
+            <span>Offline${queueMsg}</span>
+        `;
+    }
+    
+    // Add spin keyframe if not present
+    if (!document.getElementById('connection-animations')) {
+        const style = document.createElement('style');
+        style.id = 'connection-animations';
+        style.textContent = `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
+        document.head.appendChild(style);
+    }
+}
+
+/**
+ * Show offline notification when message is queued
+ */
+function showOfflineNotification(message) {
+    const notification = document.createElement('div');
+    notification.className = 'offline-notification calm-slide-in';
+    notification.innerHTML = `
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink: 0; color: var(--color-warning);">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <span>${escapeHtml(message)}</span>
+    `;
+    
+    Object.assign(notification.style, {
+        position: 'fixed',
+        bottom: '100px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        padding: '12px 20px',
+        background: 'rgba(251, 191, 36, 0.1)',
+        border: '1px solid var(--color-warning)',
+        borderRadius: 'var(--radius-lg)',
+        backdropFilter: 'blur(12px)',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        zIndex: '1000',
+        fontSize: '14px',
+        color: 'var(--color-text)'
+    });
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.add('calm-fade-out');
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
 }
 
 // Display smart chips from backend
@@ -866,6 +1092,200 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============ Cross-Surface Sync Handlers (CROWN⁹ Event #10) ============
+
+/**
+ * Handle cross-surface sync events from Dashboard, Tasks, Calendar, Analytics
+ * Updates local state and triggers UI refresh when actions happen on other surfaces
+ */
+function handleCrossSurfaceSync(data) {
+    const { action, result, source, timestamp } = data;
+    
+    console.log(`[CrossSurfaceSync] Action: ${action}, Source: ${source}`);
+    
+    // Update local context based on action type
+    switch (action) {
+        case 'create_task':
+        case 'update_task':
+        case 'mark_done':
+        case 'delete_task':
+            // Task-related sync - refresh task chips if visible
+            if (result && result.task) {
+                showSyncNotification(`Task ${action === 'create_task' ? 'created' : 'updated'}: ${result.task.title || 'Task'}`, 'task');
+            }
+            break;
+            
+        case 'add_to_calendar':
+        case 'schedule_meeting':
+            // Calendar-related sync
+            showSyncNotification('Calendar updated', 'calendar');
+            break;
+            
+        case 'analytics_refresh':
+            // Analytics update
+            showSyncNotification('Analytics refreshed', 'analytics');
+            break;
+            
+        default:
+            console.log(`[CrossSurfaceSync] Unhandled action: ${action}`);
+    }
+    
+    // Dispatch custom event for other UI components to react
+    window.dispatchEvent(new CustomEvent('copilot:sync', { detail: data }));
+}
+
+/**
+ * Show a brief sync notification for cross-surface updates
+ */
+function showSyncNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = 'sync-notification calm-slide-in';
+    notification.innerHTML = `
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink: 0;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span>${escapeHtml(message)}</span>
+    `;
+    
+    // Style the notification
+    Object.assign(notification.style, {
+        position: 'fixed',
+        bottom: '100px',
+        right: '24px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '12px 16px',
+        background: 'var(--color-glass)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-lg)',
+        backdropFilter: 'blur(12px)',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        zIndex: '1000',
+        fontSize: '14px',
+        color: 'var(--color-text)'
+    });
+    
+    document.body.appendChild(notification);
+    
+    // Remove after calm animation
+    setTimeout(() => {
+        notification.classList.add('calm-fade-out');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+/**
+ * Show action success flash with tick animation (CROWN⁹ Tick Flash)
+ */
+function showActionSuccessFlash(action, result) {
+    const actionLabels = {
+        'create_task': 'Task created',
+        'mark_done': 'Task completed',
+        'update_task': 'Task updated',
+        'delete_task': 'Task removed',
+        'add_to_calendar': 'Added to calendar',
+        'schedule_meeting': 'Meeting scheduled'
+    };
+    
+    const label = actionLabels[action] || `Action completed: ${action}`;
+    
+    // Create flash notification
+    const flash = document.createElement('div');
+    flash.className = 'action-flash';
+    flash.innerHTML = `
+        <div class="flash-icon">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" 
+                      d="M5 13l4 4L19 7" 
+                      style="stroke-dasharray: 24; stroke-dashoffset: 24; animation: tickDraw 0.4s ease-out forwards 0.1s;"/>
+            </svg>
+        </div>
+        <div class="flash-text">${escapeHtml(label)}</div>
+    `;
+    
+    // Style the flash
+    Object.assign(flash.style, {
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '16px',
+        padding: '32px 48px',
+        background: 'var(--color-glass)',
+        border: '2px solid var(--color-success)',
+        borderRadius: 'var(--radius-xl)',
+        backdropFilter: 'blur(20px)',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+        zIndex: '2000',
+        animation: 'flashPopIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+    });
+    
+    // Style icon container
+    const iconDiv = flash.querySelector('.flash-icon');
+    Object.assign(iconDiv.style, {
+        width: '64px',
+        height: '64px',
+        borderRadius: '50%',
+        background: 'var(--color-success)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'white'
+    });
+    
+    // Style text
+    const textDiv = flash.querySelector('.flash-text');
+    Object.assign(textDiv.style, {
+        fontSize: '18px',
+        fontWeight: '600',
+        color: 'var(--color-text)'
+    });
+    
+    // Add keyframe animations if not already present
+    if (!document.getElementById('flash-animations')) {
+        const styleSheet = document.createElement('style');
+        styleSheet.id = 'flash-animations';
+        styleSheet.textContent = `
+            @keyframes tickDraw {
+                to { stroke-dashoffset: 0; }
+            }
+            @keyframes flashPopIn {
+                from {
+                    opacity: 0;
+                    transform: translate(-50%, -50%) scale(0.8);
+                }
+                to {
+                    opacity: 1;
+                    transform: translate(-50%, -50%) scale(1);
+                }
+            }
+            @keyframes flashPopOut {
+                from {
+                    opacity: 1;
+                    transform: translate(-50%, -50%) scale(1);
+                }
+                to {
+                    opacity: 0;
+                    transform: translate(-50%, -50%) scale(0.9);
+                }
+            }
+        `;
+        document.head.appendChild(styleSheet);
+    }
+    
+    document.body.appendChild(flash);
+    
+    // Remove after animation
+    setTimeout(() => {
+        flash.style.animation = 'flashPopOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards';
+        setTimeout(() => flash.remove(), 300);
+    }, 1500);
 }
 
 // Event Listeners

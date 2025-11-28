@@ -6,10 +6,15 @@ Enables the AI to find related conversations and context intelligently.
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, ARRAY, Float
-from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.orm import relationship
-from app import db
+from typing import Optional, List, TYPE_CHECKING
+from sqlalchemy import ForeignKey, Integer, String, Text, DateTime, ARRAY, Float
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from . import db
+
+if TYPE_CHECKING:
+    from .user import User
+    from .workspace import Workspace
 
 
 class CopilotEmbedding(db.Model):
@@ -24,24 +29,24 @@ class CopilotEmbedding(db.Model):
     """
     __tablename__ = 'copilot_embeddings'
     
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
-    workspace_id = Column(Integer, ForeignKey('workspace.id'), nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
+    workspace_id: Mapped[Optional[int]] = mapped_column(ForeignKey('workspaces.id'), nullable=True)
     
-    text = Column(Text, nullable=False)
-    embedding = Column(ARRAY(Float), nullable=False)
-    context_type = Column(String(50), nullable=False, index=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[List[float]] = mapped_column(ARRAY(Float), nullable=False)
+    context_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     
     # Relationships
-    user = relationship('User', backref='copilot_embeddings')
-    workspace = relationship('Workspace', backref='copilot_embeddings')
+    user: Mapped["User"] = relationship(back_populates="copilot_embeddings", foreign_keys=[user_id])
+    workspace: Mapped[Optional["Workspace"]] = relationship(back_populates="copilot_embeddings", foreign_keys=[workspace_id])
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<CopilotEmbedding {self.id} type={self.context_type}>"
     
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """Convert to dictionary representation."""
         return {
             'id': self.id,

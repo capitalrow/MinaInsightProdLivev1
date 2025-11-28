@@ -68,29 +68,25 @@ class CopilotMemoryService:
         
         try:
             # Store user message
-            user_msg = CopilotConversation(
-                user_id=user_id,
-                role='user',
-                message=message,
-                session_id=session_id,
-                created_at=datetime.utcnow()
-            )
+            user_msg = CopilotConversation()
+            user_msg.user_id = user_id
+            user_msg.role = 'user'
+            user_msg.message = message
+            user_msg.session_id = session_id
             db.session.add(user_msg)
             
             # Store assistant response
-            assistant_msg = CopilotConversation(
-                user_id=user_id,
-                role='assistant',
-                message=response,
-                session_id=session_id,
-                created_at=datetime.utcnow()
-            )
+            assistant_msg = CopilotConversation()
+            assistant_msg.user_id = user_id
+            assistant_msg.role = 'assistant'
+            assistant_msg.message = response
+            assistant_msg.session_id = session_id
             db.session.add(assistant_msg)
             
             db.session.commit()
             
             logger.debug(f"Stored conversation pair for user {user_id}, session {session_id}")
-            return assistant_msg.id
+            return assistant_msg.id  # type: ignore[return-value]
             
         except Exception as e:
             logger.error(f"Failed to store conversation: {e}", exc_info=True)
@@ -220,20 +216,19 @@ class CopilotMemoryService:
         from models.copilot_embedding import CopilotEmbedding
         
         try:
-            emb = CopilotEmbedding(
-                user_id=user_id,
-                workspace_id=workspace_id,
-                text=text,
-                embedding=embedding,
-                context_type=context_type,
-                created_at=datetime.utcnow()
-            )
+            emb = CopilotEmbedding()
+            emb.user_id = user_id
+            emb.workspace_id = workspace_id
+            emb.text = text
+            emb.embedding = embedding
+            emb.context_type = context_type
+            emb.created_at = datetime.utcnow()
             
             db.session.add(emb)
             db.session.commit()
             
             logger.debug(f"Stored embedding {emb.id} for user {user_id}")
-            return emb.id
+            return emb.id  # type: ignore[return-value]
             
         except Exception as e:
             logger.error(f"Failed to store embedding: {e}", exc_info=True)
