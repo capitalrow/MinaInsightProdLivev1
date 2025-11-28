@@ -333,13 +333,13 @@ def tasks():
 @login_required
 def task_detail(task_id):
     """Task detail page - view a single task in full detail."""
-    from models import Task, Meeting
+    from models import Task, Meeting, Session
     from sqlalchemy.orm import joinedload
     
-    # Fetch task with relationships
+    # Fetch task with relationships including meeting.session for transcript links
     workspace_id_str = str(current_user.workspace_id)
     task = db.session.query(Task).options(
-        joinedload(Task.meeting),
+        joinedload(Task.meeting).joinedload(Meeting.session),
         joinedload(Task.assigned_to)
     ).outerjoin(Meeting, Task.meeting_id == Meeting.id)\
     .filter(
