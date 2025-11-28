@@ -123,12 +123,8 @@ class CopilotStreamingService:
             self.async_thread = None
         else:
             # Initialize clients
-            client_kwargs = {"api_key": self.api_key}
-            if self.base_url:
-                client_kwargs["base_url"] = self.base_url
-                
-            self.client = OpenAI(**client_kwargs)
-            self.async_client = AsyncOpenAI(**client_kwargs)
+            self.client = OpenAI(api_key=self.api_key, base_url=self.base_url if self.base_url else None)
+            self.async_client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url if self.base_url else None)
             
             # Create dedicated asyncio event loop in background thread for true async streaming
             self.async_loop = None
@@ -282,7 +278,7 @@ class CopilotStreamingService:
             # Start streaming (SYNC)
             stream = self.client.chat.completions.create(
                 model=os.getenv("OPENAI_MODEL", "gpt-4o"),
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 temperature=0.7,
                 max_tokens=1500,
                 stream=True,
@@ -423,7 +419,7 @@ class CopilotStreamingService:
             # Start streaming
             stream = await self.async_client.chat.completions.create(
                 model=os.getenv("OPENAI_MODEL", "gpt-4o"),
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 temperature=0.7,
                 max_tokens=1500,
                 stream=True,

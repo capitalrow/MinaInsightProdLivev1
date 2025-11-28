@@ -353,9 +353,11 @@ def register_copilot_namespace(socketio):
             logger.error(f"Copilot query error: {e}", exc_info=True)
             
             # Handle error with graceful degradation
+            error_session_id = data.get('session_id', 'unknown') if data else 'unknown'
+            error_user_message = data.get('message', '')[:100] if data else ''
             error_response = copilot_error_handler.handle_error(
                 error=e,
-                context={'session_id': session_id, 'user_message': user_message[:100] if 'user_message' in locals() else ''},
+                context={'session_id': error_session_id, 'user_message': error_user_message},
                 user_id=current_user.id
             )
             
@@ -426,7 +428,8 @@ def register_copilot_namespace(socketio):
                 _broadcast_action_result(
                     action=action,
                     result=result,
-                    workspace_id=workspace_id
+                    workspace_id=workspace_id,
+                    user_id=current_user.id
                 )
             
             # Emit action result
@@ -678,56 +681,71 @@ def _execute_copilot_action(
 def _broadcast_action_result(
     action: str,
     result: Dict[str, Any],
-    workspace_id: Optional[int]
+    workspace_id: Optional[int],
+    user_id: Optional[int] = None
 ):
     """
-    Broadcast action result to other surfaces for cross-surface sync.
+    Broadcast action result to other surfaces for cross-surface sync (CROWN⁹ Event #10).
+    
+    Uses enhanced event_broadcaster.broadcast_copilot_action for:
+    - ≤400ms sync latency SLA
+    - Multi-surface broadcast (Dashboard, Tasks, Calendar, Analytics)
+    - Metrics tracking for SLA compliance
     
     Channels:
     - /tasks - Task namespace
     - /calendar - Calendar namespace
     - /dashboard - Dashboard namespace
+    - /analytics - Analytics namespace
+    - /copilot - Copilot namespace
     """
     from app import socketio
     
     try:
-        # Determine broadcast namespace and event based on action
-        if action in ['create_task', 'mark_done', 'update_task']:
-            # Broadcast to tasks namespace
-            if workspace_id:
-                room_name = f"workspace_{workspace_id}"
-                socketio.emit(
-                    'task_updated',
-                    result,
-                    namespace='/tasks',
-                    to=room_name
-                )
+        if not workspace_id:
+            logger.warning("No workspace_id for cross-surface sync")
+            return
         
-        elif action in ['add_to_calendar', 'schedule_meeting']:
-            # Broadcast to calendar namespace
-            if workspace_id:
-                room_name = f"workspace_{workspace_id}"
-                socketio.emit(
-                    'calendar_updated',
-                    result,
-                    namespace='/calendar',
-                    to=room_name
-                )
+        # Use enhanced event broadcaster for SLA-tracked broadcast
+        event_broadcaster.broadcast_copilot_action(
+            action=action,
+            result=result,
+            workspace_id=workspace_id,
+            user_id=user_id
+        )
         
-        # Also broadcast to dashboard for unified updates
-        if workspace_id:
-            room_name = f"workspace_{workspace_id}"
+        # Also emit legacy events for backward compatibility
+        room_name = f"workspace_{workspace_id}"
+        
+        if action in ['create_task', 'mark_done', 'update_task', 'delete_task']:
             socketio.emit(
-                'copilot_action_completed',
-                {
-                    'action': action,
-                    'result': result
-                },
-                namespace='/dashboard',
+                'task_updated',
+                result,
+                namespace='/tasks',
                 to=room_name
             )
         
-        logger.debug(f"Broadcast {action} to workspace {workspace_id}")
+        elif action in ['add_to_calendar', 'schedule_meeting']:
+            socketio.emit(
+                'calendar_updated',
+                result,
+                namespace='/calendar',
+                to=room_name
+            )
+        
+        # Dashboard notification
+        socketio.emit(
+            'copilot_action_completed',
+            {
+                'action': action,
+                'result': result,
+                'source': 'copilot'
+            },
+            namespace='/dashboard',
+            to=room_name
+        )
+        
+        logger.debug(f"Cross-surface sync: {action} broadcast to workspace {workspace_id}")
         
     except Exception as e:
-        logger.error(f"Broadcast error: {e}", exc_info=True)
+        logger.error(f"Cross-surface sync error: {e}", exc_info=True)
