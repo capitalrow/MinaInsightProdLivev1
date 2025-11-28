@@ -26,11 +26,57 @@
             this._pendingTempTasks = new Set();  // temp task IDs being synced
             this._lastCounters = null;
             this._viewMode = 'normal';  // 'normal' or 'meeting' - tracks current view mode
+            this._stabilizing = true;   // CROWN⁴.6: Suppress counter updates until sync completes
+            this._stabilizationTimeout = null;
             
-            console.log('[TaskStateStore] Initializing single source of truth');
+            console.log('[TaskStateStore] Initializing single source of truth (stabilization mode)');
             
             // Listen for view mode changes
             this._setupViewModeListeners();
+            
+            // Listen for sync completion to end stabilization
+            this._setupStabilizationListeners();
+        }
+        
+        /**
+         * Setup listeners for sync events to control stabilization mode
+         * This prevents counter flickering during initial page load
+         */
+        _setupStabilizationListeners() {
+            // End stabilization when background sync completes
+            window.addEventListener('tasks:sync:success', () => {
+                this._endStabilization('sync_success');
+            });
+            
+            // Also end stabilization on sync error (show what we have)
+            window.addEventListener('tasks:sync:error', () => {
+                this._endStabilization('sync_error');
+            });
+            
+            // Failsafe: End stabilization after 3 seconds max
+            // This ensures counters appear even if sync hangs
+            this._stabilizationTimeout = setTimeout(() => {
+                if (this._stabilizing) {
+                    this._endStabilization('timeout');
+                }
+            }, 3000);
+        }
+        
+        /**
+         * End stabilization mode and show final counters
+         * @param {string} reason - Why stabilization ended
+         */
+        _endStabilization(reason) {
+            if (!this._stabilizing) return;
+            
+            this._stabilizing = false;
+            if (this._stabilizationTimeout) {
+                clearTimeout(this._stabilizationTimeout);
+                this._stabilizationTimeout = null;
+            }
+            
+            console.log(`[TaskStateStore] Stabilization ended (${reason}) - updating counters`);
+            this._updateAllUI();
         }
         
         /**
@@ -298,6 +344,13 @@
          * Single point of UI synchronization
          */
         _updateAllUI() {
+            // CROWN⁴.6: Skip counter updates during stabilization (initial sync)
+            // This prevents visible counter flickering as cache → server data loads
+            if (this._stabilizing) {
+                console.log('[TaskStateStore] Stabilizing - skipping counter update');
+                return;
+            }
+            
             const counters = this.computeCounters();
             
             // 1. Update counter badges
