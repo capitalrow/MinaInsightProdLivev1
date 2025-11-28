@@ -527,10 +527,17 @@ def create_task():
         
         # CROWN⁴.5 Phase 3: Calculate next position for drag-drop ordering
         # Assign position = max(existing positions) + 1 to append new tasks at end
-        # For standalone tasks (no meeting), use workspace_id directly from Task model
-        max_position = db.session.query(func.max(Task.position)).filter(
-            Task.workspace_id == current_user.workspace_id,
-            Task.deleted_at.is_(None)
+        # Handle both standalone tasks (workspace_id set) and meeting-linked tasks (via Meeting join)
+        from sqlalchemy import or_
+        
+        max_position = db.session.query(func.max(Task.position)).outerjoin(
+            Meeting, Task.meeting_id == Meeting.id
+        ).filter(
+            Task.deleted_at.is_(None),
+            or_(
+                Task.workspace_id == current_user.workspace_id,
+                Meeting.workspace_id == current_user.workspace_id
+            )
         ).scalar() or -1
         
         task = Task(
