@@ -80,15 +80,26 @@ class VectorClock {
     }
 
     /**
-     * Create from stored tuple
-     * @param {Array<[string, number]>} tuple
+     * Create from stored tuple or object format
+     * Handles both array format [["user_1", 1]] and object format {"user_1": 1}
+     * @param {Array<[string, number]>|Object} tuple - Array of tuples or object
      * @returns {VectorClock}
      */
     static fromTuple(tuple) {
         const clocks = {};
-        for (const [node, counter] of tuple) {
-            clocks[node] = counter;
+        
+        if (!tuple) {
+            return new VectorClock(clocks);
         }
+        
+        if (Array.isArray(tuple)) {
+            for (const [node, counter] of tuple) {
+                clocks[node] = counter;
+            }
+        } else if (typeof tuple === 'object') {
+            Object.assign(clocks, tuple);
+        }
+        
         return new VectorClock(clocks);
     }
 
