@@ -450,22 +450,27 @@ class TaskCache {
                         return;
                     }
                     
-                    // Check age for temp tasks not in any queue
+                    // CRITICAL FIX: Check age for temp tasks not in any queue
+                    // Temp tasks with missing/invalid created_at are STALE and should be DELETED
+                    // They were created before proper timestamp tracking was implemented
                     if (!task.created_at || task.created_at === 0 || task.created_at === '0') {
-                        console.log(`✅ Preserving temp task with missing created_at: ${task.id}`);
+                        console.log(`🗑️ [Cleanup] Deleting temp task with missing created_at: ${task.id}`);
+                        orphanedTempIds.push(task.id);
                         return;
                     }
                     
                     const createdTimestamp = new Date(task.created_at).getTime();
                     if (Number.isNaN(createdTimestamp) || createdTimestamp <= 0) {
-                        console.log(`✅ Preserving temp task with invalid timestamp: ${task.id}`);
+                        console.log(`🗑️ [Cleanup] Deleting temp task with invalid timestamp: ${task.id}`);
+                        orphanedTempIds.push(task.id);
                         return;
                     }
                     
                     const taskAge = now - createdTimestamp;
                     const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
                     if (taskAge < 0 || taskAge > ONE_YEAR_MS) {
-                        console.log(`✅ Preserving temp task with suspicious age: ${task.id}`);
+                        console.log(`🗑️ [Cleanup] Deleting temp task with suspicious age: ${task.id} (age: ${Math.round(taskAge/1000)}s)`);
+                        orphanedTempIds.push(task.id);
                         return;
                     }
                     
