@@ -1341,8 +1341,20 @@ class OptimisticUI {
 
         if (type === 'create') {
             // Replace temp ID with real ID
-            const realTask = serverData.task || serverData;
+            // Handle various response formats:
+            // - serverData.result.task (WebSocket ack with result wrapper)
+            // - serverData.task (direct task wrapper)
+            // - serverData (task object directly)
+            const realTask = serverData?.result?.task || serverData?.task || serverData;
             const tempId = operation.tempId;
+            
+            // CRITICAL: Verify we have a valid task ID before proceeding
+            if (!realTask?.id) {
+                console.error('❌ [Reconcile] No task ID in server response:', serverData);
+                throw new Error('Server response missing task ID');
+            }
+            
+            console.log(`✅ [Reconcile] Got real task ID ${realTask.id} for temp ${tempId}`);
 
             // Update DOM
             const card = document.querySelector(`[data-task-id="${tempId}"]`);
@@ -1356,9 +1368,15 @@ class OptimisticUI {
 
         } else if (type === 'update') {
             // Update with server truth
-            const realTask = serverData.task || serverData;
-            await this.cache.saveTask(realTask);
-            this._updateTaskInDOM(taskId, realTask);
+            // Handle various response formats
+            const realTask = serverData?.result?.task || serverData?.task || serverData;
+            
+            if (realTask?.id) {
+                await this.cache.saveTask(realTask);
+                this._updateTaskInDOM(taskId, realTask);
+            } else {
+                console.warn('⚠️ [Reconcile] Update response missing task ID, using taskId:', taskId);
+            }
         }
 
         // Remove operation
