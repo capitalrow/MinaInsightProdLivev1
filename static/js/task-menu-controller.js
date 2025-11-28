@@ -235,48 +235,23 @@ class TaskMenuController {
 
     /**
      * 3. TOGGLE STATUS - Mark complete/incomplete with checkbox animation
+     * Uses the same toggleTaskStatus() method as direct checkbox clicks for consistent animations
      */
     async handleToggleStatus(taskId) {
         console.log(`[TaskMenuController] Toggling status for task ${taskId}`);
         
-        const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-        if (!taskCard) {
-            window.toast?.error('Task not found');
-            return;
-        }
-
-        const checkbox = taskCard.querySelector('.task-checkbox input[type="checkbox"]');
-        if (!checkbox) {
-            window.toast?.error('Cannot find task checkbox');
-            return;
-        }
-
-        const currentStatus = checkbox.checked;
-        const newStatus = !currentStatus;
-
-        try {
-            // Optimistic UI
-            checkbox.checked = newStatus;
-            
-            if (newStatus) {
-                taskCard.classList.add('task-completed');
-            } else {
-                taskCard.classList.remove('task-completed');
+        // Use the same optimistic UI toggle method as checkbox clicks
+        // This ensures consistent animation (confetti) and visual feedback
+        if (window.optimisticUI?.toggleTaskStatus) {
+            try {
+                await window.optimisticUI.toggleTaskStatus(taskId);
+            } catch (error) {
+                console.error('[TaskMenuController] Failed to toggle status:', error);
+                window.toast?.error('Failed to update status');
             }
-
-            // Use OptimisticUI system (not raw fetch!)
-            await window.optimisticUI.updateTask(taskId, { status: newStatus ? 'completed' : 'todo' });
-            
-            // Toast handled by OptimisticUI system
-        } catch (error) {
-            // Rollback
-            checkbox.checked = currentStatus;
-            if (currentStatus) {
-                taskCard.classList.add('task-completed');
-            } else {
-                taskCard.classList.remove('task-completed');
-            }
-            window.toast?.error('Failed to update status');
+        } else {
+            // Fallback if optimisticUI not available
+            window.toast?.error('Task system not ready');
         }
     }
 
