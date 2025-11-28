@@ -486,7 +486,7 @@ def get_meeting_heatmap():
 @api_tasks_bp.route('/', methods=['POST'])
 @login_required
 def create_task():
-    """Create a new task."""
+    """Create a new task (supports both meeting-linked and standalone tasks)."""
     try:
         data = request.get_json()
         
@@ -494,17 +494,18 @@ def create_task():
         if not data.get('title'):
             return jsonify({'success': False, 'message': 'Title is required'}), 400
         
-        if not data.get('meeting_id'):
-            return jsonify({'success': False, 'message': 'Meeting ID is required'}), 400
-        
-        # Verify meeting exists and belongs to user's workspace
-        meeting = db.session.query(Meeting).filter_by(
-            id=data['meeting_id'],
-            workspace_id=current_user.workspace_id
-        ).first()
-        
-        if not meeting:
-            return jsonify({'success': False, 'message': 'Invalid meeting ID'}), 400
+        # meeting_id is OPTIONAL - supports standalone tasks from Tasks page
+        meeting = None
+        meeting_id = data.get('meeting_id')
+        if meeting_id:
+            # Verify meeting exists and belongs to user's workspace
+            meeting = db.session.query(Meeting).filter_by(
+                id=meeting_id,
+                workspace_id=current_user.workspace_id
+            ).first()
+            
+            if not meeting:
+                return jsonify({'success': False, 'message': 'Invalid meeting ID'}), 400
         
         # Parse due date if provided
         due_date = None
@@ -526,15 +527,17 @@ def create_task():
         
         # CROWN⁴.5 Phase 3: Calculate next position for drag-drop ordering
         # Assign position = max(existing positions) + 1 to append new tasks at end
-        max_position = db.session.query(func.max(Task.position)).join(Meeting).filter(
-            Meeting.workspace_id == current_user.workspace_id,
+        # For standalone tasks (no meeting), use workspace_id directly from Task model
+        max_position = db.session.query(func.max(Task.position)).filter(
+            Task.workspace_id == current_user.workspace_id,
             Task.deleted_at.is_(None)
         ).scalar() or -1
         
         task = Task(
             title=data['title'].strip(),
             description=data.get('description', '').strip() or None,
-            meeting_id=data['meeting_id'],
+            meeting_id=meeting_id,  # Can be None for standalone tasks
+            workspace_id=current_user.workspace_id,  # Required for standalone tasks
             priority=data.get('priority', 'medium'),
             category=data.get('category', '').strip() or None,
             due_date=due_date,
@@ -542,6 +545,7 @@ def create_task():
             status='todo',
             created_by_id=current_user.id,
             extracted_by_ai=False,
+            source='manual',
             position=max_position + 1
         )
         
@@ -584,7 +588,7 @@ def create_task():
         try:
             task_data = task.to_dict()
             task_data['action'] = 'created'
-            task_data['meeting_title'] = meeting.title
+            task_data['meeting_title'] = meeting.title if meeting else None
             
             event = event_sequencer.create_event(
                 event_type=EventType.TASK_CREATE_MANUAL,
@@ -592,7 +596,7 @@ def create_task():
                 payload={
                     'task_id': task.id,
                     'task': task_data,
-                    'meeting_id': meeting.id,
+                    'meeting_id': meeting.id if meeting else None,
                     'workspace_id': str(current_user.workspace_id),
                     'action': 'created'
                 },
@@ -607,11 +611,11 @@ def create_task():
         # Broadcast task_update event (legacy broadcast for backward compatibility)
         task_dict = task.to_dict()
         task_dict['action'] = 'created'
-        task_dict['meeting_title'] = meeting.title
+        task_dict['meeting_title'] = meeting.title if meeting else None
         event_broadcaster.broadcast_task_update(
             task_id=task.id,
             task_data=task_dict,
-            meeting_id=meeting.id,
+            meeting_id=meeting.id if meeting else None,
             workspace_id=current_user.workspace_id,
             user_id=current_user.id
         )
