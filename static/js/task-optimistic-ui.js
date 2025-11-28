@@ -1372,6 +1372,48 @@ class OptimisticUI {
         if (relatedEvent) {
             await this.cache.markEventSynced(relatedEvent.id);
         }
+        
+        // CROWN⁴.6: Refresh related widgets after successful sync
+        // This ensures Meeting Heatmap, counters, and other widgets reflect the updated data
+        this._refreshRelatedWidgets(type, taskId, serverData);
+    }
+    
+    /**
+     * Refresh related widgets after successful task sync
+     * CROWN⁴.6: Ensures cross-widget consistency after task changes
+     * @param {string} type - Operation type (create, update, delete)
+     * @param {number|string} taskId
+     * @param {Object} serverData
+     */
+    _refreshRelatedWidgets(type, taskId, serverData) {
+        // Debounce to prevent multiple rapid refreshes
+        if (this._widgetRefreshTimeout) {
+            clearTimeout(this._widgetRefreshTimeout);
+        }
+        
+        this._widgetRefreshTimeout = setTimeout(() => {
+            console.log(`🔄 [CROWN⁴.6] Refreshing related widgets after ${type} sync`);
+            
+            // 1. Refresh Meeting Heatmap (task counts per meeting)
+            if (window.meetingHeatmap?.refresh) {
+                window.meetingHeatmap.refresh().catch(err => {
+                    console.warn('⚠️ Failed to refresh meeting heatmap:', err);
+                });
+            }
+            
+            // 2. Update tab counters (All/Active/Archived)
+            this._updateCounters();
+            
+            // 3. Dispatch event for other widgets to react
+            window.dispatchEvent(new CustomEvent('task:synced', {
+                detail: { type, taskId, task: serverData?.task }
+            }));
+            
+            // 4. Invalidate IndexedDB cache for meeting metrics
+            if (this.cache?.invalidate) {
+                this.cache.invalidate('meeting_metrics').catch(() => {});
+            }
+        }, 100); // 100ms debounce
     }
 
     /**
