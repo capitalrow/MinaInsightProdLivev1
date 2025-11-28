@@ -698,6 +698,9 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){
 <!-- CSRF Protection - MUST load before other scripts to patch window.fetch -->
 <script src="{{ url_for('static', filename='js/csrf.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
+<!-- CROWN⁴.6 TaskStateStore - MUST load first as single source of truth -->
+<script defer src="{{ url_for('static', filename='js/task-state-store.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+
 <!-- CROWN⁴.5 Frontend Modules - ALL deferred for <200ms First Paint -->
 <script defer src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -709,9 +712,9 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){
 <script defer src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/prefetch-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-prefetch-adapter.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-bootstrap.js') }}?v=4" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-bootstrap.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-merge-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}?v=4" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-inline-editing.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-confirmation-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-date-picker.js') }}" nonce="{{ g.csp_nonce }}"></script>
