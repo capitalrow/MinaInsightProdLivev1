@@ -959,6 +959,16 @@ def create_app() -> Flask:
     def health():
         return {"ok": True, "uptime": True}, 200
 
+    # CSRF token refresh endpoint for auto-recovery (enterprise pattern)
+    @app.get("/api/csrf-token")
+    def get_csrf_token():
+        """
+        Provide fresh CSRF token for auto-recovery.
+        Used by frontend to silently retry failed requests.
+        """
+        from flask_wtf.csrf import generate_csrf
+        return jsonify({'token': generate_csrf()})
+
     # Security-hardened error handlers - prevent information leakage
     
     @app.errorhandler(CSRFError)
