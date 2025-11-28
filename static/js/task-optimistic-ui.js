@@ -16,6 +16,7 @@ class OptimisticUI {
     /**
      * ENTERPRISE-GRADE: Rehydrate pending operations from IndexedDB on page load
      * Restores ALL operation types (create/update/delete) from offline_queue
+     * CRITICAL FIX: Filters out stale operations older than 2 minutes
      * This ensures retry mechanism works after page refresh
      */
     async rehydratePendingOperations() {
@@ -30,14 +31,34 @@ class OptimisticUI {
             // Get all pending operations from offline_queue (supports create/update/delete)
             const operations = await this.cache.getAllPendingOperations();
             
-            // Restore to in-memory map
-            this.pendingOperations = operations;
+            // CRITICAL FIX: Filter out stale operations before adding to memory
+            // Stale operations (older than 2 minutes) likely already succeeded on server
+            const now = Date.now();
+            const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+            const freshOperations = new Map();
+            const staleOpIds = [];
             
-            console.log(`✅ [Offline-First] Rehydration complete: ${operations.size} operations restored`);
+            for (const [opId, op] of operations.entries()) {
+                const opTime = op.timestamp ? new Date(op.timestamp).getTime() : 0;
+                const opAge = now - opTime;
+                
+                // Filter out stale create operations (likely already succeeded)
+                if (op.type === 'create' && opAge > STALE_THRESHOLD_MS) {
+                    console.log(`🧹 [Rehydrate] Skipping stale operation: ${opId} (age: ${Math.round(opAge/1000)}s)`);
+                    staleOpIds.push(opId);
+                } else {
+                    freshOperations.set(opId, op);
+                }
+            }
+            
+            // Restore only fresh operations to in-memory map
+            this.pendingOperations = freshOperations;
+            
+            console.log(`✅ [Offline-First] Rehydration complete: ${freshOperations.size} fresh operations (${staleOpIds.length} stale filtered)`);
             
             // Log breakdown by type
-            const breakdown = { create: 0, update: 0, delete: 0, failed: 0 };
-            for (const [opId, op] of operations.entries()) {
+            const breakdown = { create: 0, update: 0, delete: 0, failed: 0, skipped: staleOpIds.length };
+            for (const [opId, op] of freshOperations.entries()) {
                 breakdown[op.type] = (breakdown[op.type] || 0) + 1;
                 if (op.failed) breakdown.failed++;
                 
@@ -1313,6 +1334,7 @@ class OptimisticUI {
 
     /**
      * Reconcile successful server response
+     * CRITICAL FIX: Properly finalizes creates for all transport paths (WebSocket, HTTP, duplicate)
      * @param {string} opId
      * @param {string} type
      * @param {Object} serverData
@@ -1369,15 +1391,8 @@ class OptimisticUI {
             
             console.log(`✅ [Reconcile] Got real task ID ${realTask.id} for temp ${tempId}`);
 
-            // Update DOM
-            const card = document.querySelector(`[data-task-id="${tempId}"]`);
-            if (card) {
-                card.dataset.taskId = realTask.id;
-                card.classList.remove('optimistic-create');
-            }
-
-            // Reconcile temp task with real ID: remove from tempTasks Map, persist to IndexedDB
-            await this.cache.reconcileTempTask(realTask.id, tempId);
+            // CRITICAL FIX: Finalize create by updating DOM and clearing syncing badge
+            await this._finalizeCreate(tempId, realTask);
 
         } else if (type === 'update') {
             // Update with server truth
@@ -1392,19 +1407,64 @@ class OptimisticUI {
             }
         }
 
-        // Remove operation
+        // Remove operation from in-memory map
         this.pendingOperations.delete(opId);
 
         // Mark event as synced
-        const events = await this.cache.getPendingEvents();
-        const relatedEvent = events.find(e => e.task_id === taskId || e.task_id === operation.tempId);
-        if (relatedEvent) {
-            await this.cache.markEventSynced(relatedEvent.id);
+        try {
+            const events = await this.cache.getPendingEvents();
+            const relatedEvent = events.find(e => e.task_id === taskId || e.task_id === operation.tempId);
+            if (relatedEvent) {
+                await this.cache.markEventSynced(relatedEvent.id);
+            }
+        } catch (eventError) {
+            console.warn('⚠️ Failed to mark event as synced:', eventError);
         }
         
         // CROWN⁴.6: Refresh related widgets after successful sync
         // This ensures Meeting Heatmap, counters, and other widgets reflect the updated data
         this._refreshRelatedWidgets(type, taskId, serverData);
+    }
+    
+    /**
+     * CRITICAL FIX: Finalize task creation - replaces temp task with real task in DOM and cache
+     * Called by _reconcileSuccess for all create paths (WebSocket, HTTP, duplicate)
+     * @param {string} tempId - Temporary task ID
+     * @param {Object} realTask - Server-confirmed task with real ID
+     */
+    async _finalizeCreate(tempId, realTask) {
+        console.log(`🔧 [Finalize] Replacing temp ${tempId} with real task ${realTask.id}`);
+        
+        // Step 1: Update DOM - replace temp ID with real ID and clear syncing badge
+        const card = document.querySelector(`[data-task-id="${tempId}"]`);
+        if (card) {
+            card.dataset.taskId = realTask.id;
+            card.classList.remove('optimistic-create');
+            
+            // CRITICAL: Clear syncing badge
+            const syncBadge = card.querySelector('.sync-status-badge');
+            if (syncBadge) {
+                syncBadge.remove();
+                console.log(`✅ [Finalize] Cleared syncing badge for task ${realTask.id}`);
+            }
+            
+            // Update any other temp-specific UI elements
+            card.classList.remove('syncing');
+            card.removeAttribute('data-temp-id');
+        } else {
+            console.warn(`⚠️ [Finalize] No card found for temp ID ${tempId}`);
+        }
+
+        // Step 2: Reconcile in cache - remove from temp_tasks, add to tasks
+        try {
+            await this.cache.reconcileTempTask(realTask.id, tempId);
+            console.log(`✅ [Finalize] Cache reconciled for task ${realTask.id}`);
+        } catch (cacheError) {
+            console.error('❌ [Finalize] Cache reconciliation failed:', cacheError);
+        }
+        
+        // Step 3: Update counters after successful finalization
+        this._updateCounters();
     }
     
     /**

@@ -145,6 +145,18 @@ class TaskBootstrap {
                 window.CROWNTelemetry.recordMetric('checksum_valid', checksumValid ? 1 : 0);
             }
 
+            // CRITICAL FIX: Clear stale pendingOperations from memory BEFORE rehydration
+            // This ensures zombie operations don't persist in the UI
+            if (window.optimisticUI) {
+                const staleOpIds = await this._getStaleOperationIds();
+                if (staleOpIds.length > 0) {
+                    console.log(`🧹 [Bootstrap] Clearing ${staleOpIds.length} stale operations from memory`);
+                    staleOpIds.forEach(opId => {
+                        window.optimisticUI.pendingOperations.delete(opId);
+                    });
+                }
+            }
+
             // Step 4: Start background sync (with reconciliation if needed)
             this.syncInBackground();
 
@@ -1052,6 +1064,49 @@ class TaskBootstrap {
             const result = await this.cache.compactEvents(30); // 30 day retention
             await this.cache.setMetadata('last_compaction_timestamp', now);
             console.log(`✅ Compacted ${result.compacted} events`);
+        }
+    }
+    
+    /**
+     * CRITICAL FIX: Get operation IDs for stale operations older than threshold
+     * These need to be cleared from in-memory pendingOperations map
+     * @returns {Promise<Array<string>>} Array of stale operation IDs
+     */
+    async _getStaleOperationIds() {
+        try {
+            await this.cache.init();
+            
+            return new Promise((resolve, reject) => {
+                const tx = this.cache.db.transaction(['offline_queue'], 'readonly');
+                const store = tx.objectStore('offline_queue');
+                const request = store.getAll();
+                
+                request.onsuccess = () => {
+                    const ops = request.result || [];
+                    const now = Date.now();
+                    const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+                    
+                    const staleOpIds = ops
+                        .filter(op => {
+                            const opTime = op.timestamp ? new Date(op.timestamp).getTime() : 0;
+                            const opAge = now - opTime;
+                            return opAge > STALE_THRESHOLD_MS && op.type === 'create';
+                        })
+                        .map(op => op.operation_id)
+                        .filter(Boolean);
+                    
+                    console.log(`🧹 [Bootstrap] Found ${staleOpIds.length} stale operation IDs`);
+                    resolve(staleOpIds);
+                };
+                
+                request.onerror = () => {
+                    console.error('❌ Failed to get stale operation IDs:', request.error);
+                    resolve([]); // Return empty on error, don't block bootstrap
+                };
+            });
+        } catch (error) {
+            console.error('❌ _getStaleOperationIds failed:', error);
+            return [];
         }
     }
 
