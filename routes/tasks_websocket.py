@@ -28,7 +28,6 @@ Supported Events (Full Matrix):
 """
 
 import logging
-import asyncio
 import datetime
 from flask import request
 from flask_socketio import emit, join_room, leave_room
@@ -43,32 +42,6 @@ from services.event_sequencer import event_sequencer
 def get_socket_sid() -> str:
     """Get Socket.IO session ID from request context."""
     return request.sid  # type: ignore[attr-defined]
-
-
-def run_async(coro):
-    """Helper to run async functions in sync context with eventlet compatibility."""
-    try:
-        # Check if there's already a running event loop
-        loop = asyncio.get_running_loop()
-        # If we're here, a loop is running - use nest_asyncio or return immediately
-        # For eventlet, we should avoid running async in the main thread
-        import nest_asyncio  # type: ignore
-        nest_asyncio.apply()
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        # No running loop, create a new one (normal sync context)
-        pass
-    except ImportError:
-        # nest_asyncio not available - log and skip
-        return None
-    
-    # Create new loop for sync context
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 logger = logging.getLogger(__name__)
 
@@ -272,16 +245,17 @@ def register_tasks_namespace(socketio):
                 # Process all ready events in order
                 results = []
                 for event in ready_events:
-                    result = run_async(task_event_handler.handle_event(
+                    # Call handler directly (synchronous)
+                    result = task_event_handler.handle_event(
                         event_type=event['event_type'],
                         payload=event['payload'],
                         user_id=user_id,
                         session_id=session_id
-                    ))
+                    )
                     
-                    # Handle None result from run_async
+                    # Handle failure result
                     if result is None:
-                        result = {'success': False, 'error': 'Async execution failed'}
+                        result = {'success': False, 'error': 'Handler returned None'}
                     
                     # CROWN⁴.5: Enhance response with event_id and checksum
                     enhanced_result = task_event_handler._enhance_response_with_crown_metadata(
@@ -334,17 +308,17 @@ def register_tasks_namespace(socketio):
                 # Legacy path: No event_id (backward compatibility)
                 logger.debug(f"Event {event_type} received without event_id, bypassing sequencer")
                 
-                # Process event without sequencing
-                result = run_async(task_event_handler.handle_event(
+                # Process event without sequencing (synchronous call)
+                result = task_event_handler.handle_event(
                     event_type=event_type,
                     payload=payload,
                     user_id=user_id,
                     session_id=session_id
-                ))
+                )
                 
-                # Handle None result from run_async
+                # Handle failure result
                 if result is None:
-                    result = {'success': False, 'error': 'Async execution failed'}
+                    result = {'success': False, 'error': 'Handler returned None'}
                 
                 # CROWN⁴.5: Enhance response with checksum (no event_id for legacy path)
                 enhanced_result = task_event_handler._enhance_response_with_crown_metadata(
