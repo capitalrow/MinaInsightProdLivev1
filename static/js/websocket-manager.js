@@ -550,25 +550,37 @@ class WebSocketManager {
      * @returns {Promise<Object>} Server response
      */
     async emitWithAck(eventName, data, namespace = 'dashboard') {
+        console.log(`🔥 [emitWithAck] Called: event=${eventName}, namespace=${namespace}`);
+        
         // Remove leading slash if present
         const ns = namespace.startsWith('/') ? namespace.substring(1) : namespace;
         
         const socket = this.sockets[ns];
+        console.log(`🔥 [emitWithAck] Socket lookup: ns=${ns}, socket exists=${!!socket}, connected=${socket?.connected}`);
+        
         if (!socket) {
-            throw new Error(`Socket /${ns} not connected`);
+            const error = new Error(`Socket /${ns} not connected`);
+            console.error(`❌ [emitWithAck] ${error.message}`);
+            throw error;
         }
         
         if (!socket.connected) {
-            throw new Error(`Socket /${ns} is not currently connected`);
+            const error = new Error(`Socket /${ns} is not currently connected`);
+            console.error(`❌ [emitWithAck] ${error.message}`);
+            throw error;
         }
+        
+        console.log(`🔥 [emitWithAck] About to emit ${eventName} to /${ns}`);
         
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
+                console.error(`❌ [emitWithAck] Timeout after 10s waiting for ${eventName} on /${ns}`);
                 reject(new Error(`Timeout waiting for ${eventName} acknowledgment on /${ns}`));
             }, 10000); // 10 second timeout
             
             socket.emit(eventName, data, (response) => {
                 clearTimeout(timeout);
+                console.log(`✅ [emitWithAck] Response received for ${eventName}:`, response);
                 
                 // Check if server returned an error
                 if (response && response.success === false) {

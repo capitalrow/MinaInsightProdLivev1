@@ -205,6 +205,7 @@ class OptimisticUI {
      * @returns {Promise<Object>} Created task
      */
     async createTask(taskData) {
+        console.log('🔥 [OptimisticUI] createTask called with:', taskData);
         // ENTERPRISE-GRADE: Wait for cache to be ready (prevents init race conditions)
         if (window.cacheManagerReady) {
             console.log('⏳ [Offline-First] Waiting for cacheManager to initialize...');
@@ -281,6 +282,7 @@ class OptimisticUI {
                 console.error('❌ Failed to persist pending operation:', err);
             });
             
+            console.log('🔥 [OptimisticUI] About to call _syncToServer for create operation');
             this._syncToServer(opId, 'create', taskData, tempId);
 
             return optimisticTask;
