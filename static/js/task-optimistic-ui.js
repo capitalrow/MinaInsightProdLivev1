@@ -1343,15 +1343,28 @@ class OptimisticUI {
             // Replace temp ID with real ID
             // Handle various response formats:
             // - serverData.result.task (WebSocket ack with result wrapper)
-            // - serverData.task (direct task wrapper)
+            // - serverData.result.existing_task (WebSocket duplicate detection)
+            // - serverData.existing_task (HTTP API duplicate detection)
+            // - serverData.task (direct task wrapper from HTTP API)
             // - serverData (task object directly)
-            const realTask = serverData?.result?.task || serverData?.task || serverData;
+            const realTask = serverData?.result?.task || 
+                           serverData?.result?.existing_task || 
+                           serverData?.existing_task ||
+                           serverData?.task || 
+                           serverData;
             const tempId = operation.tempId;
+            const isDuplicate = serverData?.result?.duplicate === true || 
+                               serverData?.is_duplicate === true;
             
             // CRITICAL: Verify we have a valid task ID before proceeding
             if (!realTask?.id) {
                 console.error('❌ [Reconcile] No task ID in server response:', serverData);
                 throw new Error('Server response missing task ID');
+            }
+            
+            // Log duplicate detection for debugging
+            if (isDuplicate) {
+                console.log(`ℹ️ [Reconcile] Duplicate detected, using existing task ID ${realTask.id}`);
             }
             
             console.log(`✅ [Reconcile] Got real task ID ${realTask.id} for temp ${tempId}`);
