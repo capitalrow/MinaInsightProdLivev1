@@ -148,7 +148,7 @@ class TaskMenuController {
      */
     async handleViewDetails(taskId) {
         console.log(`[TaskMenuController] Opening details for task ${taskId}`);
-        window.open(`/tasks/${taskId}`, '_blank');
+        window.open(`/dashboard/tasks/${taskId}`, '_blank');
     }
 
     /**

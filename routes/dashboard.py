@@ -329,6 +329,34 @@ def tasks():
                          completed_tasks=completed_tasks)
 
 
+@dashboard_bp.route('/tasks/<int:task_id>')
+@login_required
+def task_detail(task_id):
+    """Task detail page - view a single task in full detail."""
+    from models import Task, Meeting
+    from sqlalchemy.orm import joinedload
+    
+    # Fetch task with relationships
+    workspace_id_str = str(current_user.workspace_id)
+    task = db.session.query(Task).options(
+        joinedload(Task.meeting),
+        joinedload(Task.assigned_to)
+    ).outerjoin(Meeting, Task.meeting_id == Meeting.id)\
+    .filter(
+        Task.id == task_id,
+        or_(
+            Task.workspace_id == workspace_id_str,
+            Meeting.workspace_id == current_user.workspace_id
+        )
+    ).first()
+    
+    if not task:
+        from flask import abort
+        abort(404)
+    
+    return render_template('dashboard/task_detail.html', task=task)
+
+
 @dashboard_bp.route('/analytics')
 @login_required
 def analytics():

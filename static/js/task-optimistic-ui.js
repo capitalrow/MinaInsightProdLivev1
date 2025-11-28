@@ -1089,8 +1089,14 @@ class OptimisticUI {
                     return;
                 } catch (httpError) {
                     console.error(`❌ [HTTP Fallback] Failed:`, httpError);
-                    // If HTTP also fails, defer to offline queue
-                    console.log(`💾 Keeping pending operation ${opId} for later reconciliation`);
+                    
+                    // CRITICAL FIX: Trigger rollback so UI reflects actual server state
+                    await this._reconcileFailure(opId, type, taskId, httpError);
+                    
+                    // Show user-friendly error
+                    if (window.toast) {
+                        window.toast.error(`Failed to save changes: ${httpError.message || 'Network error'}`);
+                    }
                     return;
                 }
             }
