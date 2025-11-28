@@ -6,10 +6,10 @@ import logging
 import uuid
 from typing import Optional
 from werkzeug.middleware.proxy_fix import ProxyFix
-from flask import Flask, render_template, request, g, jsonify
+from flask import Flask, render_template, request, g, jsonify, flash, redirect, url_for
 from flask_socketio import SocketIO
 from flask_login import LoginManager
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
@@ -960,8 +960,34 @@ def create_app() -> Flask:
         return {"ok": True, "uptime": True}, 200
 
     # Security-hardened error handlers - prevent information leakage
+    
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        """Handle CSRF token validation failures with user-friendly experience."""
+        app.logger.warning(f"CSRF error: {e.description}")
+        
+        # For browser form submissions, redirect back with flash message
+        if request.accept_mimetypes.accept_html and not request.path.startswith('/api/'):
+            flash('Your session expired. Please try again.', 'warning')
+            # Redirect back to the referring page or login
+            referrer = request.referrer or url_for('auth.login')
+            return redirect(referrer)
+        
+        # For API requests, return JSON error
+        return jsonify({
+            'error': 'csrf_error',
+            'message': 'Session expired. Please refresh and try again.',
+            'request_id': g.get('request_id')
+        }), 400
+    
     @app.errorhandler(400)
     def bad_request(e):
+        # For browser form submissions on non-API routes, show a user-friendly page
+        if request.accept_mimetypes.accept_html and not request.path.startswith('/api/'):
+            flash('There was a problem with your request. Please try again.', 'error')
+            referrer = request.referrer or url_for('main.index')
+            return redirect(referrer)
+        
         return jsonify({
             'error': 'bad_request',
             'message': 'The request could not be understood',
