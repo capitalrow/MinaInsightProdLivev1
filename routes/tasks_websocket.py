@@ -391,8 +391,11 @@ def register_tasks_namespace(socketio):
     @socketio.on('task_create', namespace='/tasks')
     def handle_task_create(data):
         """Task creation handler."""
+        logger.info(f"📥 [TASK_CREATE] Received task_create event: {data}")
         data['event_type'] = 'task_create:manual'
-        return handle_task_event(data)
+        result = handle_task_event(data)
+        logger.info(f"📤 [TASK_CREATE] Returning result: {result}")
+        return result
     
     @socketio.on('task_update', namespace='/tasks')
     def handle_task_update(data):

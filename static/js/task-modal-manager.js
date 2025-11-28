@@ -113,7 +113,9 @@ class TaskModalManager {
         });
         
         this.form.addEventListener('submit', (e) => {
+            console.log('[TaskModalManager] 🔥 FORM SUBMIT EVENT TRIGGERED!');
             e.preventDefault();
+            console.log('[TaskModalManager] Default prevented, calling handleSubmit...');
             this.handleSubmit();
         });
         
