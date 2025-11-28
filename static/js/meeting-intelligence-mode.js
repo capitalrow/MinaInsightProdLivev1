@@ -31,7 +31,7 @@ class MeetingIntelligenceMode {
     /**
      * Toggle between meeting mode and normal mode
      */
-    toggle() {
+    async toggle() {
         this.isActive = !this.isActive;
         
         const toggleBtn = document.getElementById('meeting-intelligence-toggle');
@@ -42,14 +42,28 @@ class MeetingIntelligenceMode {
         // CROWN⁴.6: Add/remove 'meeting-mode-on' class to body
         document.body.classList.toggle('meeting-mode-on', this.isActive);
 
-        if (this.isActive) {
-            this.activateMeetingMode();
-            // CROWN⁴.6: Notify TaskStateStore of view mode change
-            window.dispatchEvent(new CustomEvent('meetingMode:activated'));
-        } else {
-            this.deactivateMeetingMode();
-            // CROWN⁴.6: Notify TaskStateStore of view mode change
-            window.dispatchEvent(new CustomEvent('meetingMode:deactivated'));
+        // CROWN⁴.6 FIX: Begin view transition to prevent counter flicker during DOM manipulation
+        if (window.taskStateStore) {
+            window.taskStateStore.beginViewTransition();
+        }
+
+        try {
+            if (this.isActive) {
+                await this.activateMeetingMode();
+                // CROWN⁴.6: Notify TaskStateStore of view mode change
+                window.dispatchEvent(new CustomEvent('meetingMode:activated'));
+            } else {
+                this.deactivateMeetingMode();
+                // CROWN⁴.6: Notify TaskStateStore of view mode change
+                window.dispatchEvent(new CustomEvent('meetingMode:deactivated'));
+            }
+        } finally {
+            // CROWN⁴.6 FIX: End view transition after DOM manipulation completes
+            requestAnimationFrame(() => {
+                if (window.taskStateStore) {
+                    window.taskStateStore.endViewTransition();
+                }
+            });
         }
     }
 
@@ -111,13 +125,7 @@ class MeetingIntelligenceMode {
 
         // Render grouped view (using live DOM elements)
         this.renderMeetingGroups(groupedTasks);
-        
-        // CROWN⁴.6: Force TaskStateStore to recalculate counters after DOM reorganization
-        requestAnimationFrame(() => {
-            if (window.taskStateStore) {
-                window.taskStateStore.forceRefresh();
-            }
-        });
+        // Note: Counter update handled by view transition wrapper in toggle()
     }
 
     /**
@@ -146,16 +154,12 @@ class MeetingIntelligenceMode {
 
         console.log('[MeetingIntelligenceMode] Normal mode restored with live elements');
         
-        // CROWN⁴.6: Re-apply current filter so TaskSearchSort can update visibility
-        // This ensures counters reflect the filtered view after deactivation
+        // Re-apply current filter so TaskSearchSort can update visibility
         requestAnimationFrame(() => {
             if (window.taskSearchSort) {
                 window.taskSearchSort.applyFiltersAndSort();
             }
-            // Force TaskStateStore to recalculate counters
-            if (window.taskStateStore) {
-                window.taskStateStore.forceRefresh();
-            }
+            // Note: Counter update handled by view transition wrapper in toggle()
         });
     }
 

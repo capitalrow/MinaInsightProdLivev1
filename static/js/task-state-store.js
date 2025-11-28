@@ -26,56 +26,94 @@
             this._pendingTempTasks = new Set();  // temp task IDs being synced
             this._lastCounters = null;
             this._viewMode = 'normal';  // 'normal' or 'meeting' - tracks current view mode
-            this._stabilizing = true;   // CROWN⁴.6: Suppress counter updates until sync completes
+            
+            // CROWN⁴.6 FIX: Proper stabilization that preserves server-rendered values
+            this._initialLoadComplete = false;  // True after server sync finishes
+            this._serverHydrateComplete = false; // True after server data is in store
+            this._viewTransitionActive = false; // True during mode switches
             this._stabilizationTimeout = null;
             
-            console.log('[TaskStateStore] Initializing single source of truth (stabilization mode)');
+            // Capture server-rendered counter values as baseline
+            this._serverRenderedCounters = this._captureServerRenderedCounters();
+            
+            console.log('[TaskStateStore] Initializing with server-rendered baseline:', this._serverRenderedCounters);
             
             // Listen for view mode changes
             this._setupViewModeListeners();
             
-            // Listen for sync completion to end stabilization
-            this._setupStabilizationListeners();
+            // Listen for sync completion
+            this._setupSyncListeners();
         }
         
         /**
-         * Setup listeners for sync events to control stabilization mode
-         * This prevents counter flickering during initial page load
+         * Capture server-rendered counter values from DOM as baseline
+         * These values are preserved until server sync completes
          */
-        _setupStabilizationListeners() {
-            // End stabilization when background sync completes
+        _captureServerRenderedCounters() {
+            const counters = { all: 0, active: 0, archived: 0 };
+            
+            // Read from data-counter badges
+            const allBadge = document.querySelector('[data-counter="all"]');
+            const activeBadge = document.querySelector('[data-counter="active"]');
+            const archivedBadge = document.querySelector('[data-counter="archived"]');
+            
+            if (allBadge) counters.all = parseInt(allBadge.textContent) || 0;
+            if (activeBadge) counters.active = parseInt(activeBadge.textContent) || 0;
+            if (archivedBadge) counters.archived = parseInt(archivedBadge.textContent) || 0;
+            
+            return counters;
+        }
+        
+        /**
+         * Setup listeners for sync events
+         */
+        _setupSyncListeners() {
+            // Mark initial load complete when background sync finishes
+            // CRITICAL: Only complete if server hydrate has occurred (tasks in store)
             window.addEventListener('tasks:sync:success', () => {
-                this._endStabilization('sync_success');
+                if (this._serverHydrateComplete) {
+                    this._completeInitialLoad('sync_success');
+                } else {
+                    console.log('[TaskStateStore] Sync success received, waiting for server hydrate');
+                }
             });
             
-            // Also end stabilization on sync error (show what we have)
             window.addEventListener('tasks:sync:error', () => {
-                this._endStabilization('sync_error');
+                // On sync error, show whatever we have
+                if (this._serverHydrateComplete || this._tasks.size > 0) {
+                    this._completeInitialLoad('sync_error');
+                } else {
+                    console.log('[TaskStateStore] Sync error, but no data yet - preserving server-rendered values');
+                }
             });
             
-            // Failsafe: End stabilization after 3 seconds max
-            // This ensures counters appear even if sync hangs
+            // Failsafe: Complete initial load after 3 seconds
+            // But only if we have data or server hydrate completed
             this._stabilizationTimeout = setTimeout(() => {
-                if (this._stabilizing) {
-                    this._endStabilization('timeout');
+                if (!this._initialLoadComplete) {
+                    if (this._serverHydrateComplete || this._tasks.size > 0) {
+                        this._completeInitialLoad('timeout');
+                    } else {
+                        console.log('[TaskStateStore] Timeout but no data - preserving server-rendered values');
+                    }
                 }
             }, 3000);
         }
         
         /**
-         * End stabilization mode and show final counters
-         * @param {string} reason - Why stabilization ended
+         * Complete initial load and enable counter updates
+         * @param {string} reason - Why initial load completed
          */
-        _endStabilization(reason) {
-            if (!this._stabilizing) return;
+        _completeInitialLoad(reason) {
+            if (this._initialLoadComplete) return;
             
-            this._stabilizing = false;
+            this._initialLoadComplete = true;
             if (this._stabilizationTimeout) {
                 clearTimeout(this._stabilizationTimeout);
                 this._stabilizationTimeout = null;
             }
             
-            console.log(`[TaskStateStore] Stabilization ended (${reason}) - updating counters`);
+            console.log(`[TaskStateStore] Initial load complete (${reason}) - counters now live`);
             this._updateAllUI();
         }
         
@@ -87,14 +125,40 @@
             window.addEventListener('meetingMode:activated', () => {
                 this._viewMode = 'meeting';
                 console.log('[TaskStateStore] View mode changed to: meeting');
-                this._updateAllUI();
+                // Only update if initial load is complete
+                if (this._initialLoadComplete) {
+                    this._updateAllUI();
+                }
             });
             
             window.addEventListener('meetingMode:deactivated', () => {
                 this._viewMode = 'normal';
                 console.log('[TaskStateStore] View mode changed to: normal');
-                this._updateAllUI();
+                // Only update if initial load is complete
+                if (this._initialLoadComplete) {
+                    this._updateAllUI();
+                }
             });
+        }
+        
+        /**
+         * Begin a view transition (pauses counter updates)
+         * Used for meeting mode and group similar toggles
+         */
+        beginViewTransition() {
+            this._viewTransitionActive = true;
+            console.log('[TaskStateStore] View transition started');
+        }
+        
+        /**
+         * End a view transition and update counters
+         */
+        endViewTransition() {
+            this._viewTransitionActive = false;
+            console.log('[TaskStateStore] View transition ended');
+            if (this._initialLoadComplete) {
+                this._updateAllUI();
+            }
         }
 
         /**
@@ -171,7 +235,19 @@
             });
 
             this._notifyListeners('hydrate');
-            this._updateAllUI();
+            
+            // CROWN⁴.6 FIX: Only update UI if initial load is complete
+            // During initial load, server-rendered values are preserved
+            // Cache hydration should NOT trigger counter updates
+            if (this._initialLoadComplete) {
+                this._updateAllUI();
+            } else if (source === 'server') {
+                // Server data is now in store - mark hydrate complete and enable counters
+                this._serverHydrateComplete = true;
+                this._completeInitialLoad('server_hydrate');
+            } else {
+                console.log('[TaskStateStore] Skipping UI update during initial load (preserving server-rendered values)');
+            }
         }
 
         /**
@@ -344,10 +420,15 @@
          * Single point of UI synchronization
          */
         _updateAllUI() {
-            // CROWN⁴.6: Skip counter updates during stabilization (initial sync)
-            // This prevents visible counter flickering as cache → server data loads
-            if (this._stabilizing) {
-                console.log('[TaskStateStore] Stabilizing - skipping counter update');
+            // CROWN⁴.6 FIX: Skip updates during initial load or view transitions
+            // Server-rendered values are preserved until sync completes
+            if (!this._initialLoadComplete) {
+                console.log('[TaskStateStore] Initial load not complete - preserving server-rendered counters');
+                return;
+            }
+            
+            if (this._viewTransitionActive) {
+                console.log('[TaskStateStore] View transition active - skipping counter update');
                 return;
             }
             
