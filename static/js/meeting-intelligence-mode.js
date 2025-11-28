@@ -44,8 +44,12 @@ class MeetingIntelligenceMode {
 
         if (this.isActive) {
             this.activateMeetingMode();
+            // CROWN⁴.6: Notify TaskStateStore of view mode change
+            window.dispatchEvent(new CustomEvent('meetingMode:activated'));
         } else {
             this.deactivateMeetingMode();
+            // CROWN⁴.6: Notify TaskStateStore of view mode change
+            window.dispatchEvent(new CustomEvent('meetingMode:deactivated'));
         }
     }
 
@@ -107,6 +111,13 @@ class MeetingIntelligenceMode {
 
         // Render grouped view (using live DOM elements)
         this.renderMeetingGroups(groupedTasks);
+        
+        // CROWN⁴.6: Force TaskStateStore to recalculate counters after DOM reorganization
+        requestAnimationFrame(() => {
+            if (window.taskStateStore) {
+                window.taskStateStore.forceRefresh();
+            }
+        });
     }
 
     /**
@@ -134,6 +145,18 @@ class MeetingIntelligenceMode {
         this.taskElements = [];
 
         console.log('[MeetingIntelligenceMode] Normal mode restored with live elements');
+        
+        // CROWN⁴.6: Re-apply current filter so TaskSearchSort can update visibility
+        // This ensures counters reflect the filtered view after deactivation
+        requestAnimationFrame(() => {
+            if (window.taskSearchSort) {
+                window.taskSearchSort.applyFiltersAndSort();
+            }
+            // Force TaskStateStore to recalculate counters
+            if (window.taskStateStore) {
+                window.taskStateStore.forceRefresh();
+            }
+        });
     }
 
     /**

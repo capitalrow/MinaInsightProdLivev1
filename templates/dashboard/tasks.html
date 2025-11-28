@@ -699,7 +699,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){
 <script src="{{ url_for('static', filename='js/csrf.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6 TaskStateStore - MUST load first as single source of truth -->
-<script defer src="{{ url_for('static', filename='js/task-state-store.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-state-store.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.5 Frontend Modules - ALL deferred for <200ms First Paint -->
 <script defer src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -778,7 +778,7 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 <script defer src="{{ url_for('static', filename='js/task-spoken-provenance.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/meeting-heatmap.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-context-preview.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/meeting-intelligence-mode.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/meeting-intelligence-mode.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/semantic-search.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/stress-indicators.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/dev-performance-panel.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>

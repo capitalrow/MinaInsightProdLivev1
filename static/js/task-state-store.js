@@ -25,8 +25,30 @@
             this._listeners = new Set();
             this._pendingTempTasks = new Set();  // temp task IDs being synced
             this._lastCounters = null;
+            this._viewMode = 'normal';  // 'normal' or 'meeting' - tracks current view mode
             
             console.log('[TaskStateStore] Initializing single source of truth');
+            
+            // Listen for view mode changes
+            this._setupViewModeListeners();
+        }
+        
+        /**
+         * Setup listeners for view mode changes (Meeting Intelligence Mode)
+         */
+        _setupViewModeListeners() {
+            // Listen for meeting mode activation/deactivation
+            window.addEventListener('meetingMode:activated', () => {
+                this._viewMode = 'meeting';
+                console.log('[TaskStateStore] View mode changed to: meeting');
+                this._updateAllUI();
+            });
+            
+            window.addEventListener('meetingMode:deactivated', () => {
+                this._viewMode = 'normal';
+                console.log('[TaskStateStore] View mode changed to: normal');
+                this._updateAllUI();
+            });
         }
 
         /**
@@ -313,17 +335,22 @@
 
         /**
          * Update "X of Y tasks" pagination indicator
+         * CROWN⁴.6: Handles both normal and meeting view modes
          * @param {Object} counters
          */
         _updatePaginationIndicator(counters) {
-            // Find the specific elements used in tasks.html
             const visibleCountEl = document.getElementById('visible-task-count');
             const totalCountEl = document.getElementById('total-task-count');
             
             if (!visibleCountEl && !totalCountEl) return;
 
-            // Get currently visible task count from DOM (respects filters)
-            const visibleCards = document.querySelectorAll('.task-card:not([style*="display: none"]):not(.deleting):not(.hidden)');
+            // Count visible task cards in DOM (respects current view mode and filters)
+            // In meeting mode, tasks are inside .meeting-group-tasks containers
+            const selector = this._viewMode === 'meeting' 
+                ? '.meeting-group-tasks .task-card:not([style*="display: none"]):not(.deleting):not(.hidden)'
+                : '.task-card:not([style*="display: none"]):not(.deleting):not(.hidden)';
+            
+            const visibleCards = document.querySelectorAll(selector);
             let visibleCount = 0;
             
             visibleCards.forEach(card => {
@@ -334,10 +361,12 @@
                 }
             });
 
-            // Update both elements
+            // Update visible count
             if (visibleCountEl) {
                 visibleCountEl.textContent = visibleCount;
             }
+            
+            // Total always reflects store count (single source of truth)
             if (totalCountEl) {
                 totalCountEl.textContent = counters.all;
             }
@@ -345,13 +374,20 @@
 
         /**
          * Update pending tasks banner
+         * CROWN⁴.6: Hides in meeting mode, shows accurate count in normal mode
          * @param {Object} counters
          */
         _updatePendingBanner(counters) {
             const banner = document.querySelector('.pending-tasks-banner, [data-pending-banner]');
             if (!banner) return;
 
-            // Show pending tasks count (active tasks needing attention)
+            // Hide banner in meeting mode - meeting groups show their own stats
+            if (this._viewMode === 'meeting') {
+                banner.style.display = 'none';
+                return;
+            }
+
+            // In normal mode, show pending tasks count (active tasks needing attention)
             const pendingCount = counters.active;
             
             if (pendingCount > 0) {
