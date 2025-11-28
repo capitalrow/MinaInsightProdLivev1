@@ -1044,14 +1044,29 @@ class OptimisticUI {
             window.taskBootstrap._updateCountersFromDOM();
         } else {
             // Fallback: direct DOM counting if TaskBootstrap not ready
+            // CRITICAL FIX: Filter out temp tasks and deleted tasks
             const cards = document.querySelectorAll('.task-card');
             const counters = {
-                all: cards.length,
+                all: 0,
                 active: 0,
                 archived: 0
             };
 
             cards.forEach(card => {
+                const taskId = card.dataset?.taskId;
+                
+                // Skip temp tasks (not yet confirmed by server)
+                if (taskId && (taskId.startsWith('temp_') || taskId.includes('_temp_'))) {
+                    return;
+                }
+                
+                // Skip deleted tasks
+                if (card.classList.contains('deleting') || card.dataset?.deleted === 'true') {
+                    return;
+                }
+                
+                counters.all++;
+                
                 const status = (card.dataset?.status || 'todo').toLowerCase().trim();
                 const isCompleted = status === 'completed';
                 const isCancelled = status === 'cancelled';

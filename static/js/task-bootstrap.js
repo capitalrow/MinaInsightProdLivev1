@@ -859,15 +859,15 @@ class TaskBootstrap {
 
     /**
      * CROWN⁴.6: Synchronous DOM-based counter update
-     * Counts ALL .task-card elements (including hidden filtered ones)
+     * Counts only VALID task cards (filters out temp tasks and deleted tasks)
      * Counter badges show totals for each category across all tasks
-     * Filtering only affects visibility, not counter totals
+     * CRITICAL FIX: Excludes temp tasks still syncing and deleted tasks
      */
     _updateCountersFromDOM() {
         // Count ALL task cards, including ones hidden by filter
         const cards = document.querySelectorAll('.task-card');
         const counters = {
-            all: cards.length,
+            all: 0,  // Will be computed, not just cards.length
             active: 0,
             archived: 0,
             todo: 0,
@@ -875,8 +875,30 @@ class TaskBootstrap {
             pending: 0,
             completed: 0
         };
+        
+        // CRITICAL FIX: Track temp task count for debugging
+        let tempTaskCount = 0;
+        let deletedCount = 0;
 
         cards.forEach(card => {
+            const taskId = card.dataset?.taskId;
+            
+            // CRITICAL FIX: Skip temp tasks (not yet confirmed by server)
+            // Temp tasks should NOT be counted until they have a real server ID
+            if (taskId && (taskId.startsWith('temp_') || taskId.includes('_temp_'))) {
+                tempTaskCount++;
+                return; // Don't count temp tasks in totals
+            }
+            
+            // CRITICAL FIX: Skip deleted tasks
+            if (card.classList.contains('deleting') || card.dataset?.deleted === 'true') {
+                deletedCount++;
+                return;
+            }
+            
+            // Count this as a valid task
+            counters.all++;
+            
             // Safe status extraction with fallback
             const rawStatus = card.dataset?.status;
             const status = rawStatus ? rawStatus.toLowerCase().trim() : 'todo';
@@ -898,7 +920,13 @@ class TaskBootstrap {
             }
         });
 
-        console.log('[TaskBootstrap] DOM counter update:', { all: counters.all, active: counters.active, archived: counters.archived });
+        console.log('[TaskBootstrap] DOM counter update:', { 
+            all: counters.all, 
+            active: counters.active, 
+            archived: counters.archived,
+            tempTasks: tempTaskCount,
+            deleted: deletedCount
+        });
 
         // Update counter badges with emotional animation
         Object.entries(counters).forEach(([key, count]) => {
