@@ -29,6 +29,7 @@ Supported Events (Full Matrix):
 
 import logging
 import asyncio
+import datetime
 from flask import request
 from flask_socketio import emit, join_room, leave_room
 from flask_login import current_user
@@ -292,11 +293,25 @@ def register_tasks_namespace(socketio):
                     
                     # Broadcast each successful event
                     if enhanced_result.get('success'):
+                        # Emit to tasks namespace for task page updates
                         emit('task_updated', {
                             'event_type': event['event_type'],
                             'event_id': event['event_id'],
                             'data': enhanced_result
                         }, to=f"workspace_{workspace_id}")
+                        
+                        # CROWN⁴.6: Cross-namespace sync to dashboard
+                        # Dashboard handleTaskUpdate() just triggers reload, so minimal payload is fine
+                        socketio.emit('task_update', {
+                            'event_id': event.get('event_id', str(enhanced_result.get('task', {}).get('id', ''))),
+                            'event_type': event['event_type'],
+                            'timestamp': datetime.datetime.utcnow().isoformat(),
+                            'data': {
+                                'task_id': enhanced_result.get('task', {}).get('id'),
+                                'status': enhanced_result.get('task', {}).get('status'),
+                                'workspace_id': workspace_id
+                            }
+                        }, namespace='/dashboard', to=f"workspace_{workspace_id}")
                 
                 # Return combined result
                 final_result = {
@@ -352,10 +367,24 @@ def register_tasks_namespace(socketio):
                 # Broadcast to workspace room if successful
                 if enhanced_result.get('success'):
                     if workspace_id:
+                        # Emit to tasks namespace for task page updates
                         emit('task_updated', {
                             'event_type': event_type,
                             'data': enhanced_result
                         }, to=f"workspace_{workspace_id}")
+                        
+                        # CROWN⁴.6: Cross-namespace sync to dashboard
+                        # Dashboard handleTaskUpdate() just triggers reload, so minimal payload is fine
+                        socketio.emit('task_update', {
+                            'event_id': str(enhanced_result.get('task', {}).get('id', '')),
+                            'event_type': event_type,
+                            'timestamp': datetime.datetime.utcnow().isoformat(),
+                            'data': {
+                                'task_id': enhanced_result.get('task', {}).get('id'),
+                                'status': enhanced_result.get('task', {}).get('status'),
+                                'workspace_id': workspace_id
+                            }
+                        }, namespace='/dashboard', to=f"workspace_{workspace_id}")
                 
                 # CRITICAL: Return wrapped response for Socket.IO acknowledgment callback
                 # This ensures emitWithAck receives {event_type, result, trace_id, sequenced}
