@@ -2093,10 +2093,12 @@ def parse_natural_due_date(due_date_text):
         # If all parsing fails, default to one week from now
         return date.today() + timedelta(days=7)
 
-@api_tasks_bp.route('', methods=['GET'])
-def get_all_tasks():
+@api_tasks_bp.route('/summary-tasks', methods=['GET'])
+def get_all_summary_tasks():
     """
-    List all action items across sessions.
+    List all action items from session summaries (legacy format).
+    NOTE: For proper task management, use GET /api/tasks/ which returns Task model data.
+    
     Query params:
       - session_id: (optional) filter by session
       - completed: (optional) "true"/"false" to filter by completion status
