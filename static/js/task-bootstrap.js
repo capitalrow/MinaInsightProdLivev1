@@ -536,14 +536,10 @@ class TaskBootstrap {
         // Attach event listeners (checkbox toggle, etc.)
         this._attachEventListeners();
 
-        // CROWN⁴.6 FIX: Only update counters from fresh server data
-        // Prevents "cache flash" where stale cached counts briefly appear
-        // Server-rendered counts are already correct on page load
-        if (!options.fromCache) {
-            this.updateCounters(tasks);
-        } else {
-            console.log('📦 [CacheFirst] Preserving server-rendered counters (skipping cache counter update)');
-        }
+        // CROWN⁴.6 FIX: Always update counters after render to match visible DOM
+        // Use sync DOM-based counting to avoid race conditions
+        // This ensures counters match what user sees regardless of cache/server source
+        this._updateCountersFromDOM();
 
         // Show cache indicator if from cache
         if (options.fromCache) {
@@ -891,6 +887,62 @@ class TaskBootstrap {
                     });
                 } else {
                     // Fallback: simple CSS animation
+                    badge.classList.remove('counter-pulse');
+                    void badge.offsetWidth; // Trigger reflow
+                    badge.classList.add('counter-pulse');
+                }
+            }
+        });
+    }
+
+    /**
+     * CROWN⁴.6: Synchronous DOM-based counter update
+     * Counts visible .task-card elements directly - no async/cache dependency
+     * Ensures counters always match what user sees on screen
+     */
+    _updateCountersFromDOM() {
+        const cards = document.querySelectorAll('.task-card:not([style*="display: none"])');
+        const counters = {
+            all: cards.length,
+            active: 0,
+            archived: 0,
+            todo: 0,
+            in_progress: 0,
+            pending: 0,
+            completed: 0
+        };
+
+        cards.forEach(card => {
+            const status = (card.dataset.status || 'todo').toLowerCase();
+            
+            // Count by status
+            if (counters[status] !== undefined) {
+                counters[status]++;
+            }
+            
+            // CROWN⁴.6: Active = NOT completed and NOT cancelled
+            // Archived = completed or cancelled
+            const isCompleted = status === 'completed';
+            const isCancelled = status === 'cancelled';
+            
+            if (isCompleted || isCancelled) {
+                counters.archived++;
+            } else {
+                counters.active++;
+            }
+        });
+
+        console.log('[TaskBootstrap] DOM counter update:', { all: counters.all, active: counters.active, archived: counters.archived });
+
+        // Update counter badges with animation
+        Object.entries(counters).forEach(([key, count]) => {
+            const badge = document.querySelector(`[data-counter="${key}"]`);
+            if (badge) {
+                const oldCount = parseInt(badge.textContent, 10) || 0;
+                badge.textContent = count;
+                
+                // Add pulse animation on counter change
+                if (oldCount !== count) {
                     badge.classList.remove('counter-pulse');
                     void badge.offsetWidth; // Trigger reflow
                     badge.classList.add('counter-pulse');
