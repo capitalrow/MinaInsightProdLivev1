@@ -536,8 +536,14 @@ class TaskBootstrap {
         // Attach event listeners (checkbox toggle, etc.)
         this._attachEventListeners();
 
-        // Update counters
-        this.updateCounters(tasks);
+        // CROWN⁴.6 FIX: Only update counters from fresh server data
+        // Prevents "cache flash" where stale cached counts briefly appear
+        // Server-rendered counts are already correct on page load
+        if (!options.fromCache) {
+            this.updateCounters(tasks);
+        } else {
+            console.log('📦 [CacheFirst] Preserving server-rendered counters (skipping cache counter update)');
+        }
 
         // Show cache indicator if from cache
         if (options.fromCache) {
