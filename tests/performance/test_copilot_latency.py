@@ -55,6 +55,7 @@ class TestStreamingLatencySLA:
                 first_chunk_time = time.time()
             chunks.append(chunk)
         
+        assert first_chunk_time is not None, "Should receive at least one chunk"
         first_token_latency_ms = (first_chunk_time - start_time) * 1000
         self.metrics_collector.record_response_latency(first_token_latency_ms, calm_score=0.95)
         
@@ -488,6 +489,7 @@ class TestMetricsAccuracy:
         metrics = self.metrics_collector.get_current_metrics()
         
         expected_rate = hits / (hits + misses)
+        assert metrics.cache_hit_rate is not None, "Cache hit rate should be recorded"
         assert abs(metrics.cache_hit_rate - expected_rate) < 0.01, f"Cache hit rate {metrics.cache_hit_rate:.3f} should match expected {expected_rate:.3f}"
     
     def test_error_tracking_accuracy(self):
