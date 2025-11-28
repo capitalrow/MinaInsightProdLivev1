@@ -1034,56 +1034,19 @@ class OptimisticUI {
 
     /**
      * Update task counters
-     * CROWN⁴.6: Delegates to TaskBootstrap for single source of truth
-     * Ensures consistent counter updates across optimistic UI, cache, and server paths
+     * CROWN⁴.6: Delegates to TaskStateStore for single source of truth
+     * All counter updates MUST go through TaskStateStore
      */
     _updateCounters() {
-        // CROWN⁴.6 FIX: Delegate to TaskBootstrap's DOM-based counter method
-        // This ensures counters are always consistent with visible DOM state
+        // PRIMARY: Use TaskStateStore (single source of truth)
+        if (window.taskStateStore && window.taskStateStore._initialized) {
+            window.taskStateStore.forceRefresh();
+            return;
+        }
+        
+        // FALLBACK: Delegate to TaskBootstrap if TaskStateStore not ready
         if (window.taskBootstrap && typeof window.taskBootstrap._updateCountersFromDOM === 'function') {
             window.taskBootstrap._updateCountersFromDOM();
-        } else {
-            // Fallback: direct DOM counting if TaskBootstrap not ready
-            // CRITICAL FIX: Filter out temp tasks and deleted tasks
-            const cards = document.querySelectorAll('.task-card');
-            const counters = {
-                all: 0,
-                active: 0,
-                archived: 0
-            };
-
-            cards.forEach(card => {
-                const taskId = card.dataset?.taskId;
-                
-                // Skip temp tasks (not yet confirmed by server)
-                if (taskId && (taskId.startsWith('temp_') || taskId.includes('_temp_'))) {
-                    return;
-                }
-                
-                // Skip deleted tasks
-                if (card.classList.contains('deleting') || card.dataset?.deleted === 'true') {
-                    return;
-                }
-                
-                counters.all++;
-                
-                const status = (card.dataset?.status || 'todo').toLowerCase().trim();
-                const isCompleted = status === 'completed';
-                const isCancelled = status === 'cancelled';
-                
-                if (isCompleted || isCancelled) {
-                    counters.archived++;
-                } else {
-                    counters.active++;
-                }
-            });
-
-            Object.entries(counters).forEach(([key, count]) => {
-                const badge = document.querySelector(`[data-counter="${key}"]`);
-                if (badge) {
-                    badge.textContent = count;
-                }
-            });
         }
     }
 
@@ -1478,7 +1441,13 @@ class OptimisticUI {
             console.error('❌ [Finalize] Cache reconciliation failed:', cacheError);
         }
         
-        // Step 3: Update counters after successful finalization
+        // Step 3: CROWN⁴.6 - Reconcile TaskStateStore (single source of truth)
+        if (window.taskStateStore) {
+            window.taskStateStore.reconcileTempTask(tempId, realTask.id, realTask);
+            console.log(`✅ [Finalize] TaskStateStore reconciled: ${tempId} → ${realTask.id}`);
+        }
+        
+        // Step 4: Update counters after successful finalization
         this._updateCounters();
     }
     

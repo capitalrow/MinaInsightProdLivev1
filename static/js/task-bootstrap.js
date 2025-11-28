@@ -439,6 +439,13 @@ class TaskBootstrap {
     async renderTasks(tasks, options = {}) {
         console.log(`🔧 [TaskBootstrap] renderTasks() called with ${tasks?.length || 0} tasks`);
         
+        // CROWN⁴.6: Hydrate TaskStateStore FIRST - single source of truth
+        if (tasks && Array.isArray(tasks) && tasks.length > 0 && window.taskStateStore) {
+            const source = options.fromCache ? 'cache' : 'server';
+            window.taskStateStore.hydrate(tasks, source);
+            console.log(`[TaskBootstrap] Hydrated TaskStateStore from ${source}`);
+        }
+        
         const container = document.getElementById('tasks-list-container');
         
         if (!container) {
@@ -845,108 +852,90 @@ class TaskBootstrap {
 
     /**
      * Update task counters in UI
-     * CROWN⁴.6: Delegates to _updateCountersFromDOM() for single source of truth
+     * CROWN⁴.6: Delegates to TaskStateStore for single source of truth
      * Kept for backward compatibility with external callers
-     * @param {Array} tasks - Ignored, DOM is source of truth
-     * @deprecated Use _updateCountersFromDOM() directly for sync updates
+     * @param {Array} tasks - Optional, will hydrate TaskStateStore if provided
      */
     async updateCounters(tasks) {
-        // CROWN⁴.6 FIX: Delegate to DOM-based counter for single source of truth
-        // This eliminates race conditions between cache and DOM state
-        console.log('[TaskBootstrap] updateCounters() delegating to _updateCountersFromDOM() for consistency');
+        // CROWN⁴.6: If tasks provided, hydrate the store first
+        if (tasks && Array.isArray(tasks) && tasks.length > 0) {
+            if (window.taskStateStore) {
+                window.taskStateStore.hydrate(tasks, 'updateCounters');
+            }
+        }
+        
+        // Delegate to single source of truth
+        console.log('[TaskBootstrap] updateCounters() delegating to TaskStateStore');
         this._updateCountersFromDOM();
     }
 
     /**
-     * CROWN⁴.6: Synchronous DOM-based counter update
-     * Counts only VALID task cards (filters out temp tasks and deleted tasks)
-     * Counter badges show totals for each category across all tasks
-     * CRITICAL FIX: Excludes temp tasks still syncing and deleted tasks
+     * CROWN⁴.6: Counter update - delegates to TaskStateStore
+     * TaskStateStore is the ONLY source of truth for counter values
+     * This method triggers a refresh from the store
      */
     _updateCountersFromDOM() {
-        // Count ALL task cards, including ones hidden by filter
-        const cards = document.querySelectorAll('.task-card');
-        const counters = {
-            all: 0,  // Will be computed, not just cards.length
-            active: 0,
-            archived: 0,
-            todo: 0,
-            in_progress: 0,
-            pending: 0,
-            completed: 0
-        };
+        // PRIMARY: Use TaskStateStore if available (single source of truth)
+        if (window.taskStateStore && window.taskStateStore._initialized) {
+            window.taskStateStore.forceRefresh();
+            return;
+        }
         
-        // CRITICAL FIX: Track temp task count for debugging
-        let tempTaskCount = 0;
-        let deletedCount = 0;
-
+        // FALLBACK: Build store from DOM if TaskStateStore not ready
+        // This only happens during initial page load before hydration
+        console.log('[TaskBootstrap] TaskStateStore not ready, building from DOM...');
+        
+        const cards = document.querySelectorAll('.task-card');
+        const tasks = [];
+        
         cards.forEach(card => {
             const taskId = card.dataset?.taskId;
+            if (!taskId) return;
             
-            // CRITICAL FIX: Skip temp tasks (not yet confirmed by server)
-            // Temp tasks should NOT be counted until they have a real server ID
-            if (taskId && (taskId.startsWith('temp_') || taskId.includes('_temp_'))) {
-                tempTaskCount++;
-                return; // Don't count temp tasks in totals
-            }
+            // Skip temp tasks
+            if (taskId.startsWith('temp_') || taskId.includes('_temp_')) return;
             
-            // CRITICAL FIX: Skip deleted tasks
-            if (card.classList.contains('deleting') || card.dataset?.deleted === 'true') {
-                deletedCount++;
-                return;
-            }
+            // Skip deleted tasks
+            if (card.classList.contains('deleting') || card.dataset?.deleted === 'true') return;
             
-            // Count this as a valid task
+            tasks.push({
+                id: taskId,
+                status: card.dataset?.status || 'todo',
+                workspace_id: window.WORKSPACE_ID
+            });
+        });
+        
+        // Hydrate store with DOM-derived tasks
+        if (window.taskStateStore) {
+            window.taskStateStore.hydrate(tasks, 'dom-fallback');
+        } else {
+            // Ultra-fallback: direct badge update (should rarely happen)
+            this._directBadgeUpdate(tasks);
+        }
+    }
+    
+    /**
+     * Ultra-fallback direct badge update when TaskStateStore unavailable
+     * @param {Array} tasks
+     */
+    _directBadgeUpdate(tasks) {
+        const counters = { all: 0, active: 0, archived: 0 };
+        
+        tasks.forEach(task => {
             counters.all++;
-            
-            // Safe status extraction with fallback
-            const rawStatus = card.dataset?.status;
-            const status = rawStatus ? rawStatus.toLowerCase().trim() : 'todo';
-            
-            // Count by status (for future use)
-            if (counters.hasOwnProperty(status)) {
-                counters[status]++;
-            }
-            
-            // CROWN⁴.6: Active = NOT completed and NOT cancelled
-            // Archived = completed or cancelled
-            const isCompleted = status === 'completed';
-            const isCancelled = status === 'cancelled';
-            
-            if (isCompleted || isCancelled) {
+            const status = (task.status || 'todo').toLowerCase();
+            if (status === 'completed' || status === 'cancelled') {
                 counters.archived++;
             } else {
                 counters.active++;
             }
         });
-
-        console.log('[TaskBootstrap] DOM counter update:', { 
-            all: counters.all, 
-            active: counters.active, 
-            archived: counters.archived,
-            tempTasks: tempTaskCount,
-            deleted: deletedCount
-        });
-
-        // Update counter badges with emotional animation
+        
+        console.log('[TaskBootstrap] Direct badge update (fallback):', counters);
+        
         Object.entries(counters).forEach(([key, count]) => {
             const badge = document.querySelector(`[data-counter="${key}"]`);
-            if (badge) {
-                const oldCount = parseInt(badge.textContent, 10) || 0;
-                badge.textContent = count;
-                
-                // Add CROWN⁴.5 emotional pulse animation on counter change
-                if (oldCount !== count && window.emotionalAnimations) {
-                    window.emotionalAnimations.pulse(badge, {
-                        emotion_cue: 'counter_update'
-                    });
-                } else if (oldCount !== count) {
-                    // Fallback: simple CSS animation
-                    badge.classList.remove('counter-pulse');
-                    void badge.offsetWidth; // Trigger reflow
-                    badge.classList.add('counter-pulse');
-                }
-            }
+            if (badge) badge.textContent = count;
         });
     }
 
