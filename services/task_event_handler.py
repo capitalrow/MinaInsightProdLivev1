@@ -225,13 +225,18 @@ class TaskEventHandler:
                 logger.info(f"Task {task.id} has NULL workspace_id, access denied for non-owner")
                 return False
             
+            # Normalize types to handle int vs string comparisons
+            task_ws_id = int(task.workspace_id) if task.workspace_id is not None else None
+            user_ws_id = int(user.workspace_id) if user.workspace_id is not None else None
+            
             # Allow access if task belongs to same workspace as user
-            if task.workspace_id == user.workspace_id:
+            if task_ws_id == user_ws_id:
+                logger.debug(f"Workspace access granted: User {user_id} (ws={user_ws_id}) can access task {task.id} (ws={task_ws_id})")
                 return True
             
             # DENY: Different workspace and not the creator
-            logger.warning(f"Access denied: User {user_id} (workspace {user.workspace_id}) "
-                         f"cannot access task {task.id} (workspace {task.workspace_id}, "
+            logger.warning(f"Access denied: User {user_id} (workspace {user_ws_id}, type={type(user.workspace_id)}) "
+                         f"cannot access task {task.id} (workspace {task_ws_id}, type={type(task.workspace_id)}, "
                          f"created_by {task.created_by_id})")
             return False
             
