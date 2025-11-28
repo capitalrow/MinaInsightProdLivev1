@@ -963,22 +963,37 @@ def create_app() -> Flask:
     
     @app.errorhandler(CSRFError)
     def handle_csrf_error(e):
-        """Handle CSRF token validation failures with user-friendly experience."""
-        app.logger.warning(f"CSRF error: {e.description}")
+        """
+        Enterprise-grade CSRF error handling.
+        - Comprehensive logging for security monitoring
+        - User-friendly messages (no technical jargon)
+        - API vs browser differentiation
+        - Fresh token provision for auto-retry
+        """
+        from flask_wtf.csrf import generate_csrf
         
-        # For browser form submissions, redirect back with flash message
+        app.logger.warning(
+            f"CSRF validation failed | "
+            f"IP: {request.remote_addr} | "
+            f"Endpoint: {request.endpoint} | "
+            f"User-Agent: {request.headers.get('User-Agent', 'unknown')[:100]} | "
+            f"Referer: {request.headers.get('Referer', 'none')} | "
+            f"Reason: {e.description}"
+        )
+        
         if request.accept_mimetypes.accept_html and not request.path.startswith('/api/'):
             flash('Your session expired. Please try again.', 'warning')
-            # Redirect back to the referring page or login
             referrer = request.referrer or url_for('auth.login')
             return redirect(referrer)
         
-        # For API requests, return JSON error
+        new_token = generate_csrf()
         return jsonify({
-            'error': 'csrf_error',
+            'error': 'csrf_token_expired',
             'message': 'Session expired. Please refresh and try again.',
+            'new_token': new_token,
+            'refresh_required': True,
             'request_id': g.get('request_id')
-        }), 400
+        }), 419
     
     @app.errorhandler(400)
     def bad_request(e):
