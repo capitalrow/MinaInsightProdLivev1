@@ -1071,11 +1071,19 @@ class MinaTasksLinear {
     }
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.minaTasksLinear = new MinaTasksLinear();
+// CROWN⁴.6 PERFORMANCE FIX: Defer initialization to allow skeleton to paint first
+// Using double-rAF pattern ensures browser paints skeleton before heavy FLIP work
+function initMinaTasksLinear() {
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            console.log('[Linear] Skeleton painted, initializing FLIP animations...');
+            window.minaTasksLinear = new MinaTasksLinear();
+        });
     });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMinaTasksLinear);
 } else {
-    window.minaTasksLinear = new MinaTasksLinear();
+    initMinaTasksLinear();
 }
