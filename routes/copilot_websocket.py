@@ -294,6 +294,9 @@ def register_copilot_namespace(socketio):
                 data={'started': True}
             )
             
+            # Capture user_id before background task (Flask-Login context not available in background tasks)
+            captured_user_id = current_user.id
+            
             def stream_task():
                 """Background task for streaming response (uses dedicated async thread)."""
                 try:
@@ -304,7 +307,7 @@ def register_copilot_namespace(socketio):
                         user_message=user_message,
                         context=context,
                         workspace_id=workspace_id,
-                        user_id=current_user.id
+                        user_id=captured_user_id
                     ):
                         # Emit streaming event to specific client
                         socketio.emit('copilot_stream', event, namespace='/copilot', to=client_sid)
@@ -329,7 +332,7 @@ def register_copilot_namespace(socketio):
                     
                     # Store conversation and update embeddings
                     copilot_memory_service.retrain_context(
-                        user_id=current_user.id,
+                        user_id=captured_user_id,
                         workspace_id=workspace_id,
                         interaction_data={
                             'message': user_message,
@@ -355,10 +358,11 @@ def register_copilot_namespace(socketio):
             # Handle error with graceful degradation
             error_session_id = data.get('session_id', 'unknown') if data else 'unknown'
             error_user_message = data.get('message', '')[:100] if data else ''
+            error_user_id = current_user.id if current_user and current_user.is_authenticated else None
             error_response = copilot_error_handler.handle_error(
                 error=e,
                 context={'session_id': error_session_id, 'user_message': error_user_message},
-                user_id=current_user.id
+                user_id=error_user_id
             )
             
             # Record error in metrics
