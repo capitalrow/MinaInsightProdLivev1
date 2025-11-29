@@ -10,7 +10,7 @@ Integration: connection:conn_google-calendar_01KB6V3GHXC33M5KH618B8HYJN
 import os
 import logging
 import aiohttp
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 
@@ -45,15 +45,38 @@ class GoogleCalendarConnector:
         self._connection_settings: Optional[Dict[str, Any]] = None
         self._connector_hostname = os.environ.get('REPLIT_CONNECTORS_HOSTNAME')
     
+    def _parse_datetime_aware(self, dt_str: str) -> datetime:
+        """Parse datetime string to timezone-aware datetime."""
+        if not dt_str:
+            return datetime.now(timezone.utc)
+        
+        dt_str = dt_str.replace('Z', '+00:00')
+        try:
+            dt = datetime.fromisoformat(dt_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except (ValueError, TypeError):
+            return datetime.now(timezone.utc)
+    
+    def _ensure_aware(self, dt: datetime) -> datetime:
+        """Ensure datetime is timezone-aware (default to UTC if naive)."""
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
     async def _get_access_token(self) -> str:
         """
         Fetch access token from Replit connector infrastructure.
-        Handles token refresh automatically.
+        Handles token refresh automatically using timezone-aware comparisons.
         """
         if (self._connection_settings and 
             self._connection_settings.get('settings', {}).get('expires_at')):
-            expires_at = self._connection_settings['settings']['expires_at']
-            if datetime.fromisoformat(expires_at.replace('Z', '+00:00')) > datetime.now():
+            expires_at_str = self._connection_settings['settings']['expires_at']
+            expires_at = self._parse_datetime_aware(expires_at_str)
+            now_utc = datetime.now(timezone.utc)
+            
+            if expires_at > now_utc:
                 access_token = (
                     self._connection_settings.get('settings', {}).get('access_token') or
                     self._connection_settings.get('settings', {}).get('oauth', {}).get('credentials', {}).get('access_token')
@@ -144,9 +167,11 @@ class GoogleCalendarConnector:
         }
         
         if time_min:
-            params['timeMin'] = time_min.isoformat() + 'Z'
+            time_min_aware = self._ensure_aware(time_min)
+            params['timeMin'] = time_min_aware.strftime('%Y-%m-%dT%H:%M:%S%z')
         if time_max:
-            params['timeMax'] = time_max.isoformat() + 'Z'
+            time_max_aware = self._ensure_aware(time_max)
+            params['timeMax'] = time_max_aware.strftime('%Y-%m-%dT%H:%M:%S%z')
         
         url = f"{GOOGLE_CALENDAR_API_BASE}/calendars/{calendar_id}/events"
         
@@ -174,14 +199,14 @@ class GoogleCalendarConnector:
             
             try:
                 if 'T' in start_str:
-                    start = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+                    start = self._parse_datetime_aware(start_str)
                 else:
-                    start = datetime.strptime(start_str, '%Y-%m-%d')
+                    start = datetime.strptime(start_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
                     
                 if 'T' in end_str:
-                    end = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
+                    end = self._parse_datetime_aware(end_str)
                 else:
-                    end = datetime.strptime(end_str, '%Y-%m-%d')
+                    end = datetime.strptime(end_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
             except (ValueError, TypeError) as e:
                 logger.warning(f"Failed to parse event times: {e}")
                 continue
@@ -249,10 +274,13 @@ class GoogleCalendarConnector:
         """
         access_token = await self._get_access_token()
         
+        start_aware = self._ensure_aware(start)
+        end_aware = self._ensure_aware(end)
+        
         event_body = {
             'summary': summary,
-            'start': {'dateTime': start.isoformat(), 'timeZone': 'UTC'},
-            'end': {'dateTime': end.isoformat(), 'timeZone': 'UTC'}
+            'start': {'dateTime': start_aware.isoformat()},
+            'end': {'dateTime': end_aware.isoformat()}
         }
         
         if description:
@@ -264,7 +292,7 @@ class GoogleCalendarConnector:
         if add_conference:
             event_body['conferenceData'] = {
                 'createRequest': {
-                    'requestId': f"mina-{datetime.utcnow().timestamp()}",
+                    'requestId': f"mina-{datetime.now(timezone.utc).timestamp()}",
                     'conferenceSolutionKey': {'type': 'hangoutsMeet'}
                 }
             }
@@ -296,8 +324,8 @@ class GoogleCalendarConnector:
         start_str = start_data.get('dateTime') or start_data.get('date')
         end_str = end_data.get('dateTime') or end_data.get('date')
         
-        created_start = datetime.fromisoformat(start_str.replace('Z', '+00:00')) if 'T' in start_str else datetime.strptime(start_str, '%Y-%m-%d')
-        created_end = datetime.fromisoformat(end_str.replace('Z', '+00:00')) if 'T' in end_str else datetime.strptime(end_str, '%Y-%m-%d')
+        created_start = self._parse_datetime_aware(start_str) if 'T' in start_str else datetime.strptime(start_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        created_end = self._parse_datetime_aware(end_str) if 'T' in end_str else datetime.strptime(end_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
         
         event = GoogleCalendarEvent(
             id=data.get('id', ''),
@@ -365,9 +393,11 @@ class GoogleCalendarConnector:
         if summary:
             existing_event['summary'] = summary
         if start:
-            existing_event['start'] = {'dateTime': start.isoformat(), 'timeZone': 'UTC'}
+            start_aware = self._ensure_aware(start)
+            existing_event['start'] = {'dateTime': start_aware.isoformat()}
         if end:
-            existing_event['end'] = {'dateTime': end.isoformat(), 'timeZone': 'UTC'}
+            end_aware = self._ensure_aware(end)
+            existing_event['end'] = {'dateTime': end_aware.isoformat()}
         if description is not None:
             existing_event['description'] = description
         if location is not None:
@@ -398,8 +428,8 @@ class GoogleCalendarConnector:
         start_str = start_data.get('dateTime') or start_data.get('date')
         end_str = end_data.get('dateTime') or end_data.get('date')
         
-        updated_start = datetime.fromisoformat(start_str.replace('Z', '+00:00')) if 'T' in start_str else datetime.strptime(start_str, '%Y-%m-%d')
-        updated_end = datetime.fromisoformat(end_str.replace('Z', '+00:00')) if 'T' in end_str else datetime.strptime(end_str, '%Y-%m-%d')
+        updated_start = self._parse_datetime_aware(start_str) if 'T' in start_str else datetime.strptime(start_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        updated_end = self._parse_datetime_aware(end_str) if 'T' in end_str else datetime.strptime(end_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
         
         event = GoogleCalendarEvent(
             id=data.get('id', ''),
@@ -493,8 +523,8 @@ class GoogleCalendarConnector:
         start_str = start_data.get('dateTime') or start_data.get('date')
         end_str = end_data.get('dateTime') or end_data.get('date')
         
-        start = datetime.fromisoformat(start_str.replace('Z', '+00:00')) if 'T' in start_str else datetime.strptime(start_str, '%Y-%m-%d')
-        end = datetime.fromisoformat(end_str.replace('Z', '+00:00')) if 'T' in end_str else datetime.strptime(end_str, '%Y-%m-%d')
+        start = self._parse_datetime_aware(start_str) if 'T' in start_str else datetime.strptime(start_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        end = self._parse_datetime_aware(end_str) if 'T' in end_str else datetime.strptime(end_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
         
         return GoogleCalendarEvent(
             id=data.get('id', ''),
