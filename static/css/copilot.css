@@ -143,33 +143,50 @@
     background: rgba(255, 255, 255, 0.05);
 }
 
-/* Prompt Chips - Modern Pill Style (Notion/Claude Inspired) */
+/* Prompt Chips - Enterprise Premium Style (Microsoft Copilot/Notion AI Parity) */
 .prompt-chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    background: var(--copilot-surface-elevated);
-    border: 1px solid var(--copilot-border);
-    border-radius: 20px;
-    font-size: 0.8125rem;
+    gap: 8px;
+    padding: 10px 16px;
+    background: linear-gradient(145deg, rgba(40, 40, 50, 0.95) 0%, rgba(32, 32, 42, 0.98) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: 12px;
+    font-size: 0.875rem;
     font-weight: 500;
-    color: var(--copilot-text-secondary);
+    color: rgba(255, 255, 255, 0.85);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
+    min-height: 44px;
+}
+
+.prompt-chip svg {
+    color: #a78bfa;
+    stroke: #a78bfa;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
 }
 
 .prompt-chip:hover {
-    background: var(--copilot-accent-soft);
-    border-color: var(--copilot-accent);
-    color: var(--copilot-text-primary);
-    transform: translateY(-1px);
+    background: linear-gradient(145deg, rgba(55, 48, 75, 0.98) 0%, rgba(45, 40, 65, 1) 100%);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25), 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.prompt-chip:hover svg {
+    color: #c4b5fd;
+    stroke: #c4b5fd;
 }
 
 .prompt-chip:active {
     transform: translateY(0);
-    background: rgba(139, 92, 246, 0.25);
+    background: linear-gradient(145deg, rgba(60, 50, 85, 0.98) 0%, rgba(50, 45, 70, 1) 100%);
+    box-shadow: 0 2px 6px rgba(139, 92, 246, 0.2), 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 /* Chat Messages - Clean Layout (Microsoft/Claude Style) */
@@ -606,9 +623,10 @@
     }
     
     .prompt-chip {
-        padding: 8px 12px;
+        padding: 10px 14px;
         font-size: 0.8125rem;
         flex-shrink: 0;
+        min-height: 44px;
     }
 }
 
@@ -751,9 +769,9 @@
 
 /* ============ Micro-interactions ============ */
 
-/* Chip press feedback */
+/* Chip press feedback - enhanced */
 .prompt-chip:active {
-    transform: scale(0.97);
+    transform: scale(0.98) translateY(0);
     transition: transform 0.1s ease;
 }
 
