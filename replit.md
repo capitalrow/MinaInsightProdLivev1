@@ -144,3 +144,25 @@ The application utilizes a layered architecture with Flask as the web framework 
 - Slack
 - Sentry
 - BetterStack
+
+## Calendar Integrations
+
+**Google Calendar (ACTIVE):**
+- Connection ID: `conn_google-calendar_01KB6V3GHXC33M5KH618B8HYJN`
+- Status: Fully integrated via Replit connector
+- Implementation: `services/google_calendar_connector.py` (real API calls)
+- Provider: `services/calendar_service.py::GoogleCalendarProvider`
+- Scopes: calendar.events, calendar.freebusy, calendar.calendarlist, calendar.settings.readonly
+- Features: List events, create events with Google Meet, update/delete events
+- OAuth: Managed by Replit connector infrastructure (automatic token refresh)
+
+**Outlook Calendar (NOT CONFIGURED):**
+- Connector ID: `ccfg_outlook_01K4BBCKRJKP82N3PYQPZQ6DAK`
+- Status: Not yet integrated - user dismissed OAuth setup
+- Implementation: Placeholder in `services/calendar_service.py::OutlookCalendarProvider`
+- To enable:
+  1. Set up the Replit Outlook connector via the integrations panel
+  2. Complete OAuth authorization flow
+  3. Create `services/outlook_calendar_connector.py` similar to Google connector
+  4. Update `OutlookCalendarProvider` to use the new connector
+- Currently: Returns empty results (no mock data) to maintain production integrity
