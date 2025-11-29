@@ -903,21 +903,9 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.error(f"Failed to register ops routes: {e}")
     
-    # Missing API endpoints - temporarily disabled due to circular import
-    # Quick fix for analytics and meetings endpoints
-    try:
-        from routes.quick_analytics_fix import quick_analytics_bp
-        app.register_blueprint(quick_analytics_bp)
-        app.logger.info("Quick analytics fix registered")
-    except Exception as e:
-        app.logger.error(f"Failed to register quick analytics fix: {e}")
-        
-    try:
-        from routes.meetings_api_fix import meetings_api_fix_bp
-        app.register_blueprint(meetings_api_fix_bp)
-        app.logger.info("Quick meetings API fix registered")
-    except Exception as e:
-        app.logger.error(f"Failed to register meetings API fix: {e}")
+    # Mock API fix blueprints removed - using real implementations:
+    # - api_meetings_bp (routes/api_meetings.py) - Real database queries
+    # - api_analytics_bp (routes/api_analytics.py) - Real analytics with workspace filtering
     
     # CROWN 4.6 Sessions API for delta synchronization
     try:
