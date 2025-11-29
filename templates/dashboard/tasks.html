@@ -201,7 +201,8 @@
     <div id="meeting-heatmap-container"></div>
 
     <!-- Task List Container (CROWN⁴.5 Required Structure) -->
-    <div id="tasks-list-container" class="tasks-list-container">
+    <!-- CROWN⁴.6: Hidden initially, skeleton shows first, then this replaces it -->
+    <div id="tasks-list-container" class="tasks-list-container" style="display: none;">
         {% if tasks and tasks|length > 0 %}
             {% for task in tasks %}
             {{ task_card(task) }}
@@ -225,7 +226,8 @@
     </div>
 
     <!-- Loading State (CROWN⁴.5 Skeleton Loaders) -->
-    <div id="tasks-loading-state" class="tasks-loading-state hidden">
+    <!-- CROWN⁴.6: Visible by default to prevent spinner→blank→skeleton flash -->
+    <div id="tasks-loading-state" class="tasks-loading-state">
         <div class="task-skeleton">
             <div class="skeleton-checkbox"></div>
             <div class="skeleton-content">
