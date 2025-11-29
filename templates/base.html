@@ -179,17 +179,18 @@
     </footer>
     {% endif %}
     
-    <!-- GSAP for Cinematic Animations -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" integrity="sha512-7eHRwcbYkK4d9g/6tD/mhkf++eoTHwpNM9woBxtPUBWm67zeAfFC+HrdoE2GanKeocly/VxeLvIqwvCdk7qScg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    
-    <!-- Socket.IO Client for CROWN⁴ Real-time Synchronization -->
-    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
-    
-    <!-- WebSocket Manager -->
-    <script src="{{ url_for('static', filename='js/websocket-manager.js') }}"></script>
-    
     <!-- PERF: Critical scripts (needed for first interaction) - load synchronously but small -->
     <script src="{{ url_for('static', filename='js/skeleton-manager.js') }}"></script>
+    
+    <!-- PERF: Heavy libraries deferred (not needed for first paint) -->
+    <!-- GSAP for Cinematic Animations - defer, code has fallbacks -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" integrity="sha512-7eHRwcbYkK4d9g/6tD/mhkf++eoTHwpNM9woBxtPUBWm67zeAfFC+HrdoE2GanKeocly/VxeLvIqwvCdk7qScg==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+    
+    <!-- Socket.IO Client for CROWN⁴ Real-time Synchronization - defer -->
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}" defer></script>
+    
+    <!-- WebSocket Manager - defer -->
+    <script src="{{ url_for('static', filename='js/websocket-manager.js') }}" defer></script>
     
     <!-- PERF: Deferred scripts (80-120ms savings) - load after paint -->
     <!-- Connection & Error Handling -->
