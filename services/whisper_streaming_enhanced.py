@@ -149,9 +149,9 @@ class M1WhisperStreamingService:
                 self.client = None
         else:
             if not OPENAI_AVAILABLE:
-                logger.warning("OpenAI package not available, using mock transcription")
+                logger.error("OpenAI package not available - transcription will be disabled")
             else:
-                logger.warning("OpenAI API key not found, using mock transcription")
+                logger.error("OpenAI API key not found - transcription will be disabled")
             self.client = None
     
     def start_session(self, session_id: str) -> None:
@@ -357,7 +357,8 @@ class M1WhisperStreamingService:
             is_force_final = chunk_data.get('force_final', False)
             
             if not self.client:
-                return self._mock_transcription_m1(chunk_data)
+                logger.warning("Transcription unavailable: OpenAI client not initialized")
+                return None  # Return None - no mock data in production
             
             # OpenAI Whisper API call
             import io
@@ -420,54 +421,6 @@ class M1WhisperStreamingService:
         except Exception as e:
             logger.error(f"Transcription error: {e}")
             return None
-    
-    def _mock_transcription_m1(self, chunk_data: Dict[str, Any]) -> M1TranscriptionResult:
-        """Mock transcription for testing with M1 format."""
-        import random
-        time.sleep(0.05 + random.random() * 0.1)  # Simulate API latency
-        
-        audio_length = len(chunk_data['audio_data']) / (16000 * 2)
-        words_count = max(1, int(audio_length * 3))  # ~3 words per second
-        
-        mock_words = [
-            "hello", "world", "this", "is", "a", "test", "transcription",
-            "with", "mock", "audio", "processing", "and", "voice", "detection"
-        ]
-        
-        text = " ".join(random.choices(mock_words, k=words_count))
-        confidence = 0.7 + random.random() * 0.3
-        
-        # Mock word-level timestamps
-        words = []
-        current_time = 0.0
-        for i, word in enumerate(text.split()):
-            word_duration = 0.3 + random.random() * 0.4
-            words.append({
-                "word": word,
-                "start": current_time,
-                "end": current_time + word_duration,
-                "confidence": confidence + random.uniform(-0.1, 0.1)
-            })
-            current_time += word_duration
-        
-        return M1TranscriptionResult(
-            text=text,
-            avg_confidence=confidence,
-            is_final=chunk_data.get('force_final', False),
-            language=self.config.language,
-            duration=audio_length,
-            timestamp=time.time(),
-            words=words,
-            metadata={
-                "session_id": chunk_data['session_id'],
-                "chunk_index": chunk_data['chunk_index'],
-                "audio_size": len(chunk_data['audio_data']),
-                "model": "mock",
-                "queue_size": self.processing_queue.size()
-            },
-            latency_ms=0,  # Will be calculated by caller
-            chunk_index=chunk_data['chunk_index']
-        )
     
     def _estimate_confidence(self, text: str, audio_size: int) -> float:
         """Estimate confidence score based on text and audio characteristics."""
