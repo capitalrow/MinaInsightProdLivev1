@@ -293,20 +293,103 @@ class AdvancedQualityAnalyzer:
         return calibration_result
     
     def _analyze_robustness(self, audio_file: bytes, transcript: str) -> Dict[str, Any]:
-        """Analyze robustness under different audio conditions."""
-        # Placeholder for audio quality analysis
-        # In a real implementation, you would analyze:
-        # - SNR (Signal-to-Noise Ratio)
-        # - Audio clarity metrics
-        # - Background noise levels
-        # - Frequency response
+        """
+        Analyze robustness under different audio conditions.
         
-        return {
-            'audio_quality_score': 0.8,  # Placeholder
-            'snr_estimate': 15.0,        # dB
-            'noise_level': 0.2,          # 0-1 scale
-            'clarity_score': 0.85        # 0-1 scale
-        }
+        Uses actual audio analysis to compute:
+        - SNR (Signal-to-Noise Ratio)
+        - Audio clarity metrics
+        - Background noise levels
+        - Overall audio quality score
+        """
+        try:
+            import numpy as np
+            
+            # Convert audio bytes to numpy array (assuming 16-bit PCM)
+            if len(audio_file) < 100:
+                # Not enough audio data for analysis
+                return {
+                    'audio_quality_score': 0.0,
+                    'snr_estimate': 0.0,
+                    'noise_level': 1.0,
+                    'clarity_score': 0.0,
+                    'analysis_error': 'Insufficient audio data'
+                }
+            
+            # Parse audio data
+            audio_data = np.frombuffer(audio_file, dtype=np.int16).astype(np.float32)
+            
+            if len(audio_data) == 0:
+                return {
+                    'audio_quality_score': 0.0,
+                    'snr_estimate': 0.0,
+                    'noise_level': 1.0,
+                    'clarity_score': 0.0,
+                    'analysis_error': 'Empty audio data'
+                }
+            
+            # Calculate RMS (Root Mean Square) energy
+            rms = np.sqrt(np.mean(audio_data ** 2))
+            
+            # Estimate noise floor from quietest 10% of frames
+            frame_size = 512
+            num_frames = len(audio_data) // frame_size
+            if num_frames > 0:
+                frame_energies = []
+                for i in range(num_frames):
+                    frame = audio_data[i * frame_size:(i + 1) * frame_size]
+                    frame_energy = np.sqrt(np.mean(frame ** 2))
+                    frame_energies.append(frame_energy)
+                
+                frame_energies = sorted(frame_energies)
+                noise_floor = np.mean(frame_energies[:max(1, len(frame_energies) // 10)])
+            else:
+                noise_floor = rms * 0.1
+            
+            # Calculate SNR estimate in dB
+            if noise_floor > 0:
+                snr_estimate = 20 * np.log10(rms / noise_floor) if rms > noise_floor else 0.0
+            else:
+                snr_estimate = 40.0  # Very clean signal
+            
+            # Clamp SNR to reasonable range
+            snr_estimate = max(0.0, min(60.0, snr_estimate))
+            
+            # Calculate noise level (0-1 scale, inverse of SNR)
+            noise_level = max(0.0, min(1.0, 1.0 - (snr_estimate / 40.0)))
+            
+            # Calculate clarity score based on dynamic range and SNR
+            peak = np.max(np.abs(audio_data))
+            dynamic_range = peak / max(1.0, rms) if peak > 0 else 1.0
+            
+            # Clarity combines SNR and dynamic range
+            snr_factor = min(1.0, snr_estimate / 30.0)  # Normalize SNR contribution
+            dynamic_factor = min(1.0, dynamic_range / 10.0)  # Normalize dynamic range
+            clarity_score = 0.7 * snr_factor + 0.3 * dynamic_factor
+            
+            # Overall audio quality score (weighted combination)
+            audio_quality_score = (
+                0.4 * snr_factor +
+                0.3 * (1.0 - noise_level) +
+                0.3 * clarity_score
+            )
+            
+            return {
+                'audio_quality_score': round(audio_quality_score, 3),
+                'snr_estimate': round(snr_estimate, 1),
+                'noise_level': round(noise_level, 3),
+                'clarity_score': round(clarity_score, 3)
+            }
+            
+        except Exception as e:
+            logger.error(f"Audio robustness analysis error: {e}")
+            return {
+                'audio_quality_score': 0.0,
+                'snr_estimate': 0.0,
+                'noise_level': 1.0,
+                'clarity_score': 0.0,
+                'analysis_error': str(e)
+            }
     
     def _calculate_overall_quality(self, metrics: Dict[str, float]) -> Tuple[float, Tuple[float, float]]:
         """Calculate overall quality score with confidence intervals."""
@@ -343,9 +426,13 @@ class AdvancedQualityAnalyzer:
         
         overall_score = total_score / total_weight if total_weight > 0 else 0.5
         
-        # Calculate confidence interval (simplified)
-        variance = 0.1  # Placeholder for actual variance calculation
-        std_error = variance ** 0.5
+        # Calculate confidence interval based on actual metric variance
+        if len(metrics) > 1:
+            metric_values = list(metrics.values())
+            variance = np.var(metric_values) if len(metric_values) > 1 else 0.05
+        else:
+            variance = 0.05  # Default variance for single metric
+        std_error = max(0.01, variance ** 0.5)
         confidence_interval = (
             max(0, overall_score - 1.96 * std_error),
             min(1, overall_score + 1.96 * std_error)
