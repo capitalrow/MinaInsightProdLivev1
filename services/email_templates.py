@@ -1,23 +1,43 @@
 """
 Email Templates Service for Mina
 Natural, human-written email templates - no robotic AI-speak.
+Includes both HTML and plain text for better deliverability.
 """
 
-from typing import Optional
+from typing import Optional, Tuple
 from datetime import datetime
 
 
-def get_welcome_email_html(
+def get_welcome_email(
     first_name: str,
     verification_link: Optional[str] = None
-) -> tuple[str, str]:
+) -> Tuple[str, str, str]:
     """
     Generate welcome email for new users.
-    Returns (subject, html_content).
+    Returns (subject, html_content, plain_text_content).
     """
     name = first_name if first_name else "there"
     
     subject = f"Welcome to Mina, {name}!"
+    
+    plain_text = f"""Hey {name}!
+
+Welcome to Mina! You're all set to start capturing your meetings.
+
+Here's the quick version: hit record, talk, and we'll turn your conversation into a searchable transcript with AI-powered insights. No complicated setup needed.
+
+Getting started is simple:
+1. Click "Live" in the sidebar
+2. Hit the record button
+3. That's it - we handle the rest
+
+{f"Go to Mina: {verification_link}" if verification_link else ""}
+
+Questions? Just reply to this email - a real person reads these.
+
+--
+Mina - Turn meetings into moments that matter.
+"""
     
     html = f"""
 <!DOCTYPE html>
@@ -97,21 +117,44 @@ def get_welcome_email_html(
 </html>
     """
     
-    return subject, html.strip()
+    return subject, html.strip(), plain_text.strip()
 
 
-def get_password_reset_email_html(
+def get_welcome_email_html(
+    first_name: str,
+    verification_link: Optional[str] = None
+) -> Tuple[str, str]:
+    """Legacy function - returns (subject, html_content) for backwards compatibility."""
+    subject, html, _ = get_welcome_email(first_name, verification_link)
+    return subject, html
+
+
+def get_password_reset_email(
     first_name: str,
     reset_link: str,
     expires_in_hours: int = 24
-) -> tuple[str, str]:
+) -> Tuple[str, str, str]:
     """
     Generate password reset email.
-    Returns (subject, html_content).
+    Returns (subject, html_content, plain_text_content).
     """
     name = first_name if first_name else "there"
     
     subject = "Reset your Mina password"
+    
+    plain_text = f"""Hey {name},
+
+We got a request to reset your password. If that was you, click the link below to choose a new one.
+
+Reset your password: {reset_link}
+
+This link expires in {expires_in_hours} hours.
+
+Didn't request this? No worries - just ignore this email and your password stays the same.
+
+--
+Mina - Turn meetings into moments that matter.
+"""
     
     html = f"""
 <!DOCTYPE html>
@@ -181,20 +224,42 @@ def get_password_reset_email_html(
 </html>
     """
     
-    return subject, html.strip()
+    return subject, html.strip(), plain_text.strip()
 
 
-def get_email_verification_html(
+def get_password_reset_email_html(
+    first_name: str,
+    reset_link: str,
+    expires_in_hours: int = 24
+) -> Tuple[str, str]:
+    """Legacy function - returns (subject, html_content) for backwards compatibility."""
+    subject, html, _ = get_password_reset_email(first_name, reset_link, expires_in_hours)
+    return subject, html
+
+
+def get_email_verification(
     first_name: str,
     verification_link: str
-) -> tuple[str, str]:
+) -> Tuple[str, str, str]:
     """
     Generate email verification request.
-    Returns (subject, html_content).
+    Returns (subject, html_content, plain_text_content).
     """
     name = first_name if first_name else "there"
     
-    subject = "Quick thing — verify your email"
+    subject = "Quick thing - verify your email"
+    
+    plain_text = f"""Hey {name},
+
+We just need to make sure this email actually reaches you. Click the link below and you're all set.
+
+Verify your email: {verification_link}
+
+Didn't sign up for Mina? Someone might have typed your email by mistake. Feel free to ignore this.
+
+--
+Mina - Turn meetings into moments that matter.
+"""
     
     html = f"""
 <!DOCTYPE html>
@@ -260,18 +325,39 @@ def get_email_verification_html(
 </html>
     """
     
-    return subject, html.strip()
+    return subject, html.strip(), plain_text.strip()
 
 
-def get_password_changed_email_html(first_name: str) -> tuple[str, str]:
+def get_email_verification_html(
+    first_name: str,
+    verification_link: str
+) -> Tuple[str, str]:
+    """Legacy function - returns (subject, html_content) for backwards compatibility."""
+    subject, html, _ = get_email_verification(first_name, verification_link)
+    return subject, html
+
+
+def get_password_changed_email(first_name: str) -> Tuple[str, str, str]:
     """
     Generate password changed confirmation email.
-    Returns (subject, html_content).
+    Returns (subject, html_content, plain_text_content).
     """
     name = first_name if first_name else "there"
     now = datetime.utcnow().strftime("%B %d, %Y at %I:%M %p UTC")
     
     subject = "Your password was changed"
+    
+    plain_text = f"""Hey {name},
+
+Just a heads up - your Mina password was changed on {now}.
+
+If that was you, you're all set. If not, please reset your password immediately and contact us.
+
+Questions? Reply to this email anytime.
+
+--
+Mina - Turn meetings into moments that matter.
+"""
     
     html = f"""
 <!DOCTYPE html>
@@ -335,4 +421,10 @@ def get_password_changed_email_html(first_name: str) -> tuple[str, str]:
 </html>
     """
     
-    return subject, html.strip()
+    return subject, html.strip(), plain_text.strip()
+
+
+def get_password_changed_email_html(first_name: str) -> Tuple[str, str]:
+    """Legacy function - returns (subject, html_content) for backwards compatibility."""
+    subject, html, _ = get_password_changed_email(first_name)
+    return subject, html
