@@ -30,11 +30,14 @@ class MinaTasksLinear {
         this.filter = 'all';
         this.sortBy = 'default';
         
-        this.init();
+        // CROWN⁴.6: Defer init to allow skeleton to paint first
+        // Use requestAnimationFrame (fires right after first render) instead of requestIdleCallback
+        // (which waits for idle thread and delays too long)
+        requestAnimationFrame(() => this.init());
     }
     
     async init() {
-        console.log('[Mina Tasks] Initializing Linear-inspired interface...');
+        console.log('[Mina Tasks] Initializing Linear-inspired interface (deferred)...');
         
         // CROWN⁴.6: Skeleton is now visible by default in HTML
         // No need to call showSkeletonLoader() - prevents double flash
@@ -43,11 +46,23 @@ class MinaTasksLinear {
         // Phase 2: Load tasks with aggressive caching
         const tasksPromise = this.loadTasksOptimized();
         
-        // Phase 3: Setup interactions (parallel)
+        // Phase 3: Setup interactions - defer to idle callback for non-critical setup
         this.setupEventListeners();
-        this.setupWebSocket();
-        this.setupPrefetching();
-        this.setupOfflineDetection();
+        
+        // Defer WebSocket and prefetching to requestIdleCallback
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(() => {
+                this.setupWebSocket();
+                this.setupPrefetching();
+                this.setupOfflineDetection();
+            }, { timeout: 500 });
+        } else {
+            setTimeout(() => {
+                this.setupWebSocket();
+                this.setupPrefetching();
+                this.setupOfflineDetection();
+            }, 50);
+        }
         
         // Phase 4: Wait for tasks, then animate in
         const tasks = await tasksPromise;
@@ -69,8 +84,12 @@ class MinaTasksLinear {
             console.warn(`[Performance] Load time exceeded target by ${(loadTime - this.PERFORMANCE_TARGET_MS).toFixed(2)}ms`);
         }
         
-        // Start prefetching related data
-        this.prefetchRelatedData();
+        // Start prefetching related data - defer to idle
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(() => this.prefetchRelatedData(), { timeout: 1000 });
+        } else {
+            setTimeout(() => this.prefetchRelatedData(), 100);
+        }
     }
     
     /**

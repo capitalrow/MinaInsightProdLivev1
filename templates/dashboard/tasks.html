@@ -707,13 +707,13 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){
 <script defer src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-animation-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-cache.js') }}?v=4" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-cache.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-search-sort.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-detail-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-grouping.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/prefetch-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-prefetch-adapter.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-prefetch-adapter.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-bootstrap.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-merge-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
@@ -768,10 +768,10 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 
 <!-- Task page initialization -->
 <script defer src="{{ url_for('static', filename='js/task-page-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-page-master-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-page-master-init.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Linear-Inspired Performance & Animations -->
-<script defer src="{{ url_for('static', filename='js/tasks-linear-inspired.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/tasks-linear-inspired.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/emotional-task-ui.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/spoken-provenance-ui.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
@@ -795,5 +795,5 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 <script defer src="{{ url_for('static', filename='js/ai-partner-nudges.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Task Page Orchestrator - MUST BE LAST to coordinate module initialization -->
-<script defer src="{{ url_for('static', filename='js/task-page-orchestrator.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-page-orchestrator.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 {% endblock %}
