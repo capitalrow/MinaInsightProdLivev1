@@ -2,20 +2,22 @@
 Authentication Email Service for Mina
 Handles welcome emails, password reset, and email verification.
 Uses SendGrid via Replit connector for delivery.
+Enhanced with multipart (HTML + plain text) for better deliverability.
 """
 
 import os
 import logging
 import secrets
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 
 from services.email_service import email_service
 from services.email_templates import (
-    get_welcome_email_html,
-    get_password_reset_email_html,
-    get_email_verification_html,
-    get_password_changed_email_html
+    get_welcome_email,
+    get_password_reset_email,
+    get_email_verification,
+    get_password_changed_email
 )
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,62 @@ class AuthEmailService:
     def generate_token(self) -> str:
         """Generate a cryptographically secure token."""
         return secrets.token_urlsafe(self.verification_token_length)
+    
+    def _send_multipart_email(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        plain_text: str,
+        email_type: str = "email"
+    ) -> Dict:
+        """
+        Send email with both HTML and plain text for better deliverability.
+        Includes proper headers for Yahoo/Gmail 2024 requirements.
+        """
+        try:
+            creds = email_service._get_credentials()
+            if not creds:
+                return {'success': False, 'error': 'Email credentials not available'}
+            
+            import sendgrid
+            from sendgrid.helpers.mail import (
+                Mail, Email, To, Content, Header
+            )
+            
+            sg = sendgrid.SendGridAPIClient(api_key=creds['api_key'])
+            
+            from_email = Email(creds['from_email'], 'Mina')
+            to = To(to_email)
+            
+            mail = Mail()
+            mail.from_email = from_email
+            mail.subject = subject
+            mail.add_to(to)
+            
+            mail.add_content(Content("text/plain", plain_text))
+            mail.add_content(Content("text/html", html_content))
+            
+            message_id = f"<{uuid.uuid4()}@teammina.com>"
+            mail.add_header(Header("Message-ID", message_id))
+            mail.add_header(Header("X-Entity-Ref-ID", str(uuid.uuid4())))
+            mail.add_header(Header("X-Mailer", "Mina/1.0"))
+            mail.add_header(Header("Precedence", "bulk"))
+            mail.add_header(Header("List-Unsubscribe", "<mailto:unsubscribe@teammina.com>"))
+            mail.add_header(Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click"))
+            
+            response = sg.send(mail)
+            
+            if response.status_code in [200, 201, 202]:
+                logger.info(f"✅ {email_type.capitalize()} email sent to {to_email}")
+                return {'success': True, 'message': f'{email_type.capitalize()} email sent'}
+            else:
+                logger.error(f"❌ {email_type.capitalize()} email failed: {response.status_code}")
+                return {'success': False, 'error': f'Email failed: {response.status_code}'}
+                
+        except Exception as e:
+            logger.error(f"❌ {email_type.capitalize()} email error: {e}")
+            return {'success': False, 'error': str(e)}
     
     def send_welcome_email(
         self,
@@ -53,35 +111,15 @@ class AuthEmailService:
         else:
             verification_link = f"{base_url.rstrip('/')}/dashboard"
         
-        subject, html_content = get_welcome_email_html(first_name, verification_link)
+        subject, html_content, plain_text = get_welcome_email(first_name, verification_link)
         
-        try:
-            creds = email_service._get_credentials()
-            if not creds:
-                return {'success': False, 'error': 'Email credentials not available'}
-            
-            import sendgrid
-            from sendgrid.helpers.mail import Mail, Email, To, Content
-            
-            sg = sendgrid.SendGridAPIClient(api_key=creds['api_key'])
-            
-            from_email = Email(creds['from_email'], 'Mina')
-            to_email = To(user_email)
-            content = Content("text/html", html_content)
-            
-            mail = Mail(from_email, to_email, subject, content)
-            response = sg.send(mail)
-            
-            if response.status_code in [200, 201, 202]:
-                logger.info(f"✅ Welcome email sent to {user_email}")
-                return {'success': True, 'message': 'Welcome email sent'}
-            else:
-                logger.error(f"❌ Welcome email failed: {response.status_code}")
-                return {'success': False, 'error': f'Email failed: {response.status_code}'}
-                
-        except Exception as e:
-            logger.error(f"❌ Welcome email error: {e}")
-            return {'success': False, 'error': str(e)}
+        return self._send_multipart_email(
+            to_email=user_email,
+            subject=subject,
+            html_content=html_content,
+            plain_text=plain_text,
+            email_type="welcome"
+        )
     
     def send_password_reset_email(
         self,
@@ -97,39 +135,19 @@ class AuthEmailService:
         
         reset_link = f"{base_url.rstrip('/')}/auth/reset-password/{reset_token}"
         
-        subject, html_content = get_password_reset_email_html(
+        subject, html_content, plain_text = get_password_reset_email(
             first_name,
             reset_link,
             self.password_reset_expiry_hours
         )
         
-        try:
-            creds = email_service._get_credentials()
-            if not creds:
-                return {'success': False, 'error': 'Email credentials not available'}
-            
-            import sendgrid
-            from sendgrid.helpers.mail import Mail, Email, To, Content
-            
-            sg = sendgrid.SendGridAPIClient(api_key=creds['api_key'])
-            
-            from_email = Email(creds['from_email'], 'Mina')
-            to_email = To(user_email)
-            content = Content("text/html", html_content)
-            
-            mail = Mail(from_email, to_email, subject, content)
-            response = sg.send(mail)
-            
-            if response.status_code in [200, 201, 202]:
-                logger.info(f"✅ Password reset email sent to {user_email}")
-                return {'success': True, 'message': 'Password reset email sent'}
-            else:
-                logger.error(f"❌ Password reset email failed: {response.status_code}")
-                return {'success': False, 'error': f'Email failed: {response.status_code}'}
-                
-        except Exception as e:
-            logger.error(f"❌ Password reset email error: {e}")
-            return {'success': False, 'error': str(e)}
+        return self._send_multipart_email(
+            to_email=user_email,
+            subject=subject,
+            html_content=html_content,
+            plain_text=plain_text,
+            email_type="password reset"
+        )
     
     def send_verification_email(
         self,
@@ -145,35 +163,15 @@ class AuthEmailService:
         
         verification_link = f"{base_url.rstrip('/')}/auth/verify-email/{verification_token}"
         
-        subject, html_content = get_email_verification_html(first_name, verification_link)
+        subject, html_content, plain_text = get_email_verification(first_name, verification_link)
         
-        try:
-            creds = email_service._get_credentials()
-            if not creds:
-                return {'success': False, 'error': 'Email credentials not available'}
-            
-            import sendgrid
-            from sendgrid.helpers.mail import Mail, Email, To, Content
-            
-            sg = sendgrid.SendGridAPIClient(api_key=creds['api_key'])
-            
-            from_email = Email(creds['from_email'], 'Mina')
-            to_email = To(user_email)
-            content = Content("text/html", html_content)
-            
-            mail = Mail(from_email, to_email, subject, content)
-            response = sg.send(mail)
-            
-            if response.status_code in [200, 201, 202]:
-                logger.info(f"✅ Verification email sent to {user_email}")
-                return {'success': True, 'message': 'Verification email sent'}
-            else:
-                logger.error(f"❌ Verification email failed: {response.status_code}")
-                return {'success': False, 'error': f'Email failed: {response.status_code}'}
-                
-        except Exception as e:
-            logger.error(f"❌ Verification email error: {e}")
-            return {'success': False, 'error': str(e)}
+        return self._send_multipart_email(
+            to_email=user_email,
+            subject=subject,
+            html_content=html_content,
+            plain_text=plain_text,
+            email_type="verification"
+        )
     
     def send_password_changed_email(
         self,
@@ -185,35 +183,15 @@ class AuthEmailService:
             logger.warning("Email service not available - skipping password changed email")
             return {'success': False, 'error': 'Email service not configured'}
         
-        subject, html_content = get_password_changed_email_html(first_name)
+        subject, html_content, plain_text = get_password_changed_email(first_name)
         
-        try:
-            creds = email_service._get_credentials()
-            if not creds:
-                return {'success': False, 'error': 'Email credentials not available'}
-            
-            import sendgrid
-            from sendgrid.helpers.mail import Mail, Email, To, Content
-            
-            sg = sendgrid.SendGridAPIClient(api_key=creds['api_key'])
-            
-            from_email = Email(creds['from_email'], 'Mina')
-            to_email = To(user_email)
-            content = Content("text/html", html_content)
-            
-            mail = Mail(from_email, to_email, subject, content)
-            response = sg.send(mail)
-            
-            if response.status_code in [200, 201, 202]:
-                logger.info(f"✅ Password changed email sent to {user_email}")
-                return {'success': True, 'message': 'Password changed email sent'}
-            else:
-                logger.error(f"❌ Password changed email failed: {response.status_code}")
-                return {'success': False, 'error': f'Email failed: {response.status_code}'}
-                
-        except Exception as e:
-            logger.error(f"❌ Password changed email error: {e}")
-            return {'success': False, 'error': str(e)}
+        return self._send_multipart_email(
+            to_email=user_email,
+            subject=subject,
+            html_content=html_content,
+            plain_text=plain_text,
+            email_type="password changed"
+        )
     
     def create_password_reset_token(self, user) -> str:
         """
