@@ -52,6 +52,7 @@ The application utilizes a layered architecture with Flask as the web framework 
 - **Monitoring & Observability**: Sentry for error tracking, BetterStack for uptime, structured JSON logging, SLO/SLI metrics.
 - **Backup & Disaster Recovery**: Automated, encrypted PostgreSQL backups with multi-tier retention.
 - **Deployment**: CI/CD pipeline (GitHub Actions), Alembic migrations, blue-green deployment.
+- **Production Readiness (Google SRE Standards)**: Startup validation with fail-fast on missing config, Kubernetes-compatible health endpoints (`/health/live`, `/health/ready`, `/health/startup`, `/health/detailed`), environment-aware database initialization (production uses migrations only), comprehensive production runbook at `docs/PRODUCTION_RUNBOOK.md`.
 
 ## External Dependencies
 
