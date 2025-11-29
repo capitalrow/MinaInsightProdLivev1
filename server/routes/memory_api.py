@@ -3,15 +3,35 @@ Memory API  –  adds retrieval (semantic search) & simple health/debug endpoint
 Place in: server/routes/memory_api.py
 """
 
+import os
 from flask import Blueprint, request, jsonify
-from server.models.memory_store import MemoryStore
 
 memory_bp = Blueprint("memory", __name__)
-memory = MemoryStore()
+
+# Lazy initialization to support testing with different database configurations
+_memory = None
+
+def get_memory_store():
+    """Lazy load MemoryStore to avoid connection at import time in tests."""
+    global _memory
+    if _memory is None:
+        # Only initialize if we have a valid PostgreSQL URL (not SQLite for tests)
+        db_url = os.environ.get("DATABASE_URL", "")
+        if db_url.startswith("postgresql"):
+            from server.models.memory_store import MemoryStore
+            _memory = MemoryStore()
+        else:
+            # Return a mock/stub for testing environments
+            return None
+    return _memory
 
 
 @memory_bp.route("/memory/add", methods=["POST"])
 def add_memory():
+    memory = get_memory_store()
+    if memory is None:
+        return jsonify({"error": "Memory service unavailable"}), 503
+    
     data = request.get_json(force=True)
     if not data or "content" not in data:
         return jsonify({"error": "Missing content field"}), 400
@@ -30,6 +50,10 @@ def add_memory():
 
 @memory_bp.route("/memory/search", methods=["GET", "POST"])
 def search_memory():
+    memory = get_memory_store()
+    if memory is None:
+        return jsonify({"error": "Memory service unavailable"}), 503
+    
     if request.method == "GET":
         query = request.args.get("query")
         top_k = int(request.args.get("top_k", 5))
@@ -45,13 +69,16 @@ def search_memory():
     return jsonify({"query": query, "results": results}), 200
 
 
-# (Addition to server/routes/memory_api.py)
 @memory_bp.route("/memory/latest", methods=["GET"])
 def get_latest_memories():
     """
     Retrieve the most recent memory entries (for UI display of recent memories).
     Query parameter 'limit' controls number of items (default 5).
     """
+    memory = get_memory_store()
+    if memory is None:
+        return jsonify({"error": "Memory service unavailable"}), 503
+    
     try:
         limit = request.args.get('limit', 5, type=int)
         rows = memory.latest_memories(limit)
@@ -72,6 +99,10 @@ def get_latest_memories():
 @memory_bp.route("/memory/debug", methods=["GET"])
 def debug_memory():
     """Return a few recent rows for quick inspection."""
+    memory = get_memory_store()
+    if memory is None:
+        return jsonify({"error": "Memory service unavailable"}), 503
+    
     try:
         rows = memory.search_memory("", top_k=10)
         return jsonify({"latest": rows}), 200
