@@ -17,7 +17,7 @@
     
     <!-- PERF: Critical inline theme initialization (prevents flash) -->
     <script>
-    (function(){var t=localStorage.getItem('mina-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();
+    (function(){try{var t=localStorage.getItem('mina-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
     </script>
     
     <!-- PERF: Preload critical CSS -->
