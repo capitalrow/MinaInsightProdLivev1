@@ -197,23 +197,41 @@
     }
 }
 
-/* Message Avatars - Refined */
+/* Message Avatars - Enterprise Grade (Microsoft/Notion Inspired) */
 .message-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-    background: var(--copilot-accent);
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    font-size: 14px;
+    font-size: 16px;
+    box-shadow: 
+        0 2px 8px rgba(139, 92, 246, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    position: relative;
+}
+
+.message-avatar::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    height: 40%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%);
+    border-radius: 10px 10px 50% 50%;
+    pointer-events: none;
 }
 
 .message-user .message-avatar {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    border-radius: 10px;
+    background: linear-gradient(145deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%);
+    box-shadow: 
+        0 2px 8px rgba(99, 102, 241, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
 }
 
 /* Message Content - High Contrast */
@@ -306,17 +324,36 @@
     }
 }
 
-/* Lifecycle/Loading Status Indicator - Modern Pill */
+/* Lifecycle/Loading Status Indicator - Premium Shimmer */
 .lifecycle-status {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
-    background: var(--copilot-surface-elevated);
-    border: 1px solid var(--copilot-border);
+    padding: 8px 14px;
+    background: linear-gradient(145deg, rgba(34, 197, 94, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%);
+    border: 1px solid rgba(34, 197, 94, 0.25);
     border-radius: 20px;
-    font-size: 0.75rem;
-    color: var(--copilot-text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #4ade80;
+    position: relative;
+    overflow: hidden;
+}
+
+.lifecycle-status::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.1) 50%, transparent 100%);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
 }
 
 .lifecycle-status .status-indicator {
@@ -324,17 +361,18 @@
     height: 8px;
     background: #22c55e;
     border-radius: 50%;
-    animation: statusPulse 2s infinite ease-in-out;
+    animation: statusPulse 1.5s infinite ease-in-out;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
 }
 
 @keyframes statusPulse {
     0%, 100% {
+        transform: scale(1);
         opacity: 1;
-        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
     }
     50% {
-        opacity: 0.8;
-        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0);
+        transform: scale(1.15);
+        opacity: 0.7;
     }
 }
 
@@ -389,15 +427,15 @@
 }
 
 #chat-input {
-    background: var(--copilot-surface-elevated);
-    border: 1px solid var(--copilot-border);
-    border-radius: var(--copilot-radius-lg);
+    background: linear-gradient(145deg, rgba(35, 35, 42, 0.95) 0%, rgba(28, 28, 35, 0.98) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.15);
+    border-radius: 14px;
     color: var(--copilot-text-primary);
     transition: all 0.2s ease;
     resize: none;
     overflow-y: hidden;
     padding: 14px 16px;
-    font-size: 0.9375rem;
+    font-size: 1rem;
     line-height: 1.5;
     min-height: 48px;
     width: 100%;
@@ -406,43 +444,48 @@
 
 #chat-input:focus {
     outline: none;
-    border-color: var(--copilot-border-focus);
-    background: var(--copilot-surface-hover);
+    border-color: rgba(139, 92, 246, 0.4);
+    background: linear-gradient(145deg, rgba(40, 40, 48, 0.98) 0%, rgba(32, 32, 40, 1) 100%);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
 #chat-input::placeholder {
-    color: var(--copilot-text-tertiary);
+    color: rgba(255, 255, 255, 0.4);
 }
 
-/* Send Button - Solid Accent */
+/* Send Button - Premium Gradient */
 .chat-send-btn {
-    background: var(--copilot-accent);
+    background: linear-gradient(145deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%);
     border: none;
     color: white;
     width: 48px;
     height: 48px;
     min-width: 48px;
-    border-radius: var(--copilot-radius-md);
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.35);
 }
 
 .chat-send-btn:hover {
-    background: #7c3aed;
+    background: linear-gradient(145deg, #a78bfa 0%, #8b5cf6 50%, #7c3aed 100%);
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.45);
 }
 
 .chat-send-btn:active {
     transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
 }
 
 .chat-send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
+    box-shadow: none;
 }
 
 /* Animations */
@@ -625,28 +668,45 @@
 
 /* ============ Enhanced Typography & Contrast ============ */
 
-/* Welcome message styling */
+/* Welcome message styling - Enterprise Hero Card */
 #welcome-message .message-content {
-    background: var(--copilot-surface-elevated);
-    border-color: var(--copilot-border);
+    background: linear-gradient(145deg, rgba(45, 45, 55, 0.95) 0%, rgba(35, 35, 42, 0.98) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.15);
+    box-shadow: 
+        0 4px 20px rgba(0, 0, 0, 0.15),
+        0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
 
 #welcome-message .message-content p {
     color: var(--copilot-text-primary);
-    font-size: 0.9375rem;
-    line-height: 1.65;
+    font-size: 1rem;
+    line-height: 1.7;
+}
+
+#welcome-message .message-content p:first-child {
+    font-size: 1.0625rem;
+    font-weight: 500;
 }
 
 #welcome-message .message-content ul {
-    margin-top: 16px;
-    margin-bottom: 16px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    background: rgba(139, 92, 246, 0.05);
+    border-radius: 10px;
+    padding: 16px 16px 16px 36px;
+    border-left: 2px solid rgba(139, 92, 246, 0.4);
 }
 
 #welcome-message .message-content li {
     color: var(--copilot-text-secondary);
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
     padding-left: 4px;
     position: relative;
+    line-height: 1.6;
+}
+
+#welcome-message .message-content li::marker {
+    color: #a78bfa;
 }
 
 /* Section headers in AI responses */
