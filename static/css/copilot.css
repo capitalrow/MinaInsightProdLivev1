@@ -1,5 +1,12 @@
 /* Copilot/Chat Crown+ Enhancement - Industry Leading Design */
 
+/* Hide global task menu on copilot page (defined in base.html) */
+#task-menu {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
 /* Design Tokens - Microsoft/Notion Inspired */
 :root {
     --copilot-surface: rgba(22, 22, 26, 0.95);
