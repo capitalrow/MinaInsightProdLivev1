@@ -688,13 +688,35 @@ window.tasks = {{ tasks_json|tojson|safe if tasks_json else '[]' }};
 console.log('[CROWN⁴.6] Loaded', window.tasks.length, 'tasks for provenance UI');
 </script>
 
-<!-- CROWN⁴.6: Early First Paint marker - records timing before any scripts block -->
+<!-- CROWN⁴.6: Accurate First Paint measurement using PerformanceObserver -->
 <script nonce="{{ g.csp_nonce }}">
 window.__FIRST_PAINT_START = performance.now();
-requestAnimationFrame(function(){requestAnimationFrame(function(){
-    window.__FIRST_PAINT_TIME = performance.now() - window.__FIRST_PAINT_START;
-    console.log('⚡ First Paint:', Math.round(window.__FIRST_PAINT_TIME) + 'ms');
-})});
+(function() {
+    // Use PerformanceObserver for accurate First Contentful Paint measurement
+    if ('PerformanceObserver' in window) {
+        try {
+            new PerformanceObserver(function(list) {
+                list.getEntries().forEach(function(entry) {
+                    if (entry.name === 'first-contentful-paint') {
+                        window.__FIRST_PAINT_TIME = entry.startTime;
+                        console.log('⚡ FCP (Browser):', Math.round(entry.startTime) + 'ms');
+                    }
+                });
+            }).observe({ type: 'paint', buffered: true });
+        } catch (e) {
+            // Fallback for browsers that don't support this observer type
+            requestAnimationFrame(function(){requestAnimationFrame(function(){
+                window.__FIRST_PAINT_TIME = performance.now() - window.__FIRST_PAINT_START;
+                console.log('⚡ First Paint (rAF):', Math.round(window.__FIRST_PAINT_TIME) + 'ms');
+            })});
+        }
+    } else {
+        requestAnimationFrame(function(){requestAnimationFrame(function(){
+            window.__FIRST_PAINT_TIME = performance.now() - window.__FIRST_PAINT_START;
+            console.log('⚡ First Paint (rAF):', Math.round(window.__FIRST_PAINT_TIME) + 'ms');
+        })});
+    }
+})();
 </script>
 
 <!-- CSRF Protection - MUST load before other scripts to patch window.fetch -->
