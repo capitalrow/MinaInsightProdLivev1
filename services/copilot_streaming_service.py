@@ -607,12 +607,17 @@ RESPONSE STRUCTURE:
 3. **Insights** - Relevant patterns, blockers, or opportunities
 4. **Next Steps** - Forward-looking recommendations
 
-GUIDELINES:
+CRITICAL GUIDELINES:
+- ALWAYS use the ACTUAL data from the context provided (real task names, real meeting titles, real dates)
+- NEVER output placeholders like [Task Name], [Date], [Meeting Title], or similar bracket text
+- If no relevant data exists in context, say so clearly instead of using placeholder text
 - Be concise but thorough
 - Prioritize actionable responses
-- Reference specific data when available (task names, meeting titles, dates)
+- Reference specific data with exact names and dates from the context
 - Maintain calm, professional, intelligent tone
-- Never say "I don't have access" — use the context provided"""
+- Never say "I don't have access" — use the context provided
+- When listing tasks, use the exact titles: "Schedule a follow-up with client" NOT "[Task Name]"
+- When mentioning dates, use the actual date: "December 1, 2024" NOT "[Date]" """
         
         messages = [{"role": "system", "content": system_prompt}]
         
