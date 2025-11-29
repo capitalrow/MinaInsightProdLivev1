@@ -851,9 +851,17 @@ function appendTokenToStream(token, section) {
         contentDiv.appendChild(sectionContainer);
     }
     
+    // Find or create the text content wrapper (separate from header)
+    let textWrapper = sectionContainer.querySelector('.section-text');
+    if (!textWrapper) {
+        textWrapper = document.createElement('div');
+        textWrapper.className = 'section-text';
+        sectionContainer.appendChild(textWrapper);
+    }
+    
     // Append token with calm typing effect
     const textNode = document.createTextNode(token);
-    sectionContainer.appendChild(textNode);
+    textWrapper.appendChild(textNode);
     
     scrollToBottom();
 }
@@ -876,6 +884,11 @@ function startNewSection(sectionName) {
         header.textContent = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
         sectionContainer.appendChild(header);
         
+        // Add text wrapper for content (separate from header)
+        const textWrapper = document.createElement('div');
+        textWrapper.className = 'section-text';
+        sectionContainer.appendChild(textWrapper);
+        
         contentDiv.appendChild(sectionContainer);
     }
 }
@@ -891,11 +904,13 @@ function finalizeStreamingMessage() {
         avatar.classList.remove('calm-pulse');
     }
     
-    // Process markdown in each section
-    const sections = currentStreamingMessage.querySelectorAll('.section-container');
-    sections.forEach(section => {
-        const rawText = section.textContent;
-        section.innerHTML = processMarkdown(rawText);
+    // Process markdown in each section's text content (preserving headers)
+    const textWrappers = currentStreamingMessage.querySelectorAll('.section-text');
+    textWrappers.forEach(textWrapper => {
+        const rawText = textWrapper.textContent;
+        if (rawText.trim()) {
+            textWrapper.innerHTML = processMarkdown(rawText);
+        }
     });
     
     currentStreamingMessage = null;
@@ -960,21 +975,35 @@ function processMarkdown(text) {
     // Process inline code
     processed = processed.replace(/`([^`]+)`/g, '<code>$1</code>');
     
-    // Process bold
+    // Process bold (including **text**: pattern)
     processed = processed.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     
-    // Process italic
-    processed = processed.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    // Process italic (but not already processed bold markers)
+    processed = processed.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
     
-    // Process bullet lists
-    processed = processed.replace(/^\- (.+)$/gm, '<li>$1</li>');
-    processed = processed.replace(/(<li>.*<\/li>)/s, '<ul style="margin-left: var(--space-5); list-style: disc;">$1</ul>');
+    // Process bullet lists - collect all consecutive list items
+    processed = processed.replace(/((?:^- .+$\n?)+)/gm, (match) => {
+        const items = match.trim().split('\n').map(line => {
+            const content = line.replace(/^- /, '');
+            return `<li>${content}</li>`;
+        }).join('');
+        return `<ul style="margin-left: var(--space-5); list-style: disc; margin-top: var(--space-2);">${items}</ul>`;
+    });
     
-    // Process numbered lists
-    processed = processed.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+    // Process numbered lists - collect all consecutive numbered items
+    processed = processed.replace(/((?:^\d+\. .+$\n?)+)/gm, (match) => {
+        const items = match.trim().split('\n').map(line => {
+            const content = line.replace(/^\d+\. /, '');
+            return `<li>${content}</li>`;
+        }).join('');
+        return `<ol style="margin-left: var(--space-5); list-style: decimal; margin-top: var(--space-2);">${items}</ol>`;
+    });
     
-    // Process line breaks
-    processed = processed.replace(/\n\n/g, '</p><p>');
+    // Process line breaks (double newline = paragraph break)
+    processed = processed.replace(/\n\n/g, '<br><br>');
+    
+    // Process single line breaks
+    processed = processed.replace(/\n/g, '<br>');
     
     return processed;
 }
