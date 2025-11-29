@@ -105,7 +105,6 @@ class AuthEmailService:
             logger.warning("Email service not available - skipping welcome email")
             return {'success': False, 'error': 'Email service not configured'}
         
-        verification_link = None
         if verification_token:
             verification_link = f"{base_url.rstrip('/')}/auth/verify-email/{verification_token}"
         else:

@@ -610,8 +610,7 @@ def verify_email(token):
     user = db.session.query(User).filter_by(email_verification_token=token).first()
     
     if not user:
-        flash('This verification link is invalid.', 'error')
-        return redirect(url_for('dashboard.index') if current_user.is_authenticated else url_for('auth.login'))
+        return render_template('auth/verify_error.html')
     
     if auth_email_service.verify_email_token(user, token):
         auth_email_service.mark_email_verified(user)
@@ -625,8 +624,7 @@ def verify_email(token):
             flash('Your email has been verified! Please log in.', 'success')
             return redirect(url_for('auth.login'))
     
-    flash('This verification link is invalid.', 'error')
-    return redirect(url_for('auth.login'))
+    return render_template('auth/verify_error.html')
 
 
 @auth_bp.route('/resend-verification', methods=['POST'])
