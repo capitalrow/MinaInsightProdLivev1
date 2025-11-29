@@ -150,31 +150,44 @@
     background: rgba(255, 255, 255, 0.05);
 }
 
+/* Prompt Chips Container - Premium Layout with Generous Spacing */
+#suggested-prompts,
+#smart-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    row-gap: 16px;
+    margin: 20px 0 24px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
 /* Prompt Chips - Enterprise Premium Style (Microsoft Copilot/Notion AI Parity) */
 .prompt-chip {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
+    gap: 10px;
+    padding: 12px 20px;
     background: linear-gradient(145deg, rgba(40, 40, 50, 0.95) 0%, rgba(32, 32, 42, 0.98) 100%);
     border: 1px solid rgba(139, 92, 246, 0.25);
-    border-radius: 12px;
-    font-size: 0.875rem;
+    border-radius: 14px;
+    font-size: 0.9375rem;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.85);
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.88);
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     white-space: nowrap;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
-    min-height: 44px;
+    min-height: 48px;
 }
 
 .prompt-chip svg {
     color: #a78bfa;
     stroke: #a78bfa;
     flex-shrink: 0;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
 }
 
 .prompt-chip:hover {
@@ -445,11 +458,6 @@
     background: var(--copilot-surface);
 }
 
-#suggested-prompts {
-    margin-bottom: 12px;
-    gap: 8px;
-}
-
 #chat-input {
     background: linear-gradient(145deg, rgba(35, 35, 42, 0.95) 0%, rgba(28, 28, 35, 0.98) 100%);
     border: 1px solid rgba(139, 92, 246, 0.15);
@@ -616,8 +624,12 @@
         padding-bottom: max(12px, env(safe-area-inset-bottom));
     }
     
-    #suggested-prompts {
-        margin-bottom: 10px;
+    #suggested-prompts,
+    #smart-chips {
+        gap: 12px;
+        row-gap: 14px;
+        margin: 16px 0 20px;
+        padding-top: 14px;
         overflow-x: auto;
         flex-wrap: nowrap;
         -webkit-overflow-scrolling: touch;
@@ -625,15 +637,16 @@
         padding-bottom: 4px;
     }
     
-    #suggested-prompts::-webkit-scrollbar {
+    #suggested-prompts::-webkit-scrollbar,
+    #smart-chips::-webkit-scrollbar {
         display: none;
     }
     
     .prompt-chip {
-        padding: 10px 14px;
-        font-size: 0.8125rem;
+        padding: 11px 16px;
+        font-size: 0.875rem;
         flex-shrink: 0;
-        min-height: 44px;
+        min-height: 46px;
     }
 }
 
