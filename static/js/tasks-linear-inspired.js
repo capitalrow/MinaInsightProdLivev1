@@ -36,8 +36,9 @@ class MinaTasksLinear {
     async init() {
         console.log('[Mina Tasks] Initializing Linear-inspired interface...');
         
-        // Phase 1: Instant skeleton (0ms)
-        this.showSkeletonLoader();
+        // CROWN⁴.6: Skeleton is now visible by default in HTML
+        // No need to call showSkeletonLoader() - prevents double flash
+        // TaskBootstrap handles initial loading state
         
         // Phase 2: Load tasks with aggressive caching
         const tasksPromise = this.loadTasksOptimized();
@@ -74,17 +75,14 @@ class MinaTasksLinear {
     
     /**
      * Show skeleton loader instantly (0ms perceived load time)
-     * Skeleton morphs into real content with smooth transition
+     * CROWN⁴.6: Now defers to TaskBootstrap for state management
+     * Skeleton is visible by default in HTML - no action needed
      */
     showSkeletonLoader() {
-        const container = document.getElementById('tasks-list-container');
-        const loadingState = document.getElementById('tasks-loading-state');
-        
-        if (container) container.classList.add('hidden');
-        if (loadingState) {
-            loadingState.classList.remove('hidden');
-            loadingState.style.opacity = '1';
-        }
+        // CROWN⁴.6: Skeleton is visible by default in HTML
+        // TaskBootstrap manages the state transitions
+        // This method kept for backwards compatibility but is now a no-op
+        console.log('[Linear] Skeleton already visible by default');
     }
     
     /**
@@ -420,6 +418,7 @@ class MinaTasksLinear {
      * FLIP Animation: First, Last, Invert, Play
      * Smooth, natural movement that guides user's attention
      * Inspired by Linear's "ink flows" aesthetic
+     * CROWN⁴.6: Coordinates with TaskBootstrap for state management
      */
     renderTasksWithFLIP(tasks) {
         const container = document.getElementById('tasks-list-container');
@@ -428,8 +427,16 @@ class MinaTasksLinear {
         
         if (!container) return;
         
-        // Hide skeleton loader
-        if (loadingState) loadingState.classList.add('hidden');
+        // CROWN⁴.6: Use TaskBootstrap's state management if available
+        // This ensures consistent state transitions across modules
+        if (window.taskBootstrap && typeof window.taskBootstrap.showTasksList === 'function') {
+            window.taskBootstrap.showTasksList();
+        } else {
+            // Fallback: Hide skeleton loader directly
+            if (loadingState) {
+                loadingState.style.display = 'none';
+            }
+        }
         
         // CRITICAL FIX: Don't replace server-rendered DOM - hydrate it!
         // Server already rendered task cards with all event listeners attached
