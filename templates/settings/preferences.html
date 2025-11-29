@@ -4,17 +4,16 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/toast-notifications.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="container settings-container">
-    <!-- Header -->
+<div class="container settings-container" data-user-id="{{ current_user.id }}">
     <div class="settings-header">
         <h1 class="settings-title">Settings</h1>
         <p class="settings-subtitle">Manage your account and preferences</p>
     </div>
 
-    <!-- Tabs -->
     <div class="settings-tabs">
         <nav class="settings-tabs-nav">
             <a href="{{ url_for('settings.preferences') }}" class="tab-link active">Preferences</a>
@@ -25,13 +24,12 @@
     </div>
 
     <div class="settings-content">
-        <!-- Notification Settings -->
         <div class="settings-card">
             <h2 class="settings-card-title">Notification Settings</h2>
-            <form method="POST" action="{{ url_for('settings.update_preferences') }}">
+            <form data-category="general">
                 <div class="form-group">
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="email_notifications" checked class="form-checkbox">
+                        <input type="checkbox" name="email_notifications" data-preference="general.email_notifications" class="form-checkbox" checked>
                         <div class="checkbox-content">
                             <p class="checkbox-title">Email Notifications</p>
                             <p class="checkbox-description">Receive email updates about your meetings</p>
@@ -39,7 +37,7 @@
                     </label>
                     
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="meeting_reminders" checked class="form-checkbox">
+                        <input type="checkbox" name="meeting_reminders" data-preference="general.notifications" class="form-checkbox" checked>
                         <div class="checkbox-content">
                             <p class="checkbox-title">Meeting Reminders</p>
                             <p class="checkbox-description">Get reminders before scheduled meetings</p>
@@ -47,7 +45,7 @@
                     </label>
                     
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="task_updates" checked class="form-checkbox">
+                        <input type="checkbox" name="task_updates" data-preference="tasks.notification_reminders" class="form-checkbox" checked>
                         <div class="checkbox-content">
                             <p class="checkbox-title">Task Updates</p>
                             <p class="checkbox-description">Notifications when tasks are updated</p>
@@ -55,7 +53,7 @@
                     </label>
 
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="insight_notifications" checked class="form-checkbox">
+                        <input type="checkbox" name="insight_notifications" data-preference="summary.auto_generate" class="form-checkbox" checked>
                         <div class="checkbox-content">
                             <p class="checkbox-title">AI Insights Ready</p>
                             <p class="checkbox-description">Notify when meeting summaries and action items are generated</p>
@@ -69,15 +67,15 @@
             </form>
         </div>
 
-        <!-- Transcription Controls -->
         <div class="settings-card">
             <h2 class="settings-card-title">Transcription Controls</h2>
-            <form method="POST" action="{{ url_for('settings.update_preferences') }}">
+            <form data-category="transcription">
                 <div class="form-group">
                     <div>
                         <label class="form-label">Default Language</label>
-                        <select name="default_language" class="form-select">
-                            <option value="en" selected>English</option>
+                        <select name="language" data-preference="transcription.language" class="form-select">
+                            <option value="auto">Auto-detect</option>
+                            <option value="en">English</option>
                             <option value="es">Spanish</option>
                             <option value="fr">French</option>
                             <option value="de">German</option>
@@ -87,17 +85,17 @@
                         </select>
                     </div>
 
-                    <div>
-                        <label class="form-label">Transcription Mode</label>
-                        <select name="transcription_mode" class="form-select">
-                            <option value="realtime" selected>Real-time (faster, less accurate)</option>
-                            <option value="accurate">Post-processed (slower, more accurate)</option>
-                            <option value="hybrid">Hybrid (real-time + refinement)</option>
+                    <div style="margin-top: var(--space-4);">
+                        <label class="form-label">Transcription Quality</label>
+                        <select name="quality" data-preference="transcription.quality" class="form-select">
+                            <option value="high">High (more accurate, slower)</option>
+                            <option value="standard">Standard (balanced)</option>
+                            <option value="fast">Fast (less accurate, faster)</option>
                         </select>
                     </div>
                     
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="speaker_diarization" checked class="form-checkbox">
+                        <input type="checkbox" name="speaker_detection" data-preference="transcription.speaker_detection" class="form-checkbox" checked>
                         <div class="checkbox-content">
                             <p class="checkbox-title">Speaker Diarization</p>
                             <p class="checkbox-description">Automatically detect and label different speakers</p>
@@ -105,7 +103,7 @@
                     </label>
 
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="profanity_filter" class="form-checkbox">
+                        <input type="checkbox" name="profanity_filter" data-preference="transcription.profanity_filter" class="form-checkbox">
                         <div class="checkbox-content">
                             <p class="checkbox-title">Profanity Filter</p>
                             <p class="checkbox-description">Automatically filter profane language in transcripts</p>
@@ -113,7 +111,7 @@
                     </label>
 
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="auto_punctuation" checked class="form-checkbox">
+                        <input type="checkbox" name="punctuation" data-preference="transcription.punctuation" class="form-checkbox" checked>
                         <div class="checkbox-content">
                             <p class="checkbox-title">Auto Punctuation</p>
                             <p class="checkbox-description">Automatically add punctuation and capitalization</p>
@@ -126,48 +124,44 @@
             </form>
         </div>
 
-        <!-- Privacy & Compliance -->
         <div class="settings-card">
             <h2 class="settings-card-title">Privacy & Compliance</h2>
-            <form method="POST" action="{{ url_for('settings.update_preferences') }}">
+            <form data-category="privacy">
                 <div class="form-group">
                     <div>
                         <label class="form-label">Data Retention Period</label>
-                        <select name="data_retention" class="form-select">
+                        <select name="data_retention_days" data-preference="privacy.data_retention_days" class="form-select">
                             <option value="30">30 days</option>
-                            <option value="90" selected>90 days</option>
+                            <option value="90">90 days</option>
                             <option value="365">1 year</option>
-                            <option value="forever">Forever</option>
+                            <option value="0">Forever</option>
                         </select>
                         <p class="form-help">Recordings and transcripts will be automatically deleted after this period</p>
                     </div>
 
-                    <div>
-                        <label class="form-label">Recording Consent</label>
-                        <select name="recording_consent" class="form-select">
-                            <option value="always">Always ask for consent</option>
-                            <option value="auto" selected>Auto-consent (default on)</option>
-                            <option value="custom">Custom consent message</option>
-                        </select>
-                    </div>
-
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="auto_redaction" class="form-checkbox">
+                        <input type="checkbox" name="recording_consent" data-preference="privacy.recording_consent" class="form-checkbox" checked>
                         <div class="checkbox-content">
-                            <p class="checkbox-title">Auto-redact PII</p>
-                            <p class="checkbox-description">Automatically mask emails, phone numbers, and credit card numbers</p>
+                            <p class="checkbox-title">Recording Consent</p>
+                            <p class="checkbox-description">Always ask for consent before recording</p>
                         </div>
                     </label>
 
-                    <div>
-                        <label class="form-label">Default Meeting Access</label>
-                        <select name="meeting_access" class="form-select">
-                            <option value="workspace" selected>Workspace only</option>
-                            <option value="team">Specific teams</option>
-                            <option value="private">Private (only me)</option>
-                            <option value="public">Public link</option>
-                        </select>
-                    </div>
+                    <label class="form-checkbox-label">
+                        <input type="checkbox" name="encrypt_storage" data-preference="privacy.encrypt_storage" class="form-checkbox" checked>
+                        <div class="checkbox-content">
+                            <p class="checkbox-title">Encrypted Storage</p>
+                            <p class="checkbox-description">Encrypt all stored recordings and transcripts</p>
+                        </div>
+                    </label>
+
+                    <label class="form-checkbox-label">
+                        <input type="checkbox" name="anonymous_usage_stats" data-preference="privacy.anonymous_usage_stats" class="form-checkbox" checked>
+                        <div class="checkbox-content">
+                            <p class="checkbox-title">Anonymous Usage Statistics</p>
+                            <p class="checkbox-description">Help improve Mina by sharing anonymous usage data</p>
+                        </div>
+                    </label>
                 </div>
                 <div style="margin-top: var(--space-6);">
                     <button type="submit" class="btn btn-primary">Save Privacy Settings</button>
@@ -175,51 +169,49 @@
             </form>
         </div>
 
-        <!-- AI Insights Configuration -->
         <div class="settings-card">
             <h2 class="settings-card-title">AI Insights Configuration</h2>
-            <form method="POST" action="{{ url_for('settings.update_preferences') }}">
+            <form data-category="summary">
                 <div class="form-group">
                     <div>
-                        <label class="form-label">Auto-generate Summaries</label>
-                        <select name="auto_summary" class="form-select">
-                            <option value="immediate" selected>Immediately after meeting</option>
-                            <option value="hourly">Within 1 hour</option>
-                            <option value="daily">Daily batch</option>
-                            <option value="manual">Manual only</option>
+                        <label class="form-label">Summary Detail Level</label>
+                        <select name="default_level" data-preference="summary.default_level" class="form-select">
+                            <option value="brief">Brief (key points only)</option>
+                            <option value="standard">Standard (balanced)</option>
+                            <option value="detailed">Detailed (comprehensive)</option>
                         </select>
                     </div>
 
-                    <div>
-                        <label class="form-label">Action Item Detection</label>
-                        <select name="action_detection" class="form-select">
-                            <option value="low">Low sensitivity (fewer items)</option>
-                            <option value="medium" selected>Medium sensitivity</option>
-                            <option value="high">High sensitivity (more items)</option>
+                    <div style="margin-top: var(--space-4);">
+                        <label class="form-label">Summary Style</label>
+                        <select name="default_style" data-preference="summary.default_style" class="form-select">
+                            <option value="executive">Executive summary</option>
+                            <option value="technical">Technical details</option>
+                            <option value="action">Action-focused</option>
                         </select>
                     </div>
 
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="auto_detect_decisions" checked class="form-checkbox">
+                        <input type="checkbox" name="auto_generate" data-preference="summary.auto_generate" class="form-checkbox" checked>
+                        <div class="checkbox-content">
+                            <p class="checkbox-title">Auto-generate Summaries</p>
+                            <p class="checkbox-description">Automatically generate summaries after meetings end</p>
+                        </div>
+                    </label>
+
+                    <label class="form-checkbox-label">
+                        <input type="checkbox" name="include_actions" data-preference="summary.include_actions" class="form-checkbox" checked>
+                        <div class="checkbox-content">
+                            <p class="checkbox-title">Include Action Items</p>
+                            <p class="checkbox-description">Extract and include action items in summaries</p>
+                        </div>
+                    </label>
+
+                    <label class="form-checkbox-label">
+                        <input type="checkbox" name="include_decisions" data-preference="summary.include_decisions" class="form-checkbox" checked>
                         <div class="checkbox-content">
                             <p class="checkbox-title">Auto-detect Decisions</p>
                             <p class="checkbox-description">Identify and highlight key decisions made during meetings</p>
-                        </div>
-                    </label>
-
-                    <label class="form-checkbox-label">
-                        <input type="checkbox" name="sentiment_analysis" class="form-checkbox">
-                        <div class="checkbox-content">
-                            <p class="checkbox-title">Sentiment Analysis</p>
-                            <p class="checkbox-description">Analyze emotional tone and engagement levels</p>
-                        </div>
-                    </label>
-
-                    <label class="form-checkbox-label">
-                        <input type="checkbox" name="auto_create_tasks" class="form-checkbox">
-                        <div class="checkbox-content">
-                            <p class="checkbox-title">Auto-create Tasks</p>
-                            <p class="checkbox-description">Automatically create tasks from detected action items</p>
                         </div>
                     </label>
                 </div>
@@ -229,42 +221,40 @@
             </form>
         </div>
 
-        <!-- Audio & Recording -->
         <div class="settings-card">
             <h2 class="settings-card-title">Audio & Recording</h2>
-            <form method="POST" action="{{ url_for('settings.update_preferences') }}">
+            <form data-category="audio">
                 <div class="form-group">
                     <div>
                         <label class="form-label">Audio Quality</label>
-                        <select name="audio_quality" class="form-select">
+                        <select name="quality" data-preference="audio.quality" class="form-select">
                             <option value="high">High Quality (48kHz)</option>
-                            <option value="standard" selected>Standard (44.1kHz)</option>
+                            <option value="standard">Standard (44.1kHz)</option>
                             <option value="low">Low Bandwidth (22kHz)</option>
                         </select>
                     </div>
 
-                    <div>
-                        <label class="form-label">Noise Cancellation</label>
-                        <select name="noise_cancellation" class="form-select">
-                            <option value="aggressive">Aggressive (remove all background noise)</option>
-                            <option value="moderate" selected>Moderate (balanced)</option>
-                            <option value="off">Off (preserve original audio)</option>
-                        </select>
-                    </div>
-                    
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="auto_save" checked class="form-checkbox">
+                        <input type="checkbox" name="noise_reduction" data-preference="audio.noise_reduction" class="form-checkbox" checked>
                         <div class="checkbox-content">
-                            <p class="checkbox-title">Auto-save recordings</p>
-                            <p class="checkbox-description">Automatically save recordings to cloud storage</p>
+                            <p class="checkbox-title">Noise Reduction</p>
+                            <p class="checkbox-description">Reduce background noise in recordings</p>
                         </div>
                     </label>
 
                     <label class="form-checkbox-label">
-                        <input type="checkbox" name="auto_start_recording" class="form-checkbox">
+                        <input type="checkbox" name="echo_cancellation" data-preference="audio.echo_cancellation" class="form-checkbox" checked>
                         <div class="checkbox-content">
-                            <p class="checkbox-title">Auto-start Recording</p>
-                            <p class="checkbox-description">Automatically start recording when you join a meeting</p>
+                            <p class="checkbox-title">Echo Cancellation</p>
+                            <p class="checkbox-description">Remove echo from recordings</p>
+                        </div>
+                    </label>
+                    
+                    <label class="form-checkbox-label">
+                        <input type="checkbox" name="voice_activity_detection" data-preference="audio.voice_activity_detection" class="form-checkbox" checked>
+                        <div class="checkbox-content">
+                            <p class="checkbox-title">Voice Activity Detection</p>
+                            <p class="checkbox-description">Automatically detect when someone is speaking</p>
                         </div>
                     </label>
                 </div>
@@ -273,6 +263,54 @@
                 </div>
             </form>
         </div>
+
+        <div class="settings-card">
+            <h2 class="settings-card-title">Interface Settings</h2>
+            <form data-category="ui">
+                <div class="form-group">
+                    <div>
+                        <label class="form-label">Theme</label>
+                        <select name="theme" data-preference="ui.theme" class="form-select">
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                            <option value="system">System default</option>
+                        </select>
+                    </div>
+
+                    <label class="form-checkbox-label">
+                        <input type="checkbox" name="keyboard_shortcuts" data-preference="ui.keyboard_shortcuts" class="form-checkbox" checked>
+                        <div class="checkbox-content">
+                            <p class="checkbox-title">Keyboard Shortcuts</p>
+                            <p class="checkbox-description">Enable keyboard shortcuts for quick actions</p>
+                        </div>
+                    </label>
+
+                    <label class="form-checkbox-label">
+                        <input type="checkbox" name="animations" data-preference="ui.animations" class="form-checkbox" checked>
+                        <div class="checkbox-content">
+                            <p class="checkbox-title">Animations</p>
+                            <p class="checkbox-description">Enable smooth animations and transitions</p>
+                        </div>
+                    </label>
+
+                    <label class="form-checkbox-label">
+                        <input type="checkbox" name="compact_mode" data-preference="ui.compact_mode" class="form-checkbox">
+                        <div class="checkbox-content">
+                            <p class="checkbox-title">Compact Mode</p>
+                            <p class="checkbox-description">Show more content with reduced spacing</p>
+                        </div>
+                    </label>
+                </div>
+                <div style="margin-top: var(--space-6);">
+                    <button type="submit" class="btn btn-primary">Save Interface Settings</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock %}

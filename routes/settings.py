@@ -823,6 +823,76 @@ def remove_member(member_id):
         return jsonify({'success': False, 'error': 'Failed to remove member'}), 500
 
 
+@settings_bp.route('/api/workspace/stats', methods=['GET'])
+@login_required
+def get_workspace_stats():
+    """
+    Get workspace statistics including meetings, hours, members, and storage.
+    
+    Returns:
+        JSON: Workspace statistics with real aggregates from meeting data
+    """
+    from app import db
+    from models import Meeting
+    from sqlalchemy import func, extract
+    
+    try:
+        workspace = None
+        workspace_members_count = 1
+        workspace_meetings_count = 0
+        workspace_hours = 0.0
+        meetings_query = None
+        
+        if current_user.workspace_id:
+            try:
+                workspace = current_user.workspace
+                if workspace and hasattr(workspace, 'members'):
+                    workspace_members_count = len(list(workspace.members)) if workspace.members else 1
+                
+                meetings_query = db.session.query(Meeting).filter_by(
+                    workspace_id=current_user.workspace_id
+                )
+                workspace_meetings_count = meetings_query.count()
+            except Exception as e:
+                logger.warning(f"Could not load workspace stats: {e}")
+        
+        if not workspace:
+            meetings_query = db.session.query(Meeting).filter(
+                Meeting.organizer_id == current_user.id
+            )
+            workspace_meetings_count = meetings_query.count()
+        
+        if meetings_query is not None:
+            completed_meetings = meetings_query.filter(
+                Meeting.actual_start.isnot(None),
+                Meeting.actual_end.isnot(None)
+            ).all()
+            
+            total_seconds = 0
+            for meeting in completed_meetings:
+                if meeting.actual_start and meeting.actual_end:
+                    duration = (meeting.actual_end - meeting.actual_start).total_seconds()
+                    if duration > 0:
+                        total_seconds += duration
+            
+            workspace_hours = round(total_seconds / 3600, 1)
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_meetings': workspace_meetings_count,
+                'hours_recorded': workspace_hours,
+                'team_members': workspace_members_count,
+                'storage_used': 0,
+                'storage_label': 'Coming soon'
+            }
+        }), 200
+    
+    except Exception as e:
+        logger.error(f"Error getting workspace stats: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': 'Failed to get workspace stats'}), 500
+
+
 @settings_bp.route('/workspace/permissions', methods=['POST'])
 @login_required
 def update_workspace_permissions():
