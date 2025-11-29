@@ -622,3 +622,151 @@
         font-size: 0.6875rem;
     }
 }
+
+/* ============ Enhanced Typography & Contrast ============ */
+
+/* Welcome message styling */
+#welcome-message .message-content {
+    background: var(--copilot-surface-elevated);
+    border-color: var(--copilot-border);
+}
+
+#welcome-message .message-content p {
+    color: var(--copilot-text-primary);
+    font-size: 0.9375rem;
+    line-height: 1.65;
+}
+
+#welcome-message .message-content ul {
+    margin-top: 16px;
+    margin-bottom: 16px;
+}
+
+#welcome-message .message-content li {
+    color: var(--copilot-text-secondary);
+    font-size: 0.875rem;
+    padding-left: 4px;
+    position: relative;
+}
+
+/* Section headers in AI responses */
+.message-content h3,
+.section-header {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--copilot-accent);
+    margin-top: 16px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.message-content h3:first-child,
+.section-header:first-child {
+    margin-top: 0;
+}
+
+/* Strong/Bold text in messages */
+.message-content strong,
+.message-content b {
+    color: var(--copilot-text-primary);
+    font-weight: 600;
+}
+
+/* Task status badges in AI responses */
+.message-content .status-completed,
+.message-content .status-done {
+    color: #22c55e;
+}
+
+.message-content .status-overdue,
+.message-content .status-late {
+    color: #ef4444;
+}
+
+.message-content .status-pending,
+.message-content .status-todo {
+    color: #f59e0b;
+}
+
+/* ============ Micro-interactions ============ */
+
+/* Chip press feedback */
+.prompt-chip:active {
+    transform: scale(0.97);
+    transition: transform 0.1s ease;
+}
+
+/* Message hover subtle effect */
+.message-content:hover {
+    border-color: rgba(139, 92, 246, 0.2);
+}
+
+/* Smooth scroll indicator */
+.chat-messages-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-messages-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.chat-messages-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Calm fade in animation */
+.calm-fade-in {
+    animation: calmFadeIn 0.3s ease-out forwards;
+}
+
+@keyframes calmFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Streaming text cursor animation */
+.streaming-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1.1em;
+    background: var(--copilot-accent);
+    margin-left: 2px;
+    animation: cursorBlink 1s infinite;
+    vertical-align: text-bottom;
+}
+
+@keyframes cursorBlink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+/* Focus ring for accessibility */
+.prompt-chip:focus-visible,
+.voice-btn:focus-visible,
+.chat-send-btn:focus-visible {
+    outline: 2px solid var(--copilot-accent);
+    outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

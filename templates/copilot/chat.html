@@ -818,18 +818,56 @@ function showOfflineNotification(message) {
     }, 4000);
 }
 
-// Display smart chips from backend
+// Display smart chips from backend (with deduplication)
 function displaySmartChips(chips) {
     if (!chips || chips.length === 0) return;
     
+    // Hide initial suggested prompts when smart chips load
+    if (suggestedPrompts) {
+        suggestedPrompts.style.display = 'none';
+    }
+    
     smartChips.innerHTML = '';
     
-    chips.forEach(chip => {
+    // Deduplicate chips by text (case-insensitive)
+    const seenTexts = new Set();
+    const uniqueChips = chips.filter(chip => {
+        const normalizedText = (chip.text || '').toLowerCase().trim();
+        if (seenTexts.has(normalizedText)) return false;
+        seenTexts.add(normalizedText);
+        return true;
+    });
+    
+    // Icon mapping for chip types
+    const chipIcons = {
+        'task': '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>',
+        'meeting': '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+        'summary': '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+        'default': '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>'
+    };
+    
+    uniqueChips.forEach(chip => {
         const chipEl = document.createElement('button');
         chipEl.className = 'prompt-chip calm-chip calm-animate';
-        chipEl.textContent = chip.text;
+        
+        // Add icon based on chip type (safe SVG insertion)
+        const iconType = chip.chip_type || 'default';
+        const iconSvg = chipIcons[iconType] || chipIcons['default'];
+        
+        // Create icon container safely
+        const iconContainer = document.createElement('span');
+        iconContainer.innerHTML = iconSvg; // SVG is controlled/trusted
+        iconContainer.style.display = 'flex';
+        iconContainer.style.alignItems = 'center';
+        chipEl.appendChild(iconContainer);
+        
+        // Create text span safely using textContent (XSS-safe)
+        const textSpan = document.createElement('span');
+        textSpan.textContent = chip.text; // Safe: textContent escapes HTML
+        chipEl.appendChild(textSpan);
+        
         chipEl.dataset.prompt = chip.action_data?.prompt || chip.text;
-        chipEl.dataset.chipType = chip.chip_type;
+        chipEl.dataset.chipType = chip.chip_type || 'default';
         
         chipEl.addEventListener('click', () => {
             sendMessage(chipEl.dataset.prompt);
@@ -848,6 +886,10 @@ function displaySmartChips(chips) {
 function hideSmartChips() {
     smartChipsContainer.style.display = 'none';
     smartChipsContainer.classList.remove('calm-fade-in');
+    // Show suggested prompts again when smart chips hide
+    if (suggestedPrompts) {
+        suggestedPrompts.style.display = 'flex';
+    }
 }
 
 // Update lifecycle status indicator
