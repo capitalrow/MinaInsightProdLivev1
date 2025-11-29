@@ -22,6 +22,23 @@ from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
 
+# Model configuration with fallback hierarchy
+# Primary: gpt-4o-mini (fast, cost-effective)
+# Fallback 1: gpt-4 (stable, widely available)
+# Fallback 2: gpt-4-turbo (high capability)
+COPILOT_MODEL_HIERARCHY = [
+    "gpt-4o-mini-2024-07-18",  # Most accessible, fast
+    "gpt-4",                   # Stable fallback
+    "gpt-4-turbo",             # High-end fallback
+]
+
+def get_copilot_model() -> str:
+    """Get the OpenAI model to use for copilot, respecting env override."""
+    env_model = os.getenv("COPILOT_MODEL")
+    if env_model:
+        return env_model
+    return COPILOT_MODEL_HIERARCHY[0]
+
 # Import metrics collector (lazy to avoid circular import)
 _metrics_collector = None
 def get_metrics_collector():
@@ -275,15 +292,30 @@ class CopilotStreamingService:
             # Build messages with system prompt and context
             messages = self._build_messages(user_message, context)
             
-            # Start streaming (SYNC)
-            stream = self.client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
-                messages=messages,  # type: ignore[arg-type]
-                temperature=0.7,
-                max_tokens=1500,
-                stream=True,
-                stream_options={"include_usage": True}
-            )
+            # Start streaming (SYNC) with model fallback
+            model_to_use = get_copilot_model()
+            stream = None
+            last_error = None
+            
+            for model in [model_to_use] + [m for m in COPILOT_MODEL_HIERARCHY if m != model_to_use]:
+                try:
+                    stream = self.client.chat.completions.create(
+                        model=model,
+                        messages=messages,  # type: ignore[arg-type]
+                        temperature=0.7,
+                        max_tokens=1500,
+                        stream=True,
+                        stream_options={"include_usage": True}
+                    )
+                    logger.info(f"Copilot streaming using model: {model}")
+                    break
+                except Exception as model_error:
+                    last_error = model_error
+                    logger.warning(f"Model {model} unavailable: {model_error}, trying fallback...")
+                    continue
+            
+            if stream is None:
+                raise last_error or Exception("No available models")
             
             current_section = None
             buffer = ""
@@ -416,15 +448,30 @@ class CopilotStreamingService:
             # Build messages with system prompt and context
             messages = self._build_messages(user_message, context)
             
-            # Start streaming
-            stream = await self.async_client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
-                messages=messages,  # type: ignore[arg-type]
-                temperature=0.7,
-                max_tokens=1500,
-                stream=True,
-                stream_options={"include_usage": True}
-            )
+            # Start streaming with model fallback
+            model_to_use = get_copilot_model()
+            stream = None
+            last_error = None
+            
+            for model in [model_to_use] + [m for m in COPILOT_MODEL_HIERARCHY if m != model_to_use]:
+                try:
+                    stream = await self.async_client.chat.completions.create(
+                        model=model,
+                        messages=messages,  # type: ignore[arg-type]
+                        temperature=0.7,
+                        max_tokens=1500,
+                        stream=True,
+                        stream_options={"include_usage": True}
+                    )
+                    logger.info(f"Copilot async streaming using model: {model}")
+                    break
+                except Exception as model_error:
+                    last_error = model_error
+                    logger.warning(f"Model {model} unavailable: {model_error}, trying fallback...")
+                    continue
+            
+            if stream is None:
+                raise last_error or Exception("No available models")
             
             current_section = None
             buffer = ""
