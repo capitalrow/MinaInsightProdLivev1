@@ -650,8 +650,25 @@ def _build_query_context(
         
         if query_text and user_id and workspace_id:
             # Search for query-relevant tasks (keyword matching)
-            # Extract keywords from query (simple approach: significant words)
-            keywords = [w.lower().strip() for w in query_text.split() if len(w) > 3]
+            # Extract keywords: keep words 3+ chars, strip punctuation
+            import re
+            raw_words = re.findall(r'\b[a-zA-Z]{3,}\b', query_text.lower())
+            
+            # Add stem variants for common suffixes (e.g., transitioning -> transition)
+            keywords = []
+            for w in raw_words:
+                keywords.append(w)
+                # Add stemmed variants
+                if w.endswith('ing') and len(w) > 5:
+                    keywords.append(w[:-3])  # transitioning -> transition
+                if w.endswith('ed') and len(w) > 4:
+                    keywords.append(w[:-2])  # completed -> complet (partial)
+                if w.endswith('s') and len(w) > 4:
+                    keywords.append(w[:-1])  # tasks -> task
+                if w.endswith('tion') and len(w) > 5:
+                    keywords.append(w + 'ing')  # transition -> transitioning
+            
+            keywords = list(set(keywords))  # Remove duplicates
             
             if keywords:
                 # Search tasks matching keywords in title or description
