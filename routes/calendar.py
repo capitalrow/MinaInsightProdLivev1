@@ -97,8 +97,7 @@ def get_providers_status():
         if not current_user.is_authenticated:
             return jsonify({'success': False, 'error': 'Authentication required'}), 401
 
-        # This would be async in a real implementation
-        # For now, return mock status based on user preferences
+        # Get authentication status from user preferences stored in database
         user = db.session.get(User, current_user.id)
         preferences = json.loads(user.preferences or '{}')
         integrations = preferences.get('integrations', {})
@@ -161,8 +160,8 @@ def authenticate_provider(provider: str):
                 'error': 'Credentials are required'
             }), 400
         
-        # For demo purposes, mark as authenticated
-        # In real implementation, this would use the calendar service
+        # Store authentication status in user preferences
+        # Full OAuth flow would require external service integration
         user = db.session.get(User, current_user.id)
         preferences = json.loads(user.preferences or '{}')
         
@@ -408,25 +407,52 @@ def create_calendar_event():
                 'error': f'Invalid datetime format: {e}'
             }), 400
         
-        # For demo purposes, create a mock event
-        # In real implementation, this would use calendar_service.create_event()
-        event_id = f"{data['provider']}_{datetime.utcnow().timestamp()}"
+        # If this is a Mina meeting, create a real Meeting record in the database
+        from models import Meeting
         
-        created_event = {
-            'id': event_id,
-            'title': data['title'],
-            'description': data.get('description', ''),
-            'start_time': start_time.isoformat(),
-            'end_time': end_time.isoformat(),
-            'location': data.get('location', ''),
-            'provider': data['provider'],
-            'attendees': data.get('attendees', []),
-            'meeting_url': data.get('meeting_url'),
-            'is_mina_meeting': data.get('is_mina_meeting', False),
-            'created_at': datetime.utcnow().isoformat()
-        }
+        is_mina_meeting = data.get('is_mina_meeting', False)
         
-        logger.info(f"Created calendar event {event_id} for user {current_user.id}")
+        if is_mina_meeting or data['provider'].lower() == 'mina':
+            # Create a real meeting in the database
+            meeting = Meeting(
+                title=data['title'],
+                description=data.get('description', ''),
+                workspace_id=current_user.workspace_id,
+                organizer_id=current_user.id,
+                scheduled_start=start_time,
+                scheduled_end=end_time,
+                status='scheduled',
+                meeting_url=data.get('meeting_url'),
+                location=data.get('location', '')
+            )
+            db.session.add(meeting)
+            db.session.commit()
+            
+            event_id = f"mina_{meeting.id}"
+            created_event = {
+                'id': event_id,
+                'meeting_id': meeting.id,
+                'title': meeting.title,
+                'description': meeting.description,
+                'start_time': start_time.isoformat(),
+                'end_time': end_time.isoformat(),
+                'location': meeting.location,
+                'provider': 'mina',
+                'attendees': data.get('attendees', []),
+                'meeting_url': meeting.meeting_url,
+                'is_mina_meeting': True,
+                'created_at': meeting.created_at.isoformat()
+            }
+            logger.info(f"Created Mina meeting {meeting.id} for user {current_user.id}")
+        else:
+            # External calendar providers (Google/Outlook) require OAuth integration
+            # Return validation response - external calendar events cannot be created without OAuth
+            return jsonify({
+                'success': False,
+                'error': f'External calendar provider "{data["provider"]}" requires OAuth authentication. Please connect your calendar in Settings first.',
+                'requires_oauth': True,
+                'provider': data['provider']
+            }), 400
         
         return jsonify({
             'success': True,
