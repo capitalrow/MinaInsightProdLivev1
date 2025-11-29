@@ -753,14 +753,14 @@ CRITICAL GUIDELINES:
         """
         text_lower = text.lower()
         
-        # Look for section markers
-        if any(marker in text_lower for marker in ['## summary', '**summary**', 'summary:']):
+        # Look for section markers (supporting ### header format)
+        if any(marker in text_lower for marker in ['### summary', '## summary', '**summary**', 'summary:']):
             return 'summary'
-        elif any(marker in text_lower for marker in ['## actions', '**actions**', 'actions:', 'you can:']):
+        elif any(marker in text_lower for marker in ['### actions', '## actions', '**actions**', 'actions:', 'you can:']):
             return 'actions'
-        elif any(marker in text_lower for marker in ['## insights', '**insights**', 'insights:', 'trends:']):
+        elif any(marker in text_lower for marker in ['### insights', '## insights', '**insights**', 'insights:', 'trends:']):
             return 'insights'
-        elif any(marker in text_lower for marker in ['## next', '**next steps**', 'next steps:', 'recommend:']):
+        elif any(marker in text_lower for marker in ['### next steps', '### next', '## next', '**next steps**', 'next steps:', 'recommend:']):
             return 'next_steps'
         
         return None
