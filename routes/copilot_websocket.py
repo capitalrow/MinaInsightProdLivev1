@@ -272,6 +272,8 @@ def register_copilot_namespace(socketio):
             )
             
             # Event #6: context_merge - Build context from workspace data
+            # Include user message for semantic search
+            context_data['message'] = user_message
             context = _build_query_context(current_user.id, workspace_id, context_data)
             
             # Add intent classification to context for response generation
@@ -632,10 +634,13 @@ def _build_query_context(
     
     CROWN⁹ Enhanced Query Context:
     - Base workspace context (tasks, meetings)
+    - Query-relevant tasks (keyword search)
     - Semantic context from embeddings (RAG)
     - Conversation history for continuity
     - Intent-specific context filtering
     """
+    from models import db, Task, Meeting
+    
     # Start with base context
     context = _build_user_context(user_id, workspace_id)
     
@@ -643,7 +648,54 @@ def _build_query_context(
         # Retrieve semantic context using RAG (embeddings-based similarity)
         query_text = context_filter.get('query', '') or context_filter.get('message', '')
         
-        if query_text and user_id:
+        if query_text and user_id and workspace_id:
+            # Search for query-relevant tasks (keyword matching)
+            # Extract keywords from query (simple approach: significant words)
+            keywords = [w.lower().strip() for w in query_text.split() if len(w) > 3]
+            
+            if keywords:
+                # Search tasks matching keywords in title or description
+                from sqlalchemy import or_
+                from datetime import date
+                
+                relevant_tasks = db.session.query(Task)\
+                    .filter(Task.workspace_id == workspace_id)\
+                    .filter(Task.deleted_at.is_(None))\
+                    .filter(or_(
+                        *[Task.title.ilike(f'%{kw}%') for kw in keywords],
+                        *[Task.description.ilike(f'%{kw}%') for kw in keywords if hasattr(Task, 'description')]
+                    ))\
+                    .limit(10)\
+                    .all()
+                
+                if relevant_tasks:
+                    today = date.today()
+                    query_relevant = []
+                    for t in relevant_tasks:
+                        if t is None:
+                            continue
+                        due_date_val = getattr(t, 'due_date', None)
+                        task_data = {
+                            'id': getattr(t, 'id', None),
+                            'title': getattr(t, 'title', 'Untitled'),
+                            'status': getattr(t, 'status', 'todo'),
+                            'priority': getattr(t, 'priority', 'medium'),
+                            'due_date': due_date_val.isoformat() if due_date_val else None,
+                            'is_overdue': t.due_date < today if t.due_date and t.status not in ['completed', 'cancelled'] else False,
+                            'query_match': True
+                        }
+                        query_relevant.append(task_data)
+                    
+                    # Add query-relevant tasks to context (avoid duplicates)
+                    existing_ids = {t['id'] for t in context.get('recent_tasks', [])}
+                    for task in query_relevant:
+                        if task['id'] not in existing_ids:
+                            context['recent_tasks'].append(task)
+                    
+                    context['query_relevant_tasks'] = query_relevant
+                    logger.debug(f"Found {len(query_relevant)} query-relevant tasks")
+            
+            # Also get semantic context from embeddings (RAG)
             semantic_contexts = copilot_memory_service.get_semantic_context(
                 query=query_text,
                 user_id=user_id,
