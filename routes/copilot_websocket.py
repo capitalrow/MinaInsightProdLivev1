@@ -507,12 +507,13 @@ def _build_user_context(user_id: int, workspace_id: Optional[int]) -> Dict[str, 
                     if t is None:
                         continue
                     
+                    due_date_val = getattr(t, 'due_date', None)
                     task_data = {
                         'id': getattr(t, 'id', None),
                         'title': getattr(t, 'title', 'Untitled'),
                         'status': getattr(t, 'status', 'todo'),
                         'priority': getattr(t, 'priority', 'medium'),
-                        'due_date': t.due_date.isoformat() if getattr(t, 'due_date', None) else None,
+                        'due_date': due_date_val.isoformat() if due_date_val else None,
                         'is_overdue': False,
                         'is_due_soon': False
                     }

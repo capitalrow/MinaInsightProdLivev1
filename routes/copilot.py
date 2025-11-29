@@ -73,6 +73,33 @@ def copilot_dashboard():
         return redirect(url_for('dashboard.index'))
 
 
+@copilot_bp.route('/api/health')
+def copilot_health():
+    """
+    Health check endpoint for Copilot service.
+    
+    Returns:
+        JSON: Health status of copilot components
+    """
+    health = {
+        'status': 'healthy',
+        'components': {
+            'openai': 'connected' if openai_client else 'not_configured',
+            'streaming': 'available',
+            'websocket': 'available',
+            'memory': 'available'
+        },
+        'timestamp': datetime.utcnow().isoformat()
+    }
+    
+    # Check if OpenAI is working
+    if not openai_client:
+        health['status'] = 'degraded'
+        health['components']['openai'] = 'not_configured'
+    
+    return jsonify(health), 200
+
+
 @copilot_bp.route('/settings')
 @login_required
 def copilot_settings():
