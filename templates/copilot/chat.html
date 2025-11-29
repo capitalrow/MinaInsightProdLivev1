@@ -1052,6 +1052,12 @@ function processMarkdown(text) {
         return `<ol style="margin-left: var(--space-5); list-style: decimal; margin-top: var(--space-2);">${items}</ol>`;
     });
     
+    // Process markdown headers (### Header -> h3, ## Header -> h2, # Header -> h1)
+    // Must be done before line breaks processing
+    processed = processed.replace(/^### (.+)$/gm, '<h4 style="font-size: var(--text-sm); font-weight: 600; color: var(--color-primary); margin-top: var(--space-4); margin-bottom: var(--space-2); border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-1);">$1</h4>');
+    processed = processed.replace(/^## (.+)$/gm, '<h3 style="font-size: var(--text-base); font-weight: 600; color: var(--color-text); margin-top: var(--space-4); margin-bottom: var(--space-2);">$1</h3>');
+    processed = processed.replace(/^# (.+)$/gm, '<h2 style="font-size: var(--text-lg); font-weight: 700; color: var(--color-text); margin-top: var(--space-4); margin-bottom: var(--space-3);">$1</h2>');
+    
     // Process line breaks (double newline = paragraph break)
     processed = processed.replace(/\n\n/g, '<br><br>');
     
