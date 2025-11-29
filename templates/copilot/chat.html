@@ -117,45 +117,55 @@
     color: var(--color-primary-light, #818cf8);
 }
 
-/* Voice input button */
+/* Voice input button - Modern Unified Style */
 .voice-btn {
-    padding: var(--space-3);
-    background: var(--color-glass);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    padding: 0;
+    background: var(--copilot-surface-elevated, rgba(32, 32, 38, 0.98));
+    border: 1px solid var(--copilot-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--copilot-radius-md, 12px);
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--color-text);
+    color: var(--copilot-text-secondary, rgba(255, 255, 255, 0.65));
 }
 
 .voice-btn:hover {
-    background: var(--color-bg);
-    border-color: var(--color-primary);
+    background: var(--copilot-surface-hover, rgba(45, 45, 52, 0.95));
+    border-color: var(--copilot-accent, #8b5cf6);
+    color: var(--copilot-text-primary, rgba(255, 255, 255, 0.95));
 }
 
 .voice-btn.listening {
-    background: var(--color-error);
-    border-color: var(--color-error);
+    background: #ef4444;
+    border-color: #ef4444;
     color: white;
-    animation: pulse 1.5s infinite;
+    animation: voicePulse 1.5s infinite ease-in-out;
 }
 
-@keyframes pulse {
-    0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.1); opacity: 0.8; }
+@keyframes voicePulse {
+    0%, 100% { 
+        transform: scale(1); 
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    }
+    50% { 
+        transform: scale(1.02); 
+        box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    }
 }
 
 .voice-btn.processing {
-    background: var(--color-warning);
-    border-color: var(--color-warning);
+    background: #f59e0b;
+    border-color: #f59e0b;
     color: white;
 }
 
 .voice-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
 }
 
@@ -351,7 +361,7 @@
     <main class="copilot-main">
         <div class="copilot-header">
             <div>
-                <h1 class="copilot-title text-2xl font-bold mb-1">AI Copilot</h1>
+                <h1 class="copilot-title">AI Copilot</h1>
                 <p class="text-sm text-secondary">Ask questions about your meetings, tasks, and insights</p>
             </div>
             <!-- Lifecycle Status Indicator -->
@@ -376,16 +386,31 @@
         </div>
 
         <div class="chat-input-container">
-            <!-- Smart Chips (Predictive Actions from Backend) -->
+            <!-- Smart Chips (Unified - deduped) -->
             <div id="smart-chips-container" class="mb-3" style="display: none;">
-                <div id="smart-chips" class="calm-animate" style="display: flex; gap: var(--space-2); flex-wrap: wrap;"></div>
+                <div id="smart-chips" class="calm-animate" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
             </div>
             
-            <!-- Suggested Prompts -->
-            <div id="suggested-prompts" class="mb-3" style="display: flex; gap: var(--space-2); flex-wrap: wrap;">
-                <button class="prompt-chip" data-prompt="What's due today?">What's due today?</button>
-                <button class="prompt-chip" data-prompt="Summarize yesterday's meetings">Summarize yesterday</button>
-                <button class="prompt-chip" data-prompt="Show action items">Show action items</button>
+            <!-- Suggested Prompts (Initial fallback, hidden once smart chips load) -->
+            <div id="suggested-prompts" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                <button class="prompt-chip" data-prompt="Show 3 overdue tasks">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink: 0;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Show 3 overdue tasks
+                </button>
+                <button class="prompt-chip" data-prompt="What's due today?">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink: 0;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    What's due today?
+                </button>
+                <button class="prompt-chip" data-prompt="Summarize yesterday's meetings">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink: 0;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                    Summarize yesterday's meetings
+                </button>
             </div>
 
             <form id="chat-form" style="display: flex; gap: var(--space-2); align-items: end;">
