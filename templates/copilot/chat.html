@@ -75,6 +75,48 @@
     border-color: var(--color-success);
 }
 
+/* Action link buttons (from markdown [text](#) patterns) */
+.copilot-action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    margin: 2px 4px 2px 0;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark, #4a4af0) 100%);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.copilot-action-link:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    filter: brightness(1.1);
+}
+
+.copilot-action-link:active {
+    transform: translateY(0);
+}
+
+/* Regular links (external URLs) */
+.copilot-link {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-decoration-color: rgba(99, 102, 241, 0.3);
+    text-underline-offset: 2px;
+    transition: all 0.2s ease;
+}
+
+.copilot-link:hover {
+    text-decoration-color: var(--color-primary);
+    color: var(--color-primary-light, #818cf8);
+}
+
 /* Voice input button */
 .voice-btn {
     padding: var(--space-3);
@@ -981,6 +1023,17 @@ function processMarkdown(text) {
     // Process italic (but not already processed bold markers)
     processed = processed.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
     
+    // Process markdown links [text](url)
+    processed = processed.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
+        // For internal actions with # or empty urls, create action buttons
+        if (url === '#' || url.startsWith('action:')) {
+            const action = url.replace('action:', '') || text.toLowerCase().replace(/\s+/g, '_');
+            return `<button class="copilot-action-link" onclick="handleCopilotAction('${action}')">${text}</button>`;
+        }
+        // For external URLs, create regular links
+        return `<a href="${url}" class="copilot-link" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    });
+    
     // Process bullet lists - collect all consecutive list items
     processed = processed.replace(/((?:^- .+$\n?)+)/gm, (match) => {
         const items = match.trim().split('\n').map(line => {
@@ -1121,6 +1174,60 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============ Action Link Handler ============
+
+/**
+ * Handle clicks on action links generated from markdown [text](url) patterns
+ * Maps action names to copilot behaviors (navigation, queries, etc.)
+ */
+function handleCopilotAction(action) {
+    console.log('[Copilot] Action triggered:', action);
+    
+    const actionRoutes = {
+        'view_upcoming_tasks': '/tasks?filter=upcoming',
+        'review_completed_tasks': '/tasks?filter=completed',
+        'view_tasks': '/tasks',
+        'view_analytics': '/analytics',
+        'view_calendar': '/calendar',
+        'view_meetings': '/meetings',
+        'schedule_meeting': '/calendar/new',
+        'create_task': null // Special handling
+    };
+    
+    // Check if it's a navigation action
+    if (actionRoutes[action]) {
+        window.location.href = actionRoutes[action];
+        return;
+    }
+    
+    // Special actions that trigger copilot queries
+    const queryActions = {
+        'show_overdue_tasks': 'Show my overdue tasks',
+        'show_blockers': 'What are my current blockers?',
+        'summarize_yesterday': 'Summarize yesterday\'s meetings',
+        'what_decisions': 'What decisions were made recently?'
+    };
+    
+    if (queryActions[action]) {
+        // Trigger a new query
+        const query = queryActions[action];
+        chatInput.value = query;
+        sendMessage();
+        return;
+    }
+    
+    // For create_task, show the input with a prompt
+    if (action === 'create_task') {
+        chatInput.value = 'Create a task: ';
+        chatInput.focus();
+        return;
+    }
+    
+    // Default: navigate to tasks
+    console.log('[Copilot] Unknown action, defaulting to tasks page');
+    window.location.href = '/tasks';
 }
 
 // ============ Cross-Surface Sync Handlers (CROWN⁹ Event #10) ============

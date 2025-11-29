@@ -669,6 +669,7 @@ def _build_query_context(
                     keywords.append(w + 'ing')  # transition -> transitioning
             
             keywords = list(set(keywords))  # Remove duplicates
+            logger.info(f"[COPILOT] Query keywords extracted: {keywords} from '{query_text}'")
             
             if keywords:
                 # Search tasks matching keywords in title or description
@@ -684,6 +685,8 @@ def _build_query_context(
                     ))\
                     .limit(10)\
                     .all()
+                
+                logger.info(f"[COPILOT] Keyword search found {len(relevant_tasks)} tasks")
                 
                 if relevant_tasks:
                     today = date.today()
@@ -702,6 +705,7 @@ def _build_query_context(
                             'query_match': True
                         }
                         query_relevant.append(task_data)
+                        logger.info(f"[COPILOT] Query-relevant task: id={task_data['id']}, title='{task_data['title']}'")
                     
                     # Add query-relevant tasks to context (avoid duplicates)
                     existing_ids = {t['id'] for t in context.get('recent_tasks', [])}
@@ -710,7 +714,9 @@ def _build_query_context(
                             context['recent_tasks'].append(task)
                     
                     context['query_relevant_tasks'] = query_relevant
-                    logger.debug(f"Found {len(query_relevant)} query-relevant tasks")
+                    logger.info(f"[COPILOT] Added {len(query_relevant)} query-relevant tasks to context")
+                else:
+                    logger.info(f"[COPILOT] No tasks found matching keywords: {keywords}")
             
             # Also get semantic context from embeddings (RAG)
             semantic_contexts = copilot_memory_service.get_semantic_context(
