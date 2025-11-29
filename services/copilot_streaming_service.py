@@ -647,11 +647,14 @@ CRITICAL GUIDELINES:
                 relevant = context['query_relevant_tasks']
                 relevant_lines = []
                 for t in relevant[:5]:
-                    status_emoji = '✅' if t.get('status') == 'completed' else '🔴' if t.get('is_overdue') else '📋'
+                    status = t.get('status', 'todo')
+                    status_label = status.upper() if status else 'TODO'
+                    status_emoji = '✅' if status == 'completed' else '🔴' if t.get('is_overdue') else '📋'
                     priority = t.get('priority', 'medium')
                     priority_tag = f"[{priority.upper()}]" if priority in ['high', 'urgent'] else ""
                     due = f" (due: {t.get('due_date')})" if t.get('due_date') else ""
-                    relevant_lines.append(f"{status_emoji} {t.get('title', 'Untitled')} {priority_tag}{due}")
+                    # Include explicit status text for AI accuracy
+                    relevant_lines.append(f"{status_emoji} {t.get('title', 'Untitled')} - STATUS: {status_label} {priority_tag}{due}")
                 context_parts.append(f"🎯 MATCHING TASKS (found {len(relevant)} matching your query):\n" + "\n".join(relevant_lines))
             
             # Recent tasks
@@ -659,11 +662,14 @@ CRITICAL GUIDELINES:
                 tasks = context['recent_tasks']
                 task_lines = []
                 for t in tasks[:10]:  # Increased from 7 to 10 for better coverage
-                    status_emoji = '✅' if t.get('status') == 'completed' else '🔴' if t.get('is_overdue') else '📋'
+                    status = t.get('status', 'todo')
+                    status_label = status.upper() if status else 'TODO'
+                    status_emoji = '✅' if status == 'completed' else '🔴' if t.get('is_overdue') else '📋'
                     priority = t.get('priority', 'medium')
                     priority_tag = f"[{priority.upper()}]" if priority in ['high', 'urgent'] else ""
                     due = f" (due: {t.get('due_date')})" if t.get('due_date') else ""
-                    task_lines.append(f"{status_emoji} {t.get('title', 'Untitled')} {priority_tag}{due}")
+                    # Include explicit status text for AI accuracy
+                    task_lines.append(f"{status_emoji} {t.get('title', 'Untitled')} [{status_label}] {priority_tag}{due}")
                 context_parts.append(f"📋 RECENT TASKS ({len(tasks)}):\n" + "\n".join(task_lines))
             
             # Recent meetings
