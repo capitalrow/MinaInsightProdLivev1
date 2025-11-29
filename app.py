@@ -1134,70 +1134,6 @@ def create_app() -> Flask:
 # WSGI entrypoints
 app = create_app()
 
-@app.route("/api/memory/search", methods=["POST"])
-def search_memory():
-    try:
-        data = request.get_json()
-        query = data.get("query")
-        if not query:
-            return jsonify({"error": "Missing query"}), 400
-
-        # 1. Create embedding for the query
-        embed_response = openai.embeddings.create(
-            input=query,
-            model="text-embedding-3-large"
-        )
-        query_embedding = embed_response.data[0].embedding
-
-        # 2. Run similarity search
-        conn = get_pg_connection()
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT id, content,
-                   1 - (embedding <=> %s::vector) AS similarity
-            FROM memory_embeddings
-            ORDER BY similarity DESC
-            LIMIT 5;
-        """, (query_embedding,))
-
-        results = [
-            {"id": r[0], "content": r[1], "similarity": round(r[2], 4)}
-            for r in cur.fetchall()
-        ]
-
-        cur.close()
-        conn.close()
-
-        return jsonify({"results": results, "count": len(results)}), 200
-
-    except Exception as e:
-        print("❌ Error in search_memory:", e)
-        return jsonify({"error": str(e)}), 500
-        
-logger = get_logger()
-logger.info("🚀 Starting Mina backend...")
-
-app.register_blueprint(metrics_bp)
-
-@app.before_request
-def before_request():
-    logger.info(f"Incoming request: {request.method} {request.path}")
-
-@app.after_request
-def after_request(response):
-    logger.info(f"Completed: {request.path} [{response.status_code}]")
-    return response
-
-# graceful shutdown for local/threading runs
-def _shutdown(*_):
-    app.logger.info("Shutting down gracefully…")
-    # In threading mode, there is no socketio.stop(); process will exit.
-signal.signal(signal.SIGTERM, _shutdown)
-signal.signal(signal.SIGINT, _shutdown)
-
-app = create_app()
-
 # Initialize Memory Persistence safely after Flask app context is ready
 with app.app_context():
     try:
@@ -1298,8 +1234,3 @@ if __name__ == "__main__":
         app.config.get("SOCKETIO_PATH", "/socket.io")
     )
     socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False, log_output=True)
-
-if __name__ == "__main__":
-    app.logger.info("🚀 Mina at http://0.0.0.0:5000  (Socket.IO path %s)", app.config.get("SOCKETIO_PATH", "/socket.io"))
-    socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False, log_output=True)
-
