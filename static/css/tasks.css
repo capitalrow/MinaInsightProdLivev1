@@ -9,8 +9,48 @@
 
 .tasks-container {
   min-height: calc(100vh - var(--header-height));
-  padding: var(--space-8) 0;
+  padding: var(--space-8) var(--space-4);
   max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Responsive container for all screen sizes */
+@media (max-width: 1240px) {
+  .tasks-container {
+    max-width: 100%;
+    padding: var(--space-6) var(--space-4);
+  }
+}
+
+@media (max-width: 640px) {
+  .tasks-container {
+    padding: var(--space-4) var(--space-3);
+  }
+  
+  .tasks-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  
+  .task-filters {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  
+  .filter-tab {
+    flex: 1 1 auto;
+    text-align: center;
+    min-width: 80px;
+  }
 }
 
 .tasks-header {
@@ -2187,34 +2227,37 @@
   gap: 8px;
 }
 
-/* Priority Badge - Compact, Vibrant */
+/* Priority Badge - Muted, Refined (Linear-inspired) */
 .priority-badge {
-  padding: 4px 10px;
-  border-radius: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
   font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-weight: 500;
+  text-transform: capitalize;
+  letter-spacing: 0;
   white-space: nowrap;
-  line-height: 1;
+  line-height: 1.2;
 }
 
+/* High priority: Subtle red, not screaming */
 .priority-badge.priority-high {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc7a7a;
+  border: none;
 }
 
+/* Medium priority: Muted amber, barely visible */
 .priority-badge.priority-medium {
-  background: rgba(251, 191, 36, 0.15);
-  color: #fde68a;
-  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: rgba(156, 163, 175, 0.06);
+  color: #9ca3af;
+  border: none;
 }
 
+/* Low priority: Near-invisible gray */
 .priority-badge.priority-low {
-  background: rgba(156, 163, 175, 0.15);
-  color: #d1d5db;
-  border: 1px solid rgba(156, 163, 175, 0.3);
+  background: transparent;
+  color: #6b7280;
+  border: none;
 }
 
 /* CROWN⁴.6: Priority change animation */

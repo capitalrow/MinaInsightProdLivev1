@@ -145,22 +145,40 @@ class TaskBootstrap {
                 window.CROWNTelemetry.recordMetric('checksum_valid', checksumValid ? 1 : 0);
             }
 
+            // CRITICAL FIX: Clear stale pendingOperations from memory BEFORE rehydration
+            // This ensures zombie operations don't persist in the UI
+            if (window.optimisticUI) {
+                const staleOpIds = await this._getStaleOperationIds();
+                if (staleOpIds.length > 0) {
+                    console.log(`🧹 [Bootstrap] Clearing ${staleOpIds.length} stale operations from memory`);
+                    staleOpIds.forEach(opId => {
+                        window.optimisticUI.pendingOperations.delete(opId);
+                    });
+                }
+            }
+
             // Step 4: Start background sync (with reconciliation if needed)
             this.syncInBackground();
 
             this.initialized = true;
 
-            // CROWN⁴.6 FIX: Delay event emission to ensure PerformanceValidator listener is attached
-            // Use requestAnimationFrame to guarantee listener registration completes first
+            // CROWN⁴.6: Emit bootstrap complete event AFTER paint
+            // Use double-rAF to ensure browser has actually painted the DOM
+            // This gives telemetry subscribers time to attach and captures true visual completion
             requestAnimationFrame(() => {
-                document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
-                    detail: {
-                        cached_tasks: cachedTasks.length,
-                        first_paint_ms: firstPaintTime,
-                        meets_target: firstPaintTime < 200
-                    }
-                }));
-                console.log(`📊 [Bootstrap] Emitted first paint event: ${firstPaintTime.toFixed(2)}ms`);
+                requestAnimationFrame(() => {
+                    const actualFirstPaint = performance.now() - this.perf.cache_load_start;
+                    document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+                        detail: {
+                            cached_tasks: cachedTasks.length,
+                            first_paint_ms: actualFirstPaint,
+                            cache_load_ms: cacheLoadTime,
+                            meets_target: actualFirstPaint < 200,
+                            source: 'cache'
+                        }
+                    }));
+                    console.log(`📊 [Bootstrap] Emitted first paint event: ${actualFirstPaint.toFixed(2)}ms (after paint)`);
+                });
             });
 
             return {
@@ -421,6 +439,13 @@ class TaskBootstrap {
     async renderTasks(tasks, options = {}) {
         console.log(`🔧 [TaskBootstrap] renderTasks() called with ${tasks?.length || 0} tasks`);
         
+        // CROWN⁴.6: Hydrate TaskStateStore FIRST - single source of truth
+        if (tasks && Array.isArray(tasks) && tasks.length > 0 && window.taskStateStore) {
+            const source = options.fromCache ? 'cache' : 'server';
+            window.taskStateStore.hydrate(tasks, source);
+            console.log(`[TaskBootstrap] Hydrated TaskStateStore from ${source}`);
+        }
+        
         const container = document.getElementById('tasks-list-container');
         
         if (!container) {
@@ -530,8 +555,10 @@ class TaskBootstrap {
         // Attach event listeners (checkbox toggle, etc.)
         this._attachEventListeners();
 
-        // Update counters
-        this.updateCounters(tasks);
+        // CROWN⁴.6 FIX: Always update counters after render to match visible DOM
+        // Use sync DOM-based counting to avoid race conditions
+        // This ensures counters match what user sees regardless of cache/server source
+        this._updateCountersFromDOM();
 
         // Show cache indicator if from cache
         if (options.fromCache) {
@@ -825,42 +852,90 @@ class TaskBootstrap {
 
     /**
      * Update task counters in UI
-     * CRITICAL: This must ALWAYS calculate counts from ALL tasks, not filtered subset
-     * @param {Array} tasks - Currently displayed tasks (may be filtered)
+     * CROWN⁴.6: Delegates to TaskStateStore for single source of truth
+     * Kept for backward compatibility with external callers
+     * @param {Array} tasks - Optional, will hydrate TaskStateStore if provided
      */
     async updateCounters(tasks) {
-        // Fetch ALL tasks from cache to get correct totals
-        // The 'tasks' parameter might be filtered, which would give wrong counts
-        const allTasks = await this.cache.getAllTasks();
+        // CROWN⁴.6: If tasks provided, hydrate the store first
+        if (tasks && Array.isArray(tasks) && tasks.length > 0) {
+            if (window.taskStateStore) {
+                window.taskStateStore.hydrate(tasks, 'updateCounters');
+            }
+        }
         
-        const counters = {
-            all: allTasks.length,
-            pending: allTasks.filter(t => t.status === 'todo' || t.status === 'in_progress').length,
-            todo: allTasks.filter(t => t.status === 'todo').length,
-            in_progress: allTasks.filter(t => t.status === 'in_progress').length,
-            completed: allTasks.filter(t => t.status === 'completed').length,
-            overdue: allTasks.filter(t => this.isDueDateOverdue(t.due_date) && t.status !== 'completed').length
-        };
+        // Delegate to single source of truth
+        console.log('[TaskBootstrap] updateCounters() delegating to TaskStateStore');
+        this._updateCountersFromDOM();
+    }
 
-        // Update counter badges with emotional pulse animation
+    /**
+     * CROWN⁴.6: Counter update - delegates to TaskStateStore
+     * TaskStateStore is the ONLY source of truth for counter values
+     * This method triggers a refresh from the store
+     */
+    _updateCountersFromDOM() {
+        // PRIMARY: Use TaskStateStore if available (single source of truth)
+        if (window.taskStateStore && window.taskStateStore._initialized) {
+            window.taskStateStore.forceRefresh();
+            return;
+        }
+        
+        // FALLBACK: Build store from DOM if TaskStateStore not ready
+        // This only happens during initial page load before hydration
+        console.log('[TaskBootstrap] TaskStateStore not ready, building from DOM...');
+        
+        const cards = document.querySelectorAll('.task-card');
+        const tasks = [];
+        
+        cards.forEach(card => {
+            const taskId = card.dataset?.taskId;
+            if (!taskId) return;
+            
+            // Skip temp tasks
+            if (taskId.startsWith('temp_') || taskId.includes('_temp_')) return;
+            
+            // Skip deleted tasks
+            if (card.classList.contains('deleting') || card.dataset?.deleted === 'true') return;
+            
+            tasks.push({
+                id: taskId,
+                status: card.dataset?.status || 'todo',
+                workspace_id: window.WORKSPACE_ID
+            });
+        });
+        
+        // Hydrate store with DOM-derived tasks
+        if (window.taskStateStore) {
+            window.taskStateStore.hydrate(tasks, 'dom-fallback');
+        } else {
+            // Ultra-fallback: direct badge update (should rarely happen)
+            this._directBadgeUpdate(tasks);
+        }
+    }
+    
+    /**
+     * Ultra-fallback direct badge update when TaskStateStore unavailable
+     * @param {Array} tasks
+     */
+    _directBadgeUpdate(tasks) {
+        const counters = { all: 0, active: 0, archived: 0 };
+        
+        tasks.forEach(task => {
+            counters.all++;
+            const status = (task.status || 'todo').toLowerCase();
+            if (status === 'completed' || status === 'cancelled') {
+                counters.archived++;
+            } else {
+                counters.active++;
+            }
+        });
+        
+        console.log('[TaskBootstrap] Direct badge update (fallback):', counters);
+        
         Object.entries(counters).forEach(([key, count]) => {
             const badge = document.querySelector(`[data-counter="${key}"]`);
-            if (badge) {
-                const oldCount = parseInt(badge.textContent, 10) || 0;
-                badge.textContent = count;
-                
-                // Add CROWN⁴.5 emotional pulse animation on counter change
-                if (oldCount !== count && window.emotionalAnimations) {
-                    window.emotionalAnimations.pulse(badge, {
-                        emotion_cue: 'counter_update'
-                    });
-                } else {
-                    // Fallback: simple CSS animation
-                    badge.classList.remove('counter-pulse');
-                    void badge.offsetWidth; // Trigger reflow
-                    badge.classList.add('counter-pulse');
-                }
-            }
+            if (badge) badge.textContent = count;
         });
     }
 
@@ -920,7 +995,22 @@ class TaskBootstrap {
             const syncTime = this.perf.sync_end - this.perf.sync_start;
             console.log(`✅ Background sync completed in ${syncTime.toFixed(2)}ms (${serverTasks.length} tasks)`);
 
-            // Update cache with server data
+            // CROWN⁴.6 FIX: Don't save empty results to cache if we already have tasks
+            // This prevents wiping out server-rendered content from cache
+            const container = document.getElementById('tasks-list-container');
+            const hasExistingTasks = container && container.querySelectorAll('.task-card').length > 0;
+            
+            if (serverTasks.length === 0 && hasExistingTasks) {
+                console.warn('⚠️ Sync returned 0 tasks but DOM has content - preserving cache');
+                // Don't save empty to cache, don't re-render
+                // Just emit event and return
+                window.dispatchEvent(new CustomEvent('tasks:sync:success', {
+                    detail: { tasks: serverTasks, sync_time_ms: syncTime, preserved_cache: true }
+                }));
+                return;
+            }
+            
+            // Update cache with server data (only if we have data OR truly empty)
             await this.cache.saveTasks(serverTasks);
             
             // CROWN⁴.5: Store server checksum for future validation
@@ -993,6 +1083,49 @@ class TaskBootstrap {
             console.log(`✅ Compacted ${result.compacted} events`);
         }
     }
+    
+    /**
+     * CRITICAL FIX: Get operation IDs for stale operations older than threshold
+     * These need to be cleared from in-memory pendingOperations map
+     * @returns {Promise<Array<string>>} Array of stale operation IDs
+     */
+    async _getStaleOperationIds() {
+        try {
+            await this.cache.init();
+            
+            return new Promise((resolve, reject) => {
+                const tx = this.cache.db.transaction(['offline_queue'], 'readonly');
+                const store = tx.objectStore('offline_queue');
+                const request = store.getAll();
+                
+                request.onsuccess = () => {
+                    const ops = request.result || [];
+                    const now = Date.now();
+                    const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+                    
+                    const staleOpIds = ops
+                        .filter(op => {
+                            const opTime = op.timestamp ? new Date(op.timestamp).getTime() : 0;
+                            const opAge = now - opTime;
+                            return opAge > STALE_THRESHOLD_MS && op.type === 'create';
+                        })
+                        .map(op => op.operation_id)
+                        .filter(Boolean);
+                    
+                    console.log(`🧹 [Bootstrap] Found ${staleOpIds.length} stale operation IDs`);
+                    resolve(staleOpIds);
+                };
+                
+                request.onerror = () => {
+                    console.error('❌ Failed to get stale operation IDs:', request.error);
+                    resolve([]); // Return empty on error, don't block bootstrap
+                };
+            });
+        } catch (error) {
+            console.error('❌ _getStaleOperationIds failed:', error);
+            return [];
+        }
+    }
 
     /**
      * Fallback to server-only loading
@@ -1000,6 +1133,7 @@ class TaskBootstrap {
      */
     async fallbackToServer() {
         console.log('⚠️ Falling back to server-only loading...');
+        const fallbackStart = performance.now();
         
         try {
             const response = await fetch('/api/tasks/', {
@@ -1018,6 +1152,23 @@ class TaskBootstrap {
             const tasks = data.tasks || [];
 
             await this.renderTasks(tasks, { fromCache: false });
+            
+            // CROWN⁴.6: Emit bootstrap complete event using double-rAF for fallback path
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const firstPaintTime = performance.now() - fallbackStart;
+                    document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+                        detail: {
+                            cached_tasks: 0,
+                            first_paint_ms: firstPaintTime,
+                            cache_load_ms: 0,
+                            meets_target: firstPaintTime < 200,
+                            source: 'server_fallback'
+                        }
+                    }));
+                    console.log(`📊 [Fallback] Emitted first paint event: ${firstPaintTime.toFixed(2)}ms`);
+                });
+            });
 
             return {
                 success: true,
@@ -1027,6 +1178,24 @@ class TaskBootstrap {
             };
         } catch (error) {
             console.error('❌ Fallback failed:', error);
+            
+            // CROWN⁴.6: Still emit event on error so First Paint is recorded (with error state)
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const firstPaintTime = performance.now() - fallbackStart;
+                    document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+                        detail: {
+                            cached_tasks: 0,
+                            first_paint_ms: firstPaintTime,
+                            cache_load_ms: 0,
+                            meets_target: false,
+                            source: 'error',
+                            error: error.message
+                        }
+                    }));
+                    console.log(`📊 [Error] Emitted first paint event: ${firstPaintTime.toFixed(2)}ms`);
+                });
+            });
             
             // CROWN⁴.5: Show error state on complete failure
             this.showErrorState(error.message || 'Unable to load tasks from server. Please check your connection.');
@@ -1118,10 +1287,16 @@ class TaskBootstrap {
     }
 }
 
-// Export singleton
-window.taskBootstrap = new TaskBootstrap();
+// Export class for orchestrator
+window.TaskBootstrap = TaskBootstrap;
 
-console.log('🚀 CROWN⁴.5 TaskBootstrap loaded');
+// Auto-instantiate if taskCache is ready
+if (window.taskCache && window.taskCache.ready) {
+    window.taskBootstrap = new TaskBootstrap();
+    console.log('🚀 CROWN⁴.5 TaskBootstrap loaded (auto-instantiated)');
+} else {
+    console.log('🚀 CROWN⁴.5 TaskBootstrap class loaded (orchestrator will instantiate)');
+}
 
 // ========================================
 // CROWN⁴.5 Empty/Loading/Error State Event Handlers

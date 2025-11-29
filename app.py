@@ -6,10 +6,10 @@ import logging
 import uuid
 from typing import Optional
 from werkzeug.middleware.proxy_fix import ProxyFix
-from flask import Flask, render_template, request, g, jsonify
+from flask import Flask, render_template, request, g, jsonify, flash, redirect, url_for
 from flask_socketio import SocketIO
 from flask_login import LoginManager
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
@@ -900,21 +900,9 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.error(f"Failed to register ops routes: {e}")
     
-    # Missing API endpoints - temporarily disabled due to circular import
-    # Quick fix for analytics and meetings endpoints
-    try:
-        from routes.quick_analytics_fix import quick_analytics_bp
-        app.register_blueprint(quick_analytics_bp)
-        app.logger.info("Quick analytics fix registered")
-    except Exception as e:
-        app.logger.error(f"Failed to register quick analytics fix: {e}")
-        
-    try:
-        from routes.meetings_api_fix import meetings_api_fix_bp
-        app.register_blueprint(meetings_api_fix_bp)
-        app.logger.info("Quick meetings API fix registered")
-    except Exception as e:
-        app.logger.error(f"Failed to register meetings API fix: {e}")
+    # Mock API fix blueprints removed - using real implementations:
+    # - api_meetings_bp (routes/api_meetings.py) - Real database queries
+    # - api_analytics_bp (routes/api_analytics.py) - Real analytics with workspace filtering
     
     # CROWN 4.6 Sessions API for delta synchronization
     try:
@@ -956,9 +944,60 @@ def create_app() -> Flask:
     def health():
         return {"ok": True, "uptime": True}, 200
 
+    # CSRF token refresh endpoint for auto-recovery (enterprise pattern)
+    @app.get("/api/csrf-token")
+    def get_csrf_token():
+        """
+        Provide fresh CSRF token for auto-recovery.
+        Used by frontend to silently retry failed requests.
+        """
+        from flask_wtf.csrf import generate_csrf
+        return jsonify({'token': generate_csrf()})
+
     # Security-hardened error handlers - prevent information leakage
+    
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        """
+        Enterprise-grade CSRF error handling.
+        - Comprehensive logging for security monitoring
+        - User-friendly messages (no technical jargon)
+        - API vs browser differentiation
+        - Fresh token provision for auto-retry
+        """
+        from flask_wtf.csrf import generate_csrf
+        
+        app.logger.warning(
+            f"CSRF validation failed | "
+            f"IP: {request.remote_addr} | "
+            f"Endpoint: {request.endpoint} | "
+            f"User-Agent: {request.headers.get('User-Agent', 'unknown')[:100]} | "
+            f"Referer: {request.headers.get('Referer', 'none')} | "
+            f"Reason: {e.description}"
+        )
+        
+        if request.accept_mimetypes.accept_html and not request.path.startswith('/api/'):
+            flash('Your session expired. Please try again.', 'warning')
+            referrer = request.referrer or url_for('auth.login')
+            return redirect(referrer)
+        
+        new_token = generate_csrf()
+        return jsonify({
+            'error': 'csrf_token_expired',
+            'message': 'Session expired. Please refresh and try again.',
+            'new_token': new_token,
+            'refresh_required': True,
+            'request_id': g.get('request_id')
+        }), 419
+    
     @app.errorhandler(400)
     def bad_request(e):
+        # For browser form submissions on non-API routes, show a user-friendly page
+        if request.accept_mimetypes.accept_html and not request.path.startswith('/api/'):
+            flash('There was a problem with your request. Please try again.', 'error')
+            referrer = request.referrer or url_for('main.index')
+            return redirect(referrer)
+        
         return jsonify({
             'error': 'bad_request',
             'message': 'The request could not be understood',
@@ -1092,70 +1131,6 @@ def create_app() -> Flask:
 # WSGI entrypoints
 app = create_app()
 
-@app.route("/api/memory/search", methods=["POST"])
-def search_memory():
-    try:
-        data = request.get_json()
-        query = data.get("query")
-        if not query:
-            return jsonify({"error": "Missing query"}), 400
-
-        # 1. Create embedding for the query
-        embed_response = openai.embeddings.create(
-            input=query,
-            model="text-embedding-3-large"
-        )
-        query_embedding = embed_response.data[0].embedding
-
-        # 2. Run similarity search
-        conn = get_pg_connection()
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT id, content,
-                   1 - (embedding <=> %s::vector) AS similarity
-            FROM memory_embeddings
-            ORDER BY similarity DESC
-            LIMIT 5;
-        """, (query_embedding,))
-
-        results = [
-            {"id": r[0], "content": r[1], "similarity": round(r[2], 4)}
-            for r in cur.fetchall()
-        ]
-
-        cur.close()
-        conn.close()
-
-        return jsonify({"results": results, "count": len(results)}), 200
-
-    except Exception as e:
-        print("❌ Error in search_memory:", e)
-        return jsonify({"error": str(e)}), 500
-        
-logger = get_logger()
-logger.info("🚀 Starting Mina backend...")
-
-app.register_blueprint(metrics_bp)
-
-@app.before_request
-def before_request():
-    logger.info(f"Incoming request: {request.method} {request.path}")
-
-@app.after_request
-def after_request(response):
-    logger.info(f"Completed: {request.path} [{response.status_code}]")
-    return response
-
-# graceful shutdown for local/threading runs
-def _shutdown(*_):
-    app.logger.info("Shutting down gracefully…")
-    # In threading mode, there is no socketio.stop(); process will exit.
-signal.signal(signal.SIGTERM, _shutdown)
-signal.signal(signal.SIGINT, _shutdown)
-
-app = create_app()
-
 # Initialize Memory Persistence safely after Flask app context is ready
 with app.app_context():
     try:
@@ -1256,8 +1231,3 @@ if __name__ == "__main__":
         app.config.get("SOCKETIO_PATH", "/socket.io")
     )
     socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False, log_output=True)
-
-if __name__ == "__main__":
-    app.logger.info("🚀 Mina at http://0.0.0.0:5000  (Socket.IO path %s)", app.config.get("SOCKETIO_PATH", "/socket.io"))
-    socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False, log_output=True)
-

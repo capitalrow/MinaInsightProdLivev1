@@ -565,51 +565,23 @@ class TaskActionsMenu {
  ***************************************************************/
 window.TaskActionsMenu = TaskActionsMenu;
 
-(function bootstrapTaskActionsMenu() {
-    let retryTimer = null;
-
-    const markReady = (instance, source = 'bootstrap') => {
-        window.taskActionsMenu = instance;
-        window.__taskActionsMenuReady = true;
-        window.dispatchEvent(new CustomEvent('taskActionsMenu:ready', {
-            detail: { source }
-        }));
-        console.log(`[TaskActionsMenu] Ready via ${source}`);
-        return instance;
-    };
-
-    const attemptInit = (source) => {
-        if (window.__taskActionsMenuReady || window.taskActionsMenu) {
-            return window.taskActionsMenu;
+// Auto-initialize with retry logic for dependencies
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("[TaskActionsMenu] DOMContentLoaded fired");
+    
+    const initMenu = () => {
+        if (window.taskActionsMenu) {
+            console.log("[TaskActionsMenu] Already initialized");
+            return;
         }
-
-        if (!window.TaskActionsMenu) {
-            console.error('[TaskActionsMenu] Class not available when attempting init');
-            return null;
-        }
-
-        if (!window.optimisticUI || !window.taskStore) {
-            console.warn('[TaskActionsMenu] Dependencies missing (optimisticUI/taskStore); waiting...');
-            if (!retryTimer) {
-                retryTimer = setTimeout(() => {
-                    retryTimer = null;
-                    attemptInit(source || 'retry');
-                }, 120);
-            }
-            return null;
-        }
-
-        console.log('[TaskActionsMenu] Initializing with optimisticUI + taskStore ready');
-        return markReady(new TaskActionsMenu(window.optimisticUI), source || 'auto');
-    };
-
-    const ensureAfterDom = (source) => {
-        const init = () => attemptInit(source || 'dom');
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init, { once: true });
+        
+        if (window.optimisticUI) {
+            console.log("[TaskActionsMenu] Dependencies ready, initializing...");
+            window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
+            console.log("[TaskActionsMenu] Initialization complete");
         } else {
-            init();
+            console.log("[TaskActionsMenu] Awaiting optimisticUI...");
+            setTimeout(initMenu, 100);
         }
 
         window.addEventListener('taskStoreReady', () => attemptInit('taskStoreReady'));
@@ -617,7 +589,7 @@ window.TaskActionsMenu = TaskActionsMenu;
 
         return window.taskActionsMenu;
     };
-
-    window.bootstrapTaskActionsMenu = ensureAfterDom;
-    ensureAfterDom('bootstrap');
-})();
+    
+    // Start initialization with short delay to allow other modules to load
+    setTimeout(initMenu, 50);
+});

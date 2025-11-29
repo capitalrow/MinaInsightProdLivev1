@@ -124,8 +124,16 @@ class TaskSearchSort {
             });
         });
         
-        // Initial count update
-        this.updateCounts();
+        // Apply initial filter immediately if tasks already in DOM (server-rendered)
+        // This ensures filter counts match tab counters on page load
+        const initialTasks = this.tasksContainer?.querySelectorAll('.task-card') || [];
+        if (initialTasks.length > 0) {
+            console.log(`[TaskSearchSort] Found ${initialTasks.length} server-rendered tasks, applying initial filter`);
+            this.applyFiltersAndSort();
+        } else {
+            // If no tasks in DOM yet, the bootstrap:complete event will trigger filtering
+            console.log('[TaskSearchSort] No tasks in DOM yet, waiting for bootstrap');
+        }
     }
 
     /**
@@ -270,18 +278,23 @@ class TaskSearchSort {
         });
 
         // 2. Apply archive filter (from filter tabs: All/Active/Archived)
-        // CRITICAL: Deleted tasks should NEVER show up, regardless of filter
-        visibleTasks = visibleTasks.filter(task => !task.dataset.deletedAt);
-
+        // Filter is based on task.status field: 'todo', 'in_progress', 'pending', 'blocked', 'completed', 'cancelled'
+        // Active = todo, in_progress, pending, blocked (not completed/cancelled)
+        // Archived = completed or cancelled
+        
         if (this.currentFilter === 'active') {
-            // Active = not archived (deleted already filtered above)
-            visibleTasks = visibleTasks.filter(task => !task.dataset.archivedAt);
+            visibleTasks = visibleTasks.filter(task => {
+                const status = task.dataset.status || 'todo';
+                return status !== 'completed' && status !== 'cancelled';
+            });
         } else if (this.currentFilter === 'archived') {
-            // Archived = has archived_at timestamp (deleted already filtered above)
-            visibleTasks = visibleTasks.filter(task => task.dataset.archivedAt);
+            visibleTasks = visibleTasks.filter(task => {
+                const status = task.dataset.status || 'todo';
+                return status === 'completed' || status === 'cancelled';
+            });
         }
-        // 'all' shows active + archived (deleted already filtered above)
-
+        // 'all' shows both active and archived tasks
+        
         // 2.5. Apply quick filter (from Quick Actions Bar)
         if (this.quickFilter) {
             visibleTasks = this.applyQuickFilterLogic(visibleTasks, this.quickFilter);

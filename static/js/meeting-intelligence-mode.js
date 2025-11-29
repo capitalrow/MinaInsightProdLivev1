@@ -31,7 +31,7 @@ class MeetingIntelligenceMode {
     /**
      * Toggle between meeting mode and normal mode
      */
-    toggle() {
+    async toggle() {
         this.isActive = !this.isActive;
         
         const toggleBtn = document.getElementById('meeting-intelligence-toggle');
@@ -42,10 +42,28 @@ class MeetingIntelligenceMode {
         // CROWN⁴.6: Add/remove 'meeting-mode-on' class to body
         document.body.classList.toggle('meeting-mode-on', this.isActive);
 
-        if (this.isActive) {
-            this.activateMeetingMode();
-        } else {
-            this.deactivateMeetingMode();
+        // CROWN⁴.6 FIX: Begin view transition to prevent counter flicker during DOM manipulation
+        if (window.taskStateStore) {
+            window.taskStateStore.beginViewTransition();
+        }
+
+        try {
+            if (this.isActive) {
+                await this.activateMeetingMode();
+                // CROWN⁴.6: Notify TaskStateStore of view mode change
+                window.dispatchEvent(new CustomEvent('meetingMode:activated'));
+            } else {
+                this.deactivateMeetingMode();
+                // CROWN⁴.6: Notify TaskStateStore of view mode change
+                window.dispatchEvent(new CustomEvent('meetingMode:deactivated'));
+            }
+        } finally {
+            // CROWN⁴.6 FIX: End view transition after DOM manipulation completes
+            requestAnimationFrame(() => {
+                if (window.taskStateStore) {
+                    window.taskStateStore.endViewTransition();
+                }
+            });
         }
     }
 
@@ -59,12 +77,43 @@ class MeetingIntelligenceMode {
         if (!container) return;
 
         // Get all task cards (live DOM elements)
-        const taskCards = Array.from(container.querySelectorAll('.task-card'));
+        let taskCards = Array.from(container.querySelectorAll('.task-card'));
+        
+        // CROWN⁴.6 FIX: If DOM is empty but cache has tasks, re-render from cache first
+        if (taskCards.length === 0 && window.cacheManager) {
+            console.log('[MeetingIntelligenceMode] DOM empty, attempting to restore from cache...');
+            try {
+                const cachedTasks = await window.cacheManager.getTasks();
+                if (cachedTasks && cachedTasks.length > 0) {
+                    console.log(`[MeetingIntelligenceMode] Found ${cachedTasks.length} tasks in cache, re-rendering...`);
+                    // Trigger a re-render from cache
+                    if (window.taskBootstrap) {
+                        await window.taskBootstrap.renderTasks(cachedTasks, { fromCache: true });
+                        // Re-query for task cards after render
+                        taskCards = Array.from(container.querySelectorAll('.task-card'));
+                    }
+                }
+            } catch (error) {
+                console.error('[MeetingIntelligenceMode] Failed to restore from cache:', error);
+            }
+        }
+        
         if (taskCards.length === 0) {
-            container.innerHTML = '<div class="empty-state">No tasks to group by meeting</div>';
+            console.log('[MeetingIntelligenceMode] No task cards found, showing empty state');
+            container.innerHTML = `
+                <div class="empty-state meeting-mode-empty">
+                    <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <h3>No tasks to group</h3>
+                    <p class="text-secondary">Create tasks from meetings to see them grouped here</p>
+                </div>
+            `;
             return;
         }
 
+        console.log(`[MeetingIntelligenceMode] Found ${taskCards.length} task cards to group`);
+        
         // Store references to live task elements
         this.taskElements = taskCards;
 
@@ -76,6 +125,7 @@ class MeetingIntelligenceMode {
 
         // Render grouped view (using live DOM elements)
         this.renderMeetingGroups(groupedTasks);
+        // Note: Counter update handled by view transition wrapper in toggle()
     }
 
     /**
@@ -103,6 +153,14 @@ class MeetingIntelligenceMode {
         this.taskElements = [];
 
         console.log('[MeetingIntelligenceMode] Normal mode restored with live elements');
+        
+        // Re-apply current filter so TaskSearchSort can update visibility
+        requestAnimationFrame(() => {
+            if (window.taskSearchSort) {
+                window.taskSearchSort.applyFiltersAndSort();
+            }
+            // Note: Counter update handled by view transition wrapper in toggle()
+        });
     }
 
     /**

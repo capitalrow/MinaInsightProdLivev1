@@ -17,11 +17,22 @@ from app import db
 from models.session import Session
 from models.segment import Segment
 from models.summary import Summary, SummaryLevel, SummaryStyle
-from server.models.memory_store import MemoryStore
 from services.text_matcher import TextMatcher
-
-memory = MemoryStore()
+import os
 import inspect
+
+# Lazy-load MemoryStore to avoid PostgreSQL connection at import time in test environments
+_memory = None
+
+def get_memory_store():
+    """Lazy load MemoryStore to avoid connection at import time in tests."""
+    global _memory
+    if _memory is None:
+        db_url = os.environ.get("DATABASE_URL", "")
+        if db_url.startswith("postgresql"):
+            from server.models.memory_store import MemoryStore
+            _memory = MemoryStore()
+    return _memory
 
 logger = logging.getLogger(__name__)
 text_matcher = TextMatcher()
@@ -366,18 +377,21 @@ class AnalysisService:
         logger.info(f"Generating summary for session {session_id}")
 
         # --- Memory-aware context (NEW) ---
+        memory_context = ""
         try:
-            memory_context = ""
-            related_memories = memory.search_memory(f"session_{session_id}", top_k=10)
-            if related_memories:
-                joined = "\n".join([m["content"] for m in related_memories])
-                memory_context = f"\n\nPreviously recalled notes:\n{joined}\n\n"
-                logger.info(f"Added {len(related_memories)} related memories to context.")
+            memory = get_memory_store()
+            if memory:
+                related_memories = memory.search_memory(f"session_{session_id}", top_k=10)
+                if related_memories:
+                    joined = "\n".join([m["content"] for m in related_memories])
+                    memory_context = f"\n\nPreviously recalled notes:\n{joined}\n\n"
+                    logger.info(f"Added {len(related_memories)} related memories to context.")
+                else:
+                    logger.info("No related memories found for this session.")
             else:
-                logger.info("No related memories found for this session.")
+                logger.info("Memory store not available, skipping memory retrieval.")
         except Exception as e:
             logger.warning(f"Memory retrieval skipped: {e}")
-            memory_context = ""
         # -----------------------------------
 
         # Load session and segments
@@ -442,11 +456,19 @@ class AnalysisService:
                     'validation_warning': validation_result['reason']
                 }
             else:
-                # Generate insights using configured engine with level and style
+                # Generate insights using OpenAI engine only - no mock fallbacks in production
                 if engine == 'openai_gpt':
                     summary_data = AnalysisService._analyse_with_openai(context_with_memory, level, style)
                 else:
-                    summary_data = AnalysisService._analyse_with_mock(context_with_memory, list(final_segments), level, style)
+                    # AI service unavailable - return informative error instead of fake data
+                    logger.error("AI analysis unavailable: OpenAI API key not configured")
+                    summary_data = {
+                        'summary_md': '## AI Analysis Unavailable\n\nThe AI-powered meeting analysis service is currently unavailable. Please ensure your OpenAI API key is properly configured to enable meeting summaries and insights.',
+                        'actions': [],
+                        'decisions': [],
+                        'risks': [],
+                        'error': 'AI service unavailable - OpenAI API key not configured'
+                    }
                 
                 # Attach any validation warnings to summary data for UI display
                 if validation_result.get('warning'):
@@ -460,24 +482,28 @@ class AnalysisService:
 
         # --- Store summary + key insights back into memory (NEW) ---
         try:
-            def _safe(text):
-                return text.strip() if isinstance(text, str) else ""
+            memory = get_memory_store()
+            if memory:
+                def _safe(text):
+                    return text.strip() if isinstance(text, str) else ""
 
-            # store main summary
-            if summary_data.get("summary_md"):
-                memory.add_memory(session_id, "summary_bot", _safe(summary_data["summary_md"]), source_type="summary")
+                # store main summary
+                if summary_data.get("summary_md"):
+                    memory.add_memory(session_id, "summary_bot", _safe(summary_data["summary_md"]), source_type="summary")
 
-            # store highlights / actions / decisions for semantic recall
-            for item in summary_data.get("actions", []) or []:
-                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="action_item")
+                # store highlights / actions / decisions for semantic recall
+                for item in summary_data.get("actions", []) or []:
+                    memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="action_item")
 
-            for item in summary_data.get("decisions", []) or []:
-                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="decision")
+                for item in summary_data.get("decisions", []) or []:
+                    memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="decision")
 
-            for item in summary_data.get("risks", []) or []:
-                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="risk")
+                for item in summary_data.get("risks", []) or []:
+                    memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="risk")
 
-            logger.info("Summary data stored back into MemoryStore successfully.")
+                logger.info("Summary data stored back into MemoryStore successfully.")
+            else:
+                logger.info("Memory store not available, skipping summary persistence to memory.")
         except Exception as e:
             logger.warning(f"Could not persist summary to MemoryStore: {e}")
         
@@ -995,144 +1021,6 @@ class AnalysisService:
                 return "standard_bullet"
             else:  # EXECUTIVE, ACTION default to executive for standard
                 return "standard_executive"
-    
-    @staticmethod
-    def _analyse_with_mock(context: str, segments: List[Segment], level: SummaryLevel, style: SummaryStyle) -> Dict:
-        """
-        Generate mock analysis for testing and development with multi-level and multi-style support.
-        
-        Args:
-            context: Meeting transcript context
-            segments: List of segments for analysis
-            level: Summary detail level
-            style: Summary style type
-            
-        Returns:
-            Mock analysis results dictionary
-        """
-        # Create realistic mock insights based on transcript content and style
-        word_count = len(context.split()) if context else 0
-        
-        # Generate different content based on level and style
-        brief_summary = "Key decisions were made during this meeting with several action items identified for follow-up."
-        
-        if level == SummaryLevel.BRIEF:
-            if style == SummaryStyle.ACTION:
-                summary_md = "## Action Summary\nCritical tasks were identified and assigned during this meeting."
-            else:
-                summary_md = "## Executive Brief\nStrategic discussions resulted in key business decisions."
-        elif level == SummaryLevel.DETAILED:
-            summary_md = f"""## Comprehensive Meeting Analysis
-
-### Overview
-This meeting encompassed {word_count} words of detailed discussion across multiple strategic and operational areas.
-
-### Strategic Outcomes
-- Key business decisions were finalized
-- Strategic direction was clarified
-- Resource allocation was discussed
-
-### Operational Details
-- Implementation plans were reviewed
-- Timeline considerations were addressed
-- Team responsibilities were assigned
-
-### Technical Considerations
-- Technical approaches were evaluated
-- Architecture decisions were made
-- Development priorities were set"""
-        else:  # STANDARD
-            if style == SummaryStyle.TECHNICAL:
-                summary_md = f"""## Technical Meeting Summary
-This meeting covered {word_count} words focusing on technical implementation and architecture decisions.
-
-### Technical Decisions
-- Architecture approaches were evaluated
-- Technology choices were made
-- Implementation strategies were discussed"""
-            else:
-                summary_md = f"""## Meeting Summary
-This meeting covered {word_count} words of discussion. Key topics discussed included the main agenda items and various decisions were made.
-
-### Key Discussion Points
-- Primary topics were addressed
-- Team collaboration was evident
-- Several action items were identified"""
-        
-        detailed_summary = f"""## Comprehensive Analysis
-
-This meeting involved extensive discussion across {word_count} words of content, covering strategic, operational, and technical aspects of the project.
-
-### Strategic Overview
-The meeting addressed high-level business objectives and strategic direction. Key stakeholders participated in decision-making processes that will impact future operations.
-
-### Operational Focus
-Day-to-day operational concerns were discussed, including resource allocation, timeline management, and team coordination.
-
-### Technical Considerations
-Technical implementation details were reviewed, including architecture decisions, technology choices, and development approaches.
-
-### Outcomes and Next Steps
-Multiple action items were identified with clear ownership and timelines. Follow-up meetings were scheduled to track progress."""
-        
-        # CRITICAL: Mock data must also pass validation to prevent hallucination
-        # Generate candidate mock actions
-        mock_actions_candidates = [
-            {"text": "Follow up on discussed action items", "owner": "unknown", "due": "unknown"},
-            {"text": "Prepare report based on meeting outcomes", "owner": "unknown", "due": "next week"}
-        ] if word_count > 50 else []
-        
-        # Validate mock actions against transcript (ZERO TOLERANCE for hallucination)
-        text_matcher_instance = TextMatcher()
-        if mock_actions_candidates and context:
-            logger.warning("[MOCK DATA] Validating mock actions against transcript...")
-            mock_actions = text_matcher_instance.validate_task_list(mock_actions_candidates, context)
-            rejected = len(mock_actions_candidates) - len(mock_actions)
-            if rejected > 0:
-                logger.warning(f"[MOCK DATA] ⚠️ Rejected {rejected} hallucinated mock tasks")
-        else:
-            mock_actions = []
-        
-        # Mock decisions
-        mock_decisions = [
-            {"text": "Agreed to proceed with the discussed approach"},
-            {"text": "Decided to schedule follow-up meeting if needed"}
-        ] if word_count > 30 else []
-        
-        # Mock risks
-        mock_risks = [
-            {"text": "Timeline may be challenging", "mitigation": "Regular check-ins to monitor progress"},
-            {"text": "Resource allocation needs clarification", "mitigation": "Schedule resource planning meeting"}
-        ] if word_count > 100 else []
-        
-        # Generate style-specific mock content
-        executive_insights = [
-            {"insight": "Strategic alignment achieved", "impact": "Improved business outcomes", "timeline": "Q1 next year", "stakeholders": "Executive team"},
-            {"insight": "Resource allocation optimized", "impact": "Cost savings identified", "timeline": "This quarter", "stakeholders": "Operations team"}
-        ] if style == SummaryStyle.EXECUTIVE or level == SummaryLevel.DETAILED else []
-        
-        technical_details = [
-            {"area": "Architecture", "details": "Microservices approach selected", "decisions": "API-first design", "next_steps": "Design service boundaries"},
-            {"area": "Technology Stack", "details": "Modern framework adoption", "decisions": "React/Node.js combination", "next_steps": "Set up development environment"}
-        ] if style == SummaryStyle.TECHNICAL or level == SummaryLevel.DETAILED else []
-        
-        action_plan = [
-            {"phase": "Planning", "tasks": "Finalize requirements and specifications", "owner": "Product team", "timeline": "Week 1-2"},
-            {"phase": "Development", "tasks": "Implement core functionality", "owner": "Engineering team", "timeline": "Week 3-8"},
-            {"phase": "Testing", "tasks": "Quality assurance and user testing", "owner": "QA team", "timeline": "Week 7-10"}
-        ] if style == SummaryStyle.ACTION or level == SummaryLevel.DETAILED else []
-
-        return {
-            'summary_md': summary_md,
-            'brief_summary': brief_summary,
-            'detailed_summary': detailed_summary if level == SummaryLevel.DETAILED else None,
-            'actions': mock_actions,
-            'decisions': mock_decisions,
-            'risks': mock_risks,
-            'executive_insights': executive_insights,
-            'technical_details': technical_details,
-            'action_plan': action_plan
-        }
     
     @staticmethod
     def _persist_summary(session_id: int, summary_data: Dict, engine: str, level: SummaryLevel, style: SummaryStyle) -> Summary:
