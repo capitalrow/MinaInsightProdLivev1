@@ -3,9 +3,10 @@ Authentication Routes for Mina User Management
 Handles registration, login, logout, and user management functionality.
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
+from functools import wraps
 from models import db, User, Workspace
 import re
 import logging
@@ -13,6 +14,42 @@ import traceback
 
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+
+# Rate limiting decorator for auth endpoints - industry standard (like Slack, Auth0)
+def auth_rate_limit(limit_string):
+    """Custom rate limit decorator that applies to specific auth endpoints.
+    
+    Uses Flask-Limiter with the specified limit string.
+    Gracefully degrades if limiter is not available.
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            # Only apply rate limiting for POST requests (form submissions)
+            if request.method != 'POST':
+                return f(*args, **kwargs)
+            
+            try:
+                limiter = current_app.extensions.get('limiter')
+                if limiter:
+                    # Use limiter.check() to enforce the limit
+                    from flask_limiter import RateLimitExceeded
+                    try:
+                        limiter.check()
+                    except RateLimitExceeded:
+                        flash('Too many attempts. Please wait a moment and try again.', 'error')
+                        # Return to the appropriate template
+                        if 'login' in request.endpoint:
+                            return render_template('auth/login.html')
+                        elif 'register' in request.endpoint:
+                            return render_template('auth/register.html')
+            except Exception as e:
+                # Log but don't block - graceful degradation
+                logging.warning(f"Rate limit check failed: {e}")
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 
 def is_valid_email(email):
@@ -33,8 +70,12 @@ def is_valid_password(password):
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
+@auth_rate_limit("3 per minute")
 def register():
-    """User registration page and handler."""
+    """User registration page and handler.
+    
+    Rate limited: 3 attempts per minute (industry standard like Slack, Auth0).
+    """
     if current_user.is_authenticated:
         return redirect(url_for('dashboard.index'))
     
@@ -127,15 +168,20 @@ def register():
             db.session.rollback()
             logging.error(f"Registration failed for user {username} ({email}): {str(e)}")
             logging.error(traceback.format_exc())
-            flash(f'Registration failed: {str(e)}', 'error')
+            # Generic error message to prevent information leakage (security best practice)
+            flash('Registration failed. Please try again or contact support.', 'error')
             return render_template('auth/register.html')
     
     return render_template('auth/register.html')
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@auth_rate_limit("5 per minute")
 def login():
-    """User login page and handler."""
+    """User login page and handler.
+    
+    Rate limited: 5 attempts per minute (industry standard like Slack, Auth0).
+    """
     if current_user.is_authenticated:
         return redirect(url_for('dashboard.index'))
     

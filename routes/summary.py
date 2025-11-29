@@ -11,11 +11,11 @@ import logging
 from flask import Blueprint, request, jsonify, current_app, abort
 # from flask_socketio import emit  # Disabled for native WebSocket testing
 from dataclasses import asdict
+from sqlalchemy import select
 from services.analysis_service import AnalysisService
-from models.summary import SummaryLevel, SummaryStyle
+from models.summary import Summary, SummaryLevel, SummaryStyle
 # from app import socketio  # Disabled for native WebSocket testing
 from openai import OpenAI
-from server.models.memory_store import MemoryStore
 from models import db
 
 logger = logging.getLogger(__name__)
@@ -23,8 +23,20 @@ logger = logging.getLogger(__name__)
 # Create summary blueprint
 summary_bp = Blueprint('summary', __name__, url_prefix='/sessions')
 analysis = AnalysisService()
-memory = MemoryStore()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Lazy-load MemoryStore to avoid PostgreSQL connection at import time in test environments
+_memory = None
+
+def get_memory_store():
+    """Lazy load MemoryStore to avoid connection at import time in tests."""
+    global _memory
+    if _memory is None:
+        db_url = os.environ.get("DATABASE_URL", "")
+        if db_url.startswith("postgresql"):
+            from server.models.memory_store import MemoryStore
+            _memory = MemoryStore()
+    return _memory
 
 SYSTEM_PROMPT = (
     "You are Mina, an intelligent meeting summarizer. "

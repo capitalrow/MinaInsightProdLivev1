@@ -17,11 +17,22 @@ from app import db
 from models.session import Session
 from models.segment import Segment
 from models.summary import Summary, SummaryLevel, SummaryStyle
-from server.models.memory_store import MemoryStore
 from services.text_matcher import TextMatcher
-
-memory = MemoryStore()
+import os
 import inspect
+
+# Lazy-load MemoryStore to avoid PostgreSQL connection at import time in test environments
+_memory = None
+
+def get_memory_store():
+    """Lazy load MemoryStore to avoid connection at import time in tests."""
+    global _memory
+    if _memory is None:
+        db_url = os.environ.get("DATABASE_URL", "")
+        if db_url.startswith("postgresql"):
+            from server.models.memory_store import MemoryStore
+            _memory = MemoryStore()
+    return _memory
 
 logger = logging.getLogger(__name__)
 text_matcher = TextMatcher()
@@ -366,18 +377,21 @@ class AnalysisService:
         logger.info(f"Generating summary for session {session_id}")
 
         # --- Memory-aware context (NEW) ---
+        memory_context = ""
         try:
-            memory_context = ""
-            related_memories = memory.search_memory(f"session_{session_id}", top_k=10)
-            if related_memories:
-                joined = "\n".join([m["content"] for m in related_memories])
-                memory_context = f"\n\nPreviously recalled notes:\n{joined}\n\n"
-                logger.info(f"Added {len(related_memories)} related memories to context.")
+            memory = get_memory_store()
+            if memory:
+                related_memories = memory.search_memory(f"session_{session_id}", top_k=10)
+                if related_memories:
+                    joined = "\n".join([m["content"] for m in related_memories])
+                    memory_context = f"\n\nPreviously recalled notes:\n{joined}\n\n"
+                    logger.info(f"Added {len(related_memories)} related memories to context.")
+                else:
+                    logger.info("No related memories found for this session.")
             else:
-                logger.info("No related memories found for this session.")
+                logger.info("Memory store not available, skipping memory retrieval.")
         except Exception as e:
             logger.warning(f"Memory retrieval skipped: {e}")
-            memory_context = ""
         # -----------------------------------
 
         # Load session and segments
@@ -460,24 +474,28 @@ class AnalysisService:
 
         # --- Store summary + key insights back into memory (NEW) ---
         try:
-            def _safe(text):
-                return text.strip() if isinstance(text, str) else ""
+            memory = get_memory_store()
+            if memory:
+                def _safe(text):
+                    return text.strip() if isinstance(text, str) else ""
 
-            # store main summary
-            if summary_data.get("summary_md"):
-                memory.add_memory(session_id, "summary_bot", _safe(summary_data["summary_md"]), source_type="summary")
+                # store main summary
+                if summary_data.get("summary_md"):
+                    memory.add_memory(session_id, "summary_bot", _safe(summary_data["summary_md"]), source_type="summary")
 
-            # store highlights / actions / decisions for semantic recall
-            for item in summary_data.get("actions", []) or []:
-                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="action_item")
+                # store highlights / actions / decisions for semantic recall
+                for item in summary_data.get("actions", []) or []:
+                    memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="action_item")
 
-            for item in summary_data.get("decisions", []) or []:
-                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="decision")
+                for item in summary_data.get("decisions", []) or []:
+                    memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="decision")
 
-            for item in summary_data.get("risks", []) or []:
-                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="risk")
+                for item in summary_data.get("risks", []) or []:
+                    memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="risk")
 
-            logger.info("Summary data stored back into MemoryStore successfully.")
+                logger.info("Summary data stored back into MemoryStore successfully.")
+            else:
+                logger.info("Memory store not available, skipping summary persistence to memory.")
         except Exception as e:
             logger.warning(f"Could not persist summary to MemoryStore: {e}")
         

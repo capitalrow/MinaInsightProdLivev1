@@ -18,7 +18,6 @@ from collections import Counter
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from openai import OpenAI
-from server.models.memory_store import MemoryStore
 
 
 logger = logging.getLogger(__name__)
@@ -35,8 +34,18 @@ if openai_api_key:
     except Exception as e:
         logger.error(f"Failed to initialize OpenAI client: {e}")
 
-# Memory store for context retrieval (e.g., recent summaries, relevant info)
-memory = MemoryStore()
+# Lazy-load MemoryStore to avoid PostgreSQL connection at import time in test environments
+_memory = None
+
+def get_memory_store():
+    """Lazy load MemoryStore to avoid connection at import time in tests."""
+    global _memory
+    if _memory is None:
+        db_url = os.environ.get("DATABASE_URL", "")
+        if db_url.startswith("postgresql"):
+            from server.models.memory_store import MemoryStore
+            _memory = MemoryStore()
+    return _memory
 
 # System prompt defining the Copilot's role and tone
 SYSTEM_PROMPT = (
