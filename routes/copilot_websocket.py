@@ -707,14 +707,16 @@ def _build_query_context(
                         query_relevant.append(task_data)
                         logger.info(f"[COPILOT] Query-relevant task: id={task_data['id']}, title='{task_data['title']}'")
                     
-                    # Add query-relevant tasks to context (avoid duplicates)
+                    # PRIORITIZE query-relevant tasks at the TOP of recent_tasks
+                    # This ensures they're within the first 7 tasks shown to the AI
                     existing_ids = {t['id'] for t in context.get('recent_tasks', [])}
-                    for task in query_relevant:
-                        if task['id'] not in existing_ids:
-                            context['recent_tasks'].append(task)
+                    new_relevant = [task for task in query_relevant if task['id'] not in existing_ids]
+                    
+                    # Prepend query-relevant tasks (they're more important than recency)
+                    context['recent_tasks'] = new_relevant + context.get('recent_tasks', [])
                     
                     context['query_relevant_tasks'] = query_relevant
-                    logger.info(f"[COPILOT] Added {len(query_relevant)} query-relevant tasks to context")
+                    logger.info(f"[COPILOT] PRIORITIZED {len(new_relevant)} query-relevant tasks at top of recent_tasks (total: {len(context['recent_tasks'])})")
                 else:
                     logger.info(f"[COPILOT] No tasks found matching keywords: {keywords}")
             

@@ -642,11 +642,23 @@ CRITICAL GUIDELINES:
                 blocker_lines = [f"- {b.get('title', 'Untitled')} (blocked)" for b in blockers[:3]]
                 context_parts.append(f"🚫 BLOCKERS ({len(blockers)}):\n" + "\n".join(blocker_lines))
             
+            # Query-relevant tasks (HIGH PRIORITY - matches user's question)
+            if context.get('query_relevant_tasks'):
+                relevant = context['query_relevant_tasks']
+                relevant_lines = []
+                for t in relevant[:5]:
+                    status_emoji = '✅' if t.get('status') == 'completed' else '🔴' if t.get('is_overdue') else '📋'
+                    priority = t.get('priority', 'medium')
+                    priority_tag = f"[{priority.upper()}]" if priority in ['high', 'urgent'] else ""
+                    due = f" (due: {t.get('due_date')})" if t.get('due_date') else ""
+                    relevant_lines.append(f"{status_emoji} {t.get('title', 'Untitled')} {priority_tag}{due}")
+                context_parts.append(f"🎯 MATCHING TASKS (found {len(relevant)} matching your query):\n" + "\n".join(relevant_lines))
+            
             # Recent tasks
             if context.get('recent_tasks'):
                 tasks = context['recent_tasks']
                 task_lines = []
-                for t in tasks[:7]:
+                for t in tasks[:10]:  # Increased from 7 to 10 for better coverage
                     status_emoji = '✅' if t.get('status') == 'completed' else '🔴' if t.get('is_overdue') else '📋'
                     priority = t.get('priority', 'medium')
                     priority_tag = f"[{priority.upper()}]" if priority in ['high', 'urgent'] else ""
