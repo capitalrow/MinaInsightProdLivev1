@@ -920,13 +920,10 @@ function startNewSection(sectionName) {
         sectionContainer = document.createElement('div');
         sectionContainer.className = `section-container section-${sectionName} calm-slide-in`;
         
-        // Add section header
-        const header = document.createElement('h4');
-        header.className = 'section-header';
-        header.textContent = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
-        sectionContainer.appendChild(header);
+        // NOTE: Headers are now rendered by markdown (### Header format)
+        // No duplicate header creation - markdown processMarkdown handles it
         
-        // Add text wrapper for content (separate from header)
+        // Add text wrapper for content
         const textWrapper = document.createElement('div');
         textWrapper.className = 'section-text';
         sectionContainer.appendChild(textWrapper);
