@@ -44,9 +44,10 @@ class TextMatcher:
     ]
     
     def __init__(self):
-        """Initialize TextMatcher with default configuration."""
-        self.min_fuzzy_ratio = 0.6  # Minimum similarity ratio (0-1)
+        """Initialize TextMatcher with stricter anti-hallucination configuration."""
+        self.min_fuzzy_ratio = 0.7  # Minimum similarity ratio (0-1) - STRICTER
         self.min_keyword_matches = 1  # Minimum keywords that must match
+        self.min_evidence_quote_similarity = 0.6  # Minimum for AI-provided quote to match transcript
     
     def validate_extraction(self, extracted_text: str, transcript: str, 
                           extraction_type: str = 'action') -> Dict:
@@ -236,9 +237,76 @@ class TextMatcher:
         
         return best_match if best_ratio > 0.3 else None
     
+    def validate_evidence_quote(self, evidence_quote: str, transcript: str) -> Dict:
+        """
+        Validate that an AI-provided evidence quote actually appears in the transcript.
+        
+        This is CRITICAL for anti-hallucination: the AI must provide real quotes,
+        not fabricated ones.
+        
+        Args:
+            evidence_quote: The quote the AI claims is from the transcript
+            transcript: The actual source transcript
+            
+        Returns:
+            Dictionary with:
+            - is_valid: bool indicating if quote appears in transcript
+            - similarity_score: 0-100 score
+            - best_match: closest matching text from transcript
+        """
+        if not evidence_quote or not transcript:
+            return {'is_valid': False, 'similarity_score': 0, 'best_match': None}
+        
+        quote_clean = self._normalize_text(evidence_quote)
+        transcript_clean = self._normalize_text(transcript)
+        
+        # Check 1: Exact substring match (best case)
+        if quote_clean in transcript_clean:
+            return {
+                'is_valid': True,
+                'similarity_score': 100.0,
+                'best_match': evidence_quote,
+                'match_type': 'exact'
+            }
+        
+        # Check 2: Fuzzy match with sliding window
+        quote_words = quote_clean.split()
+        transcript_words = transcript_clean.split()
+        
+        best_similarity = 0.0
+        best_match = None
+        
+        # Slide through transcript looking for best match
+        window_size = len(quote_words) + 3  # Allow some flexibility
+        
+        for i in range(max(1, len(transcript_words) - window_size + 1)):
+            window = ' '.join(transcript_words[i:i + window_size])
+            similarity = SequenceMatcher(None, quote_clean, window).ratio()
+            
+            if similarity > best_similarity:
+                best_similarity = similarity
+                # Get original text from transcript (preserve case)
+                original_words = transcript.split()
+                if i < len(original_words):
+                    best_match = ' '.join(original_words[i:i + window_size])
+        
+        # Threshold: 60% similarity to accept
+        is_valid = best_similarity >= self.min_evidence_quote_similarity
+        
+        return {
+            'is_valid': is_valid,
+            'similarity_score': round(best_similarity * 100, 2),
+            'best_match': best_match,
+            'match_type': 'fuzzy' if is_valid else 'no_match'
+        }
+    
     def validate_task_list(self, tasks: List[Dict], transcript: str) -> List[Dict]:
         """
-        Validate a list of extracted tasks against transcript.
+        Validate a list of extracted tasks against transcript with STRICT evidence checking.
+        
+        Uses TWO-LAYER validation:
+        1. Task text must have evidence in transcript (fuzzy match)
+        2. AI-provided evidence_quote must actually appear in transcript (quote validation)
         
         Args:
             tasks: List of task dictionaries with 'text' or 'action' field
@@ -248,33 +316,55 @@ class TextMatcher:
             Filtered list containing only validated tasks with validation metadata
         """
         validated_tasks = []
+        rejected_count = 0
         
         for i, task in enumerate(tasks):
             # Extract task text (handle different field names)
             task_text = task.get('text') or task.get('action') or task.get('title', '')
+            evidence_quote = task.get('evidence_quote', '')
             
             if not task_text:
-                logger.warning(f"Task {i} has no text field, skipping validation")
+                logger.warning(f"[HALLUCINATION_CHECK] Task {i} has no text field, skipping")
                 continue
             
-            # Validate against transcript
-            validation = self.validate_extraction(task_text, transcript, 'action')
+            # LAYER 1: Validate task text against transcript
+            text_validation = self.validate_extraction(task_text, transcript, 'action')
             
-            # Only keep tasks that pass validation
-            if validation['is_valid']:
+            # LAYER 2: Validate AI-provided evidence_quote (if present)
+            quote_validation = {'is_valid': True, 'similarity_score': 100}  # Default: pass if no quote
+            if evidence_quote:
+                quote_validation = self.validate_evidence_quote(evidence_quote, transcript)
+                
+                if not quote_validation['is_valid']:
+                    logger.warning(f"[HALLUCINATION_DETECTED] Quote not found in transcript!")
+                    logger.warning(f"   AI claimed: \"{evidence_quote[:80]}...\"")
+                    logger.warning(f"   Best match: \"{quote_validation.get('best_match', 'None')[:80]}...\"")
+                    logger.warning(f"   Similarity: {quote_validation['similarity_score']}%")
+            
+            # COMBINED VALIDATION: Both layers must pass
+            # If quote validation fails, downgrade the overall validation
+            combined_valid = text_validation['is_valid']
+            if evidence_quote and not quote_validation['is_valid']:
+                # AI provided a fake quote - this is a red flag
+                combined_valid = False
+                logger.warning(f"[HALLUCINATION_REJECTED] Task rejected due to fabricated evidence quote")
+            
+            if combined_valid:
                 # Add validation metadata to task
                 task_with_validation = task.copy()
                 task_with_validation['validation'] = {
-                    'confidence_score': validation['confidence_score'],
-                    'evidence_quote': validation['evidence_quote'],
+                    'confidence_score': text_validation['confidence_score'],
+                    'evidence_quote': text_validation['evidence_quote'] or evidence_quote,
+                    'quote_verified': quote_validation['is_valid'],
                     'validated': True
                 }
                 validated_tasks.append(task_with_validation)
                 
-                logger.info(f"✅ Task validated (score: {validation['confidence_score']}): {task_text[:60]}...")
+                logger.info(f"✅ [VALIDATED] Task (score: {text_validation['confidence_score']}): {task_text[:60]}...")
             else:
-                logger.warning(f"❌ Task REJECTED (score: {validation['confidence_score']}): {task_text[:60]}...")
-                logger.debug(f"   Reason: No sufficient evidence in transcript")
+                rejected_count += 1
+                logger.warning(f"❌ [REJECTED] Task (score: {text_validation['confidence_score']}): {task_text[:60]}...")
+                logger.warning(f"   Evidence match: {quote_validation['similarity_score']}%")
         
-        logger.info(f"Task validation: {len(validated_tasks)}/{len(tasks)} tasks passed")
+        logger.info(f"[VALIDATION_SUMMARY] {len(validated_tasks)}/{len(tasks)} tasks passed, {rejected_count} rejected as hallucinations")
         return validated_tasks
