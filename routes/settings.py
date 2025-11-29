@@ -109,7 +109,10 @@ def get_integrations_status():
 @login_required
 def connect_integration():
     """
-    Connect an integration (simulated for now).
+    Connect an integration (persists to user preferences).
+    
+    Note: OAuth flows for third-party services require API credentials.
+    Integration state is stored in user preferences JSON field.
     
     Request Body:
         {
@@ -276,6 +279,8 @@ def update_preferences():
     Returns:
         JSON: Success/error response
     """
+    from app import db
+    
     try:
         data = request.get_json() or {}
         category = data.get('category')
@@ -298,8 +303,6 @@ def update_preferences():
                 'success': False,
                 'error': f'Invalid category. Must be one of: {", ".join(valid_categories)}'
             }), 400
-        
-        from app import db
         
         # Type check current_user
         if not current_user.is_authenticated:
@@ -350,14 +353,14 @@ def reset_preferences():
     Returns:
         JSON: Success/error response
     """
+    from app import db
+    
     try:
         data = request.get_json() or {}
         category = data.get('category')
         
         # Get default preferences
         default_preferences = _get_default_preferences()
-        
-        from app import db
         
         # Type check current_user
         if not current_user.is_authenticated:
@@ -436,12 +439,12 @@ def export_settings():
         }), 500
 
 
-def _get_user_preferences(user: User) -> Dict[str, Any]:
+def _get_user_preferences(user) -> Dict[str, Any]:
     """
     Get user preferences with defaults for missing values.
     
     Args:
-        user: User object
+        user: User object (can be LocalProxy from Flask-Login)
         
     Returns:
         Dictionary of user preferences with defaults
@@ -469,7 +472,7 @@ def _get_user_preferences(user: User) -> Dict[str, Any]:
         return _get_default_preferences()
 
 
-def _get_workspace_settings(user: User) -> Optional[Dict[str, Any]]:
+def _get_workspace_settings(user) -> Optional[Dict[str, Any]]:
     """
     Get workspace settings for the user.
     
@@ -628,12 +631,32 @@ def workspace_management():
         if not workspace:
             workspace_members = [current_user]
             # Count meetings for current user
-            workspace_meetings_count = db.session.query(Meeting).join(Meeting.organizer).filter(
-                Meeting.organizer.has(id=current_user.id)
+            workspace_meetings_count = db.session.query(Meeting).filter(
+                Meeting.organizer_id == current_user.id
             ).count()
         
-        # Calculate total hours (placeholder: 30 min per meeting)
-        workspace_hours = int(workspace_meetings_count * 0.5)
+        # Calculate total hours from actual meeting durations
+        if current_user.workspace_id:
+            meetings_with_duration = db.session.query(Meeting).filter(
+                Meeting.workspace_id == current_user.workspace_id,
+                Meeting.actual_start.isnot(None),
+                Meeting.actual_end.isnot(None)
+            ).all()
+        else:
+            meetings_with_duration = db.session.query(Meeting).filter(
+                Meeting.organizer_id == current_user.id,
+                Meeting.actual_start.isnot(None),
+                Meeting.actual_end.isnot(None)
+            ).all()
+        
+        total_seconds = 0
+        for meeting in meetings_with_duration:
+            if meeting.actual_start and meeting.actual_end:
+                duration = (meeting.actual_end - meeting.actual_start).total_seconds()
+                if duration > 0:
+                    total_seconds += duration
+        
+        workspace_hours = round(total_seconds / 3600, 1)
         
         return render_template('settings/workspace.html',
                              workspace=workspace,
