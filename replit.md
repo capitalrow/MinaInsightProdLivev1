@@ -10,6 +10,47 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**November 29, 2025 - CROWN⁹ AI Copilot Critical Fixes & Industry-Leading Enhancements:**
+
+Comprehensive fixes to bring AI Copilot to industry-leading standards (Microsoft Copilot 2025, Notion AI):
+
+1. **Database Schema Fix:**
+   - Fixed critical type mismatch: `tasks.workspace_id` migrated from VARCHAR to INTEGER
+   - Proper foreign key relationship with workspaces table now enforced
+   - Context hydration no longer fails due to type mismatch
+
+2. **Semantic RAG Retrieval (pgvector Integration):**
+   - Created `copilot_embeddings` table with native pgvector support
+   - IVFFlat index for efficient cosine similarity search
+   - Similarity threshold (>0.5) for high-quality context retrieval
+   - Fallback to recent conversations when embeddings unavailable
+
+3. **Action Chaining for Multi-Step Workflows:**
+   - `create_and_assign` - Create task then assign to user
+   - `complete_and_followup` - Mark complete and create follow-up task
+   - `mark_all_done` - Batch completion of multiple tasks
+   - `reschedule_meeting` - Update meeting with new time/location
+   - All actions track steps in results for transparency
+
+4. **Proactive Intelligence:**
+   - Automatic detection of overdue tasks (high severity alerts)
+   - Blockers surfaced automatically on page load
+   - Due-soon warnings (within 24 hours)
+   - Task count summaries by priority level
+
+5. **Enhanced Context Building:**
+   - Defensive null guards throughout context building pipeline
+   - Proactive insights injected into streaming context
+   - Semantic context from RAG retrieval included
+   - Conversation history for continuity
+   - Activity summaries and productivity metrics
+
+6. **Improved System Prompts:**
+   - Industry-leading multi-section response structure
+   - Summary → Actions → Insights → Next Steps format
+   - Reference specific data (task names, dates)
+   - Never say "I don't have access" - use provided context
+
 **November 29, 2025 - Production Mock/Placeholder Cleanup Audit:**
 
 Comprehensive audit to remove all mock implementations, placeholder data, and stubs from production code:

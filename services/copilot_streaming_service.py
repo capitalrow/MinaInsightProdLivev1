@@ -527,7 +527,13 @@ class CopilotStreamingService:
         context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, str]]:
         """
-        Build message array with system prompt and context.
+        Build message array with system prompt and CROWN⁹ enhanced context.
+        
+        CROWN⁹ Enhanced Context Building:
+        - User workspace context (tasks, meetings)
+        - Proactive insights (overdue, blockers, due soon)
+        - Semantic context from RAG retrieval
+        - Conversation history for continuity
         
         Args:
             user_message: User's query
@@ -536,42 +542,116 @@ class CopilotStreamingService:
         Returns:
             List of message dictionaries for OpenAI API
         """
-        # System prompt defining Copilot's role
+        # System prompt defining Copilot's role (Industry-leading)
         system_prompt = """You are Mina Copilot, the cognitive thread that connects every thought, task, and moment of work.
 
 Your purpose is to perceive, interpret, and synchronize — bridging meetings, tasks, calendar, and analytics through natural dialogue.
 
-When responding:
-1. **Summary** - Provide context overview first
-2. **Actions** - Suggest interactive next steps
-3. **Insights** - Surface trends or blockers
-4. **Next Steps** - Recommend future guidance
+CAPABILITIES:
+- Understand user's workspace: meetings, tasks, calendar, analytics
+- Provide actionable insights with clear next steps
+- Execute actions: create tasks, schedule meetings, prioritize work
+- Surface blockers and overdue items proactively
+- Learn from interactions to improve over time
 
-Be concise, intelligent, and emotionally calm. Every query is both reflection and action."""
+RESPONSE STRUCTURE:
+1. **Summary** - Direct, concise answer to the query
+2. **Actions** - Specific, actionable next steps (with action buttons when applicable)
+3. **Insights** - Relevant patterns, blockers, or opportunities
+4. **Next Steps** - Forward-looking recommendations
+
+GUIDELINES:
+- Be concise but thorough
+- Prioritize actionable responses
+- Reference specific data when available (task names, meeting titles, dates)
+- Maintain calm, professional, intelligent tone
+- Never say "I don't have access" — use the context provided"""
         
         messages = [{"role": "system", "content": system_prompt}]
         
-        # Add context if provided
+        # Build comprehensive context
         if context:
             context_parts = []
             
+            # Proactive insights (HIGH PRIORITY - surface first)
+            if context.get('proactive_insights'):
+                insights = context['proactive_insights']
+                insight_lines = []
+                for insight in insights:
+                    severity = insight.get('severity', 'medium')
+                    emoji = '🔴' if severity == 'high' else '🟡' if severity == 'medium' else '🟢'
+                    insight_lines.append(f"{emoji} {insight.get('message', '')}")
+                if insight_lines:
+                    context_parts.append("⚠️ PROACTIVE ALERTS:\n" + "\n".join(insight_lines))
+            
+            # Blockers (HIGH PRIORITY)
+            if context.get('blockers'):
+                blockers = context['blockers']
+                blocker_lines = [f"- {b.get('title', 'Untitled')} (blocked)" for b in blockers[:3]]
+                context_parts.append(f"🚫 BLOCKERS ({len(blockers)}):\n" + "\n".join(blocker_lines))
+            
+            # Recent tasks
             if context.get('recent_tasks'):
                 tasks = context['recent_tasks']
-                context_parts.append(f"Recent Tasks ({len(tasks)} items):\n" + 
-                                   "\n".join([f"- {t.get('title', 'Untitled')}" for t in tasks[:5]]))
+                task_lines = []
+                for t in tasks[:7]:
+                    status_emoji = '✅' if t.get('status') == 'completed' else '🔴' if t.get('is_overdue') else '📋'
+                    priority = t.get('priority', 'medium')
+                    priority_tag = f"[{priority.upper()}]" if priority in ['high', 'urgent'] else ""
+                    due = f" (due: {t.get('due_date')})" if t.get('due_date') else ""
+                    task_lines.append(f"{status_emoji} {t.get('title', 'Untitled')} {priority_tag}{due}")
+                context_parts.append(f"📋 RECENT TASKS ({len(tasks)}):\n" + "\n".join(task_lines))
             
+            # Recent meetings
             if context.get('recent_meetings'):
                 meetings = context['recent_meetings']
-                context_parts.append(f"Recent Meetings ({len(meetings)} items):\n" +
-                                   "\n".join([f"- {m.get('title', 'Untitled')}" for m in meetings[:3]]))
+                meeting_lines = []
+                for m in meetings[:5]:
+                    has_summary = "📝" if m.get('has_summary') else ""
+                    meeting_lines.append(f"- {m.get('title', 'Untitled')} {has_summary}")
+                context_parts.append(f"📅 RECENT MEETINGS ({len(meetings)}):\n" + "\n".join(meeting_lines))
             
+            # Semantic context from RAG (HIGH VALUE)
+            if context.get('semantic_context'):
+                semantic = context['semantic_context']
+                if semantic:
+                    semantic_lines = []
+                    for s in semantic[:3]:
+                        text = s.get('text', '')[:100]
+                        similarity = s.get('similarity', 0)
+                        if similarity > 0.7:
+                            semantic_lines.append(f"- {text}...")
+                    if semantic_lines:
+                        context_parts.append("🧠 RELATED CONTEXT:\n" + "\n".join(semantic_lines))
+            
+            # Conversation history for continuity
+            if context.get('conversation_history'):
+                history = context['conversation_history']
+                if history:
+                    recent_messages = [f"User: {h.get('message', '')[:50]}..." for h in history[:2]]
+                    if recent_messages:
+                        context_parts.append("💬 RECENT CONVERSATION:\n" + "\n".join(recent_messages))
+            
+            # Activity summary
+            if context.get('activity'):
+                activity = context['activity']
+                tasks_today = activity.get('tasks_today', 0)
+                completed = activity.get('tasks_completed_recently', 0)
+                productivity = activity.get('productivity_score', 50)
+                context_parts.append(f"📊 ACTIVITY: {tasks_today} tasks due today, {completed} completed recently, productivity score: {productivity}%")
+            
+            # User name for personalization
+            if context.get('user_name'):
+                context_parts.insert(0, f"👤 User: {context['user_name']}")
+            
+            # Add summary if provided
             if context.get('summary'):
-                context_parts.append(f"Context: {context['summary']}")
+                context_parts.append(f"📌 Context: {context['summary']}")
             
             if context_parts:
                 messages.append({
                     "role": "system",
-                    "content": "Context from your workspace:\n\n" + "\n\n".join(context_parts)
+                    "content": "WORKSPACE CONTEXT:\n\n" + "\n\n".join(context_parts)
                 })
         
         # Add user message
