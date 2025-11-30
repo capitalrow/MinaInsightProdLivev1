@@ -62,32 +62,107 @@ class PerformanceValidator {
     }
 
     setupPerformanceObservers() {
-        // CROWN⁴.6 FIX: Listen for task bootstrap completion event
-        document.addEventListener('task:bootstrap:complete', (e) => {
-            if (e.detail && e.detail.first_paint_ms) {
-                console.log(`📊 [PerformanceValidator] Captured first paint: ${e.detail.first_paint_ms.toFixed(2)}ms`);
-                this.recordMetric('firstPaint', e.detail.first_paint_ms);
-            }
-        });
+        const self = this;
         
-        // Monitor paint timing (fallback)
-        if (window.performance && window.performance.getEntriesByType) {
-            const paintEntries = window.performance.getEntriesByType('paint');
-            paintEntries.forEach(entry => {
-                if (entry.name === 'first-contentful-paint') {
-                    this.recordMetric('firstPaint', entry.startTime);
+        // CROWN⁴.6: Primary - Listen for task bootstrap completion event
+        // This is the most reliable source as it comes from the actual bootstrap timing
+        // CRITICAL: Add listener immediately AND re-add on document ready for safety
+        const handleBootstrapComplete = (e) => {
+            if (e.detail && e.detail.first_paint_ms !== undefined) {
+                console.log(`⚡ [PerformanceValidator] Bootstrap FCP captured: ${e.detail.first_paint_ms.toFixed(2)}ms`);
+                this.recordMetric('firstPaint', e.detail.first_paint_ms);
+                // Mark as captured to prevent double-recording
+                this._bootstrapCaptured = true;
+            }
+        };
+        
+        // Primary listener - immediate registration
+        document.addEventListener('task:bootstrap:complete', handleBootstrapComplete);
+        console.log('⚡ [PerformanceValidator] Bootstrap event listener registered');
+        
+        // CROWN⁴.6 FIX: Also check if bootstrap already completed (race condition)
+        // This handles cases where bootstrap runs before validator initializes
+        if (window.taskBootstrap && window.taskBootstrap.perf && window.taskBootstrap.perf.first_paint > 0) {
+            const firstPaintTime = window.taskBootstrap.perf.first_paint - window.taskBootstrap.perf.cache_load_start;
+            console.log(`⚡ [PerformanceValidator] Bootstrap already completed, recovering FCP: ${firstPaintTime.toFixed(2)}ms`);
+            this.recordMetric('firstPaint', firstPaintTime);
+            this._bootstrapCaptured = true;
+        }
+        
+        // CROWN⁴.6: Use PerformanceObserver for browser's FCP measurement
+        if ('PerformanceObserver' in window) {
+            try {
+                const paintObserver = new PerformanceObserver((entryList) => {
+                    for (const entry of entryList.getEntries()) {
+                        if (entry.name === 'first-contentful-paint') {
+                            console.log(`⚡ [PerformanceValidator] Browser FCP: ${Math.round(entry.startTime)}ms`);
+                            // Only use browser FCP if we don't have a bootstrap value yet
+                            if (self.metrics.firstPaint.length === 0) {
+                                self.recordMetric('firstPaint', entry.startTime);
+                            }
+                            paintObserver.disconnect();
+                        }
+                    }
+                });
+                paintObserver.observe({ type: 'paint', buffered: true });
+            } catch (e) {
+                console.warn('Paint PerformanceObserver not supported:', e);
+            }
+        }
+        
+        // Fallback: Check for early inline marker from <head>
+        if (window.__FIRST_PAINT_TIME !== undefined && this.metrics.firstPaint.length === 0) {
+            console.log(`⚡ [PerformanceValidator] Using head marker: ${Math.round(window.__FIRST_PAINT_TIME)}ms`);
+            this.recordMetric('firstPaint', window.__FIRST_PAINT_TIME);
+        }
+        
+        // Fallback: Try to read FCP from Performance API directly after 500ms
+        // This handles cases where PerformanceObserver buffered entries are empty
+        setTimeout(() => {
+            if (this.metrics.firstPaint.length === 0) {
+                // CROWN⁴.6 FIX: Check bootstrap perf data first (most reliable)
+                if (window.taskBootstrap && window.taskBootstrap.perf && window.taskBootstrap.perf.first_paint > 0) {
+                    const firstPaintTime = window.taskBootstrap.perf.first_paint - window.taskBootstrap.perf.cache_load_start;
+                    console.log(`⚡ [PerformanceValidator] FCP via bootstrap perf data: ${firstPaintTime.toFixed(2)}ms`);
+                    this.recordMetric('firstPaint', firstPaintTime);
+                    return;
                 }
-            });
-        }
-
-        // Monitor navigation timing for initial load (fallback)
-        if (window.performance && window.performance.timing) {
-            window.addEventListener('load', () => {
-                const timing = window.performance.timing;
-                const firstPaint = timing.domContentLoadedEventEnd - timing.navigationStart;
-                this.recordMetric('firstPaint', firstPaint);
-            });
-        }
+                
+                // Try getEntriesByName first (more precise)
+                if (window.performance && window.performance.getEntriesByName) {
+                    const fcpEntries = window.performance.getEntriesByName('first-contentful-paint', 'paint');
+                    if (fcpEntries.length > 0) {
+                        console.log(`⚡ [PerformanceValidator] FCP via getEntriesByName: ${Math.round(fcpEntries[0].startTime)}ms`);
+                        this.recordMetric('firstPaint', fcpEntries[0].startTime);
+                        return;
+                    }
+                }
+                
+                // Fall back to getEntriesByType
+                if (window.performance && window.performance.getEntriesByType) {
+                    const paintEntries = window.performance.getEntriesByType('paint');
+                    for (const entry of paintEntries) {
+                        if (entry.name === 'first-contentful-paint') {
+                            console.log(`⚡ [PerformanceValidator] FCP via poll: ${Math.round(entry.startTime)}ms`);
+                            this.recordMetric('firstPaint', entry.startTime);
+                            break;
+                        }
+                    }
+                }
+            }
+        }, 500);
+        
+        // CROWN⁴.6 FIX: Extra fallback at 2 seconds - check bootstrap perf directly
+        setTimeout(() => {
+            if (this.metrics.firstPaint.length === 0 && window.taskBootstrap && window.taskBootstrap.perf) {
+                const perf = window.taskBootstrap.perf;
+                if (perf.first_paint > 0 && perf.cache_load_start > 0) {
+                    const firstPaintTime = perf.first_paint - perf.cache_load_start;
+                    console.log(`⚡ [PerformanceValidator] FCP fallback from bootstrap.perf: ${firstPaintTime.toFixed(2)}ms`);
+                    this.recordMetric('firstPaint', firstPaintTime);
+                }
+            }
+        }, 2000);
 
         // Monitor DOM mutations
         this.observeDOMMutations();
@@ -355,7 +430,8 @@ class PerformanceValidator {
             const telemetrySummary = window.CROWNTelemetry.getSummary();
             
             // Add Bootstrap/First Paint from telemetry
-            if (telemetrySummary.bootstrap) {
+            // CROWN⁴.6: Only add bootstrap if actually measured (not 'not_measured' status)
+            if (telemetrySummary.bootstrap && telemetrySummary.bootstrap.status !== 'not_measured') {
                 report.metrics.bootstrap = {
                     target: this.targets.firstPaint,
                     actual: telemetrySummary.bootstrap.time,
@@ -394,7 +470,10 @@ class PerformanceValidator {
         // Bootstrap / First Paint
         if (report.metrics.bootstrap || report.metrics.firstPaint) {
             const metric = report.metrics.bootstrap || report.metrics.firstPaint;
-            console.log(`${metric.passed ? '✅' : '❌'} First Paint: ${metric.actual?.toFixed(0) || 'N/A'}ms (target: ≤${metric.target}ms)`);
+            const actualValue = typeof metric.actual === 'number' ? `${metric.actual.toFixed(0)}ms` : 'N/A';
+            console.log(`${metric.passed ? '✅' : '❌'} First Paint: ${actualValue} (target: ≤${metric.target}ms)`);
+        } else {
+            console.log(`⏳ First Paint: Not measured yet (target: ≤${this.targets.firstPaint}ms)`);
         }
 
         // Mutation Apply

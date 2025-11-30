@@ -1,13 +1,18 @@
 """
 API endpoint for generating insights from transcripts (post-recording workflow).
+
+ANTI-HALLUCINATION: All extracted action items are validated against the transcript
+using TextMatcher to ensure they are grounded in what was actually said.
 """
 
 import logging
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
+from services.text_matcher import TextMatcher
 
 logger = logging.getLogger(__name__)
+text_matcher = TextMatcher()
 
 api_generate_insights_bp = Blueprint('api_generate_insights', __name__)
 
@@ -121,7 +126,12 @@ def generate_insights():
 
 
 def _generate_insights_directly(transcript):
-    """Generate insights directly using OpenAI without complex dependencies."""
+    """
+    Generate insights directly using OpenAI with STRICT anti-hallucination validation.
+    
+    All extracted action items are validated against the transcript to ensure
+    they were actually stated, not inferred or invented by the AI.
+    """
     try:
         import os
         import json
@@ -134,36 +144,97 @@ def _generate_insights_directly(transcript):
         
         client = OpenAI(api_key=api_key)
         
-        prompt = f"""Analyze this meeting transcript and provide insights in JSON format:
+        # STRICT anti-hallucination prompt
+        prompt = f"""You are a STRICT evidence-based meeting analyst. Extract ONLY what is EXPLICITLY stated in the transcript.
+
+CRITICAL RULES - ZERO HALLUCINATION:
+1. ONLY extract action items that were EXPLICITLY stated by the speaker
+2. Each action_item MUST include an "evidence_quote" field with the EXACT words from the transcript
+3. Do NOT infer, suggest, or invent tasks that weren't explicitly said
+4. If the meeting is about "testing" something, do NOT add tasks like "check pages" or "update systems"
+5. When in doubt, DO NOT extract - it's better to miss a task than to invent one
 
 TRANSCRIPT:
 {transcript}
 
-Please provide a JSON response with these fields:
-- summary: Brief 2-3 sentence summary of the meeting
-- key_points: Array of 3-5 main discussion points
-- action_items: Array of specific action items mentioned
-- decisions: Array of decisions made
-- next_steps: Array of follow-up actions
+Return ONLY valid JSON with these fields:
+- summary: Brief 2-3 sentence FACTUAL summary (no embellishment)
+- key_points: Array of 3-5 main points that were ACTUALLY discussed
+- action_items: Array of objects with "task" and "evidence_quote" fields (ONLY explicit commitments)
+- decisions: Array of decisions that were EXPLICITLY made
+- next_steps: Array of follow-up actions that were EXPLICITLY stated
 - participants: Array of participant roles/names if mentioned
 - sentiment: Overall meeting sentiment (positive/neutral/negative)
+
+Example action_items format:
+[{{"task": "Work on the AI Copilot page", "evidence_quote": "I will work on the AI Copilot page today"}}]
+
+If no explicit action items were stated, return an empty array: []
 
 Format as valid JSON only."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a professional meeting analyst. Respond with valid JSON only. Format your response as JSON with the requested structure."},
+                {"role": "system", "content": "You are a STRICT evidence-based meeting analyst. NEVER invent or infer content. Only extract what is EXPLICITLY stated. Respond with valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3
+            temperature=0.2  # Lower temperature for more deterministic output
         )
         
         result_text = response.choices[0].message.content
         if not result_text:
             logger.warning("Empty response from OpenAI")
             return _generate_fallback_insights(transcript)
-        return json.loads(result_text)
+        
+        result = json.loads(result_text)
+        
+        # ANTI-HALLUCINATION VALIDATION: Validate action items against transcript
+        raw_action_items = result.get('action_items', [])
+        if raw_action_items:
+            logger.info(f"[VALIDATION] Validating {len(raw_action_items)} action items against transcript...")
+            
+            # Convert to format expected by text_matcher
+            tasks_for_validation = []
+            for item in raw_action_items:
+                if isinstance(item, dict):
+                    tasks_for_validation.append({
+                        'text': item.get('task', ''),
+                        'evidence_quote': item.get('evidence_quote', '')
+                    })
+                elif isinstance(item, str):
+                    tasks_for_validation.append({'text': item, 'evidence_quote': ''})
+            
+            # Validate against transcript
+            validated_tasks = text_matcher.validate_task_list(tasks_for_validation, transcript)
+            
+            # Convert back to action_items format
+            validated_action_items = []
+            for task in validated_tasks:
+                validated_action_items.append({
+                    'task': task.get('text', ''),
+                    'evidence_quote': task.get('validation', {}).get('evidence_quote', ''),
+                    'confidence': task.get('validation', {}).get('confidence_score', 0)
+                })
+            
+            original_count = len(raw_action_items)
+            validated_count = len(validated_action_items)
+            rejected_count = original_count - validated_count
+            
+            if rejected_count > 0:
+                logger.warning(f"[HALLUCINATION_FILTER] Rejected {rejected_count}/{original_count} action items as hallucinations")
+            
+            result['action_items'] = validated_action_items
+            result['_validation_metadata'] = {
+                'original_count': original_count,
+                'validated_count': validated_count,
+                'rejected_count': rejected_count,
+                'hallucination_rate': round((rejected_count / original_count * 100) if original_count > 0 else 0, 1)
+            }
+            
+            logger.info(f"[VALIDATION_COMPLETE] {validated_count}/{original_count} action items passed validation")
+        
+        return result
         
     except Exception as e:
         logger.error(f"Direct OpenAI analysis failed: {e}")
@@ -171,23 +242,27 @@ Format as valid JSON only."""
 
 
 def _generate_fallback_insights(transcript):
-    """Generate basic insights when OpenAI fails."""
+    """
+    Generate basic insights when OpenAI fails.
+    
+    ANTI-HALLUCINATION: Returns empty action_items since we cannot
+    validate anything without AI analysis.
+    """
     word_count = len(transcript.split())
     
     return {
-        'summary': f"Meeting transcript analyzed ({word_count} words). OpenAI processing unavailable.",
+        'summary': f"Meeting transcript captured ({word_count} words). AI analysis unavailable.",
         'key_points': [
-            "Meeting transcript successfully captured",
             f"Transcript contains {word_count} words",
-            "Review transcript for specific topics and decisions"
+            "Review transcript manually for specific topics"
         ],
-        'action_items': [
-            "Review meeting transcript for action items",
-            "Follow up on discussed topics",
-            "Share meeting outcomes with stakeholders"
-        ],
+        'action_items': [],  # CRITICAL: Empty - we don't hallucinate action items
         'decisions': [],
-        'next_steps': ["Review transcript and extract specific action items"],
+        'next_steps': [],
         'participants': [],
-        'sentiment': 'neutral'
+        'sentiment': 'neutral',
+        '_validation_metadata': {
+            'fallback_mode': True,
+            'reason': 'AI analysis unavailable'
+        }
     }

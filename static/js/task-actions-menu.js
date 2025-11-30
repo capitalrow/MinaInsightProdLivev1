@@ -537,20 +537,26 @@ class TaskActionsMenu {
  ***************************************************************/
 window.TaskActionsMenu = TaskActionsMenu;
 
+// Auto-initialize with retry logic for dependencies
 document.addEventListener("DOMContentLoaded", () => {
-    console.log("[TaskActionsMenu] DOMContentLoaded fired, checking for optimisticUI...");
-    console.log("[TaskActionsMenu] window.optimisticUI exists:", !!window.optimisticUI);
+    console.log("[TaskActionsMenu] DOMContentLoaded fired");
     
     const initMenu = () => {
+        if (window.taskActionsMenu) {
+            console.log("[TaskActionsMenu] Already initialized");
+            return;
+        }
+        
         if (window.optimisticUI) {
-            console.log("[TaskActionsMenu] Initializing TaskActionsMenu with optimisticUI");
+            console.log("[TaskActionsMenu] Dependencies ready, initializing...");
             window.taskActionsMenu = new TaskActionsMenu(window.optimisticUI);
             console.log("[TaskActionsMenu] Initialization complete");
         } else {
-            console.warn("[TaskActionsMenu] optimisticUI not ready, retrying in 100ms...");
+            console.log("[TaskActionsMenu] Awaiting optimisticUI...");
             setTimeout(initMenu, 100);
         }
     };
     
-    initMenu();
+    // Start initialization with short delay to allow other modules to load
+    setTimeout(initMenu, 50);
 });

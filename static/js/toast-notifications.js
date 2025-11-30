@@ -111,6 +111,9 @@ class ToastNotification {
 // Global toast instance
 window.toast = new ToastNotification();
 
+// CROWN⁴.6 Compatibility: Alias toastManager for legacy code expecting window.toastManager.show()
+window.toastManager = window.toast;
+
 // Compatibility with existing code
 window.showToast = function(message, type = 'info', duration = 3000) {
     window.toast.show(message, type, duration);

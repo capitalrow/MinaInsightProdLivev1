@@ -20,13 +20,20 @@ class WebSocketManager {
         this.workspaceId = null;
         this.isConnected = false;
         this.reconnectAttempts = {};
-        this.maxReconnectAttempts = 5;
         this.baseReconnectDelay = 1000; // Start with 1 second
-        this.maxReconnectDelay = 30000; // Max 30 seconds
+        this.maxReconnectDelay = 30000; // Max 30 seconds for quick recovery phase
+        this.degradedDelay = 60000; // 60 seconds during degraded phase
+        this.steadyStateDelay = 120000; // 120 seconds for steady state retry
         this.eventHandlers = {};
         this.lastEventId = null;
         this.lastSequenceNum = {};
         this.telemetry = telemetry; // CROWN⁴ telemetry for event propagation tracking
+        
+        // Adaptive reconnection state
+        this.reconnectTimers = {};
+        this.isDegraded = {};
+        this.degradedSince = {};
+        this.httpSyncIntervals = {};
         
         // BroadcastChannel for cross-tab sync
         if ('BroadcastChannel' in window) {
@@ -62,6 +69,23 @@ class WebSocketManager {
     }
     
     /**
+     * Check if connected to a specific namespace (or any namespace if none specified)
+     * @param {string} [namespace] - Optional namespace to check (e.g., 'tasks', '/tasks')
+     * @returns {boolean} True if connected
+     */
+    getConnectionStatus(namespace) {
+        if (!namespace) {
+            return this.isConnected;
+        }
+        
+        // Normalize namespace (remove leading slash if present)
+        const normalizedNs = namespace.startsWith('/') ? namespace.slice(1) : namespace;
+        const socket = this.sockets[normalizedNs];
+        
+        return socket && socket.connected;
+    }
+    
+    /**
      * Connect to a specific namespace
      * @param {string} namespace - Namespace name (e.g., 'dashboard', 'tasks')
      */
@@ -79,13 +103,14 @@ class WebSocketManager {
         // Calculate exponential backoff delay
         const delay = this.calculateBackoffDelay(namespace);
         
-        // Create Socket.IO connection with exponential backoff
+        // Create Socket.IO connection with adaptive reconnection
+        // Use Infinity for reconnectionAttempts - we handle retry logic ourselves
         const socket = io(`/${namespace}`, {
             transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionDelay: delay,
             reconnectionDelayMax: this.maxReconnectDelay,
-            reconnectionAttempts: this.maxReconnectAttempts,
+            reconnectionAttempts: Infinity, // Never give up - we handle adaptive retry
             randomizationFactor: 0.5 // Add jitter to prevent thundering herd
         });
         
@@ -93,7 +118,11 @@ class WebSocketManager {
         socket.on('connect', () => {
             console.log(`✅ Connected to /${namespace} namespace`);
             this.isConnected = true;
+            
+            // Reset reconnection state on successful connect
             this.reconnectAttempts[namespace] = 0;
+            this.clearReconnectTimer(namespace);
+            this.exitDegradedState(namespace);
             
             // Abort any pending requests from before reconnection
             this.abortPendingRequests(namespace);
@@ -114,20 +143,33 @@ class WebSocketManager {
             console.warn(`⚠️ Disconnected from /${namespace}: ${reason}`);
             this.isConnected = false;
             this.emit('connection_status', { namespace, connected: false, reason });
+            
+            // Schedule adaptive reconnect for server-initiated disconnects
+            // Pass incrementAttempt=true since disconnect doesn't go through connect_error
+            if (reason === 'transport close' || reason === 'transport error' || reason === 'ping timeout') {
+                this.scheduleAdaptiveReconnect(namespace, true);
+            }
         });
         
         socket.on('connect_error', (error) => {
-            console.error(`❌ Connection error on /${namespace}:`, error);
             this.reconnectAttempts[namespace]++;
+            const attempts = this.reconnectAttempts[namespace];
             
-            const delay = this.calculateBackoffDelay(namespace);
-            console.log(`🔄 Will retry /${namespace} in ${delay}ms (attempt ${this.reconnectAttempts[namespace]}/${this.maxReconnectAttempts})`);
+            console.error(`❌ Connection error on /${namespace}:`, error);
+            console.log(`🔄 Adaptive retry ${attempts} for /${namespace}`);
             
-            if (this.reconnectAttempts[namespace] >= this.maxReconnectAttempts) {
-                console.error(`❌ Max reconnection attempts reached for /${namespace}`);
-                this.abortPendingRequests(namespace);
-                this.emit('connection_failed', { namespace, error, attempts: this.reconnectAttempts[namespace] });
+            // Enter degraded state after 5 failed attempts
+            if (attempts >= 5 && !this.isDegraded[namespace]) {
+                this.enterDegradedState(namespace);
             }
+            
+            // Emit telemetry at key milestones
+            if (this.telemetry && (attempts === 5 || attempts === 12 || attempts % 10 === 0)) {
+                this.telemetry.recordMetric(`ws_reconnect_attempts_${namespace}`, attempts);
+            }
+            
+            // Schedule next adaptive reconnect attempt
+            this.scheduleAdaptiveReconnect(namespace);
         });
         
         socket.on('error', (error) => {
@@ -533,25 +575,37 @@ class WebSocketManager {
      * @returns {Promise<Object>} Server response
      */
     async emitWithAck(eventName, data, namespace = 'dashboard') {
+        console.log(`🔥 [emitWithAck] Called: event=${eventName}, namespace=${namespace}`);
+        
         // Remove leading slash if present
         const ns = namespace.startsWith('/') ? namespace.substring(1) : namespace;
         
         const socket = this.sockets[ns];
+        console.log(`🔥 [emitWithAck] Socket lookup: ns=${ns}, socket exists=${!!socket}, connected=${socket?.connected}`);
+        
         if (!socket) {
-            throw new Error(`Socket /${ns} not connected`);
+            const error = new Error(`Socket /${ns} not connected`);
+            console.error(`❌ [emitWithAck] ${error.message}`);
+            throw error;
         }
         
         if (!socket.connected) {
-            throw new Error(`Socket /${ns} is not currently connected`);
+            const error = new Error(`Socket /${ns} is not currently connected`);
+            console.error(`❌ [emitWithAck] ${error.message}`);
+            throw error;
         }
+        
+        console.log(`🔥 [emitWithAck] About to emit ${eventName} to /${ns}`);
         
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
+                console.error(`❌ [emitWithAck] Timeout after 10s waiting for ${eventName} on /${ns}`);
                 reject(new Error(`Timeout waiting for ${eventName} acknowledgment on /${ns}`));
             }, 10000); // 10 second timeout
             
             socket.emit(eventName, data, (response) => {
                 clearTimeout(timeout);
+                console.log(`✅ [emitWithAck] Response received for ${eventName}:`, response);
                 
                 // Check if server returned an error
                 if (response && response.success === false) {
@@ -596,10 +650,230 @@ class WebSocketManager {
     }
     
     /**
+     * Schedule adaptive reconnection with exponential backoff phases
+     * Phase 1 (attempts 1-5): Aggressive - 1s → 30s exponential backoff
+     * Phase 2 (attempts 6-12): Degraded - 60s fixed interval
+     * Phase 3 (attempts 13+): Steady state - 120s fixed interval
+     * @param {string} namespace - Namespace to reconnect
+     * @param {boolean} incrementAttempt - Whether to increment attempt counter (default: false, since connect_error already increments)
+     */
+    scheduleAdaptiveReconnect(namespace, incrementAttempt = false) {
+        // Increment attempt counter if called from disconnect (not from connect_error which already increments)
+        if (incrementAttempt) {
+            this.reconnectAttempts[namespace] = (this.reconnectAttempts[namespace] || 0) + 1;
+        }
+        
+        const attempts = this.reconnectAttempts[namespace] || 1;
+        let delay;
+        
+        if (attempts <= 5) {
+            // Phase 1: Aggressive exponential backoff
+            delay = Math.min(this.baseReconnectDelay * Math.pow(2, attempts - 1), this.maxReconnectDelay);
+        } else if (attempts <= 12) {
+            // Phase 2: Degraded mode - slower retries
+            delay = this.degradedDelay;
+        } else {
+            // Phase 3: Steady state - very slow retries
+            delay = this.steadyStateDelay;
+        }
+        
+        // Add jitter (±20%) to prevent thundering herd
+        const jitter = delay * 0.2 * (Math.random() - 0.5);
+        const finalDelay = Math.round(delay + jitter);
+        
+        // Clear existing timer
+        this.clearReconnectTimer(namespace);
+        
+        console.log(`⏱️ Adaptive reconnect scheduled for /${namespace} in ${Math.round(finalDelay/1000)}s (attempt ${attempts})`);
+        
+        // Schedule the reconnect - this is the critical fix: actually trigger socket.connect()
+        this.reconnectTimers[namespace] = setTimeout(() => {
+            const socket = this.sockets[namespace];
+            if (socket) {
+                if (!socket.connected) {
+                    console.log(`🔄 Executing adaptive reconnect for /${namespace} (attempt ${attempts})`);
+                    try {
+                        socket.connect();
+                    } catch (e) {
+                        console.error(`❌ Failed to reconnect /${namespace}:`, e);
+                        // Schedule another attempt
+                        this.scheduleAdaptiveReconnect(namespace, true);
+                    }
+                }
+            } else {
+                // Socket was destroyed, recreate it
+                console.log(`🔄 Recreating socket for /${namespace}`);
+                this.connect(namespace);
+            }
+        }, finalDelay);
+    }
+    
+    /**
+     * Clear reconnect timer for a namespace
+     * @param {string} namespace - Namespace
+     */
+    clearReconnectTimer(namespace) {
+        if (this.reconnectTimers[namespace]) {
+            clearTimeout(this.reconnectTimers[namespace]);
+            delete this.reconnectTimers[namespace];
+        }
+    }
+    
+    /**
+     * Enter degraded state - show UI banner and start HTTP sync fallback
+     * @param {string} namespace - Namespace
+     */
+    enterDegradedState(namespace) {
+        if (this.isDegraded[namespace]) return;
+        
+        console.warn(`⚠️ Entering degraded state for /${namespace}`);
+        this.isDegraded[namespace] = true;
+        this.degradedSince[namespace] = Date.now();
+        
+        // Emit event for UI to show degraded banner
+        this.emit('connection_degraded', {
+            namespace,
+            since: this.degradedSince[namespace],
+            attempts: this.reconnectAttempts[namespace]
+        });
+        
+        // Start HTTP sync fallback after 2 minutes of degraded state
+        this.httpSyncIntervals[namespace] = setTimeout(() => {
+            if (this.isDegraded[namespace]) {
+                this.startHttpSyncFallback(namespace);
+            }
+        }, 120000);
+    }
+    
+    /**
+     * Exit degraded state - hide UI banner and stop HTTP sync
+     * @param {string} namespace - Namespace
+     */
+    exitDegradedState(namespace) {
+        if (!this.isDegraded[namespace]) return;
+        
+        const duration = this.degradedSince[namespace] 
+            ? Math.round((Date.now() - this.degradedSince[namespace]) / 1000)
+            : 0;
+        
+        console.log(`✅ Exiting degraded state for /${namespace} (was degraded for ${duration}s)`);
+        this.isDegraded[namespace] = false;
+        delete this.degradedSince[namespace];
+        
+        // Stop HTTP sync fallback - ensure all intervals/timeouts are cleared
+        this.stopHttpSyncFallback(namespace);
+        
+        // Clear any pending degraded-mode timer
+        if (this.httpSyncIntervals[namespace]) {
+            if (typeof this.httpSyncIntervals[namespace] === 'number') {
+                clearTimeout(this.httpSyncIntervals[namespace]);
+            }
+            delete this.httpSyncIntervals[namespace];
+        }
+        
+        // Emit event for UI to hide degraded banner
+        this.emit('connection_recovered', {
+            namespace,
+            degradedDuration: duration
+        });
+    }
+    
+    /**
+     * Start HTTP sync fallback for degraded state
+     * Periodically fetches data via REST API when WebSocket is unavailable
+     * @param {string} namespace - Namespace
+     */
+    startHttpSyncFallback(namespace) {
+        if (this.httpSyncIntervals[namespace] && typeof this.httpSyncIntervals[namespace] !== 'number') {
+            return; // Already running
+        }
+        
+        console.log(`📡 Starting HTTP sync fallback for /${namespace}`);
+        
+        const syncEndpoints = {
+            'dashboard': '/api/dashboard/bootstrap',
+            'tasks': '/api/tasks/bootstrap',
+            'analytics': '/api/analytics/refresh'
+        };
+        
+        const endpoint = syncEndpoints[namespace];
+        if (!endpoint) return;
+        
+        // Sync every 90 seconds while degraded
+        this.httpSyncIntervals[namespace] = setInterval(async () => {
+            if (!this.isDegraded[namespace]) {
+                this.stopHttpSyncFallback(namespace);
+                return;
+            }
+            
+            try {
+                console.log(`🔄 HTTP fallback sync for /${namespace}`);
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // Emit the data as if it came from WebSocket
+                    this.emit(`${namespace}_sync`, { data, source: 'http_fallback' });
+                }
+            } catch (error) {
+                console.warn(`⚠️ HTTP fallback sync failed for /${namespace}:`, error);
+            }
+        }, 90000);
+    }
+    
+    /**
+     * Stop HTTP sync fallback
+     * @param {string} namespace - Namespace
+     */
+    stopHttpSyncFallback(namespace) {
+        if (this.httpSyncIntervals[namespace]) {
+            if (typeof this.httpSyncIntervals[namespace] === 'number') {
+                clearTimeout(this.httpSyncIntervals[namespace]);
+            } else {
+                clearInterval(this.httpSyncIntervals[namespace]);
+            }
+            delete this.httpSyncIntervals[namespace];
+            console.log(`🛑 Stopped HTTP sync fallback for /${namespace}`);
+        }
+    }
+    
+    /**
+     * Force immediate reconnection (manual retry)
+     * Resets attempt counter and immediately tries to reconnect
+     * @param {string} namespace - Namespace to reconnect
+     */
+    forceReconnect(namespace) {
+        console.log(`🔌 Force reconnect requested for /${namespace}`);
+        
+        // Clear any pending reconnect timer
+        this.clearReconnectTimer(namespace);
+        
+        // Reset attempt counter for fresh start
+        this.reconnectAttempts[namespace] = 0;
+        
+        // Immediately try to connect
+        const socket = this.sockets[namespace];
+        if (socket) {
+            socket.connect();
+        } else {
+            // Socket doesn't exist, create new connection
+            this.connect(namespace);
+        }
+    }
+    
+    /**
      * Disconnect from namespace
      * @param {string} namespace - Namespace to disconnect
      */
     disconnect(namespace) {
+        // Clear any pending reconnect attempts
+        this.clearReconnectTimer(namespace);
+        this.stopHttpSyncFallback(namespace);
+        
         if (this.sockets[namespace]) {
             this.sockets[namespace].disconnect();
             delete this.sockets[namespace];

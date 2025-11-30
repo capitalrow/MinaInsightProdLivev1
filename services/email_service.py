@@ -1,33 +1,123 @@
 """
 Email Service for Mina - Phase 2 Group 4 (T2.27)
 Handles sending transcripts via email with summary and optional attachments.
+Uses Replit SendGrid connector for secure credential management.
 """
 
 import os
 import logging
+import requests
 from typing import Optional, List, Dict
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
+def _get_replit_token() -> Optional[str]:
+    """Get the Replit authentication token for connector API."""
+    if os.environ.get('REPL_IDENTITY'):
+        return 'repl ' + os.environ['REPL_IDENTITY']
+    elif os.environ.get('WEB_REPL_RENEWAL'):
+        return 'depl ' + os.environ['WEB_REPL_RENEWAL']
+    return None
+
+
+def _get_sendgrid_credentials() -> Optional[Dict[str, str]]:
+    """
+    Fetch SendGrid credentials from Replit Connectors API.
+    Returns dict with 'api_key' and 'from_email' or None if not configured.
+    """
+    hostname = os.environ.get('REPLIT_CONNECTORS_HOSTNAME')
+    token = _get_replit_token()
+    
+    if not hostname or not token:
+        return None
+    
+    try:
+        response = requests.get(
+            f'https://{hostname}/api/v2/connection',
+            params={
+                'include_secrets': 'true',
+                'connector_names': 'sendgrid'
+            },
+            headers={
+                'Accept': 'application/json',
+                'X_REPLIT_TOKEN': token
+            },
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            logger.warning(f"SendGrid connector API returned {response.status_code}")
+            return None
+        
+        data = response.json()
+        items = data.get('items', [])
+        
+        if not items:
+            return None
+        
+        settings = items[0].get('settings', {})
+        api_key = settings.get('api_key')
+        from_email = settings.get('from_email')
+        
+        if api_key and from_email:
+            return {
+                'api_key': api_key,
+                'from_email': from_email
+            }
+        
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Failed to fetch SendGrid credentials: {e}")
+        return None
+
+
 class EmailService:
     """Service for sending meeting transcripts via email."""
     
     def __init__(self):
-        self.sendgrid_api_key = os.environ.get('SENDGRID_API_KEY')
-        self.from_email = os.environ.get('FROM_EMAIL', 'noreply@mina.app')
         self.from_name = os.environ.get('FROM_NAME', 'Mina')
-        self.is_configured = bool(self.sendgrid_api_key)
-        
-        if self.is_configured:
-            logger.info("✅ Email service initialized with SendGrid")
+        self._cached_credentials = None
+        self._check_configuration()
+    
+    def _check_configuration(self):
+        """Check if email service is configured via Replit connector or env vars."""
+        creds = self._get_credentials()
+        if creds:
+            logger.info("✅ Email service initialized with SendGrid (Replit connector)")
         else:
-            logger.warning("⚠️ Email service not configured - SENDGRID_API_KEY not found")
+            legacy_key = os.environ.get('SENDGRID_API_KEY')
+            if legacy_key:
+                logger.info("✅ Email service initialized with SendGrid (environment variable)")
+            else:
+                logger.warning("⚠️ Email service not configured - SendGrid not connected")
+    
+    def _get_credentials(self) -> Optional[Dict[str, str]]:
+        """
+        Get SendGrid credentials. 
+        Tries Replit connector first, falls back to environment variables.
+        Never caches credentials as they may expire.
+        """
+        creds = _get_sendgrid_credentials()
+        if creds:
+            return creds
+        
+        api_key = os.environ.get('SENDGRID_API_KEY')
+        from_email = os.environ.get('FROM_EMAIL', 'noreply@mina.app')
+        
+        if api_key:
+            return {
+                'api_key': api_key,
+                'from_email': from_email
+            }
+        
+        return None
     
     def is_available(self) -> bool:
         """Check if email service is available."""
-        return self.is_configured
+        return self._get_credentials() is not None
     
     def send_transcript_email(
         self,
@@ -54,7 +144,9 @@ class EmailService:
         Returns:
             Dict with success status and message
         """
-        if not self.is_configured:
+        creds = self._get_credentials()
+        
+        if not creds:
             return {
                 'success': False,
                 'error': 'Email service not configured. Please set up SendGrid integration.'
@@ -64,7 +156,7 @@ class EmailService:
             import sendgrid
             from sendgrid.helpers.mail import Mail, Email, To, Content
             
-            sg = sendgrid.SendGridAPIClient(api_key=self.sendgrid_api_key)
+            sg = sendgrid.SendGridAPIClient(api_key=creds['api_key'])
             
             subject = f"Meeting Transcript: {session_title}"
             
@@ -77,7 +169,7 @@ class EmailService:
                 custom_message=custom_message
             )
             
-            from_email = Email(self.from_email, self.from_name)
+            from_email = Email(creds['from_email'], self.from_name)
             to_list = [To(email) for email in to_emails]
             content = Content("text/html", html_content)
             

@@ -1,6 +1,8 @@
 /**
  * CROWN⁴.6 Developer Performance Panel
  * Ctrl+Shift+M keyboard shortcut to view real-time performance metrics
+ * 
+ * Only visible in development mode (non-production environments)
  */
 
 class DevPerformancePanel {
@@ -8,11 +10,48 @@ class DevPerformancePanel {
         this.isVisible = false;
         this.panelElement = null;
         this.refreshInterval = null;
-        this.init();
+        this.isDev = this.checkDevEnvironment();
+        
+        // Only initialize in development mode
+        if (this.isDev) {
+            this.init();
+        } else {
+            console.log('[DevPerformancePanel] Disabled in production mode');
+        }
+    }
+    
+    checkDevEnvironment() {
+        // Explicit server-provided flag takes priority
+        if (typeof window.__MINA_ENV__ !== 'undefined') {
+            return window.__MINA_ENV__ === 'development';
+        }
+        
+        // Fallback: strict hostname whitelist for development
+        const hostname = window.location.hostname;
+        const devHosts = [
+            'localhost',
+            '127.0.0.1',
+            '0.0.0.0'
+        ];
+        
+        // Check if it's a known dev host
+        if (devHosts.includes(hostname)) {
+            return true;
+        }
+        
+        // Check for Replit dev environment patterns
+        if (hostname.includes('.riker.replit.dev') || 
+            hostname.includes('.repl.co') ||
+            hostname.includes('.picard.replit.dev')) {
+            return true;
+        }
+        
+        // Everything else (including .replit.app and custom domains) is production
+        return false;
     }
 
     init() {
-        console.log('[DevPerformancePanel] Initializing...');
+        console.log('[DevPerformancePanel] Initializing (development mode)...');
 
         // Create panel element
         this.createPanel();

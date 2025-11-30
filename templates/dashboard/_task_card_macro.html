@@ -2,19 +2,19 @@
 {# CROWN⁴.6: Fragment-based hydration for optimistic inserts #}
 
 {% macro task_card(task) %}
-<div class="task-card{% if task.completed %} completed{% endif %}" 
+<div class="task-card{% if task.status == 'completed' %} completed{% endif %}" 
      data-task-id="{{ task.id }}"
      data-meeting-id="{{ task.meeting_id or '' }}"
      data-session-id="{{ task.session_id or '' }}"
      data-extracted-by-ai="{{ 'true' if task.extracted_by_ai else 'false' }}"
-     data-status="{% if task.completed %}completed{% else %}pending{% endif %}"
+     data-status="{{ task.status|default('todo') }}"
      data-priority="{{ task.priority|default('medium')|lower }}"
      data-assigned-to="{{ task.assigned_to_id or '' }}"
      data-due-date="{{ task.due_date or '' }}"
      data-labels="{{ task.labels|tojson|escape if task.labels else '[]' }}"
      data-transcript-span="{{ task.transcript_span|tojson|escape if task.transcript_span else '{}' }}">
     <div class="checkbox-wrapper">
-        <input type="checkbox" {% if task.completed %}checked{% endif %} class="task-checkbox" data-task-id="{{ task.id }}">
+        <input type="checkbox" {% if task.status == 'completed' %}checked{% endif %} class="task-checkbox" data-task-id="{{ task.id }}">
     </div>
     <div class="task-content">
         {# CROWN⁴.6: Spoken Provenance - Meeting origin display #}

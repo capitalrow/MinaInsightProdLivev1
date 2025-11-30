@@ -80,15 +80,26 @@ class VectorClock {
     }
 
     /**
-     * Create from stored tuple
-     * @param {Array<[string, number]>} tuple
+     * Create from stored tuple or object format
+     * Handles both array format [["user_1", 1]] and object format {"user_1": 1}
+     * @param {Array<[string, number]>|Object} tuple - Array of tuples or object
      * @returns {VectorClock}
      */
     static fromTuple(tuple) {
         const clocks = {};
-        for (const [node, counter] of tuple) {
-            clocks[node] = counter;
+        
+        if (!tuple) {
+            return new VectorClock(clocks);
         }
+        
+        if (Array.isArray(tuple)) {
+            for (const [node, counter] of tuple) {
+                clocks[node] = counter;
+            }
+        } else if (typeof tuple === 'object') {
+            Object.assign(clocks, tuple);
+        }
+        
         return new VectorClock(clocks);
     }
 
@@ -345,18 +356,17 @@ class TaskCache {
     }
     
     /**
-     * ENTERPRISE-GRADE: Clean orphaned temp tasks (safe, prevents data loss)
-     * Only removes temp IDs that are:
-     * 1. NOT in the offline queue (already synced/failed)
-     * 2. Older than 10 minutes (safe threshold for failed operations)
-     * This preserves legitimate offline tasks that are still pending sync.
+     * ENTERPRISE-GRADE: Clean orphaned temp tasks AND stale offline_queue entries
+     * Phase 1: Clean stale offline_queue entries (older than 2 mins with failed/pending status)
+     * Phase 2: Clean orphaned temp_tasks that are now safe to remove
+     * This prevents zombie "Sync Failed" badges from persisting indefinitely.
      * Updated to check temp_tasks store (v3 schema)
-     * @returns {Promise<number>} Number of tasks removed
+     * @returns {Promise<number>} Number of items removed (temp tasks + queue entries)
      */
     async cleanOrphanedTempTasks() {
         await this.init();
         
-        console.log('🧹 [Cleanup] Starting cleanOrphanedTempTasks()...');
+        console.log('🧹 [Cleanup] Starting cleanOrphanedTempTasks() with stale queue cleanup...');
         
         return new Promise(async (resolve, reject) => {
             try {
@@ -381,69 +391,121 @@ class TaskCache {
                     console.log('🧹 [Cleanup] Temp tasks:', allTempTasks.map(t => ({ id: t.id, created_at: t.created_at, title: t.title })));
                 }
                 if (queuedOps.length > 0) {
-                    console.log('🧹 [Cleanup] Queued operations:', queuedOps.map(op => ({ type: op.type, temp_id: op.temp_id, data_temp_id: op.data?.temp_id })));
+                    console.log('🧹 [Cleanup] Queued operations:', queuedOps.map(op => ({ 
+                        type: op.type, 
+                        temp_id: op.temp_id, 
+                        data_temp_id: op.data?.temp_id,
+                        timestamp: op.timestamp,
+                        failed: op.failed
+                    })));
                 }
                 
-                // Build set of temp IDs that are in the offline queue (should NOT be deleted)
-                const queuedTempIds = new Set();
+                const now = Date.now();
+                const STALE_QUEUE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes for stale queue
+                const TEMP_TASK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes for temp tasks (reduced from 10)
+                
+                // PHASE 1: Clean stale offline_queue entries
+                // Find queue entries that are older than 2 minutes (likely already succeeded on server)
+                const staleQueueEntries = [];
                 queuedOps.forEach(op => {
-                    if (op.temp_id) queuedTempIds.add(op.temp_id);
-                    if (op.data && op.data.temp_id) queuedTempIds.add(op.data.temp_id);
+                    const opTime = op.timestamp ? new Date(op.timestamp).getTime() : 0;
+                    const opAge = now - opTime;
+                    
+                    if (opAge > STALE_QUEUE_THRESHOLD_MS && (op.type === 'create')) {
+                        console.log(`🧹 [Cleanup] Stale queue entry: ${op.operation_id || op.id} (age: ${Math.round(opAge/1000)}s, type: ${op.type})`);
+                        staleQueueEntries.push(op);
+                    }
                 });
                 
-                console.log(`🧹 [Cleanup] Found ${queuedTempIds.size} temp IDs in offline queue`);
+                // Get temp IDs from stale queue entries to also clean up
+                const staleQueueTempIds = new Set();
+                staleQueueEntries.forEach(op => {
+                    if (op.temp_id) staleQueueTempIds.add(op.temp_id);
+                    if (op.data && op.data.temp_id) staleQueueTempIds.add(op.data.temp_id);
+                });
                 
-                // Find orphaned temp tasks (older than 10 minutes AND not in queue)
-                const now = Date.now();
-                const SAFE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+                // Build set of temp IDs that are still in ACTIVE (non-stale) queue - don't delete these
+                const activeQueueTempIds = new Set();
+                queuedOps.filter(op => !staleQueueEntries.includes(op)).forEach(op => {
+                    if (op.temp_id) activeQueueTempIds.add(op.temp_id);
+                    if (op.data && op.data.temp_id) activeQueueTempIds.add(op.data.temp_id);
+                });
+                
+                console.log(`🧹 [Cleanup] Active queue temp IDs: ${activeQueueTempIds.size}, Stale queue temp IDs: ${staleQueueTempIds.size}`);
+                
+                // PHASE 2: Find orphaned temp tasks
                 const orphanedTempIds = [];
                 
                 allTempTasks.forEach(task => {
-                    console.log(`🧹 [Cleanup] Evaluating temp task: ${task.id} (created: ${task.created_at})`);
-                    
-                    // Skip if in offline queue (legitimate pending task)
-                    if (queuedTempIds.has(task.id)) {
-                        console.log(`✅ [Cleanup] Preserving queued temp task: ${task.id}`);
+                    // Skip if in active (non-stale) queue
+                    if (activeQueueTempIds.has(task.id)) {
+                        console.log(`✅ [Cleanup] Preserving active temp task: ${task.id}`);
                         return;
                     }
                     
-                    // CRITICAL: Validate created_at timestamp (preserve if invalid to be safe)
-                    // Reject: null, undefined, 0, empty string, non-ISO strings
+                    // If in stale queue, mark for deletion
+                    if (staleQueueTempIds.has(task.id)) {
+                        console.log(`🗑️ [Cleanup] Temp task in stale queue, deleting: ${task.id}`);
+                        orphanedTempIds.push(task.id);
+                        return;
+                    }
+                    
+                    // CRITICAL FIX: Check age for temp tasks not in any queue
+                    // Temp tasks with missing/invalid created_at are STALE and should be DELETED
+                    // They were created before proper timestamp tracking was implemented
                     if (!task.created_at || task.created_at === 0 || task.created_at === '0') {
-                        console.log(`✅ Preserving temp task with missing/invalid created_at: ${task.id}`);
+                        console.log(`🗑️ [Cleanup] Deleting temp task with missing created_at: ${task.id}`);
+                        orphanedTempIds.push(task.id);
                         return;
                     }
                     
-                    // Parse timestamp and validate
                     const createdTimestamp = new Date(task.created_at).getTime();
-                    
-                    // CRITICAL: Skip if timestamp is NaN or epoch/negative
                     if (Number.isNaN(createdTimestamp) || createdTimestamp <= 0) {
-                        console.log(`✅ Preserving temp task with invalid timestamp: ${task.id}`);
+                        console.log(`🗑️ [Cleanup] Deleting temp task with invalid timestamp: ${task.id}`);
+                        orphanedTempIds.push(task.id);
                         return;
                     }
                     
-                    // Calculate age from valid timestamp
                     const taskAge = now - createdTimestamp;
-                    
-                    // CRITICAL: Sanity check - if age is negative or unreasonably large (>1 year), preserve
                     const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
                     if (taskAge < 0 || taskAge > ONE_YEAR_MS) {
-                        console.log(`✅ Preserving temp task with suspicious age: ${task.id} (age: ${taskAge}ms)`);
+                        console.log(`🗑️ [Cleanup] Deleting temp task with suspicious age: ${task.id} (age: ${Math.round(taskAge/1000)}s)`);
+                        orphanedTempIds.push(task.id);
                         return;
                     }
                     
-                    if (taskAge < SAFE_THRESHOLD_MS) {
+                    if (taskAge < TEMP_TASK_THRESHOLD_MS) {
                         console.log(`⏳ Preserving recent temp task: ${task.id} (age: ${Math.round(taskAge/1000)}s)`);
                         return;
                     }
                     
-                    // This is a confirmed orphaned temp task - safe to remove
-                    console.log(`🗑️ Orphaned temp task confirmed for deletion: ${task.id} (age: ${Math.round(taskAge/1000)}s, not in queue)`);
+                    console.log(`🗑️ Orphaned temp task confirmed: ${task.id} (age: ${Math.round(taskAge/1000)}s)`);
                     orphanedTempIds.push(task.id);
                 });
                 
-                // Delete orphaned temp tasks from temp_tasks store
+                let totalRemoved = 0;
+                
+                // Delete stale queue entries
+                if (staleQueueEntries.length > 0) {
+                    const queueDeleteTx = this.db.transaction(['offline_queue'], 'readwrite');
+                    const queueDeleteStore = queueDeleteTx.objectStore('offline_queue');
+                    
+                    staleQueueEntries.forEach(op => {
+                        const key = op.id || op.operation_id;
+                        queueDeleteStore.delete(key);
+                        console.log(`🧹 Removing stale queue entry: ${key}`);
+                    });
+                    
+                    await new Promise((res, rej) => {
+                        queueDeleteTx.oncomplete = res;
+                        queueDeleteTx.onerror = () => rej(queueDeleteTx.error);
+                    });
+                    
+                    totalRemoved += staleQueueEntries.length;
+                    console.log(`✅ Removed ${staleQueueEntries.length} stale queue entries`);
+                }
+                
+                // Delete orphaned temp tasks
                 if (orphanedTempIds.length > 0) {
                     const deleteTransaction = this.db.transaction(['temp_tasks'], 'readwrite');
                     const deleteStore = deleteTransaction.objectStore('temp_tasks');
@@ -453,15 +515,20 @@ class TaskCache {
                         console.log(`🧹 Removing orphaned temp task: ${tempId}`);
                     });
                     
-                    deleteTransaction.oncomplete = () => {
-                        console.log(`✅ Cache hygiene: Removed ${orphanedTempIds.length} orphaned temp tasks from temp_tasks store`);
-                        resolve(orphanedTempIds.length);
-                    };
-                    deleteTransaction.onerror = () => reject(deleteTransaction.error);
-                } else {
-                    console.log('✅ No orphaned temp tasks found in temp_tasks store');
-                    resolve(0);
+                    await new Promise((res, rej) => {
+                        deleteTransaction.oncomplete = res;
+                        deleteTransaction.onerror = () => rej(deleteTransaction.error);
+                    });
+                    
+                    totalRemoved += orphanedTempIds.length;
+                    console.log(`✅ Removed ${orphanedTempIds.length} orphaned temp tasks`);
                 }
+                
+                if (totalRemoved === 0) {
+                    console.log('✅ No orphaned items found');
+                }
+                
+                resolve(totalRemoved);
                 
             } catch (error) {
                 console.error('❌ Failed to clean orphaned temp tasks:', error);
@@ -1440,6 +1507,46 @@ class TaskCache {
             const request = store.put({ key, value, updated_at: Date.now() });
 
             request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * CROWN⁴.6: Cache prefetched task detail for instant modal opens
+     * @param {string|number} taskId - Task ID
+     * @param {Object} detailData - Task detail data from API
+     * @returns {Promise<void>}
+     */
+    async setTaskDetail(taskId, detailData) {
+        await this.init();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['metadata'], 'readwrite');
+            const store = transaction.objectStore('metadata');
+            const request = store.put({
+                key: `task_detail_${taskId}`,
+                value: detailData,
+                task_id: taskId,
+                updated_at: Date.now()
+            });
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * CROWN⁴.6: Get prefetched task detail for instant modal opens
+     * @param {string|number} taskId - Task ID
+     * @returns {Promise<Object|null>}
+     */
+    async getTaskDetail(taskId) {
+        await this.init();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['metadata'], 'readonly');
+            const store = transaction.objectStore('metadata');
+            const request = store.get(`task_detail_${taskId}`);
+
+            request.onsuccess = () => resolve(request.result?.value || null);
             request.onerror = () => reject(request.error);
         });
     }
