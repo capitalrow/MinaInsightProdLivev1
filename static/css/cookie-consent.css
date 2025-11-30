@@ -139,6 +139,32 @@
     border-color: var(--color-primary-dark, #7c3aed);
 }
 
+.cookie-consent-actions .btn-reject {
+    background: transparent;
+    border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.2));
+    color: var(--color-text-secondary, rgba(255, 255, 255, 0.7));
+}
+
+.cookie-consent-actions .btn-reject:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-primary, #ffffff);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.cookie-desc {
+    display: block;
+    font-size: 11px;
+    color: var(--color-text-tertiary, rgba(255, 255, 255, 0.5));
+    margin-top: 2px;
+    font-weight: normal;
+}
+
+.cookie-links {
+    font-size: 12px;
+    margin-top: 12px;
+    color: var(--color-text-tertiary, rgba(255, 255, 255, 0.5));
+}
+
 .cookie-settings-link {
     position: fixed;
     bottom: 16px;
