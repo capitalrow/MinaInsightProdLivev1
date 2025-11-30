@@ -35,7 +35,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/error-states.css') }}" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/calm-motion.css') }}" media="print" onload="this.media='all'">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/cookie-consent.css') }}" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cookie-consent.css') }}?v=2">
     
     <!-- Fallback for browsers without onload -->
     <noscript>
@@ -45,7 +45,6 @@
         <link rel="stylesheet" href="{{ url_for('static', filename='css/error-states.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/calm-motion.css') }}">
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/cookie-consent.css') }}">
     </noscript>
     
     {% block extra_css %}{% endblock %}
