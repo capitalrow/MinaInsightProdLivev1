@@ -131,6 +131,13 @@ class TaskDateSheet {
         });
 
         this.overlay.querySelectorAll('.task-sheet-preset').forEach(btn => {
+            // Helper to reset button state
+            const resetBtn = () => {
+                btn.style.transform = '';
+                btn.style.background = '';
+                btn.style.borderColor = '';
+            };
+            
             // Touch feedback on press
             btn.addEventListener('touchstart', () => {
                 btn.style.transform = 'scale(0.97)';
@@ -138,11 +145,9 @@ class TaskDateSheet {
                 btn.style.borderColor = 'rgba(59, 130, 246, 0.4)';
             }, { passive: true });
             
-            btn.addEventListener('touchend', () => {
-                btn.style.transform = '';
-                btn.style.background = '';
-                btn.style.borderColor = '';
-            }, { passive: true });
+            btn.addEventListener('touchend', resetBtn, { passive: true });
+            btn.addEventListener('touchcancel', resetBtn, { passive: true });
+            btn.addEventListener('touchmove', resetBtn, { passive: true });
             
             btn.addEventListener('click', () => {
                 const preset = btn.dataset.preset;
