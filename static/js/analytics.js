@@ -16,6 +16,100 @@ class AnalyticsDashboard {
         this.init();
     }
 
+    /**
+     * CROWN⁵+ Empty State Templates
+     * "Every empty state feels like a gentle invitation, not a void."
+     */
+    static CROWN5_EMPTY_STATES = {
+        chart: (type, title, description) => `
+            <div class="crown5-chart-empty" role="status" aria-label="${title}">
+                <div class="crown5-chart-empty-placeholder">
+                    ${type === 'bar' ? `
+                        <div class="crown5-chart-empty-placeholder-bars">
+                            <div class="crown5-chart-empty-placeholder-bar"></div>
+                            <div class="crown5-chart-empty-placeholder-bar"></div>
+                            <div class="crown5-chart-empty-placeholder-bar"></div>
+                            <div class="crown5-chart-empty-placeholder-bar"></div>
+                            <div class="crown5-chart-empty-placeholder-bar"></div>
+                        </div>
+                    ` : type === 'donut' ? `
+                        <div class="crown5-chart-empty-placeholder-donut"></div>
+                    ` : `
+                        <div class="crown5-chart-empty-placeholder-line"></div>
+                    `}
+                </div>
+                <div class="crown5-empty-illustration">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </div>
+                <p class="crown5-empty-title">${title}</p>
+                <p class="crown5-empty-description">${description}</p>
+            </div>
+        `,
+        balance: (title, hint) => `
+            <div class="crown5-balance-card">
+                <div class="crown5-balance-header">
+                    <span class="crown5-balance-title">${title}</span>
+                    <span class="crown5-balance-score crown5-no-data-value">—</span>
+                </div>
+                <div class="crown5-balance-empty-indicator"></div>
+                <p class="crown5-balance-hint">${hint}</p>
+                <span class="crown5-balance-status crown5-no-data-status">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    No Data
+                </span>
+            </div>
+        `,
+        productivity: (icon, title, description) => `
+            <div class="crown5-empty-state">
+                <div class="crown5-empty-illustration">
+                    ${icon}
+                </div>
+                <p class="crown5-empty-title">${title}</p>
+                <p class="crown5-empty-description">${description}</p>
+                <div class="crown5-empty-hint">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Record or select a meeting to populate this section
+                </div>
+            </div>
+        `
+    };
+
+    /**
+     * Render CROWN⁵+ styled empty state for charts
+     */
+    renderCrown5EmptyChart(container, type, title, description) {
+        if (!container) return;
+        
+        const canvas = container.querySelector('canvas');
+        if (canvas) canvas.style.display = 'none';
+        
+        const existingEmpty = container.querySelector('.crown5-chart-empty');
+        if (existingEmpty) existingEmpty.remove();
+        
+        const emptyDiv = document.createElement('div');
+        emptyDiv.innerHTML = AnalyticsDashboard.CROWN5_EMPTY_STATES.chart(type, title, description);
+        container.appendChild(emptyDiv.firstElementChild);
+    }
+
+    /**
+     * Hide CROWN⁵+ empty state and show chart canvas
+     */
+    hideCrown5EmptyChart(container) {
+        if (!container) return;
+        
+        const canvas = container.querySelector('canvas');
+        if (canvas) canvas.style.display = '';
+        
+        const existingEmpty = container.querySelector('.crown5-chart-empty');
+        if (existingEmpty) existingEmpty.remove();
+    }
+
     async init() {
         // Set up date range filter
         this.setupDateRangeFilter();
@@ -420,6 +514,17 @@ class AnalyticsDashboard {
         // Update Meeting Activity Chart
         if (dashboard.trends && dashboard.trends.meeting_frequency) {
             this.updateMeetingActivityChart(dashboard.trends.meeting_frequency);
+        } else {
+            const activityCtx = document.getElementById('meetingActivityChart');
+            const activityFrame = activityCtx?.closest('.chart-frame');
+            if (activityFrame) {
+                this.renderCrown5EmptyChart(
+                    activityFrame,
+                    'line',
+                    'No meeting activity yet',
+                    'Record meetings to see activity trends'
+                );
+            }
         }
         
         // Update Task Status Chart
@@ -427,14 +532,13 @@ class AnalyticsDashboard {
         
         // Load and update Speaker Distribution
         this.loadCommunicationData().then(commData => {
-            if (commData) {
-                this.updateSpeakerChart(commData);
-            }
+            this.updateSpeakerChart(commData || {});
         });
     }
 
     updateMeetingActivityChart(trendData) {
         const ctx = document.getElementById('meetingActivityChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
 
         const labels = trendData.map(d => {
@@ -442,6 +546,9 @@ class AnalyticsDashboard {
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         });
         const values = trendData.map(d => d.meetings);
+
+        // Hide any existing empty state before rendering chart
+        this.hideCrown5EmptyChart(chartFrame);
 
         // Destroy existing chart if it exists
         if (this.charts.meetingActivity) {
@@ -488,12 +595,26 @@ class AnalyticsDashboard {
 
     updateTaskStatusChart(dashboard) {
         const ctx = document.getElementById('taskStatusChart');
-        if (!ctx || !dashboard.productivity) return;
+        const chartFrame = ctx?.closest('.chart-frame');
+        if (!ctx) return;
 
-        const tasks = dashboard.productivity;
-        const completed = tasks.total_tasks_created || 0;
-        const inProgress = Math.floor(completed * 0.3); // Estimate
-        const pending = Math.floor(completed * 0.1); // Estimate
+        const tasks = dashboard?.productivity;
+        const completed = tasks?.total_tasks_created || 0;
+        const inProgress = Math.floor(completed * 0.3);
+        const pending = Math.floor(completed * 0.1);
+        const total = completed + inProgress + pending;
+
+        if (total === 0) {
+            this.renderCrown5EmptyChart(
+                chartFrame,
+                'donut',
+                'No task data yet',
+                'Complete meetings to see task distribution'
+            );
+            return;
+        }
+
+        this.hideCrown5EmptyChart(chartFrame);
 
         if (this.charts.taskStatus) {
             this.charts.taskStatus.destroy();
@@ -536,9 +657,23 @@ class AnalyticsDashboard {
 
     updateSpeakerChart(commData) {
         const ctx = document.getElementById('speakerChart');
-        if (!ctx || !commData.top_speakers) return;
+        const chartFrame = ctx?.closest('.chart-frame');
+        if (!ctx) return;
 
-        const speakers = commData.top_speakers.slice(0, 5);
+        const speakers = commData?.top_speakers?.slice(0, 5) || [];
+        
+        if (speakers.length === 0 || speakers.every(s => !s.talk_time_minutes)) {
+            this.renderCrown5EmptyChart(
+                chartFrame,
+                'bar',
+                'No speaker data yet',
+                'Record meetings to see who speaks most'
+            );
+            return;
+        }
+
+        this.hideCrown5EmptyChart(chartFrame);
+
         const labels = speakers.map(s => s.name);
         const values = speakers.map(s => s.talk_time_minutes);
         const colors = [
@@ -985,16 +1120,14 @@ class AnalyticsDashboard {
         const container = document.getElementById('speakingTimeDetails');
         if (!container) return;
 
-        container.innerHTML = `
-            <div class="text-center text-secondary py-12">
-                <svg class="w-16 h-16 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                </svg>
-                <p class="font-medium">No speaking time data available</p>
-                <p class="text-sm mt-1">Record meetings to see participant speaking analytics</p>
-            </div>
-        `;
+        container.innerHTML = AnalyticsDashboard.CROWN5_EMPTY_STATES.productivity(
+            `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>`,
+            'No speaking data yet',
+            'Record meetings to see who contributes and how time is distributed across participants.'
+        );
     }
 
     /**
@@ -1128,11 +1261,12 @@ class AnalyticsDashboard {
         const safeStatus = isValidScore ? status : 'No Data';
         const safeDescription = isValidScore ? description : 'Record meetings to see metrics';
         
-        let colorClass, bgGradient;
         if (!isValidScore) {
-            colorClass = 'text-secondary';
-            bgGradient = 'rgba(128, 128, 128, 0.1)';
-        } else if (score >= 80) {
+            return AnalyticsDashboard.CROWN5_EMPTY_STATES.balance(title, safeDescription);
+        }
+        
+        let colorClass, bgGradient;
+        if (score >= 80) {
             colorClass = 'text-green-500';
             bgGradient = 'rgba(34, 197, 94, 0.1)';
         } else if (score >= 60) {
@@ -1147,7 +1281,7 @@ class AnalyticsDashboard {
         }
 
         return `
-            <div class="p-5 rounded-xl" style="background: ${bgGradient}; border: 1px solid rgba(255, 255, 255, 0.1);">
+            <div class="crown5-balance-card p-5 rounded-xl crown5-staggered-entry" style="background: ${bgGradient}; border: 1px solid rgba(255, 255, 255, 0.1);">
                 <div class="flex items-start justify-between mb-3">
                     <div class="w-10 h-10 rounded-lg flex items-center justify-center ${colorClass}" style="background: rgba(255, 255, 255, 0.1);">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1156,14 +1290,14 @@ class AnalyticsDashboard {
                     </div>
                     <div class="text-right">
                         <div class="text-3xl font-bold ${colorClass}">${displayScore}</div>
-                        <div class="text-xs text-secondary">${isValidScore ? '/ 100' : ''}</div>
+                        <div class="text-xs text-secondary">/ 100</div>
                     </div>
                 </div>
                 <h3 class="font-semibold text-sm mb-1">${title}</h3>
                 <p class="text-xs text-tertiary mb-2">${safeDescription}</p>
                 <div class="flex items-center gap-2">
                     <div class="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div class="h-full ${colorClass} transition-all duration-500" style="width: ${isValidScore ? score : 0}%; opacity: 0.8;"></div>
+                        <div class="h-full ${colorClass} transition-all duration-500" style="width: ${score}%; opacity: 0.8;"></div>
                     </div>
                     <span class="text-xs font-medium ${colorClass}">${safeStatus}</span>
                 </div>

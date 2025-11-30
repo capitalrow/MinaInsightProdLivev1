@@ -1,0 +1,607 @@
+/**
+ * CROWN⁵+ Analytics Event Sequencing Visual System
+ * "Clarity over clutter — intelligence that reflects, not overwhelms."
+ * 
+ * Implements emotional calm through:
+ * - Glassmorphism depth
+ * - Calm motion (200-400ms)
+ * - Subtle empty states
+ * - Sequential fade-in
+ * - Micro-pulse updates
+ */
+
+/* ============================================================================
+   GLASSMORPHISM ENHANCEMENT FOR ANALYTICS CARDS
+   ========================================================================= */
+
+.analytics-workspace .kpi-card,
+.analytics-workspace .chart-card {
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: all var(--calm-duration-normal) var(--calm-ease-out);
+}
+
+.analytics-workspace .kpi-card:hover,
+.analytics-workspace .chart-card:hover {
+    background: rgba(30, 41, 59, 0.75);
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 
+        0 10px 15px -3px rgba(0, 0, 0, 0.15),
+        0 4px 6px -2px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(99, 102, 241, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+/* ============================================================================
+   CROWN⁵+ CALM EMPTY STATES
+   "Every empty state feels like a gentle invitation, not a void."
+   ========================================================================= */
+
+.crown5-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    text-align: center;
+    min-height: 200px;
+    position: relative;
+    overflow: hidden;
+}
+
+.crown5-empty-state::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: crown5-breathe 4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes crown5-breathe {
+    0%, 100% {
+        opacity: 0.5;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+}
+
+.crown5-empty-illustration {
+    width: 80px;
+    height: 80px;
+    margin-bottom: var(--space-4);
+    opacity: 0.4;
+    transition: opacity var(--calm-duration-normal) var(--calm-ease-out);
+    position: relative;
+    z-index: 1;
+}
+
+.crown5-empty-state:hover .crown5-empty-illustration {
+    opacity: 0.6;
+}
+
+.crown5-empty-illustration svg {
+    width: 100%;
+    height: 100%;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    fill: none;
+}
+
+.crown5-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-2);
+    position: relative;
+    z-index: 1;
+}
+
+.crown5-empty-description {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    max-width: 280px;
+    line-height: 1.5;
+    position: relative;
+    z-index: 1;
+}
+
+.crown5-empty-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(99, 102, 241, 0.08);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-xs);
+    color: var(--color-primary);
+    position: relative;
+    z-index: 1;
+    transition: background var(--calm-duration-fast) var(--calm-ease-out);
+}
+
+.crown5-empty-hint:hover {
+    background: rgba(99, 102, 241, 0.12);
+}
+
+.crown5-empty-hint svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+}
+
+/* ============================================================================
+   CHART-SPECIFIC EMPTY STATES (No bare axes)
+   ========================================================================= */
+
+.crown5-chart-empty {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.crown5-chart-empty-placeholder {
+    position: absolute;
+    inset: 0;
+    opacity: 0.08;
+    pointer-events: none;
+}
+
+.crown5-chart-empty-placeholder-line {
+    position: absolute;
+    bottom: 20%;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg, 
+        transparent 0%,
+        rgba(99, 102, 241, 0.5) 20%,
+        rgba(99, 102, 241, 0.5) 40%,
+        rgba(139, 92, 246, 0.5) 60%,
+        rgba(139, 92, 246, 0.5) 80%,
+        transparent 100%
+    );
+    border-radius: 1px;
+}
+
+.crown5-chart-empty-placeholder-bars {
+    position: absolute;
+    bottom: 20%;
+    left: 10%;
+    right: 10%;
+    height: 60%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    gap: 8%;
+}
+
+.crown5-chart-empty-placeholder-bar {
+    flex: 1;
+    background: linear-gradient(180deg, 
+        rgba(99, 102, 241, 0.15) 0%,
+        rgba(99, 102, 241, 0.05) 100%
+    );
+    border-radius: 4px 4px 0 0;
+    animation: crown5-bar-pulse 3s ease-in-out infinite;
+}
+
+.crown5-chart-empty-placeholder-bar:nth-child(1) { height: 30%; animation-delay: 0s; }
+.crown5-chart-empty-placeholder-bar:nth-child(2) { height: 50%; animation-delay: 0.2s; }
+.crown5-chart-empty-placeholder-bar:nth-child(3) { height: 40%; animation-delay: 0.4s; }
+.crown5-chart-empty-placeholder-bar:nth-child(4) { height: 70%; animation-delay: 0.6s; }
+.crown5-chart-empty-placeholder-bar:nth-child(5) { height: 55%; animation-delay: 0.8s; }
+
+@keyframes crown5-bar-pulse {
+    0%, 100% { opacity: 0.15; }
+    50% { opacity: 0.25; }
+}
+
+.crown5-chart-empty-placeholder-donut {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    height: 60%;
+    border: 3px dashed rgba(99, 102, 241, 0.15);
+    border-radius: 50%;
+    animation: crown5-donut-spin 20s linear infinite;
+}
+
+@keyframes crown5-donut-spin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ============================================================================
+   PARTICIPATION BALANCE EMPTY CARDS
+   ========================================================================= */
+
+.crown5-balance-card {
+    background: rgba(30, 41, 59, 0.4);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    transition: all var(--calm-duration-normal) var(--calm-ease-out);
+}
+
+.crown5-balance-card:hover {
+    background: rgba(30, 41, 59, 0.5);
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.crown5-balance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-2);
+}
+
+.crown5-balance-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-primary);
+}
+
+.crown5-balance-score {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-tertiary);
+}
+
+.crown5-balance-empty-indicator {
+    height: 4px;
+    background: rgba(148, 163, 184, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: var(--space-2);
+}
+
+.crown5-balance-empty-indicator::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(99, 102, 241, 0.2) 50%,
+        transparent 100%
+    );
+    animation: crown5-shimmer-slide 2s ease-in-out infinite;
+}
+
+@keyframes crown5-shimmer-slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.crown5-balance-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.crown5-balance-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    padding: var(--space-1) 0;
+}
+
+.crown5-balance-status svg {
+    width: 12px;
+    height: 12px;
+    opacity: 0.6;
+}
+
+/* ============================================================================
+   KPI MICRO-PULSE ANIMATION (Section 7)
+   ========================================================================= */
+
+@keyframes crown5-kpi-pulse {
+    0% {
+        box-shadow: 
+            0 0 0 0 rgba(99, 102, 241, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    50% {
+        box-shadow: 
+            0 0 0 8px rgba(99, 102, 241, 0),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+    100% {
+        box-shadow: 
+            0 0 0 0 rgba(99, 102, 241, 0),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+}
+
+.kpi-card.crown5-updating {
+    animation: crown5-kpi-pulse 600ms var(--calm-ease-out) 1;
+}
+
+.kpi-card .crown5-value-updating {
+    position: relative;
+}
+
+.kpi-card .crown5-value-updating::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 8px;
+    animation: crown5-value-highlight 500ms ease-out forwards;
+}
+
+@keyframes crown5-value-highlight {
+    0% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.2); }
+}
+
+/* ============================================================================
+   SEQUENTIAL TILE FADE-IN (Stage 3)
+   ========================================================================= */
+
+.crown5-staggered-entry {
+    opacity: 0;
+    transform: translateY(16px);
+    animation: crown5-stagger-in var(--calm-duration-normal) var(--calm-ease-out) forwards;
+}
+
+.crown5-staggered-entry:nth-child(1) { animation-delay: 0ms; }
+.crown5-staggered-entry:nth-child(2) { animation-delay: 50ms; }
+.crown5-staggered-entry:nth-child(3) { animation-delay: 100ms; }
+.crown5-staggered-entry:nth-child(4) { animation-delay: 150ms; }
+.crown5-staggered-entry:nth-child(5) { animation-delay: 200ms; }
+.crown5-staggered-entry:nth-child(6) { animation-delay: 250ms; }
+
+@keyframes crown5-stagger-in {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================================
+   CROSSFADE FOR FILTER CHANGES (Section 3 - Event 7)
+   ========================================================================= */
+
+.crown5-crossfade-out {
+    animation: crown5-fade-out 200ms var(--calm-ease-in) forwards;
+}
+
+.crown5-crossfade-in {
+    animation: crown5-fade-in 300ms var(--calm-ease-out) forwards;
+}
+
+@keyframes crown5-fade-out {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-8px); }
+}
+
+@keyframes crown5-fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================================
+   SHIMMER RECONCILIATION EFFECT (Stage 2)
+   ========================================================================= */
+
+.crown5-reconciling {
+    position: relative;
+    overflow: hidden;
+}
+
+.crown5-reconciling::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(99, 102, 241, 0.08) 50%,
+        transparent 100%
+    );
+    animation: crown5-reconcile-shimmer 1.5s ease-in-out;
+}
+
+@keyframes crown5-reconcile-shimmer {
+    from { left: -100%; }
+    to { left: 100%; }
+}
+
+/* ============================================================================
+   TIMESTAMP REFRESH (Stage 5 - Continuity)
+   ========================================================================= */
+
+.crown5-timestamp {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    transition: color var(--calm-duration-fast) var(--calm-ease-out);
+}
+
+.crown5-timestamp.crown5-just-updated {
+    color: var(--color-primary);
+}
+
+.crown5-timestamp svg {
+    width: 12px;
+    height: 12px;
+    opacity: 0.6;
+}
+
+.crown5-timestamp.crown5-syncing svg {
+    animation: crown5-spin 1s linear infinite;
+}
+
+@keyframes crown5-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   INSIGHT BANNER SLIDE-IN (Section 7 - insight_generate)
+   ========================================================================= */
+
+.crown5-insight-banner {
+    background: linear-gradient(135deg, 
+        rgba(99, 102, 241, 0.1) 0%, 
+        rgba(139, 92, 246, 0.1) 100%
+    );
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+    animation: crown5-insight-slide-in 400ms var(--calm-ease-out) forwards;
+}
+
+@keyframes crown5-insight-slide-in {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.crown5-insight-banner-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.crown5-insight-banner-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.crown5-insight-banner-icon svg {
+    width: 20px;
+    height: 20px;
+    stroke: white;
+}
+
+.crown5-insight-banner-text {
+    flex: 1;
+}
+
+.crown5-insight-banner-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.crown5-insight-banner-description {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+/* ============================================================================
+   NO DATA PLACEHOLDER VALUE (NaN Protection)
+   ========================================================================= */
+
+.crown5-no-data-value {
+    color: var(--color-text-tertiary);
+    font-weight: var(--font-weight-normal);
+}
+
+.crown5-no-data-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    background: rgba(148, 163, 184, 0.08);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-md);
+}
+
+/* ============================================================================
+   RESPONSIVE ADJUSTMENTS
+   ========================================================================= */
+
+@media (max-width: 768px) {
+    .crown5-empty-state {
+        padding: var(--space-6);
+        min-height: 160px;
+    }
+    
+    .crown5-empty-illustration {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .crown5-empty-description {
+        max-width: 240px;
+    }
+    
+    .crown5-insight-banner-content {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+
+/* ============================================================================
+   REDUCED MOTION SUPPORT
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    .crown5-staggered-entry,
+    .crown5-crossfade-out,
+    .crown5-crossfade-in,
+    .crown5-reconciling::after,
+    .crown5-insight-banner,
+    .kpi-card.crown5-updating,
+    .crown5-chart-empty-placeholder-bar,
+    .crown5-chart-empty-placeholder-donut,
+    .crown5-balance-empty-indicator::after,
+    .crown5-empty-state::before {
+        animation: none !important;
+    }
+    
+    .crown5-staggered-entry {
+        opacity: 1;
+        transform: none;
+    }
+}
