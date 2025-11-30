@@ -478,12 +478,14 @@
                 <h2 class="text-lg font-semibold mb-1" id="participant-details-title">Participant Details</h2>
                 <p class="text-sm text-secondary mb-4" id="participant-details-desc">Individual speaking metrics and balance indicators</p>
                 <div id="speakingTimeDetails" class="flex flex-col gap-4" role="list" aria-describedby="participant-details-title participant-details-desc" aria-live="polite">
-                    <!-- Will be populated by JavaScript -->
-                    <div class="text-center text-secondary py-8" role="status">
-                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        Loading speaking time data...
+                    <div class="crown5-empty-state" role="status">
+                        <div class="crown5-empty-illustration">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <p class="crown5-empty-title">Awaiting participant data</p>
+                        <p class="crown5-empty-description">Speaking metrics will appear after recording</p>
                     </div>
                 </div>
             </div>
@@ -494,14 +496,7 @@
             <div class="chart-card" role="region" aria-labelledby="participation-overview-title" aria-describedby="participation-overview-desc">
                 <h2 class="text-lg font-semibold mb-1" id="participation-overview-title">Participation Balance Overview</h2>
                 <p class="text-sm text-secondary mb-4" id="participation-overview-desc">Multi-dimensional engagement metrics across all participants</p>
-                <div id="participationBalanceMetrics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" role="list" aria-describedby="participation-overview-title participation-overview-desc" aria-live="polite">
-                    <!-- Will be populated by JavaScript -->
-                    <div class="text-center text-secondary py-8 col-span-full" role="status">
-                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                        </svg>
-                        Loading participation balance metrics...
-                    </div>
+                <div id="participationBalanceMetrics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 crown5-tile-grid" role="list" aria-describedby="participation-overview-title participation-overview-desc" aria-live="polite">
                 </div>
             </div>
         </div>
@@ -532,11 +527,14 @@
                 <h2 class="text-lg font-semibold mb-1" id="action-items-title">Action Item Completion Rate</h2>
                 <p class="text-sm text-secondary mb-4" id="action-items-desc">Track progress of meeting action items</p>
                 <div id="actionItemsCompletion" role="list" aria-describedby="action-items-title action-items-desc" aria-live="polite">
-                    <div class="text-center text-secondary py-8" role="status">
-                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                        </svg>
-                        Select a meeting to view action items
+                    <div class="crown5-empty-state" role="status">
+                        <div class="crown5-empty-illustration">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                            </svg>
+                        </div>
+                        <p class="crown5-empty-title">No action items yet</p>
+                        <p class="crown5-empty-description">Select a meeting to see task completion progress</p>
                     </div>
                 </div>
             </div>
@@ -548,11 +546,14 @@
                 <h2 class="text-lg font-semibold mb-1" id="topic-trends-title">Topic Evolution Timeline</h2>
                 <p class="text-sm text-secondary mb-4" id="topic-trends-desc">How conversation topics developed throughout meetings</p>
                 <div id="topicTrendsTimeline" role="list" aria-describedby="topic-trends-title topic-trends-desc" aria-live="polite">
-                    <div class="text-center text-secondary py-8" role="status">
-                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
-                        </svg>
-                        Select a meeting to view topic trends
+                    <div class="crown5-empty-state" role="status">
+                        <div class="crown5-empty-illustration">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+                            </svg>
+                        </div>
+                        <p class="crown5-empty-title">No topic data yet</p>
+                        <p class="crown5-empty-description">Select a meeting to explore conversation flow</p>
                     </div>
                 </div>
             </div>
@@ -564,11 +565,14 @@
                 <h2 class="text-lg font-semibold mb-1" id="qa-tracking-title">Question & Answer Tracking</h2>
                 <p class="text-sm text-secondary mb-4" id="qa-tracking-desc">Questions asked during meetings and their resolution status</p>
                 <div id="qaTracking" role="list" aria-describedby="qa-tracking-title qa-tracking-desc" aria-live="polite">
-                    <div class="text-center text-secondary py-8" role="status">
-                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        Select a meeting to view Q&A analytics
+                    <div class="crown5-empty-state" role="status">
+                        <div class="crown5-empty-illustration">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <p class="crown5-empty-title">No questions tracked</p>
+                        <p class="crown5-empty-description">Select a meeting to see Q&A insights</p>
                     </div>
                 </div>
             </div>
