@@ -8,6 +8,11 @@ class AnalyticsDashboard {
         this.selectedDateRange = 30; // Default: 30 days
         this.charts = {};
         this.widgetPreferences = this.loadWidgetPreferences();
+        this.previouslyFocusedElement = null;
+        this.firstFocusableElement = null;
+        this.lastFocusableElement = null;
+        this.modalKeydownHandler = this.handleModalKeydown.bind(this);
+        this.modalMutationObserver = null;
         this.init();
     }
 
@@ -94,6 +99,8 @@ class AnalyticsDashboard {
         
         if (!modal || !togglesContainer) return;
 
+        this.previouslyFocusedElement = document.activeElement;
+
         const widgets = [
             { id: 'kpi-meetings', name: 'Total Meetings KPI', category: 'KPIs' },
             { id: 'kpi-tasks', name: 'Action Items KPI', category: 'KPIs' },
@@ -111,7 +118,6 @@ class AnalyticsDashboard {
             { id: 'action-items', name: 'Action Items Completion', category: 'Productivity' }
         ];
 
-        // Group widgets by category
         const grouped = widgets.reduce((acc, widget) => {
             if (!acc[widget.category]) acc[widget.category] = [];
             acc[widget.category].push(widget);
@@ -129,6 +135,7 @@ class AnalyticsDashboard {
                                 data-widget-id="${widget.id}"
                                 ${this.widgetPreferences[widget.id] !== false ? 'checked' : ''}
                                 class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary focus:ring-2"
+                                aria-label="Toggle ${widget.name} visibility"
                             >
                             <div class="flex-1">
                                 <div class="font-medium text-sm">${widget.name}</div>
@@ -140,12 +147,76 @@ class AnalyticsDashboard {
         `).join('');
 
         modal.classList.remove('hidden');
+        
+        const closeBtn = document.getElementById('closeCustomizeModal');
+        if (closeBtn) {
+            closeBtn.focus();
+        }
+        
+        this.setupModalFocusTrap(modal);
+        
+        modal.addEventListener('keydown', this.modalKeydownHandler);
+    }
+    
+    setupModalFocusTrap(modal) {
+        this.updateFocusableElements(modal);
+        
+        if (!this.modalMutationObserver) {
+            this.modalMutationObserver = new MutationObserver(() => {
+                this.updateFocusableElements(modal);
+            });
+        }
+        
+        this.modalMutationObserver.observe(modal, { 
+            childList: true, 
+            subtree: true 
+        });
+    }
+    
+    updateFocusableElements(modal) {
+        const focusableElements = modal.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusableElements.length > 0) {
+            this.firstFocusableElement = focusableElements[0];
+            this.lastFocusableElement = focusableElements[focusableElements.length - 1];
+        }
+    }
+    
+    handleModalKeydown(e) {
+        if (e.key === 'Escape') {
+            this.hideCustomizeModal();
+            return;
+        }
+        
+        if (e.key === 'Tab') {
+            if (e.shiftKey) {
+                if (document.activeElement === this.firstFocusableElement) {
+                    e.preventDefault();
+                    this.lastFocusableElement.focus();
+                }
+            } else {
+                if (document.activeElement === this.lastFocusableElement) {
+                    e.preventDefault();
+                    this.firstFocusableElement.focus();
+                }
+            }
+        }
     }
 
     hideCustomizeModal() {
         const modal = document.getElementById('widgetCustomizationModal');
         if (modal) {
             modal.classList.add('hidden');
+            modal.removeEventListener('keydown', this.modalKeydownHandler);
+        }
+        
+        if (this.modalMutationObserver) {
+            this.modalMutationObserver.disconnect();
+        }
+        
+        if (this.previouslyFocusedElement && this.previouslyFocusedElement.focus) {
+            this.previouslyFocusedElement.focus();
         }
     }
 
