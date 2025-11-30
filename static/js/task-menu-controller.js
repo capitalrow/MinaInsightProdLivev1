@@ -256,7 +256,16 @@ class TaskMenuController {
     }
 
     /**
-     * 4. PRIORITY - Change priority with visual selector (with browser fallback)
+     * Detect if running on mobile/touch device
+     */
+    isMobile() {
+        return window.matchMedia('(max-width: 768px)').matches || 
+               ('ontouchstart' in window) ||
+               (navigator.maxTouchPoints > 0);
+    }
+
+    /**
+     * 4. PRIORITY - Change priority with mobile sheet or desktop popover
      */
     async handlePriority(taskId) {
         console.log(`[TaskMenuController] Changing priority for task ${taskId}`);
@@ -266,24 +275,29 @@ class TaskMenuController {
 
         try {
             const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-            const trigger = taskCard || document.body;
-
+            const currentPriority = task.priority || 'medium';
             let newPriority;
             
-            // Try custom modal first, fallback to browser prompt
-            if (window.taskPrioritySelector?.show) {
+            // Mobile: use bottom sheet (Notion/Linear pattern)
+            if (this.isMobile() && window.taskPrioritySheet?.open) {
+                console.log('[TaskMenuController] Using mobile priority sheet');
+                newPriority = await window.taskPrioritySheet.open(taskId, currentPriority);
+            }
+            // Desktop: use popover selector
+            else if (window.taskPrioritySelector?.show) {
+                console.log('[TaskMenuController] Using desktop priority selector');
+                const trigger = taskCard || document.body;
                 try {
-                    newPriority = await window.taskPrioritySelector.show(trigger);
+                    newPriority = await window.taskPrioritySelector.show(trigger, currentPriority);
                 } catch (e) {
-                    console.warn('[TaskMenuController] Priority selector failed, using fallback');
+                    console.warn('[TaskMenuController] Priority selector failed:', e);
                     newPriority = null;
                 }
             }
             
-            // Fallback: use browser prompt with options
+            // Final fallback: browser prompt
             if (newPriority === undefined || newPriority === null) {
-                if (!window.taskPrioritySelector) {
-                    const currentPriority = task.priority || 'medium';
+                if (!window.taskPrioritySheet && !window.taskPrioritySelector) {
                     const choice = window.prompt(
                         `Set priority for "${task.title || 'Task'}":\n\nOptions: urgent, high, medium, low\n\nCurrent: ${currentPriority}`,
                         currentPriority
@@ -332,7 +346,7 @@ class TaskMenuController {
     }
 
     /**
-     * 5. DUE DATE - Set due date with date picker (with browser fallback)
+     * 5. DUE DATE - Set due date with mobile sheet or desktop picker
      */
     async handleDueDate(taskId) {
         console.log(`[TaskMenuController] Setting due date for task ${taskId}`);
@@ -342,26 +356,32 @@ class TaskMenuController {
 
         try {
             const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-            const trigger = taskCard || document.body;
-
+            const currentDate = task.due_date || null;
             let newDate;
             
-            // Try custom date picker first
-            if (window.taskDatePicker?.show) {
+            // Mobile: use bottom sheet (Notion/Linear pattern)
+            if (this.isMobile() && window.taskDateSheet?.open) {
+                console.log('[TaskMenuController] Using mobile date sheet');
+                newDate = await window.taskDateSheet.open(taskId, currentDate);
+            }
+            // Desktop: use popover date picker
+            else if (window.taskDatePicker?.show) {
+                console.log('[TaskMenuController] Using desktop date picker');
+                const trigger = taskCard || document.body;
                 try {
-                    newDate = await window.taskDatePicker.show(trigger);
+                    newDate = await window.taskDatePicker.show(trigger, currentDate);
                 } catch (e) {
-                    console.warn('[TaskMenuController] Date picker failed, using fallback');
+                    console.warn('[TaskMenuController] Date picker failed:', e);
                     newDate = undefined;
                 }
             }
             
-            // Fallback: use browser input type=date via prompt
-            if (newDate === undefined && !window.taskDatePicker) {
-                const currentDate = task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '';
+            // Final fallback: browser prompt
+            if (newDate === undefined && !window.taskDateSheet && !window.taskDatePicker) {
+                const currentDateStr = task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '';
                 const choice = window.prompt(
                     `Set due date for "${task.title || 'Task'}":\n\nFormat: YYYY-MM-DD (e.g., 2024-12-31)\nLeave empty to clear due date`,
-                    currentDate
+                    currentDateStr
                 );
                 
                 if (choice === null) {
