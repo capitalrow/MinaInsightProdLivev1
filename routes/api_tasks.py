@@ -2591,7 +2591,7 @@ Format as JSON array: [{{"title": "...", "description": "...", "priority": "medi
                     return
                 
                 stream = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
