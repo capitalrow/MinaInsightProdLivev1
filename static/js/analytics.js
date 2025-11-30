@@ -110,6 +110,99 @@ class AnalyticsDashboard {
         if (existingEmpty) existingEmpty.remove();
     }
 
+    /**
+     * CROWN⁵+ KPI Animation Helpers (Section 7 Emotional Design)
+     * "Numbers that breathe, not flash. Transitions that feel intentional."
+     */
+    animateKpiValue(element, newValue, duration = 300) {
+        if (!element) return;
+        
+        const currentValue = parseFloat(element.textContent.replace(/[^0-9.-]/g, '')) || 0;
+        const targetValue = parseFloat(newValue);
+        
+        if (isNaN(targetValue)) {
+            element.textContent = '—';
+            element.removeAttribute('data-animating');
+            element.classList.remove('crown5-kpi-value');
+            return;
+        }
+        
+        element.classList.add('crown5-kpi-value');
+        element.setAttribute('data-animating', 'true');
+        
+        const startTime = performance.now();
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            
+            const current = currentValue + (targetValue - currentValue) * eased;
+            element.textContent = this.formatKpiValue(current, element.dataset.format);
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                element.removeAttribute('data-animating');
+            }
+        };
+        
+        requestAnimationFrame(animate);
+    }
+
+    formatKpiValue(value, format) {
+        switch (format) {
+            case 'hours':
+                return value.toFixed(1) + 'h';
+            case 'minutes':
+                return Math.round(value) + 'm';
+            case 'percent':
+                return Math.round(value) + '%';
+            case 'integer':
+                return Math.round(value).toLocaleString();
+            default:
+                return Math.round(value).toLocaleString();
+        }
+    }
+
+    triggerKpiUpdate(card) {
+        if (!card) return;
+        card.classList.add('crown5-kpi-updated');
+        setTimeout(() => card.classList.remove('crown5-kpi-updated'), 400);
+    }
+
+    triggerKpiShimmer(card) {
+        if (!card) return;
+        card.classList.add('crown5-kpi-shimmer');
+        setTimeout(() => card.classList.remove('crown5-kpi-shimmer'), 1500);
+    }
+
+    /**
+     * Apply staggered tile fade-in animation to a container
+     */
+    applyTileGridAnimation(container) {
+        if (!container) return;
+        container.classList.add('crown5-tile-grid');
+    }
+
+    /**
+     * Apply crossfade transition for filter/tab changes
+     */
+    crossfadeTransition(container, updateFn) {
+        if (!container) return;
+        
+        container.classList.add('crown5-filter-crossfade-exit');
+        
+        setTimeout(() => {
+            updateFn();
+            container.classList.remove('crown5-filter-crossfade-exit');
+            container.classList.add('crown5-filter-crossfade-enter');
+            
+            setTimeout(() => {
+                container.classList.remove('crown5-filter-crossfade-enter');
+            }, 250);
+        }, 150);
+    }
+
     async init() {
         // Set up date range filter
         this.setupDateRangeFilter();

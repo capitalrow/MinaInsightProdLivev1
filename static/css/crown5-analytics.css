@@ -558,6 +558,215 @@
 }
 
 /* ============================================================================
+   KPI MICRO-PULSE ANIMATIONS (Section 7 Emotional Design)
+   "Numbers that breathe, not flash. Transitions that feel intentional."
+   ========================================================================= */
+
+/* Count-up animation for KPI values on data load */
+.crown5-kpi-value {
+    position: relative;
+    overflow: hidden;
+}
+
+.crown5-kpi-value[data-animating="true"] {
+    animation: crown5-value-pulse 300ms var(--calm-ease-out);
+}
+
+@keyframes crown5-value-pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+        color: var(--color-primary);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Shimmer effect for data reconciliation (Stage 2) */
+.crown5-kpi-shimmer {
+    position: relative;
+    overflow: hidden;
+}
+
+.crown5-kpi-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(99, 102, 241, 0.08) 50%,
+        transparent 100%
+    );
+    animation: crown5-shimmer 1.5s ease-in-out;
+    pointer-events: none;
+}
+
+@keyframes crown5-shimmer {
+    0% {
+        left: -100%;
+    }
+    100% {
+        left: 100%;
+    }
+}
+
+/* Soft pulse on KPI card update */
+.crown5-kpi-updated {
+    animation: crown5-kpi-update-pulse 400ms var(--calm-ease-out);
+}
+
+@keyframes crown5-kpi-update-pulse {
+    0% {
+        box-shadow: 
+            0 4px 6px -1px rgba(0, 0, 0, 0.1),
+            0 0 0 0 rgba(99, 102, 241, 0);
+    }
+    50% {
+        box-shadow: 
+            0 4px 6px -1px rgba(0, 0, 0, 0.1),
+            0 0 0 4px rgba(99, 102, 241, 0.15);
+    }
+    100% {
+        box-shadow: 
+            0 4px 6px -1px rgba(0, 0, 0, 0.1),
+            0 0 0 0 rgba(99, 102, 241, 0);
+    }
+}
+
+/* Trend indicator animations */
+.crown5-trend-up,
+.crown5-trend-down {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    transition: all var(--calm-duration-fast) var(--calm-ease-out);
+}
+
+.crown5-trend-up {
+    color: var(--color-success);
+}
+
+.crown5-trend-down {
+    color: var(--color-warning);
+}
+
+.crown5-trend-up svg,
+.crown5-trend-down svg {
+    width: 12px;
+    height: 12px;
+    transition: transform var(--calm-duration-normal) var(--calm-ease-spring);
+}
+
+.crown5-trend-up:hover svg {
+    transform: translateY(-2px);
+}
+
+.crown5-trend-down:hover svg {
+    transform: translateY(2px);
+}
+
+/* Value change delta indicator */
+.crown5-delta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-full);
+    opacity: 0;
+    transform: translateX(8px);
+    transition: all var(--calm-duration-normal) var(--calm-ease-out);
+}
+
+.crown5-delta-badge.visible {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.crown5-delta-badge.positive {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--color-success);
+}
+
+.crown5-delta-badge.negative {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-error);
+}
+
+/* ============================================================================
+   STAGGERED TILE FADE-IN (Stage 3: Warm Render)
+   Compositional delay 0-150ms for sequential reveal
+   ========================================================================= */
+
+.crown5-tile-grid {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.crown5-tile-grid > * {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: crown5-tile-appear 300ms var(--calm-ease-out) forwards;
+}
+
+.crown5-tile-grid > *:nth-child(1) { animation-delay: 0ms; }
+.crown5-tile-grid > *:nth-child(2) { animation-delay: 50ms; }
+.crown5-tile-grid > *:nth-child(3) { animation-delay: 100ms; }
+.crown5-tile-grid > *:nth-child(4) { animation-delay: 150ms; }
+.crown5-tile-grid > *:nth-child(5) { animation-delay: 200ms; }
+.crown5-tile-grid > *:nth-child(6) { animation-delay: 250ms; }
+
+@keyframes crown5-tile-appear {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================================
+   CROSSFADE FOR FILTER/TAB CHANGES
+   "No jarring redraws — smooth blending between states"
+   ========================================================================= */
+
+.crown5-filter-crossfade-enter {
+    animation: crown5-crossfade-enter 250ms var(--calm-ease-out) forwards;
+}
+
+.crown5-filter-crossfade-exit {
+    animation: crown5-crossfade-exit 150ms var(--calm-ease-in) forwards;
+}
+
+@keyframes crown5-crossfade-enter {
+    from {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes crown5-crossfade-exit {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+}
+
+/* ============================================================================
    RESPONSIVE ADJUSTMENTS
    ========================================================================= */
 
@@ -596,11 +805,18 @@
     .crown5-chart-empty-placeholder-bar,
     .crown5-chart-empty-placeholder-donut,
     .crown5-balance-empty-indicator::after,
-    .crown5-empty-state::before {
+    .crown5-empty-state::before,
+    .crown5-kpi-value[data-animating="true"],
+    .crown5-kpi-shimmer::after,
+    .crown5-kpi-updated,
+    .crown5-tile-grid > *,
+    .crown5-filter-crossfade-enter,
+    .crown5-filter-crossfade-exit {
         animation: none !important;
     }
     
-    .crown5-staggered-entry {
+    .crown5-staggered-entry,
+    .crown5-tile-grid > * {
         opacity: 1;
         transform: none;
     }
