@@ -1301,7 +1301,10 @@ class AnalyticsDashboard {
 
         const completionTrend = productivity.completion_trend || [];
         
-        if (completionTrend.length === 0 || completionTrend.every(w => w.total_tasks === 0)) {
+        // Check for meaningful data - filter out all-zero weeks
+        const hasAnyData = completionTrend.some(w => w.total_tasks > 0);
+        
+        if (completionTrend.length === 0 || !hasAnyData) {
             if (chartFrame) {
                 this.renderCrown5EmptyChart(
                     chartFrame,
@@ -1317,9 +1320,12 @@ class AnalyticsDashboard {
             this.hideCrown5EmptyChart(chartFrame);
         }
 
-        const labels = completionTrend.map(w => `Week ${w.week}`);
-        const trendData = completionTrend.map(w => w.completion_rate);
-        const taskCounts = completionTrend.map(w => ({ total: w.total_tasks, completed: w.completed_tasks }));
+        // Only include weeks with actual data for meaningful visualization
+        const weeksWithData = completionTrend.filter(w => w.total_tasks > 0);
+        // Use backend-provided week_label (e.g., "Nov 18") or fallback to week_start date
+        const labels = weeksWithData.map(w => w.week_label || w.week_start || `Week ${w.week || '?'}`);
+        const trendData = weeksWithData.map(w => w.completion_rate);
+        const taskCounts = weeksWithData.map(w => ({ total: w.total_tasks, completed: w.completed_tasks }));
 
         this.charts.productivity = new Chart(ctx, {
             type: 'line',
