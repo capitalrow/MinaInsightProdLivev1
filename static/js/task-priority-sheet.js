@@ -140,17 +140,24 @@ class TaskPrioritySheet {
     }
 
     close(result) {
+        // Capture and clear callback before timeout to prevent race conditions
+        const resolve = this.resolveCallback;
+        this.resolveCallback = null;
+        const taskId = this.currentTaskId;
+        this.currentTaskId = null;
+        
         this.overlay.classList.remove('visible');
         this.sheet.classList.remove('visible');
         
         setTimeout(() => {
             this.overlay.style.display = 'none';
-            if (this.resolveCallback) {
-                this.resolveCallback(result);
-                this.resolveCallback = null;
+            // Resolve with cached callback to prevent overwrites on rapid re-entry
+            if (resolve) {
+                resolve(result);
             }
-            this.currentTaskId = null;
         }, 300);
+        
+        console.log('[TaskPrioritySheet] Closed for task:', taskId, 'with result:', result);
     }
 
     static isMobile() {
