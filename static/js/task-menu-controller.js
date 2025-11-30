@@ -831,32 +831,33 @@ class TaskMenuController {
 
     /**
      * 13. DELETE - Permanently delete task with confirmation (with browser fallback)
+     * Handles both temp tasks (local only) and server-synced tasks
      */
     async handleDelete(taskId) {
         console.log(`[TaskMenuController] Deleting task ${taskId}`);
         
+        const isTempTask = String(taskId).startsWith('temp_');
+        
         try {
+            // Get task info (from cache, DOM, or API)
             const task = await this.fetchTask(taskId);
-            if (!task) {
-                console.error('[TaskMenuController] Task not found:', taskId);
-                return;
-            }
+            const taskTitle = task?.title || 'this task';
 
-            console.log('[TaskMenuController] Task fetched successfully:', task);
+            console.log('[TaskMenuController] Task info retrieved:', taskTitle, isTempTask ? '(temp)' : '(synced)');
 
             let confirmed = false;
             
             // Try custom confirmation modal
             if (window.taskConfirmModal?.confirmDelete) {
                 try {
-                    confirmed = await window.taskConfirmModal.confirmDelete(task.title);
+                    confirmed = await window.taskConfirmModal.confirmDelete(taskTitle);
                 } catch (e) {
                     console.warn('[TaskMenuController] Delete modal failed, using browser fallback');
-                    confirmed = window.confirm(`Delete task "${task.title || 'this task'}" permanently?\n\nThis action cannot be undone.`);
+                    confirmed = window.confirm(`Delete task "${taskTitle}" permanently?\n\nThis action cannot be undone.`);
                 }
             } else {
                 // Fallback to browser confirm
-                confirmed = window.confirm(`Delete task "${task.title || 'this task'}" permanently?\n\nThis action cannot be undone.`);
+                confirmed = window.confirm(`Delete task "${taskTitle}" permanently?\n\nThis action cannot be undone.`);
             }
             
             console.log('[TaskMenuController] Confirmation result:', confirmed);
@@ -874,9 +875,32 @@ class TaskMenuController {
                 taskCard.style.pointerEvents = 'none';
             }
 
-            console.log('[TaskMenuController] Calling optimisticUI.deleteTask...');
+            console.log('[TaskMenuController] Deleting task...', isTempTask ? '(temp task - local only)' : '(synced task)');
             
-            // Use OptimisticUI deleteTask (soft delete with 15s undo window)
+            // Handle temp tasks differently - they only exist locally
+            if (isTempTask) {
+                // Remove from cache
+                if (window.taskCache?.deleteTask) {
+                    await window.taskCache.deleteTask(taskId);
+                }
+                if (window.taskCache?.deleteTempTask) {
+                    await window.taskCache.deleteTempTask(taskId);
+                }
+                
+                // Remove from DOM with animation
+                if (taskCard) {
+                    taskCard.style.transition = 'opacity 0.2s, transform 0.2s';
+                    taskCard.style.opacity = '0';
+                    taskCard.style.transform = 'translateX(-20px)';
+                    setTimeout(() => taskCard.remove(), 200);
+                }
+                
+                this.showToast('Task deleted', 'success');
+                console.log('[TaskMenuController] Temp task deleted successfully');
+                return;
+            }
+            
+            // For synced tasks, use OptimisticUI deleteTask (soft delete with undo window)
             if (window.optimisticUI?.deleteTask) {
                 await window.optimisticUI.deleteTask(taskId);
             } else {
@@ -909,10 +933,55 @@ class TaskMenuController {
     }
 
     /**
-     * Helper: Fetch task details from API
+     * Helper: Fetch task details from cache first, then API
+     * Handles temp tasks (not yet synced to server) gracefully
      */
     async fetchTask(taskId) {
         try {
+            // 1. Check if this is a temp task (not yet on server)
+            const isTempTask = String(taskId).startsWith('temp_');
+            
+            // 2. Try to get from cache first (works for both temp and synced tasks)
+            if (window.taskCache && typeof window.taskCache.getTask === 'function') {
+                const cachedTask = await window.taskCache.getTask(taskId);
+                if (cachedTask) {
+                    console.log('[TaskMenuController] Task found in cache:', taskId);
+                    return cachedTask;
+                }
+            }
+            
+            // 3. Try optimisticUI cache
+            if (window.optimisticUI?.cache?.getTask) {
+                const cachedTask = await window.optimisticUI.cache.getTask(taskId);
+                if (cachedTask) {
+                    console.log('[TaskMenuController] Task found in optimisticUI cache:', taskId);
+                    return cachedTask;
+                }
+            }
+            
+            // 4. For temp tasks, extract basic info from DOM as fallback
+            if (isTempTask) {
+                const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+                if (taskCard) {
+                    console.log('[TaskMenuController] Extracting temp task from DOM:', taskId);
+                    return {
+                        id: taskId,
+                        title: taskCard.querySelector('.task-title-text')?.textContent?.trim() || 
+                               taskCard.querySelector('.task-title')?.textContent?.trim() || 'Untitled',
+                        status: taskCard.dataset.status || 'todo',
+                        priority: taskCard.dataset.priority || 'medium',
+                        meeting_id: taskCard.dataset.meetingId || null,
+                        labels: [],
+                        _isTemp: true
+                    };
+                }
+                
+                // Temp task not in cache and not in DOM - it may have been deleted
+                console.warn('[TaskMenuController] Temp task not found:', taskId);
+                return null;
+            }
+            
+            // 5. For server tasks, fetch from API
             const response = await fetch(`/api/tasks/${taskId}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch task');
@@ -921,7 +990,7 @@ class TaskMenuController {
             return data.task;
         } catch (error) {
             console.error('[TaskMenuController] Error fetching task:', error);
-            window.toast?.error('Failed to fetch task details');
+            console.error('[TaskMenuController] Task not found:', taskId);
             return null;
         }
     }
