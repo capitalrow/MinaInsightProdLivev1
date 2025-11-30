@@ -102,18 +102,23 @@ class TaskPrioritySheet {
         });
 
         this.overlay.querySelectorAll('.task-sheet-option').forEach(btn => {
+            // Helper to reset button state
+            const resetBtn = () => {
+                btn.style.transform = '';
+                if (!btn.classList.contains('selected')) {
+                    btn.style.background = '';
+                }
+            };
+            
             // Touch feedback on press
             btn.addEventListener('touchstart', () => {
                 btn.style.transform = 'scale(0.98)';
                 btn.style.background = 'rgba(255,255,255,0.08)';
             }, { passive: true });
             
-            btn.addEventListener('touchend', () => {
-                btn.style.transform = '';
-                if (!btn.classList.contains('selected')) {
-                    btn.style.background = '';
-                }
-            }, { passive: true });
+            btn.addEventListener('touchend', resetBtn, { passive: true });
+            btn.addEventListener('touchcancel', resetBtn, { passive: true });
+            btn.addEventListener('touchmove', resetBtn, { passive: true });
             
             btn.addEventListener('click', () => {
                 const priority = btn.dataset.priority;
