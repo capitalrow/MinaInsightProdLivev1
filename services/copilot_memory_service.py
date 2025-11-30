@@ -162,10 +162,17 @@ class CopilotMemoryService:
                 return self.embedding_cache[cache_key]
         
         try:
-            # Only import if API key is available
+            # Note: Replit AI Integrations does not support embeddings API
+            # This feature is disabled until a compatible embeddings provider is configured
             api_key = os.environ.get('OPENAI_API_KEY')
             if not api_key:
-                logger.warning("OPENAI_API_KEY not set, skipping embedding generation")
+                logger.debug("Embeddings disabled: no direct API key configured")
+                return None
+            
+            # Check if using Replit AI proxy (doesn't support embeddings)
+            base_url = os.environ.get('OPENAI_BASE_URL', '')
+            if 'modelfarm' in base_url or 'replit' in base_url.lower():
+                logger.debug("Embeddings disabled: Replit AI Integrations does not support embeddings API")
                 return None
             
             from openai import OpenAI
@@ -188,7 +195,7 @@ class CopilotMemoryService:
             return embedding
             
         except Exception as e:
-            logger.error(f"Failed to generate embedding: {e}", exc_info=True)
+            logger.debug(f"Embeddings unavailable: {e}")
             return None
     
     def store_embedding(
