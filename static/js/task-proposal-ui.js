@@ -8,6 +8,13 @@ class TaskProposalUI {
         this.isStreaming = false;
         this.streamTimeout = null;
         this.STREAM_TIMEOUT_MS = 30000;
+        this.meetingId = null;
+        this.meetingTitle = null;
+        this.totalProposals = 0;
+        this.acceptedCount = 0;
+        this.metadataReceived = false;
+        this.pendingProposals = [];
+        this.buttonMeetingId = null;
         this.init();
     }
 
@@ -140,6 +147,13 @@ class TaskProposalUI {
         `;
 
         this.proposals = [];
+        this.meetingId = null;
+        this.meetingTitle = null;
+        this.totalProposals = 0;
+        this.acceptedCount = 0;
+        this.metadataReceived = false;
+        this.pendingProposals = [];
+        this.buttonMeetingId = meetingId ? parseInt(meetingId) : null;
         this.openModal();
         this.showStreamingState();
 
@@ -241,13 +255,52 @@ class TaskProposalUI {
 
     handleStreamEvent(data) {
         switch (data.type) {
+            case 'metadata':
+                this.meetingId = data.meeting_id;
+                this.meetingTitle = data.meeting_title;
+                this.metadataReceived = true;
+                console.log('[TaskProposalUI] Meeting context:', this.meetingId, this.meetingTitle);
+                
+                if (this.pendingProposals.length > 0) {
+                    console.log('[TaskProposalUI] Processing', this.pendingProposals.length, 'queued proposals');
+                    this.pendingProposals.forEach(task => {
+                        task.meeting_id = this.meetingId;
+                        task.meeting_title = this.meetingTitle;
+                        this.proposals.push(task);
+                        this.totalProposals++;
+                        this.renderProposal(task);
+                    });
+                    this.pendingProposals = [];
+                }
+                break;
             case 'proposal':
                 if (data.task) {
-                    this.proposals.push(data.task);
-                    this.renderProposal(data.task);
+                    if (this.metadataReceived) {
+                        data.task.meeting_id = this.meetingId;
+                        data.task.meeting_title = this.meetingTitle;
+                        this.proposals.push(data.task);
+                        this.totalProposals++;
+                        this.renderProposal(data.task);
+                    } else {
+                        console.log('[TaskProposalUI] Queueing proposal until metadata received');
+                        this.pendingProposals.push(data.task);
+                    }
                 }
                 break;
             case 'done':
+                if (!this.metadataReceived && this.pendingProposals.length > 0) {
+                    console.log('[TaskProposalUI] No metadata received, using button meetingId:', this.buttonMeetingId);
+                    this.meetingId = this.buttonMeetingId;
+                    this.meetingTitle = null;
+                    this.pendingProposals.forEach(task => {
+                        task.meeting_id = this.meetingId;
+                        task.meeting_title = this.meetingTitle;
+                        this.proposals.push(task);
+                        this.totalProposals++;
+                        this.renderProposal(task);
+                    });
+                    this.pendingProposals = [];
+                }
                 this.onStreamComplete();
                 break;
             case 'error':
@@ -287,12 +340,20 @@ class TaskProposalUI {
         const card = document.createElement('div');
         card.className = 'ai-proposal-card';
         card.dataset.proposalIndex = index;
+        
+        const meetingSource = task.meeting_title 
+            ? `<span class="meeting-source"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${this.escapeHtml(task.meeting_title)}</span>`
+            : '';
+        
         card.innerHTML = `
-            <div class="ai-proposal-badge">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                </svg>
-                AI Suggestion
+            <div class="ai-proposal-header">
+                <div class="ai-proposal-badge">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                    AI Suggestion
+                </div>
+                ${meetingSource}
             </div>
             <h3 class="ai-proposal-title">${this.escapeHtml(task.title)}</h3>
             ${task.description ? `<p class="ai-proposal-description">${this.escapeHtml(task.description)}</p>` : ''}
@@ -349,10 +410,15 @@ class TaskProposalUI {
         
         const activeProposals = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected)');
         const count = activeProposals.length;
+        const acceptedCards = this.modal.querySelectorAll('.ai-proposal-card.accepted');
         
         if (count > 0) {
             footer.style.display = 'flex';
-            countEl.textContent = `${count} suggestion${count !== 1 ? 's' : ''} available`;
+            if (acceptedCards.length > 0) {
+                countEl.textContent = `${count} of ${this.totalProposals} remaining`;
+            } else {
+                countEl.textContent = `${count} suggestion${count !== 1 ? 's' : ''} available`;
+            }
             acceptAllBtn.disabled = false;
         } else {
             footer.style.display = 'none';
@@ -370,6 +436,29 @@ class TaskProposalUI {
                 <p>Try recording more meetings or adding existing tasks for better context.</p>
             </div>
         `;
+    }
+    
+    showAllAccepted() {
+        const content = this.modal.querySelector('.ai-proposals-content');
+        const footer = this.modal.querySelector('.ai-proposals-footer');
+        
+        content.innerHTML = `
+            <div class="ai-proposals-complete">
+                <div class="complete-animation">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                </div>
+                <h4>All done!</h4>
+                <p>${this.acceptedCount} task${this.acceptedCount !== 1 ? 's' : ''} added to your list</p>
+                <button class="btn-close-complete" onclick="this.closest('.ai-proposals-modal-overlay').classList.remove('visible'); document.body.style.overflow = '';">
+                    Close
+                </button>
+            </div>
+        `;
+        
+        footer.style.display = 'none';
     }
 
     showError(message) {
@@ -406,16 +495,22 @@ class TaskProposalUI {
         button.classList.add('btn-loading');
 
         try {
+            const taskData = {
+                title: proposal.title,
+                description: proposal.description || '',
+                priority: proposal.priority || 'medium',
+                status: 'todo',
+                source: 'ai_proposal'
+            };
+            
+            if (proposal.meeting_id) {
+                taskData.meeting_id = proposal.meeting_id;
+            }
+            
             const response = await fetch('/api/tasks/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: proposal.title,
-                    description: proposal.description || '',
-                    priority: proposal.priority || 'medium',
-                    status: 'todo',
-                    source: 'ai_proposal'
-                })
+                body: JSON.stringify(taskData)
             });
 
             if (!response.ok) {
@@ -423,14 +518,15 @@ class TaskProposalUI {
             }
 
             const data = await response.json();
+            this.acceptedCount++;
             
             card.classList.add('accepted');
             card.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 0.5rem; color: #16a34a;">
+                <div class="ai-proposal-success">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
-                    <span style="font-weight: 500;">Task created: ${this.escapeHtml(proposal.title)}</span>
+                    <span>Task created: ${this.escapeHtml(proposal.title)}</span>
                 </div>
             `;
 
@@ -444,11 +540,14 @@ class TaskProposalUI {
 
             if (this.taskUI && typeof this.taskUI.loadTasks === 'function') {
                 this.taskUI.loadTasks();
-            } else {
-                setTimeout(() => window.location.reload(), 1500);
             }
 
             this.updateFooter();
+            
+            const remainingCards = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected)');
+            if (remainingCards.length === 0 && !this.isStreaming) {
+                this.showAllAccepted();
+            }
 
         } catch (error) {
             console.error('[TaskProposalUI] Accept error:', error);

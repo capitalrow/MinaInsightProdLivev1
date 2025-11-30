@@ -87,6 +87,11 @@
     margin: 0;
 }
 
+[data-theme="dark"] .ai-proposals-title,
+.dark .ai-proposals-title {
+    color: #ffffff;
+}
+
 .ai-proposals-title .ai-sparkle {
     color: var(--primary, #6366f1);
 }
@@ -198,6 +203,16 @@
     border-color: rgba(255, 255, 255, 0.08);
 }
 
+/* Proposal Card Header with meeting source */
+.ai-proposal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
 .ai-proposal-badge {
     display: inline-flex;
     align-items: center;
@@ -210,7 +225,23 @@
     background: rgba(99, 102, 241, 0.1);
     padding: 0.2rem 0.5rem;
     border-radius: 4px;
-    margin-bottom: 0.5rem;
+}
+
+.meeting-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-tertiary, #9ca3af);
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.meeting-source svg {
+    flex-shrink: 0;
+    opacity: 0.7;
 }
 
 .ai-proposal-title {
@@ -438,8 +469,132 @@
     border-color: #22c55e;
 }
 
+.ai-proposal-success {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    color: #16a34a;
+    font-weight: 500;
+    padding: 0.5rem 0.25rem;
+    animation: success-slide-in 0.3s ease-out;
+}
+
+@keyframes success-slide-in {
+    0% {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.ai-proposal-success svg {
+    flex-shrink: 0;
+    animation: success-check 0.4s ease-out 0.1s both;
+}
+
+@keyframes success-check {
+    0% {
+        transform: scale(0) rotate(-45deg);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.2) rotate(0deg);
+    }
+    100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+    }
+}
+
+.ai-proposal-success span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9rem;
+}
+
 .ai-proposal-card.rejected {
     opacity: 0.5;
+    transform: scale(0.98);
+}
+
+/* All Done State */
+.ai-proposals-complete {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1rem;
+    text-align: center;
+}
+
+.complete-animation {
+    width: 64px;
+    height: 64px;
+    background: rgba(34, 197, 94, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+    animation: complete-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.complete-animation svg {
+    width: 32px;
+    height: 32px;
+    color: #22c55e;
+}
+
+@keyframes complete-pop {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.ai-proposals-complete h4 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary, #1a1a2e);
+    margin: 0 0 0.375rem 0;
+}
+
+[data-theme="dark"] .ai-proposals-complete h4,
+.dark .ai-proposals-complete h4 {
+    color: #ffffff;
+}
+
+.ai-proposals-complete p {
+    font-size: 0.875rem;
+    color: var(--text-secondary, #6b7280);
+    margin: 0 0 1.25rem 0;
+}
+
+.btn-close-complete {
+    padding: 0.625rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    background: var(--primary, #6366f1);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.btn-close-complete:hover {
+    background: var(--primary-dark, #4f46e5);
+}
+
+.btn-close-complete:active {
     transform: scale(0.98);
 }
 
@@ -472,23 +627,25 @@
     .ai-proposals-modal {
         border-radius: 20px 20px 0 0;
         max-height: 85vh;
+        position: relative;
     }
     
-    .ai-proposals-header {
-        padding: 1.25rem 1rem;
-    }
-    
-    /* Drag handle for mobile */
-    .ai-proposals-header::before {
+    /* Visible drag handle for mobile */
+    .ai-proposals-modal::before {
         content: '';
         position: absolute;
         top: 8px;
         left: 50%;
         transform: translateX(-50%);
-        width: 36px;
-        height: 4px;
-        background: var(--border, rgba(0, 0, 0, 0.1));
-        border-radius: 2px;
+        width: 40px;
+        height: 5px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 3px;
+        z-index: 10;
+    }
+    
+    .ai-proposals-header {
+        padding: 1.5rem 1rem 1rem 1rem;
     }
     
     .ai-proposals-body {
@@ -502,6 +659,10 @@
     .ai-proposals-footer {
         padding: 0.875rem 1rem;
         padding-bottom: calc(0.875rem + env(safe-area-inset-bottom, 0));
+    }
+    
+    .meeting-source {
+        max-width: 140px;
     }
 }
 
