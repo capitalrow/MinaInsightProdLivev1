@@ -2495,6 +2495,9 @@ def stream_ai_task_proposals():
         
         # Meeting ID is now optional - use workspace context if not provided
         meeting = None
+        default_meeting_id = None
+        default_meeting_title = None
+        
         if meeting_id:
             # Verify meeting access
             meeting = db.session.query(Meeting).filter_by(
@@ -2504,10 +2507,24 @@ def stream_ai_task_proposals():
             
             if not meeting:
                 return jsonify({'success': False, 'message': 'Meeting not found'}), 404
+            default_meeting_id = meeting.id
+            default_meeting_title = meeting.title
+        else:
+            # Get most recent meeting for default assignment
+            recent_meeting = db.session.query(Meeting).filter_by(
+                workspace_id=current_user.workspace_id
+            ).order_by(Meeting.created_at.desc()).first()
+            if recent_meeting:
+                default_meeting_id = recent_meeting.id
+                default_meeting_title = recent_meeting.title
         
         def generate_proposals():
             """Generator function for SSE streaming."""
+            nonlocal default_meeting_id, default_meeting_title
             try:
+                # Send metadata first so frontend knows meeting context
+                yield f"data: {json.dumps({'type': 'metadata', 'meeting_id': default_meeting_id, 'meeting_title': default_meeting_title})}\n\n"
+                
                 # Build context from meeting OR workspace
                 context_parts = []
                 
