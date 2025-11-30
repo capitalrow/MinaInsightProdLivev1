@@ -20,6 +20,7 @@ class TaskPrioritySelector {
     createPopover() {
         this.popover = document.createElement('div');
         this.popover.className = 'task-priority-selector-popover';
+        this.popover.style.display = 'none'; // Critical: Hide immediately to prevent FOUC
         this.popover.innerHTML = `
             <div class="task-priority-selector-content">
                 <button class="task-priority-option" data-priority="high">

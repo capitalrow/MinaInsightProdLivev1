@@ -21,6 +21,7 @@ class TaskDatePicker {
     createPopover() {
         this.popover = document.createElement('div');
         this.popover.className = 'task-date-picker-popover';
+        this.popover.style.display = 'none'; // Critical: Hide immediately to prevent FOUC
         this.popover.innerHTML = `
             <div class="task-date-picker-content">
                 <div class="task-date-picker-presets">
