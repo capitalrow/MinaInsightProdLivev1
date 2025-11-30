@@ -454,7 +454,7 @@
     <div id="tab-engagement" class="analytics-tab-content" role="tabpanel" aria-labelledby="tab-engagement-btn" tabindex="0">
         <!-- Speaking Time Analysis (T2.33) -->
         <div class="charts-primary-grid mb-6" data-widget="chart-speaking-time">
-            <div class="chart-card" role="figure" aria-label="Speaking Time Distribution chart">
+            <div class="chart-card" role="figure" aria-labelledby="chart-speaking-time-title" aria-describedby="chart-speaking-time-desc">
                 <h2 class="text-lg font-semibold mb-1" id="chart-speaking-time-title">Speaking Time Distribution</h2>
                 <p class="text-sm text-secondary mb-4" id="chart-speaking-time-desc">Breakdown of talk time across participants</p>
                 <div class="chart-frame">
@@ -462,7 +462,7 @@
                 </div>
             </div>
 
-            <div class="chart-card" role="figure" aria-label="Speaking Balance chart">
+            <div class="chart-card" role="figure" aria-labelledby="chart-speaking-balance-title" aria-describedby="chart-speaking-balance-desc">
                 <h2 class="text-lg font-semibold mb-1" id="chart-speaking-balance-title">Speaking Balance</h2>
                 <p class="text-sm text-secondary mb-4" id="chart-speaking-balance-desc">Percentage of total meeting time</p>
                 <div class="chart-frame chart-doughnut">
@@ -473,7 +473,7 @@
 
         <!-- Detailed Speaking Time Breakdown -->
         <div class="charts-single mb-6">
-            <div class="chart-card" role="region" aria-label="Participant speaking details">
+            <div class="chart-card" role="region" aria-labelledby="participant-details-title" aria-describedby="participant-details-desc">
                 <h2 class="text-lg font-semibold mb-1" id="participant-details-title">Participant Details</h2>
                 <p class="text-sm text-secondary mb-4" id="participant-details-desc">Individual speaking metrics and balance indicators</p>
                 <div id="speakingTimeDetails" class="flex flex-col gap-4" role="list" aria-describedby="participant-details-title participant-details-desc" aria-live="polite">
@@ -490,7 +490,7 @@
 
         <!-- Participation Balance Metrics (T2.34) -->
         <div class="charts-single mb-6" data-widget="chart-participation">
-            <div class="chart-card" role="region" aria-label="Participation balance metrics">
+            <div class="chart-card" role="region" aria-labelledby="participation-overview-title" aria-describedby="participation-overview-desc">
                 <h2 class="text-lg font-semibold mb-1" id="participation-overview-title">Participation Balance Overview</h2>
                 <p class="text-sm text-secondary mb-4" id="participation-overview-desc">Multi-dimensional engagement metrics across all participants</p>
                 <div id="participationBalanceMetrics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" role="list" aria-describedby="participation-overview-title participation-overview-desc" aria-live="polite">
@@ -527,7 +527,7 @@
     <div id="tab-productivity" class="analytics-tab-content" role="tabpanel" aria-labelledby="tab-productivity-btn" tabindex="0">
         <!-- Action Items Completion (T2.38) -->
         <div class="charts-single mb-6" data-widget="action-items">
-            <div class="chart-card" role="region" aria-label="Action item completion tracking">
+            <div class="chart-card" role="region" aria-labelledby="action-items-title" aria-describedby="action-items-desc">
                 <h2 class="text-lg font-semibold mb-1" id="action-items-title">Action Item Completion Rate</h2>
                 <p class="text-sm text-secondary mb-4" id="action-items-desc">Track progress of meeting action items</p>
                 <div id="actionItemsCompletion" role="list" aria-describedby="action-items-title action-items-desc" aria-live="polite">
@@ -543,7 +543,7 @@
         
         <!-- Topic Trends Timeline (T2.36) -->
         <div class="charts-single mb-6" data-widget="topic-trends">
-            <div class="chart-card" role="region" aria-label="Topic evolution analysis">
+            <div class="chart-card" role="region" aria-labelledby="topic-trends-title" aria-describedby="topic-trends-desc">
                 <h2 class="text-lg font-semibold mb-1" id="topic-trends-title">Topic Evolution Timeline</h2>
                 <p class="text-sm text-secondary mb-4" id="topic-trends-desc">How conversation topics developed throughout meetings</p>
                 <div id="topicTrendsTimeline" role="list" aria-describedby="topic-trends-title topic-trends-desc" aria-live="polite">
@@ -559,7 +559,7 @@
 
         <!-- Q&A Tracking (T2.37) -->
         <div class="charts-single mb-6" data-widget="qa-tracking">
-            <div class="chart-card" role="region" aria-label="Question and answer analytics">
+            <div class="chart-card" role="region" aria-labelledby="qa-tracking-title" aria-describedby="qa-tracking-desc">
                 <h2 class="text-lg font-semibold mb-1" id="qa-tracking-title">Question & Answer Tracking</h2>
                 <p class="text-sm text-secondary mb-4" id="qa-tracking-desc">Questions asked during meetings and their resolution status</p>
                 <div id="qaTracking" role="list" aria-describedby="qa-tracking-title qa-tracking-desc" aria-live="polite">
