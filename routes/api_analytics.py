@@ -304,6 +304,40 @@ def get_productivity_analytics():
         
         avg_efficiency = sum(a.meeting_efficiency_score for a in efficiency_scores if a.meeting_efficiency_score is not None) / len(efficiency_scores) if efficiency_scores else 0
         
+        # Weekly completion trend for historical chart data
+        from sqlalchemy import cast, Date, extract
+        weeks_to_show = min(4, max(1, days // 7))
+        completion_trend = []
+        
+        for week_idx in range(weeks_to_show):
+            week_start = cutoff_date + timedelta(weeks=week_idx)
+            week_end = week_start + timedelta(weeks=1)
+            
+            # Get meetings in this week
+            week_meeting_ids = [m.id for m in meetings if week_start <= m.created_at < week_end]
+            
+            if week_meeting_ids:
+                week_total = db.session.query(Task).filter(
+                    Task.meeting_id.in_(week_meeting_ids)
+                ).count()
+                week_completed = db.session.query(Task).filter(
+                    Task.meeting_id.in_(week_meeting_ids),
+                    Task.status == 'completed'
+                ).count()
+                week_rate = round((week_completed / week_total * 100), 1) if week_total > 0 else 0
+            else:
+                week_total = 0
+                week_completed = 0
+                week_rate = 0
+            
+            completion_trend.append({
+                'week': week_idx + 1,
+                'week_start': week_start.strftime('%Y-%m-%d'),
+                'total_tasks': week_total,
+                'completed_tasks': week_completed,
+                'completion_rate': week_rate
+            })
+        
         return jsonify({
             'success': True,
             'productivity': {
@@ -322,6 +356,7 @@ def get_productivity_analytics():
                     'average_score': round(avg_efficiency * 100, 1),
                     'meetings_analyzed': len(efficiency_scores)
                 },
+                'completion_trend': completion_trend,
                 'period_days': days,
                 'total_meetings': len(meetings)
             }
