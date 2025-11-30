@@ -242,6 +242,82 @@ class AuthEmailService:
         user.is_verified = True
         user.email_verification_token = None
         user.email_verification_sent_at = None
+    
+    def send_account_deleted_email(
+        self,
+        user_email: str,
+        first_name: str
+    ) -> Dict:
+        """Send account deletion confirmation email (GDPR compliance)."""
+        if not email_service.is_available():
+            logger.warning("Email service not available - skipping account deleted email")
+            return {'success': False, 'error': 'Email service not configured'}
+        
+        subject = "Your Mina Account Has Been Deleted"
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #6366f1; margin: 0;">Mina</h1>
+            </div>
+            
+            <h2 style="color: #1f2937;">Account Deletion Confirmed</h2>
+            
+            <p>Hi {first_name},</p>
+            
+            <p>This email confirms that your Mina account has been successfully deleted.</p>
+            
+            <p>What this means:</p>
+            <ul style="padding-left: 20px;">
+                <li>Your profile and personal information have been permanently removed</li>
+                <li>All your meetings, recordings, and transcripts have been deleted</li>
+                <li>All tasks and action items have been removed</li>
+                <li>Your data cannot be recovered</li>
+            </ul>
+            
+            <p>If you did not request this deletion or believe this was done in error, please contact our support team immediately.</p>
+            
+            <p>Thank you for using Mina. We're sorry to see you go.</p>
+            
+            <p style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280;">
+                This is an automated message from Mina. Please do not reply to this email.
+            </p>
+        </body>
+        </html>
+        """
+        
+        plain_text = f"""Account Deletion Confirmed
+
+Hi {first_name},
+
+This email confirms that your Mina account has been successfully deleted.
+
+What this means:
+- Your profile and personal information have been permanently removed
+- All your meetings, recordings, and transcripts have been deleted
+- All tasks and action items have been removed
+- Your data cannot be recovered
+
+If you did not request this deletion or believe this was done in error, please contact our support team immediately.
+
+Thank you for using Mina. We're sorry to see you go.
+
+This is an automated message from Mina.
+"""
+        
+        return self._send_multipart_email(
+            to_email=user_email,
+            subject=subject,
+            html_content=html_content,
+            plain_text=plain_text,
+            email_type="account deleted"
+        )
 
 
 auth_email_service = AuthEmailService()
