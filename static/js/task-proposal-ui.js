@@ -3,104 +3,182 @@ class TaskProposalUI {
         this.taskUI = taskUI;
         this.currentStream = null;
         this.currentAbortController = null;
-        this.proposalContainer = null;
+        this.modal = null;
+        this.proposals = [];
+        this.isStreaming = false;
+        this.streamTimeout = null;
+        this.STREAM_TIMEOUT_MS = 30000;
         this.init();
-        console.log('[TaskProposalUI] Initialized');
     }
 
     init() {
-        document.addEventListener('click', async (e) => {
-            if (e.target.classList.contains('btn-accept-proposal')) {
-                const taskId = e.target.dataset.taskId;
-                await this.acceptProposal(taskId, e.target);
-            } else if (e.target.classList.contains('btn-reject-proposal')) {
-                const taskId = e.target.dataset.taskId;
-                await this.rejectProposal(taskId, e.target);
-            } else if (e.target.classList.contains('btn-generate-proposals')) {
-                await this.startProposalStream(e.target);
-            } else if (e.target.classList.contains('btn-stop-stream')) {
-                this.stopStream();
+        this.createModal();
+        this.bindEvents();
+        console.log('[TaskProposalUI] Initialized with modal');
+    }
+
+    createModal() {
+        if (document.getElementById('ai-proposals-modal-overlay')) {
+            this.modal = document.getElementById('ai-proposals-modal-overlay');
+            return;
+        }
+
+        const overlay = document.createElement('div');
+        overlay.id = 'ai-proposals-modal-overlay';
+        overlay.className = 'ai-proposals-modal-overlay';
+        overlay.innerHTML = `
+            <div class="ai-proposals-modal" role="dialog" aria-labelledby="ai-proposals-title" aria-modal="true">
+                <div class="ai-proposals-header">
+                    <h2 id="ai-proposals-title" class="ai-proposals-title">
+                        <svg class="ai-sparkle" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                        </svg>
+                        AI Suggestions
+                    </h2>
+                    <button class="ai-proposals-close" aria-label="Close">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="ai-proposals-body">
+                    <div class="ai-proposals-content"></div>
+                </div>
+                <div class="ai-proposals-footer" style="display: none;">
+                    <span class="proposals-count"></span>
+                    <button class="btn-accept-all" disabled>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Accept All
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        this.modal = overlay;
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.closeModal();
             }
         });
+
+        const closeBtn = overlay.querySelector('.ai-proposals-close');
+        closeBtn.addEventListener('click', () => this.closeModal());
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.modal.classList.contains('visible')) {
+                this.closeModal();
+            }
+        });
+    }
+
+    bindEvents() {
+        document.addEventListener('click', async (e) => {
+            const target = e.target.closest('button');
+            if (!target) return;
+
+            if (target.classList.contains('btn-generate-proposals')) {
+                e.preventDefault();
+                await this.startProposalStream(target);
+            } else if (target.classList.contains('btn-accept-proposal')) {
+                await this.acceptProposal(target);
+            } else if (target.classList.contains('btn-reject-proposal')) {
+                await this.rejectProposal(target);
+            } else if (target.classList.contains('btn-accept-all')) {
+                await this.acceptAllProposals();
+            } else if (target.classList.contains('btn-retry')) {
+                const generateBtn = document.querySelector('.btn-generate-proposals');
+                if (generateBtn) {
+                    await this.startProposalStream(generateBtn);
+                }
+            }
+        });
+    }
+
+    openModal() {
+        if (!this.modal) this.createModal();
+        this.modal.classList.add('visible');
+        document.body.style.overflow = 'hidden';
+        
+        const firstFocusable = this.modal.querySelector('button');
+        if (firstFocusable) firstFocusable.focus();
+    }
+
+    closeModal() {
+        if (this.isStreaming) {
+            this.stopStream();
+        }
+        
+        this.modal.classList.remove('visible');
+        document.body.style.overflow = '';
+        
+        const generateBtn = document.querySelector('.btn-generate-proposals');
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = `
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                AI Proposals
+            `;
+        }
     }
 
     async startProposalStream(button) {
         const meetingId = button.dataset.meetingId;
         
-        // Meeting ID is optional - if not provided, uses workspace context
-        const requestBody = {
-            max_proposals: 3
-        };
-        
+        button.disabled = true;
+        button.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin">
+                <circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"></circle>
+            </svg>
+            Generating...
+        `;
+
+        this.proposals = [];
+        this.openModal();
+        this.showStreamingState();
+
+        const requestBody = { max_proposals: 3 };
         if (meetingId && meetingId.trim() !== '') {
             requestBody.meeting_id = parseInt(meetingId);
-            console.log('[TaskProposalUI] Generating proposals for meeting:', meetingId);
-        } else {
-            console.log('[TaskProposalUI] Generating proposals from workspace context');
         }
 
-        // Disable button during generation
-        button.disabled = true;
-        const originalText = button.textContent;
-        button.textContent = 'Generating...';
-
         try {
-            console.log('[TaskProposalUI] Starting proposal generation...');
-            
-            // Create or show proposal container
-            this.showProposalContainer();
-
-            // Show streaming indicator
-            this.showStreamingState();
-
-            // Create AbortController for cancellation
             this.currentAbortController = new AbortController();
+            
+            this.streamTimeout = setTimeout(() => {
+                console.warn('[TaskProposalUI] Stream timeout reached');
+                this.stopStream();
+                this.showError('Request timed out. Please try again.');
+            }, this.STREAM_TIMEOUT_MS);
 
-            console.log('[TaskProposalUI] Calling /api/tasks/ai-proposals/stream...');
-
-            // Start SSE stream
             const response = await fetch('/api/tasks/ai-proposals/stream', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
                 signal: this.currentAbortController.signal
             });
 
-            console.log('[TaskProposalUI] Response status:', response.status, response.statusText);
-
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('[TaskProposalUI] API error response:', errorText);
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            // Read SSE stream
+            this.isStreaming = true;
             const reader = response.body.getReader();
             this.currentStream = reader;
             const decoder = new TextDecoder();
             let buffer = '';
-            let chunkCount = 0;
-            let proposalCount = 0;
-
-            console.log('[TaskProposalUI] Starting stream read loop...');
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) {
-                    console.log('[TaskProposalUI] Stream complete. Chunks:', chunkCount, 'Proposals:', proposalCount);
-                    break;
-                }
+                if (done) break;
 
-                chunkCount++;
-                const decoded = decoder.decode(value, { stream: true });
-                buffer += decoded;
-                
-                if (chunkCount <= 3 || chunkCount % 10 === 0) {
-                    console.log(`[TaskProposalUI] Chunk ${chunkCount}: ${decoded.substring(0, 100)}...`);
-                }
-                
+                buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
                 buffer = lines.pop();
 
@@ -108,449 +186,329 @@ class TaskProposalUI {
                     if (line.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(line.substring(6));
-                            console.log('[TaskProposalUI] Event received:', data.type, data.type === 'proposal' ? data.task?.title : '');
-                            if (data.type === 'proposal') proposalCount++;
                             this.handleStreamEvent(data);
-                        } catch (parseError) {
-                            console.error('[TaskProposalUI] JSON parse error:', parseError, 'Line:', line);
+                        } catch (e) {
+                            console.warn('[TaskProposalUI] Parse error:', e);
                         }
                     }
                 }
             }
 
-            console.log('[TaskProposalUI] Stream processing complete');
-            // Complete
-            this.hideStreamingState();
-            if (window.CROWNTelemetry) {
-                window.CROWNTelemetry.recordMetric('ai_proposals_generated', 1);
-            }
+            this.onStreamComplete();
 
         } catch (error) {
-            // Handle abort gracefully
             if (error.name === 'AbortError') {
-                console.log('[TaskProposalUI] Stream cancelled by user');
-                this.hideStreamingState();
-                if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordMetric('ai_proposals_cancelled', 1);
-                }
+                console.log('[TaskProposalUI] Stream aborted');
             } else {
                 console.error('[TaskProposalUI] Stream error:', error);
-                this.showError('Failed to generate proposals. Please try again.');
-                
-                // Show toast for user feedback
-                if (window.toast && typeof window.toast.error === 'function') {
-                    window.toast.error('Failed to generate AI proposals');
-                } else if (window.toastManager && typeof window.toastManager.show === 'function') {
-                    window.toastManager.show('Failed to generate AI proposals', 'error', 3000);
-                }
-                
-                if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordMetric('ai_proposals_error', 1);
-                }
+                this.showError(error.message || 'Failed to generate proposals');
             }
         } finally {
-            // Clean up state
-            this.currentAbortController = null;
-            this.currentStream = null;
+            this.cleanup();
             button.disabled = false;
-            button.textContent = originalText;
+            button.innerHTML = `
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                AI Proposals
+            `;
         }
     }
 
     stopStream() {
-        console.log('[TaskProposalUI] Stopping stream');
-        
-        // Abort the fetch request
         if (this.currentAbortController) {
             this.currentAbortController.abort();
             this.currentAbortController = null;
         }
         
-        // Cancel the reader
         if (this.currentStream) {
-            this.currentStream.cancel().catch(err => {
-                console.warn('[TaskProposalUI] Reader cancel error:', err);
-            });
+            this.currentStream.cancel().catch(() => {});
             this.currentStream = null;
         }
         
-        // Clean up UI
-        this.hideStreamingState();
-        
-        if (window.CROWNTelemetry) {
-            window.CROWNTelemetry.recordMetric('ai_proposals_cancelled', 1);
+        this.cleanup();
+    }
+
+    cleanup() {
+        if (this.streamTimeout) {
+            clearTimeout(this.streamTimeout);
+            this.streamTimeout = null;
         }
-        
-        console.log('[TaskProposalUI] Stream stopped successfully');
-    }
-
-    showProposalContainer() {
-        // Find existing container first (placed in HTML template)
-        let container = document.getElementById('ai-proposals-container');
-        
-        if (!container) {
-            // Try to find tasks page container with multiple possible selectors
-            const tasksPage = document.querySelector('.tasks-container') || 
-                              document.querySelector('.tasks-page-content') ||
-                              document.querySelector('.container');
-            
-            if (tasksPage) {
-                container = document.createElement('div');
-                container.id = 'ai-proposals-container';
-                container.className = 'ai-proposals-section glass-card';
-                container.style.cssText = 'margin-bottom: 1.5rem; padding: 1rem; border-radius: 12px; background: var(--card-bg, #fff); box-shadow: 0 2px 8px rgba(0,0,0,0.1);';
-                container.innerHTML = `
-                    <div class="proposals-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3 class="proposals-title" style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
-                            <svg class="ai-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                                <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
-                                <polyline points="7.5 19.79 7.5 14.6 3 12"/>
-                                <polyline points="21 12 16.5 14.6 16.5 19.79"/>
-                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                                <line x1="12" y1="22.08" x2="12" y2="12"/>
-                            </svg>
-                            AI Suggestions
-                        </h3>
-                        <button class="btn-stop-stream btn-icon-sm" style="display: none; padding: 0.25rem 0.5rem; border: none; background: var(--bg-secondary, #f5f5f7); border-radius: 6px; cursor: pointer;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <rect x="6" y="6" width="12" height="12" rx="2"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="proposals-content"></div>
-                    <div class="streaming-indicator" style="display: none; align-items: center; gap: 0.5rem; padding: 1rem; color: var(--text-secondary, #6b7280);">
-                        <div class="streaming-dots" style="display: flex; gap: 0.25rem;">
-                            <span style="width: 8px; height: 8px; background: var(--primary, #6366f1); border-radius: 50%; animation: streaming-dot 1.4s infinite ease-in-out;"></span>
-                            <span style="width: 8px; height: 8px; background: var(--primary, #6366f1); border-radius: 50%; animation: streaming-dot 1.4s infinite ease-in-out 0.2s;"></span>
-                            <span style="width: 8px; height: 8px; background: var(--primary, #6366f1); border-radius: 50%; animation: streaming-dot 1.4s infinite ease-in-out 0.4s;"></span>
-                        </div>
-                        <span class="streaming-text">Analyzing meeting content...</span>
-                    </div>
-                `;
-                
-                // Insert after the search toolbar or at the start of tasks container
-                const searchToolbar = tasksPage.querySelector('.search-sort-toolbar');
-                const taskFilters = tasksPage.querySelector('.task-filters');
-                
-                if (searchToolbar && searchToolbar.parentNode === tasksPage) {
-                    searchToolbar.insertAdjacentElement('afterend', container);
-                } else if (taskFilters && taskFilters.parentNode === tasksPage) {
-                    taskFilters.insertAdjacentElement('afterend', container);
-                } else {
-                    tasksPage.insertBefore(container, tasksPage.firstChild);
-                }
-                
-                console.log('[TaskProposalUI] Created proposals container');
-            } else {
-                console.error('[TaskProposalUI] Could not find tasks page container');
-                return;
-            }
-        }
-
-        this.proposalContainer = container;
-        container.style.display = 'block';
-        console.log('[TaskProposalUI] Proposals container shown');
-    }
-
-    showStreamingState() {
-        if (!this.proposalContainer) return;
-        
-        const indicator = this.proposalContainer.querySelector('.streaming-indicator');
-        const stopBtn = this.proposalContainer.querySelector('.btn-stop-stream');
-        
-        if (indicator) indicator.style.display = 'flex';
-        if (stopBtn) stopBtn.style.display = 'block';
-
-        // Clear previous proposals
-        const content = this.proposalContainer.querySelector('.proposals-content');
-        if (content) content.innerHTML = '';
-    }
-
-    hideStreamingState() {
-        if (!this.proposalContainer) return;
-        
-        const indicator = this.proposalContainer.querySelector('.streaming-indicator');
-        const stopBtn = this.proposalContainer.querySelector('.btn-stop-stream');
-        
-        if (indicator) indicator.style.display = 'none';
-        if (stopBtn) stopBtn.style.display = 'none';
+        this.isStreaming = false;
+        this.currentAbortController = null;
+        this.currentStream = null;
     }
 
     handleStreamEvent(data) {
-        console.log('[TaskProposalUI] handleStreamEvent:', data.type);
         switch (data.type) {
-            case 'chunk':
-                break;
-            
             case 'proposal':
-                console.log('[TaskProposalUI] Rendering proposal:', data.task?.title);
-                this.renderProposal(data.task);
+                if (data.task) {
+                    this.proposals.push(data.task);
+                    this.renderProposal(data.task);
+                }
                 break;
-            
             case 'done':
-                console.log('[TaskProposalUI] Stream done event received');
-                this.hideStreamingState();
+                this.onStreamComplete();
                 break;
-            
             case 'error':
-                console.error('[TaskProposalUI] Stream error:', data.message);
-                this.showError(data.message);
-                this.hideStreamingState();
+                this.showError(data.message || 'An error occurred');
                 break;
-                
-            default:
-                console.warn('[TaskProposalUI] Unknown event type:', data.type);
         }
     }
 
-    renderProposal(task) {
-        console.log('[TaskProposalUI] renderProposal called with:', task);
-        if (!this.proposalContainer) {
-            console.error('[TaskProposalUI] No proposal container!');
-            return;
-        }
-
-        const content = this.proposalContainer.querySelector('.proposals-content');
-        if (!content) {
-            console.error('[TaskProposalUI] No proposals-content element!');
-            return;
-        }
-        console.log('[TaskProposalUI] Appending proposal card to content element');
-
-        const proposalCard = document.createElement('div');
-        proposalCard.className = 'task-card ai-proposal proposal-enter';
-        proposalCard.innerHTML = `
-            <div class="ai-proposal-badge">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                </svg>
-                AI
-            </div>
-            <div class="task-content">
-                <input type="text" 
-                       class="task-title-input proposal-title" 
-                       value="${this.escapeHtml(task.title)}" 
-                       readonly>
-                ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
-                <div class="task-meta">
-                    <span class="priority-badge priority-${task.priority || 'medium'}">
-                        ${task.priority || 'medium'}
-                    </span>
-                    ${task.category ? `<span class="category-badge">${this.escapeHtml(task.category)}</span>` : ''}
+    showStreamingState() {
+        const content = this.modal.querySelector('.ai-proposals-content');
+        const footer = this.modal.querySelector('.ai-proposals-footer');
+        
+        content.innerHTML = `
+            <div class="ai-proposals-streaming">
+                <div class="streaming-animation">
+                    <span></span>
+                    <span></span>
+                    <span></span>
                 </div>
+                <div class="streaming-text">Analyzing your meetings...</div>
+                <div class="streaming-subtext">Generating actionable task suggestions</div>
+            </div>
+        `;
+        
+        footer.style.display = 'none';
+    }
+
+    renderProposal(task) {
+        const content = this.modal.querySelector('.ai-proposals-content');
+        
+        const streamingEl = content.querySelector('.ai-proposals-streaming');
+        if (streamingEl) {
+            streamingEl.remove();
+        }
+
+        const index = this.proposals.length - 1;
+        const card = document.createElement('div');
+        card.className = 'ai-proposal-card';
+        card.dataset.proposalIndex = index;
+        card.innerHTML = `
+            <div class="ai-proposal-badge">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                AI Suggestion
+            </div>
+            <h3 class="ai-proposal-title">${this.escapeHtml(task.title)}</h3>
+            ${task.description ? `<p class="ai-proposal-description">${this.escapeHtml(task.description)}</p>` : ''}
+            <div class="ai-proposal-meta">
+                <span class="priority-pill ${task.priority || 'medium'}">${this.capitalizeFirst(task.priority || 'medium')} Priority</span>
+                ${task.category ? `<span class="category-pill">${this.escapeHtml(task.category)}</span>` : ''}
             </div>
             <div class="ai-proposal-actions">
-                <button class="btn-accept-proposal btn-sm btn-primary" data-proposal='${JSON.stringify(task)}'>
+                <button class="btn-accept-proposal" data-proposal-index="${index}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                     Accept
                 </button>
-                <button class="btn-reject-proposal btn-sm btn-ghost" data-proposal='${JSON.stringify(task)}'>
+                <button class="btn-reject-proposal" data-proposal-index="${index}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
-                    Reject
+                    Dismiss
                 </button>
             </div>
         `;
 
-        content.appendChild(proposalCard);
+        content.appendChild(card);
+        
+        requestAnimationFrame(() => {
+            card.classList.add('visible');
+        });
 
-        // Trigger entrance animation
-        setTimeout(() => proposalCard.classList.add('proposal-visible'), 50);
+        this.updateFooter();
+    }
 
-        if (window.EmotionalAnimations) {
-            window.EmotionalAnimations.playAnimation(proposalCard, 'slide', 'positive');
+    onStreamComplete() {
+        this.cleanup();
+        
+        const content = this.modal.querySelector('.ai-proposals-content');
+        const streamingEl = content.querySelector('.ai-proposals-streaming');
+        if (streamingEl) {
+            streamingEl.remove();
+        }
+
+        if (this.proposals.length === 0) {
+            this.showEmpty();
+        }
+
+        this.updateFooter();
+    }
+
+    updateFooter() {
+        const footer = this.modal.querySelector('.ai-proposals-footer');
+        const countEl = footer.querySelector('.proposals-count');
+        const acceptAllBtn = footer.querySelector('.btn-accept-all');
+        
+        const activeProposals = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected)');
+        const count = activeProposals.length;
+        
+        if (count > 0) {
+            footer.style.display = 'flex';
+            countEl.textContent = `${count} suggestion${count !== 1 ? 's' : ''} available`;
+            acceptAllBtn.disabled = false;
+        } else {
+            footer.style.display = 'none';
         }
     }
 
-    showError(message) {
-        if (!this.proposalContainer) return;
-
-        const content = this.proposalContainer.querySelector('.proposals-content');
-        if (!content) return;
-
+    showEmpty() {
+        const content = this.modal.querySelector('.ai-proposals-content');
         content.innerHTML = `
-            <div class="error-state">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            <div class="ai-proposals-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                 </svg>
-                <p>${this.escapeHtml(message)}</p>
+                <h4>No suggestions available</h4>
+                <p>Try recording more meetings or adding existing tasks for better context.</p>
             </div>
         `;
     }
 
+    showError(message) {
+        const content = this.modal.querySelector('.ai-proposals-content');
+        const footer = this.modal.querySelector('.ai-proposals-footer');
+        
+        content.innerHTML = `
+            <div class="ai-proposals-error">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <h4>Something went wrong</h4>
+                <p>${this.escapeHtml(message)}</p>
+                <button class="btn-retry">Try Again</button>
+            </div>
+        `;
+        
+        footer.style.display = 'none';
+
+        if (window.toast) {
+            window.toast.error('Failed to generate AI proposals');
+        }
+    }
+
+    async acceptProposal(button) {
+        const index = parseInt(button.dataset.proposalIndex);
+        const proposal = this.proposals[index];
+        if (!proposal) return;
+
+        const card = button.closest('.ai-proposal-card');
+        button.disabled = true;
+        button.classList.add('btn-loading');
+
+        try {
+            const response = await fetch('/api/tasks/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: proposal.title,
+                    description: proposal.description || '',
+                    priority: proposal.priority || 'medium',
+                    status: 'todo',
+                    source: 'ai_proposal'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to create task');
+            }
+
+            const data = await response.json();
+            
+            card.classList.add('accepted');
+            card.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.5rem; color: #16a34a;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <span style="font-weight: 500;">Task created: ${this.escapeHtml(proposal.title)}</span>
+                </div>
+            `;
+
+            if (window.toast) {
+                window.toast.success('Task created successfully');
+            }
+
+            if (window.taskCache && typeof window.taskCache.invalidate === 'function') {
+                window.taskCache.invalidate();
+            }
+
+            if (this.taskUI && typeof this.taskUI.loadTasks === 'function') {
+                this.taskUI.loadTasks();
+            } else {
+                setTimeout(() => window.location.reload(), 1500);
+            }
+
+            this.updateFooter();
+
+        } catch (error) {
+            console.error('[TaskProposalUI] Accept error:', error);
+            button.disabled = false;
+            button.classList.remove('btn-loading');
+            
+            if (window.toast) {
+                window.toast.error('Failed to create task');
+            }
+        }
+    }
+
+    async rejectProposal(button) {
+        const card = button.closest('.ai-proposal-card');
+        card.classList.add('rejected');
+        
+        setTimeout(() => {
+            card.style.height = card.offsetHeight + 'px';
+            card.style.overflow = 'hidden';
+            requestAnimationFrame(() => {
+                card.style.height = '0';
+                card.style.padding = '0';
+                card.style.margin = '0';
+                card.style.opacity = '0';
+            });
+            
+            setTimeout(() => {
+                card.remove();
+                this.updateFooter();
+                
+                const remainingCards = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected)');
+                if (remainingCards.length === 0 && !this.isStreaming) {
+                    this.showEmpty();
+                }
+            }, 300);
+        }, 100);
+    }
+
+    async acceptAllProposals() {
+        const acceptBtns = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected) .btn-accept-proposal');
+        
+        for (const btn of acceptBtns) {
+            await this.acceptProposal(btn);
+            await new Promise(r => setTimeout(r, 300));
+        }
+    }
+
     escapeHtml(text) {
+        if (!text) return '';
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 
-    async acceptProposal(taskId, button) {
-        const card = button.closest('.task-card');
-        if (!card) return;
-
-        button.disabled = true;
-        const originalText = button.textContent;
-        button.textContent = 'Accepting...';
-
-        try {
-            // Check if this is a new proposal (no taskId)
-            const proposalData = button.dataset.proposal;
-            let result;
-
-            if (taskId) {
-                // Existing task - just accept
-                const response = await fetch(`/api/tasks/${taskId}/accept`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                result = await response.json();
-            } else if (proposalData) {
-                // New proposal - create task
-                const proposal = JSON.parse(proposalData);
-                const response = await fetch('/api/tasks', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: proposal.title,
-                        description: proposal.description || '',
-                        priority: proposal.priority || 'medium',
-                        category: proposal.category || '',
-                        status: 'todo',
-                        meeting_id: this.getCurrentMeetingId()
-                    })
-                });
-                result = await response.json();
-            } else {
-                throw new Error('No task ID or proposal data');
-            }
-
-            if (result.success) {
-                if (window.EmotionalAnimations) {
-                    window.EmotionalAnimations.playAnimation(card, 'burst', 'positive');
-                }
-
-                if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordMetric('task_proposal_accepted', 1);
-                }
-
-                // Remove card from proposals section
-                setTimeout(() => {
-                    card.style.opacity = '0';
-                    setTimeout(() => {
-                        card.remove();
-                        
-                        // Check if proposals section is empty
-                        if (this.proposalContainer) {
-                            const content = this.proposalContainer.querySelector('.proposals-content');
-                            if (content && content.children.length === 0) {
-                                this.proposalContainer.style.display = 'none';
-                            }
-                        }
-                    }, 300);
-                }, 500);
-
-                // Show toast notification
-                if (window.ToastNotifications) {
-                    window.ToastNotifications.show('Task added successfully', 'success');
-                }
-            } else {
-                throw new Error(result.message || 'Failed to accept proposal');
-            }
-        } catch (error) {
-            console.error('Failed to accept proposal:', error);
-            button.textContent = originalText;
-            button.disabled = false;
-
-            if (window.CROWNTelemetry) {
-                window.CROWNTelemetry.recordMetric('task_proposal_accept_failure', 1);
-            }
-
-            if (window.ToastNotifications) {
-                window.ToastNotifications.show('Failed to add task', 'error');
-            } else {
-                alert('Failed to accept task proposal. Please try again.');
-            }
-        }
-    }
-
-    async rejectProposal(taskId, button) {
-        const card = button.closest('.task-card');
-        if (!card) return;
-
-        button.disabled = true;
-        const originalText = button.textContent;
-        button.textContent = 'Rejecting...';
-
-        try {
-            // Check if this is a new proposal (no taskId)
-            const proposalData = button.dataset.proposal;
-            let result;
-
-            if (taskId) {
-                // Existing task - reject via API
-                const response = await fetch(`/api/tasks/${taskId}/reject`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                result = await response.json();
-            } else if (proposalData) {
-                // New proposal - just remove from UI
-                result = { success: true };
-            } else {
-                throw new Error('No task ID or proposal data');
-            }
-
-            if (result.success) {
-                if (window.EmotionalAnimations) {
-                    window.EmotionalAnimations.playAnimation(card, 'slide', 'neutral');
-                }
-
-                if (window.CROWNTelemetry) {
-                    window.CROWNTelemetry.recordMetric('task_proposal_rejected', 1);
-                }
-
-                setTimeout(() => {
-                    card.style.opacity = '0';
-                    setTimeout(() => {
-                        card.remove();
-                        
-                        // Check if proposals section is empty
-                        if (this.proposalContainer) {
-                            const content = this.proposalContainer.querySelector('.proposals-content');
-                            if (content && content.children.length === 0) {
-                                this.proposalContainer.style.display = 'none';
-                            }
-                        }
-                    }, 300);
-                }, 500);
-            } else {
-                throw new Error(result.message || 'Failed to reject proposal');
-            }
-        } catch (error) {
-            console.error('Failed to reject proposal:', error);
-            button.textContent = originalText;
-            button.disabled = false;
-
-            if (window.CROWNTelemetry) {
-                window.CROWNTelemetry.recordMetric('task_proposal_reject_failure', 1);
-            }
-
-            alert('Failed to reject task proposal. Please try again.');
-        }
-    }
-
-    getCurrentMeetingId() {
-        // Extract meeting ID from page context or button dataset
-        const button = document.querySelector('.btn-generate-proposals');
-        return button ? parseInt(button.dataset.meetingId) : null;
+    capitalizeFirst(str) {
+        if (!str) return '';
+        return str.charAt(0).toUpperCase() + str.slice(1);
     }
 }
 
-window.TaskProposalUI = TaskProposalUI;
+if (typeof window !== 'undefined') {
+    window.TaskProposalUI = TaskProposalUI;
+}
