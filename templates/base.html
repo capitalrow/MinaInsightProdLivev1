@@ -236,18 +236,24 @@
                 <div class="cookie-consent-options">
                     <label class="disabled" title="Required for login, security, and basic functionality">
                         <input type="checkbox" checked disabled>
-                        <span>Essential</span>
-                        <small class="cookie-desc">(Required for site functionality)</small>
+                        <span class="cookie-label-text">
+                            <span class="cookie-name">Essential</span>
+                            <small class="cookie-desc">Required for site functionality</small>
+                        </span>
                     </label>
                     <label title="Help us understand how you use Mina to improve the experience">
                         <input type="checkbox" id="consent-analytics">
-                        <span>Analytics</span>
-                        <small class="cookie-desc">(Usage insights)</small>
+                        <span class="cookie-label-text">
+                            <span class="cookie-name">Analytics</span>
+                            <small class="cookie-desc">Usage insights</small>
+                        </span>
                     </label>
                     <label title="Personalized content and offers based on your interests">
                         <input type="checkbox" id="consent-marketing">
-                        <span>Marketing</span>
-                        <small class="cookie-desc">(Personalized offers)</small>
+                        <span class="cookie-label-text">
+                            <span class="cookie-name">Marketing</span>
+                            <small class="cookie-desc">Personalized offers</small>
+                        </span>
                     </label>
                 </div>
                 <p class="cookie-links"><a href="{{ url_for('pages.privacy') }}">Privacy Policy</a> | <a href="{{ url_for('pages.cookies') }}">Cookie Policy</a></p>
