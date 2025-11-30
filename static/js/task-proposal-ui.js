@@ -45,6 +45,8 @@ class TaskProposalUI {
         button.textContent = 'Generating...';
 
         try {
+            console.log('[TaskProposalUI] Starting proposal generation...');
+            
             // Create or show proposal container
             this.showProposalContainer();
 
@@ -53,6 +55,8 @@ class TaskProposalUI {
 
             // Create AbortController for cancellation
             this.currentAbortController = new AbortController();
+
+            console.log('[TaskProposalUI] Calling /api/tasks/ai-proposals/stream...');
 
             // Start SSE stream
             const response = await fetch('/api/tasks/ai-proposals/stream', {
@@ -64,7 +68,11 @@ class TaskProposalUI {
                 signal: this.currentAbortController.signal
             });
 
+            console.log('[TaskProposalUI] Response status:', response.status, response.statusText);
+
             if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[TaskProposalUI] API error response:', errorText);
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
@@ -108,6 +116,13 @@ class TaskProposalUI {
                 console.error('[TaskProposalUI] Stream error:', error);
                 this.showError('Failed to generate proposals. Please try again.');
                 
+                // Show toast for user feedback
+                if (window.toast && typeof window.toast.error === 'function') {
+                    window.toast.error('Failed to generate AI proposals');
+                } else if (window.toastManager && typeof window.toastManager.show === 'function') {
+                    window.toastManager.show('Failed to generate AI proposals', 'error', 3000);
+                }
+                
                 if (window.CROWNTelemetry) {
                     window.CROWNTelemetry.recordMetric('ai_proposals_error', 1);
                 }
@@ -149,18 +164,23 @@ class TaskProposalUI {
     }
 
     showProposalContainer() {
-        // Find or create proposal container in tasks page
+        // Find existing container first (placed in HTML template)
         let container = document.getElementById('ai-proposals-container');
         
         if (!container) {
-            const tasksPage = document.querySelector('.tasks-page-content');
+            // Try to find tasks page container with multiple possible selectors
+            const tasksPage = document.querySelector('.tasks-container') || 
+                              document.querySelector('.tasks-page-content') ||
+                              document.querySelector('.container');
+            
             if (tasksPage) {
                 container = document.createElement('div');
                 container.id = 'ai-proposals-container';
                 container.className = 'ai-proposals-section glass-card';
+                container.style.cssText = 'margin-bottom: 1.5rem; padding: 1rem; border-radius: 12px; background: var(--card-bg, #fff); box-shadow: 0 2px 8px rgba(0,0,0,0.1);';
                 container.innerHTML = `
-                    <div class="proposals-header">
-                        <h3 class="proposals-title">
+                    <div class="proposals-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 class="proposals-title" style="margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                             <svg class="ai-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                                 <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
@@ -171,26 +191,45 @@ class TaskProposalUI {
                             </svg>
                             AI Suggestions
                         </h3>
-                        <button class="btn-stop-stream btn-icon-sm" style="display: none;">
+                        <button class="btn-stop-stream btn-icon-sm" style="display: none; padding: 0.25rem 0.5rem; border: none; background: var(--bg-secondary, #f5f5f7); border-radius: 6px; cursor: pointer;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <rect x="6" y="6" width="12" height="12" rx="2"/>
                             </svg>
                         </button>
                     </div>
                     <div class="proposals-content"></div>
-                    <div class="streaming-indicator" style="display: none;">
-                        <div class="streaming-dots">
-                            <span></span><span></span><span></span>
+                    <div class="streaming-indicator" style="display: none; align-items: center; gap: 0.5rem; padding: 1rem; color: var(--text-secondary, #6b7280);">
+                        <div class="streaming-dots" style="display: flex; gap: 0.25rem;">
+                            <span style="width: 8px; height: 8px; background: var(--primary, #6366f1); border-radius: 50%; animation: streaming-dot 1.4s infinite ease-in-out;"></span>
+                            <span style="width: 8px; height: 8px; background: var(--primary, #6366f1); border-radius: 50%; animation: streaming-dot 1.4s infinite ease-in-out 0.2s;"></span>
+                            <span style="width: 8px; height: 8px; background: var(--primary, #6366f1); border-radius: 50%; animation: streaming-dot 1.4s infinite ease-in-out 0.4s;"></span>
                         </div>
                         <span class="streaming-text">Analyzing meeting content...</span>
                     </div>
                 `;
-                tasksPage.insertBefore(container, tasksPage.firstChild);
+                
+                // Insert after the search toolbar or at the start of tasks container
+                const searchToolbar = tasksPage.querySelector('.search-sort-toolbar');
+                const taskFilters = tasksPage.querySelector('.task-filters');
+                
+                if (searchToolbar && searchToolbar.parentNode === tasksPage) {
+                    searchToolbar.insertAdjacentElement('afterend', container);
+                } else if (taskFilters && taskFilters.parentNode === tasksPage) {
+                    taskFilters.insertAdjacentElement('afterend', container);
+                } else {
+                    tasksPage.insertBefore(container, tasksPage.firstChild);
+                }
+                
+                console.log('[TaskProposalUI] Created proposals container');
+            } else {
+                console.error('[TaskProposalUI] Could not find tasks page container');
+                return;
             }
         }
 
         this.proposalContainer = container;
         container.style.display = 'block';
+        console.log('[TaskProposalUI] Proposals container shown');
     }
 
     showStreamingState() {
