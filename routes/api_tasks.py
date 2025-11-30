@@ -2584,22 +2584,41 @@ Avoid duplicating existing tasks. Focus on concrete next steps."""
 Based on this {context_source}, suggest {max_proposals} actionable tasks.
 Format as JSON array: [{{"title": "...", "description": "...", "priority": "medium", "category": "..."}}]"""
                 
-                # Stream from OpenAI
+                # Stream from OpenAI with configurable model
+                from config import Config
                 client = get_openai_client()
                 if not client:
                     yield f"data: {json.dumps({'type': 'error', 'message': 'OpenAI client not available'})}\n\n"
                     return
                 
-                stream = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    stream=True,
-                    temperature=0.7,
-                    max_tokens=800
-                )
+                model = Config.AI_PROPOSALS_MODEL
+                try:
+                    stream = client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        stream=True,
+                        temperature=0.7,
+                        max_tokens=800
+                    )
+                except Exception as model_error:
+                    # Fallback to gpt-4 if primary model fails
+                    if "model" in str(model_error).lower() or "403" in str(model_error):
+                        logger.warning(f"Model {model} failed, falling back to gpt-4")
+                        stream = client.chat.completions.create(
+                            model="gpt-4",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt}
+                            ],
+                            stream=True,
+                            temperature=0.7,
+                            max_tokens=800
+                        )
+                    else:
+                        raise
                 
                 full_response = ""
                 for chunk in stream:

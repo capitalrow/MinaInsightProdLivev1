@@ -5,7 +5,7 @@ from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def codex_update(file_path: str, instruction: str, model="gpt-4o-mini"):
+def codex_update(file_path: str, instruction: str, model="gpt-4o-mini-2024-07-18"):
     """
     Uses Codex-style model to read a file, apply an update, and overwrite it.
     """
