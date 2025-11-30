@@ -20,6 +20,12 @@ class TaskEmbeddingService:
         self.client = None
         self.model = "text-embedding-3-small"  # 1536 dimensions
         
+        # Check if using Replit AI proxy (doesn't support embeddings)
+        base_url = os.environ.get('OPENAI_BASE_URL', '')
+        if 'modelfarm' in base_url or 'replit' in base_url.lower():
+            logger.info("⚠️ Embeddings disabled: Replit AI Integrations does not support embeddings API")
+            return
+        
         if self.api_key:
             try:
                 from openai import OpenAI
@@ -28,7 +34,7 @@ class TaskEmbeddingService:
             except Exception as e:
                 logger.error(f"❌ Failed to initialize OpenAI: {e}")
         else:
-            logger.warning("⚠️ OPENAI_API_KEY not set - semantic search disabled")
+            logger.debug("⚠️ OPENAI_API_KEY not set - semantic search disabled")
     
     def is_available(self) -> bool:
         """Check if embedding service is available."""
