@@ -102,6 +102,19 @@ class TaskPrioritySheet {
         });
 
         this.overlay.querySelectorAll('.task-sheet-option').forEach(btn => {
+            // Touch feedback on press
+            btn.addEventListener('touchstart', () => {
+                btn.style.transform = 'scale(0.98)';
+                btn.style.background = 'rgba(255,255,255,0.08)';
+            }, { passive: true });
+            
+            btn.addEventListener('touchend', () => {
+                btn.style.transform = '';
+                if (!btn.classList.contains('selected')) {
+                    btn.style.background = '';
+                }
+            }, { passive: true });
+            
             btn.addEventListener('click', () => {
                 const priority = btn.dataset.priority;
                 this.close(priority);
@@ -118,9 +131,34 @@ class TaskPrioritySheet {
     async open(taskId, currentPriority = 'medium') {
         this.currentTaskId = taskId;
         
+        // Update selected state styling
         this.overlay.querySelectorAll('.task-sheet-option').forEach(btn => {
             const isSelected = btn.dataset.priority === currentPriority;
             btn.classList.toggle('selected', isSelected);
+            
+            if (isSelected) {
+                btn.style.background = 'rgba(59, 130, 246, 0.1)';
+                btn.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+                btn.style.borderRadius = '12px';
+                
+                // Add checkmark indicator
+                let check = btn.querySelector('.selected-check');
+                if (!check) {
+                    check = document.createElement('span');
+                    check.className = 'selected-check';
+                    check.innerHTML = `<svg width="20" height="20" fill="none" stroke="#3b82f6" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>`;
+                    check.style.cssText = 'margin-left: auto;';
+                    btn.appendChild(check);
+                }
+            } else {
+                btn.style.background = '';
+                btn.style.border = '';
+                
+                const check = btn.querySelector('.selected-check');
+                if (check) check.remove();
+            }
         });
 
         this.overlay.style.display = 'flex';
