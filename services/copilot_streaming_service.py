@@ -22,14 +22,14 @@ from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
 
-# Model configuration with fallback hierarchy
+# Model configuration with fallback hierarchy (Replit AI Integrations compatible)
 # Primary: gpt-4o-mini (fast, cost-effective)
-# Fallback 1: gpt-4 (stable, widely available)
-# Fallback 2: gpt-4-turbo (high capability)
+# Fallback 1: gpt-4.1-mini (same family, reliable)
+# Fallback 2: gpt-4.1 (high capability)
 COPILOT_MODEL_HIERARCHY = [
-    "gpt-4o-mini-2024-07-18",  # Most accessible, fast
-    "gpt-4",                   # Stable fallback
-    "gpt-4-turbo",             # High-end fallback
+    "gpt-4o-mini",    # Fast, cost-effective (Replit AI supported)
+    "gpt-4.1-mini",   # Reliable fallback (Replit AI supported)
+    "gpt-4.1",        # High-end fallback (Replit AI supported)
 ]
 
 def get_copilot_model() -> str:
