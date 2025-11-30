@@ -8,6 +8,7 @@ class TaskPrioritySelector {
         this.popover = null;
         this.resolveCallback = null;
         this.triggerElement = null;
+        this.justOpened = false; // Prevent immediate close from click propagation
         this.init();
     }
 
@@ -64,6 +65,9 @@ class TaskPrioritySelector {
         });
 
         document.addEventListener('click', (e) => {
+            // Skip if popover was just opened (prevents immediate close from click propagation)
+            if (this.justOpened) return;
+            
             if (this.popover.classList.contains('visible') && 
                 !this.popover.contains(e.target) &&
                 e.target !== this.triggerElement) {
@@ -80,12 +84,17 @@ class TaskPrioritySelector {
 
     async show(triggerElement) {
         this.triggerElement = triggerElement;
+        this.justOpened = true; // Prevent immediate close from click propagation
 
         this.position(triggerElement);
         
         this.popover.style.display = 'block';
         requestAnimationFrame(() => {
             this.popover.classList.add('visible');
+            // Reset justOpened flag after a short delay to allow click propagation to complete
+            setTimeout(() => {
+                this.justOpened = false;
+            }, 100);
         });
 
         return new Promise((resolve) => {
