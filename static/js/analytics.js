@@ -287,41 +287,6 @@ class AnalyticsDashboard {
             tab.addEventListener('click', async () => {
                 await this.activateTab(tab);
             });
-            
-            tab.addEventListener('keydown', async (e) => {
-                let targetIndex = index;
-                
-                switch (e.key) {
-                    case 'ArrowRight':
-                    case 'ArrowDown':
-                        e.preventDefault();
-                        targetIndex = (index + 1) % tabs.length;
-                        break;
-                    case 'ArrowLeft':
-                    case 'ArrowUp':
-                        e.preventDefault();
-                        targetIndex = (index - 1 + tabs.length) % tabs.length;
-                        break;
-                    case 'Home':
-                        e.preventDefault();
-                        targetIndex = 0;
-                        break;
-                    case 'End':
-                        e.preventDefault();
-                        targetIndex = tabs.length - 1;
-                        break;
-                    case 'Enter':
-                    case ' ':
-                        e.preventDefault();
-                        await this.activateTab(tab);
-                        return;
-                    default:
-                        return;
-                }
-                
-                tabs[targetIndex].focus();
-                await this.activateTab(tabs[targetIndex]);
-            });
         });
     }
     
@@ -1083,6 +1048,15 @@ class AnalyticsDashboard {
     }
 
     calculateBalanceMetrics(speakers, totalTime, numSpeakers) {
+        if (!numSpeakers || numSpeakers === 0 || !totalTime || totalTime === 0) {
+            return {
+                timeBalance: { score: NaN, status: 'No Data', description: 'Record meetings to see metrics' },
+                contributionEquity: { score: NaN, status: 'No Data', description: 'Record meetings to see metrics' },
+                dispersion: { score: NaN, status: 'No Data', description: 'Record meetings to see metrics' },
+                overall: { score: NaN, status: 'No Data', description: 'Record meetings to see metrics' }
+            };
+        }
+        
         const idealPercentage = 100 / numSpeakers;
         const percentages = speakers.map(s => (s.talk_time_minutes / totalTime) * 100);
         
@@ -1149,9 +1123,16 @@ class AnalyticsDashboard {
     }
 
     createBalanceMetricCard(title, score, status, description, iconPath) {
-        // Determine color based on score
+        const isValidScore = !isNaN(score) && isFinite(score);
+        const displayScore = isValidScore ? score : '—';
+        const safeStatus = isValidScore ? status : 'No Data';
+        const safeDescription = isValidScore ? description : 'Record meetings to see metrics';
+        
         let colorClass, bgGradient;
-        if (score >= 80) {
+        if (!isValidScore) {
+            colorClass = 'text-secondary';
+            bgGradient = 'rgba(128, 128, 128, 0.1)';
+        } else if (score >= 80) {
             colorClass = 'text-green-500';
             bgGradient = 'rgba(34, 197, 94, 0.1)';
         } else if (score >= 60) {
@@ -1174,17 +1155,17 @@ class AnalyticsDashboard {
                         </svg>
                     </div>
                     <div class="text-right">
-                        <div class="text-3xl font-bold ${colorClass}">${score}</div>
-                        <div class="text-xs text-secondary">/ 100</div>
+                        <div class="text-3xl font-bold ${colorClass}">${displayScore}</div>
+                        <div class="text-xs text-secondary">${isValidScore ? '/ 100' : ''}</div>
                     </div>
                 </div>
                 <h3 class="font-semibold text-sm mb-1">${title}</h3>
-                <p class="text-xs text-tertiary mb-2">${description}</p>
+                <p class="text-xs text-tertiary mb-2">${safeDescription}</p>
                 <div class="flex items-center gap-2">
                     <div class="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div class="h-full ${colorClass} transition-all duration-500" style="width: ${score}%; opacity: 0.8;"></div>
+                        <div class="h-full ${colorClass} transition-all duration-500" style="width: ${isValidScore ? score : 0}%; opacity: 0.8;"></div>
                     </div>
-                    <span class="text-xs font-medium ${colorClass}">${status}</span>
+                    <span class="text-xs font-medium ${colorClass}">${safeStatus}</span>
                 </div>
             </div>
         `;
