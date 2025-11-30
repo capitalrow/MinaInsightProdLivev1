@@ -1,52 +1,80 @@
+/* ==========================================================
+   UNIFIED DESIGN TOKENS - Crown+ Aligned
+   Combines legacy numeric spacing with Crown+ visual identity
+   ========================================================== */
+
 :root {
-  /* Color Palette - Crown+ Dark Theme */
-  --color-primary: #6366f1;
-  --color-primary-light: #818cf8;
-  --color-primary-dark: #4f46e5;
+  /* ============================================
+     COLOR PALETTE - Crown+ Dark Theme
+     ============================================ */
   
-  --color-secondary: #10b981;
-  --color-secondary-light: #34d399;
-  --color-secondary-dark: #059669;
+  /* Brand Colors - Mina Gradient System */
+  --color-primary: #3b82f6;
+  --color-primary-light: #60a5fa;
+  --color-primary-dark: #2563eb;
   
-  --color-accent: #f59e0b;
-  --color-accent-light: #fbbf24;
-  --color-accent-dark: #d97706;
+  --color-secondary: #8b5cf6;
+  --color-secondary-light: #a78bfa;
+  --color-secondary-dark: #7c3aed;
   
-  /* Neutral Colors - Dark Theme */
+  --color-accent: #14b8a6;
+  --color-accent-light: #2dd4bf;
+  --color-accent-dark: #0d9488;
+  
+  /* Surface Colors - Dark Theme */
   --color-background: #0f172a;
   --color-surface: #1e293b;
   --color-surface-light: #334155;
   --color-surface-lighter: #475569;
+  --color-card: #1e293b;
   
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #cbd5e1;
+  /* Text Colors */
+  --color-text: #f8fafc;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #e2e8f0;
   --color-text-tertiary: #94a3b8;
+  --color-text-muted: #94a3b8;
   --color-text-disabled: #64748b;
+  --color-text-inverse: #0f172a;
   
-  --color-border: #334155;
-  --color-border-light: #475569;
+  /* Border Colors */
+  --color-border: #475569;
+  --color-border-light: #334155;
   
-  /* Status Colors */
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
+  /* Status Colors - Crown+ Aligned */
+  --color-success: #22c55e;
+  --color-success-light: #4ade80;
+  --color-warning: #facc15;
+  --color-warning-light: #fde047;
   --color-error: #ef4444;
+  --color-danger: #ef4444;
+  --color-danger-light: #f87171;
   --color-info: #3b82f6;
+  --color-info-light: #60a5fa;
   
-  /* Gradient Overlays */
-  --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  --gradient-secondary: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
-  --gradient-hero: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  /* ============================================
+     GRADIENTS - Crown+ Brand Identity
+     ============================================ */
+  --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #a855f7 100%);
+  --gradient-secondary: linear-gradient(135deg, #14b8a6 0%, #3b82f6 100%);
+  --gradient-hero: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%);
+  --gradient-accent: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
   
-  /* Glass Effect */
-  --glass-bg: rgba(30, 41, 59, 0.6);
+  /* ============================================
+     GLASS EFFECT - Crown+ Glassmorphism
+     ============================================ */
+  --glass-bg: rgba(30, 41, 59, 0.7);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   --backdrop-blur: blur(16px);
   
-  /* Typography Scale */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  /* ============================================
+     TYPOGRAPHY - Crown+ Font System
+     ============================================ */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
   
+  /* Font Sizes */
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
@@ -57,50 +85,78 @@
   --font-size-4xl: 2.25rem;
   --font-size-5xl: 3rem;
   
+  /* Font Weights */
   --font-weight-normal: 400;
+  --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
   
+  /* Line Heights */
   --line-height-tight: 1.25;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.75;
   
-  /* Spacing Scale */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
-  --space-16: 4rem;
-  --space-20: 5rem;
-  --space-24: 6rem;
+  /* ============================================
+     SPACING SCALE - Numeric System
+     ============================================ */
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+  --space-16: 4rem;     /* 64px */
+  --space-20: 5rem;     /* 80px */
+  --space-24: 6rem;     /* 96px */
   
-  /* Border Radius */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1rem;
+  /* Crown+ Named Spacing Aliases */
+  --space-xxs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  
+  /* ============================================
+     BORDER RADIUS - Crown+ Radii
+     ============================================ */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
   --radius-full: 9999px;
   
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  /* ============================================
+     SHADOWS - Crown+ Elevation System
+     ============================================ */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
   
-  /* Transitions */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* Elevation Aliases */
+  --elevation-1: var(--shadow-sm);
+  --elevation-2: var(--shadow-md);
+  --elevation-3: var(--shadow-lg);
   
-  /* Z-Index Scale */
+  /* ============================================
+     TRANSITIONS - Crown+ Motion System
+     ============================================ */
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* ============================================
+     Z-INDEX SCALE
+     ============================================ */
   --z-dropdown: 1000;
   --z-sticky: 1020;
   --z-fixed: 1030;
@@ -109,12 +165,14 @@
   --z-popover: 1060;
   --z-tooltip: 1070;
   
-  /* Layout */
+  /* ============================================
+     LAYOUT
+     ============================================ */
   --container-max-width: 1280px;
   --header-height: 64px;
   --sidebar-width: 280px;
   
-  /* Responsive Breakpoints (for JS) */
+  /* Responsive Breakpoints */
   --breakpoint-sm: 640px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
@@ -122,27 +180,41 @@
   --breakpoint-2xl: 1536px;
 }
 
-/* Light Theme Override */
+/* ==========================================================
+   LIGHT THEME - Crown+ Light Mode
+   ========================================================== */
 [data-theme="light"] {
   --color-background: #ffffff;
   --color-surface: #f8fafc;
   --color-surface-light: #f1f5f9;
   --color-surface-lighter: #e2e8f0;
+  --color-card: #ffffff;
   
+  --color-text: #0f172a;
   --color-text-primary: #0f172a;
   --color-text-secondary: #334155;
   --color-text-tertiary: #64748b;
+  --color-text-muted: #64748b;
   --color-text-disabled: #94a3b8;
+  --color-text-inverse: #ffffff;
   
   --color-border: #e2e8f0;
   --color-border-light: #f1f5f9;
   
-  --glass-bg: rgba(248, 250, 252, 0.6);
-  --glass-border: rgba(0, 0, 0, 0.1);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+  --glass-bg: rgba(248, 250, 252, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
-/* Accessibility - Reduced Motion */
+/* ==========================================================
+   ACCESSIBILITY OVERRIDES
+   ========================================================== */
+   
+/* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --transition-fast: 0ms;
@@ -151,10 +223,11 @@
   }
 }
 
-/* Accessibility - High Contrast */
+/* High Contrast */
 @media (prefers-contrast: high) {
   :root {
     --color-border: #64748b;
     --color-text-secondary: #e2e8f0;
+    --glass-border: rgba(255, 255, 255, 0.25);
   }
 }
