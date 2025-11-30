@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container settings-container" data-user-id="{{ current_user.id }}">
+<div class="container settings-container" data-user-id="{{ current_user.id }}" data-user-email="{{ current_user.email }}">
     <div class="settings-header">
         <h1 class="settings-title">Settings</h1>
         <p class="settings-subtitle">Manage your account and preferences</p>
@@ -167,6 +167,133 @@
                     <button type="submit" class="btn btn-primary">Save Privacy Settings</button>
                 </div>
             </form>
+        </div>
+
+        <div class="settings-card data-rights-card">
+            <h2 class="settings-card-title">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+                Your Data Rights (GDPR)
+            </h2>
+            <p class="data-rights-intro">
+                Under GDPR, you have the right to access, export, and delete your personal data. 
+                We encrypt all your data and never sell it or use it to train AI models.
+            </p>
+            
+            <div class="data-rights-actions">
+                <div class="data-right-item">
+                    <div class="data-right-info">
+                        <h3>Export Your Data</h3>
+                        <p>Download a complete copy of all your data including meetings, transcripts, tasks, and account information in a portable format.</p>
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="export-data-btn">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        Export All Data
+                    </button>
+                </div>
+                
+                <div class="data-right-item">
+                    <div class="data-right-info">
+                        <h3>Update Consent Preferences</h3>
+                        <p>Manage your marketing email preferences and cookie consent settings.</p>
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="manage-consent-btn">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        Manage Consent
+                    </button>
+                </div>
+                
+                <div class="data-right-item danger-zone">
+                    <div class="data-right-info">
+                        <h3>Delete Account</h3>
+                        <p>Permanently delete your account and all associated data. This action cannot be undone and will delete all your meetings, transcripts, and tasks.</p>
+                    </div>
+                    <button type="button" class="btn btn-danger" id="delete-account-btn">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Delete My Account
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Consent Management Modal -->
+        <div id="consent-modal" class="modal" style="display: none;">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Manage Your Consent</h3>
+                    <button type="button" class="modal-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="consent-form">
+                        <div class="form-group">
+                            <label class="form-checkbox-label">
+                                <input type="checkbox" name="marketing_consent" class="form-checkbox" id="marketing-consent-checkbox">
+                                <div class="checkbox-content">
+                                    <p class="checkbox-title">Marketing Emails</p>
+                                    <p class="checkbox-description">Receive product updates, tips, and occasional promotional emails</p>
+                                </div>
+                            </label>
+                            
+                            <label class="form-checkbox-label">
+                                <input type="checkbox" name="analytics_consent" class="form-checkbox" id="analytics-consent-checkbox">
+                                <div class="checkbox-content">
+                                    <p class="checkbox-title">Analytics & Performance</p>
+                                    <p class="checkbox-description">Allow anonymous usage data to help improve Mina</p>
+                                </div>
+                            </label>
+                        </div>
+                        <p class="consent-note">You can change these preferences at any time. Essential cookies required for the service are always enabled.</p>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-consent-btn">Save Preferences</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Account Confirmation Modal -->
+        <div id="delete-modal" class="modal" style="display: none;">
+            <div class="modal-overlay"></div>
+            <div class="modal-content modal-danger">
+                <div class="modal-header">
+                    <h3>Delete Your Account</h3>
+                    <button type="button" class="modal-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="delete-warning">
+                        <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <h4>This action is permanent</h4>
+                        <p>Deleting your account will permanently remove:</p>
+                        <ul>
+                            <li>All your meeting recordings</li>
+                            <li>All transcripts and AI-generated summaries</li>
+                            <li>All tasks and action items</li>
+                            <li>Your profile and preferences</li>
+                        </ul>
+                        <p><strong>This cannot be undone.</strong></p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="delete-confirm-email">Type your email to confirm:</label>
+                        <input type="email" id="delete-confirm-email" class="form-input" placeholder="{{ current_user.email }}">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirm-delete-btn" disabled>Delete My Account</button>
+                </div>
+            </div>
         </div>
 
         <div class="settings-card">

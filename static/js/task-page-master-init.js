@@ -868,20 +868,23 @@
         }));
     }
     
-    // Start initialization when DOM is ready - properly await async initialization
-    // CROWN⁴.6: Use window load event to ensure all deferred scripts have executed
+    // CROWN⁴.6 PERFORMANCE FIX: Defer initialization to allow skeleton to paint first
+    // Using double-rAF pattern ensures browser paints before heavy event handler setup
     const startInit = () => {
-        console.log('[MasterInit] Starting deferred initialization...');
-        console.log('[MasterInit] taskBootstrap available:', !!window.taskBootstrap);
-        initializeAllFeatures().catch(error => {
-            console.error('[MasterInit] Initialization failed:', error);
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                console.log('[MasterInit] Skeleton painted, starting deferred initialization...');
+                console.log('[MasterInit] taskBootstrap available:', !!window.taskBootstrap);
+                initializeAllFeatures().catch(error => {
+                    console.error('[MasterInit] Initialization failed:', error);
+                });
+            });
         });
     };
     
     if (document.readyState === 'complete') {
-        console.log('[MasterInit] Document already complete, initializing immediately...');
-        // Small delay to ensure all module initializations complete
-        setTimeout(startInit, 50);
+        console.log('[MasterInit] Document already complete, deferring for paint...');
+        startInit();
     } else {
         console.log('[MasterInit] Waiting for window load event...');
         window.addEventListener('load', () => {

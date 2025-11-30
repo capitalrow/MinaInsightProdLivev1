@@ -523,7 +523,8 @@ class TaskActionsMenu {
             // Close menu before executing action
             this.closeMenu();
             
-            // Map action to handler
+            // Map action to handler - Complete list of all 13 actions
+            // Supports both HTML template names and JS fallback names
             const actionMap = {
                 'view-details': 'view-details',
                 'edit': 'edit',
@@ -536,6 +537,9 @@ class TaskActionsMenu {
                 'set-due-date': 'due-date',
                 'assign': 'assign',
                 'labels': 'labels',
+                'duplicate': 'duplicate',
+                'snooze': 'snooze',
+                'merge': 'merge',
                 'jump-to-transcript': 'jump-to-transcript',
                 'duplicate': 'duplicate',
                 'snooze': 'snooze',
