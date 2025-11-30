@@ -222,27 +222,31 @@ class TaskDateSheet {
         return `${dayNames[date.getDay()]}, ${monthNames[date.getMonth()]} ${date.getDate()}`;
     }
 
+    formatActualDate(date) {
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return `${dayNames[date.getDay()]}, ${monthNames[date.getMonth()]} ${date.getDate()}`;
+    }
+
     updatePresetLabels() {
         const presets = this.overlay.querySelectorAll('.task-sheet-preset');
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 7);
+        
+        const nextMonth = new Date(today);
+        nextMonth.setMonth(today.getMonth() + 1);
         
         const dates = {
-            'today': this.formatRelativeDate(today.toISOString().split('T')[0]),
-            'tomorrow': (() => {
-                const d = new Date(today);
-                d.setDate(today.getDate() + 1);
-                return this.formatRelativeDate(d.toISOString().split('T')[0]);
-            })(),
-            'next-week': (() => {
-                const d = new Date(today);
-                d.setDate(today.getDate() + 7);
-                return this.formatRelativeDate(d.toISOString().split('T')[0]);
-            })(),
-            'next-month': (() => {
-                const d = new Date(today);
-                d.setMonth(today.getMonth() + 1);
-                return this.formatRelativeDate(d.toISOString().split('T')[0]);
-            })()
+            'today': this.formatActualDate(today),
+            'tomorrow': this.formatActualDate(tomorrow),
+            'next-week': this.formatActualDate(nextWeek),
+            'next-month': this.formatActualDate(nextMonth)
         };
         
         presets.forEach(btn => {
