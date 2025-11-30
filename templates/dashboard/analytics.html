@@ -333,6 +333,70 @@
         </div>
     </header>
 
+    <!-- Tier 1: Executive Summary with Meeting Health Score -->
+    <section id="executive-summary" class="mb-6" role="region" aria-label="Executive Summary">
+        <div class="executive-summary-card" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 50%, rgba(6, 182, 212, 0.05) 100%); border-radius: var(--radius-lg); padding: var(--space-6); border: 1px solid rgba(99, 102, 241, 0.1);">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <!-- Health Score Ring -->
+                <div class="flex items-center gap-6">
+                    <div class="health-score-ring" role="img" aria-label="Meeting Health Score" style="position: relative; width: 100px; height: 100px;">
+                        <svg viewBox="0 0 36 36" style="width: 100%; height: 100%; transform: rotate(-90deg);">
+                            <path id="health-score-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="rgba(107, 114, 128, 0.2)" stroke-width="3"/>
+                            <path id="health-score-arc" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--color-primary)" stroke-width="3" stroke-dasharray="0, 100" stroke-linecap="round" style="transition: stroke-dasharray 1s ease-out, stroke 0.3s ease;"/>
+                        </svg>
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                            <span id="health-score-value" class="text-2xl font-bold" aria-live="polite">—</span>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold mb-1">Meeting Health Score</h2>
+                        <p id="health-score-message" class="text-sm text-secondary">Analyzing your meetings...</p>
+                        <div id="health-score-trend" class="flex items-center gap-2 mt-2" aria-live="polite"></div>
+                    </div>
+                </div>
+                
+                <!-- Health Breakdown -->
+                <div id="health-breakdown" class="flex flex-wrap gap-4" role="list" aria-label="Health Score Breakdown">
+                    <div class="health-breakdown-item" role="listitem" style="min-width: 100px;">
+                        <p class="text-xs text-tertiary uppercase tracking-wide">Effectiveness</p>
+                        <p id="health-effectiveness" class="text-lg font-semibold">—</p>
+                    </div>
+                    <div class="health-breakdown-item" role="listitem" style="min-width: 100px;">
+                        <p class="text-xs text-tertiary uppercase tracking-wide">Engagement</p>
+                        <p id="health-engagement" class="text-lg font-semibold">—</p>
+                    </div>
+                    <div class="health-breakdown-item" role="listitem" style="min-width: 100px;">
+                        <p class="text-xs text-tertiary uppercase tracking-wide">Follow-through</p>
+                        <p id="health-followthrough" class="text-lg font-semibold">—</p>
+                    </div>
+                    <div class="health-breakdown-item" role="listitem" style="min-width: 100px;">
+                        <p class="text-xs text-tertiary uppercase tracking-wide">Decisions</p>
+                        <p id="health-decisions" class="text-lg font-semibold">—</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tier 2: Actionable Insights -->
+    <section id="actionable-insights-section" class="mb-6" role="region" aria-label="Actionable Insights">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">Actionable Insights</h2>
+            <span class="text-xs text-tertiary" id="insights-count">Loading...</span>
+        </div>
+        <div id="actionable-insights-container" class="grid gap-3 md:grid-cols-2" role="feed" aria-label="Meeting insights and recommendations">
+            <div class="crown5-empty-state" role="status">
+                <div class="crown5-empty-illustration">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                </div>
+                <p class="crown5-empty-title">Analyzing meeting patterns...</p>
+                <p class="crown5-empty-description">Smart recommendations will appear here</p>
+            </div>
+        </div>
+    </section>
+
     <!-- KPI Cards -->
     <section class="kpi-grid crown5-tile-grid" role="region" aria-label="Key Performance Indicators">
         <article class="kpi-card" data-widget="kpi-meetings" data-kpi="total_meetings" role="article" aria-labelledby="kpi-meetings-label" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, transparent 100%);" tabindex="0">
