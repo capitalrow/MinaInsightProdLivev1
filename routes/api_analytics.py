@@ -724,3 +724,127 @@ def export_analytics():
         
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_analytics_bp.route('/header', methods=['GET'])
+@login_required
+def get_analytics_header():
+    """
+    CROWN⁵+ ETag reconciliation endpoint.
+    Returns lightweight header with ETag for cache validation.
+    Supports If-None-Match for 304 Not Modified responses.
+    """
+    try:
+        import hashlib
+        
+        workspace_id = current_user.workspace_id
+        
+        # Get latest analytics metadata for ETag computation
+        latest_analytics = db.session.query(
+            func.max(Analytics.updated_at),
+            func.count(Analytics.id)
+        ).join(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Analytics.analysis_status == 'completed'
+        ).first()
+        
+        # Use deterministic fallback for empty data (fixed epoch, not now())
+        last_updated = latest_analytics[0]
+        count = latest_analytics[1] or 0
+        
+        # Use fixed epoch for empty workspaces to ensure stable ETag
+        if last_updated is None:
+            last_updated_str = '1970-01-01T00:00:00'
+        else:
+            last_updated_str = last_updated.isoformat()
+        
+        etag_source = f"{workspace_id}:{last_updated_str}:{count}"
+        etag = hashlib.md5(etag_source.encode()).hexdigest()
+        
+        # Check If-None-Match header
+        if_none_match = request.headers.get('If-None-Match', '').strip('"')
+        if if_none_match == etag:
+            return '', 304  # Not Modified
+        
+        response = jsonify({
+            'success': True,
+            'last_updated': last_updated_str,
+            'analytics_count': count,
+            'workspace_id': workspace_id
+        })
+        
+        response.headers['ETag'] = f'"{etag}"'
+        response.headers['Cache-Control'] = 'private, must-revalidate'
+        
+        return response
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_analytics_bp.route('/checksum', methods=['GET'])
+@login_required
+def get_analytics_checksum():
+    """
+    CROWN⁵+ Checksum validation endpoint.
+    Returns lightweight checksum for idle sync drift detection.
+    """
+    try:
+        import hashlib
+        
+        workspace_id = current_user.workspace_id
+        days = request.args.get('days', 30, type=int)
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        # Get distinct meeting count (separate query to avoid join duplication)
+        meeting_count = db.session.query(
+            func.count(Meeting.id)
+        ).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).scalar() or 0
+        
+        # Get task count for workspace meetings
+        task_count = db.session.query(
+            func.count(Task.id)
+        ).join(Meeting, Task.meeting_id == Meeting.id).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).scalar() or 0
+        
+        # Get latest update timestamps
+        last_meeting_update = db.session.query(
+            func.max(Meeting.updated_at)
+        ).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).scalar()
+        
+        last_task_update = db.session.query(
+            func.max(Task.updated_at)
+        ).join(Meeting, Task.meeting_id == Meeting.id).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).scalar()
+        
+        # Build checksum from key metrics (use empty string for None values)
+        checksum_parts = [
+            str(workspace_id),
+            str(meeting_count),
+            str(task_count),
+            last_meeting_update.isoformat() if last_meeting_update else '',
+            last_task_update.isoformat() if last_task_update else ''
+        ]
+        
+        checksum_source = ':'.join(checksum_parts)
+        checksum = hashlib.sha256(checksum_source.encode()).hexdigest()[:16]
+        
+        return jsonify({
+            'success': True,
+            'checksum': checksum,
+            'timestamp': datetime.now().isoformat(),
+            'period_days': days
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500

@@ -9,12 +9,16 @@ class AnalyticsEventManager {
         this.workspaceId = typeof WORKSPACE_ID !== 'undefined' ? WORKSPACE_ID : 1;
         this.lastSequenceNum = 0;
         this.cache = null;
+        this.idleSyncInterval = null;
+        this.lastSyncTimestamp = Date.now();
+        this.lastETag = null;
+        this.IDLE_SYNC_INTERVAL = 30000; // 30 seconds per CROWN⁵+ spec
         
         this.init();
     }
     
     async init() {
-        console.log('[Analytics] Initializing CROWN ¹⁰ event synchronization');
+        console.log('[Analytics] Initializing CROWN⁵+ event synchronization');
         
         // Initialize cache
         await this.initCache();
@@ -24,6 +28,184 @@ class AnalyticsEventManager {
         
         // Load last sequence number
         this.lastSequenceNum = this.getLastSequenceNum();
+        
+        // Setup visibility-based refresh (Industry Standard)
+        this.setupVisibilityRefresh();
+        
+        // Start 30s idle sync loop (CROWN⁵+ Stage 5: Continuity)
+        this.startIdleSync();
+    }
+    
+    /**
+     * CROWN⁵+ Stage 5: Visibility-based refresh
+     * When user returns to tab, validate and refresh data silently
+     */
+    setupVisibilityRefresh() {
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👁️ Tab visible - triggering silent reconciliation');
+                await this.performETagReconciliation();
+            }
+        });
+        console.log('✅ Visibility-based refresh enabled');
+    }
+    
+    /**
+     * CROWN⁵+ Stage 5: 30-second idle sync loop
+     * Continuous self-healing intelligence
+     */
+    startIdleSync() {
+        if (this.idleSyncInterval) {
+            clearInterval(this.idleSyncInterval);
+        }
+        
+        this.idleSyncInterval = setInterval(async () => {
+            // Only sync if tab is visible and user is idle
+            if (document.visibilityState === 'visible') {
+                await this.performIdleSync();
+            }
+        }, this.IDLE_SYNC_INTERVAL);
+        
+        console.log('✅ 30s idle sync loop started');
+    }
+    
+    /**
+     * CROWN⁵+ ETag reconciliation
+     * Validates cache freshness with server, triggers diff if stale
+     */
+    async performETagReconciliation() {
+        try {
+            const response = await fetch('/api/analytics/header', {
+                headers: {
+                    'If-None-Match': this.lastETag || ''
+                }
+            });
+            
+            if (response.status === 304) {
+                // Data is fresh, no action needed
+                console.log('✅ ETag match - data is fresh');
+                return;
+            }
+            
+            if (response.ok) {
+                const newETag = response.headers.get('ETag');
+                if (newETag) {
+                    this.lastETag = newETag;
+                }
+                
+                // Trigger silent refresh
+                console.log('🔄 ETag mismatch - refreshing data silently');
+                await this.silentRefresh();
+            }
+        } catch (error) {
+            console.warn('⚠️ ETag reconciliation failed:', error.message);
+        }
+    }
+    
+    /**
+     * CROWN⁵+ Idle sync with checksum validation
+     */
+    async performIdleSync() {
+        const now = Date.now();
+        const timeSinceLastSync = now - this.lastSyncTimestamp;
+        
+        // Skip if synced recently (within 25s to avoid overlap)
+        if (timeSinceLastSync < 25000) {
+            return;
+        }
+        
+        try {
+            // Perform lightweight checksum validation
+            const response = await fetch('/api/analytics/checksum');
+            
+            if (response.ok) {
+                const data = await response.json();
+                const serverChecksum = data.checksum;
+                const localChecksum = await this.getLocalChecksum();
+                
+                if (serverChecksum !== localChecksum) {
+                    console.log('🔄 Checksum drift detected - syncing silently');
+                    await this.silentRefresh();
+                } else {
+                    console.log('✅ Idle sync: checksums match');
+                }
+                
+                this.lastSyncTimestamp = now;
+                
+                // Update "last updated" timestamp silently
+                this.updateLastSyncTimestamp();
+            }
+        } catch (error) {
+            // Silently fail - don't disrupt user experience
+            console.warn('⚠️ Idle sync skipped:', error.message);
+        }
+    }
+    
+    /**
+     * Get local data checksum for comparison
+     */
+    async getLocalChecksum() {
+        try {
+            if (this.cache) {
+                const cachedData = await this.cache.get('analytics');
+                if (cachedData) {
+                    // Simple checksum based on stringified data
+                    const str = JSON.stringify(cachedData);
+                    let hash = 0;
+                    for (let i = 0; i < str.length; i++) {
+                        const char = str.charCodeAt(i);
+                        hash = ((hash << 5) - hash) + char;
+                        hash = hash & hash;
+                    }
+                    return hash.toString(16);
+                }
+            }
+        } catch (error) {
+            console.warn('Could not compute local checksum');
+        }
+        return null;
+    }
+    
+    /**
+     * Silent refresh without UI disruption
+     * CROWN⁵+ Emotional Calm: movement, not noise
+     */
+    async silentRefresh() {
+        try {
+            if (window.analyticsDashboard) {
+                await window.analyticsDashboard.loadDashboardData();
+            }
+            
+            // Invalidate cache
+            if (this.cache) {
+                await this.cache.invalidate('analytics');
+            }
+        } catch (error) {
+            console.warn('Silent refresh failed:', error.message);
+        }
+    }
+    
+    /**
+     * Update the "last updated" indicator silently
+     */
+    updateLastSyncTimestamp() {
+        const timestampEl = document.querySelector('.analytics-last-updated');
+        if (timestampEl) {
+            const now = new Date();
+            timestampEl.textContent = `Updated ${now.toLocaleTimeString()}`;
+            timestampEl.classList.add('calm-fade');
+            setTimeout(() => timestampEl.classList.remove('calm-fade'), 300);
+        }
+    }
+    
+    /**
+     * Cleanup on page unload
+     */
+    destroy() {
+        if (this.idleSyncInterval) {
+            clearInterval(this.idleSyncInterval);
+            this.idleSyncInterval = null;
+        }
     }
     
     async initCache() {
