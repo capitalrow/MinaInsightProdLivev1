@@ -210,21 +210,84 @@ class AnalyticsDashboard {
     }
 
     setupTabs() {
-        document.querySelectorAll('.analytics-tab').forEach(tab => {
+        const tabs = Array.from(document.querySelectorAll('.analytics-tab'));
+        
+        tabs.forEach((tab, index) => {
             tab.addEventListener('click', async () => {
-                const targetTab = tab.dataset.tab;
+                await this.activateTab(tab);
+            });
+            
+            tab.addEventListener('keydown', async (e) => {
+                let targetIndex = index;
                 
-                // Update active states
-                document.querySelectorAll('.analytics-tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.analytics-tab-content').forEach(c => c.classList.remove('active'));
+                switch (e.key) {
+                    case 'ArrowRight':
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        targetIndex = (index + 1) % tabs.length;
+                        break;
+                    case 'ArrowLeft':
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        targetIndex = (index - 1 + tabs.length) % tabs.length;
+                        break;
+                    case 'Home':
+                        e.preventDefault();
+                        targetIndex = 0;
+                        break;
+                    case 'End':
+                        e.preventDefault();
+                        targetIndex = tabs.length - 1;
+                        break;
+                    case 'Enter':
+                    case ' ':
+                        e.preventDefault();
+                        await this.activateTab(tab);
+                        return;
+                    default:
+                        return;
+                }
                 
-                tab.classList.add('active');
-                document.getElementById('tab-' + targetTab).classList.add('active');
-                
-                // Load tab-specific data
-                await this.loadTabData(targetTab);
+                tabs[targetIndex].focus();
+                await this.activateTab(tabs[targetIndex]);
             });
         });
+    }
+    
+    async activateTab(tab) {
+        const targetTab = tab.dataset.tab;
+        const tabs = document.querySelectorAll('.analytics-tab');
+        const tabContents = document.querySelectorAll('.analytics-tab-content');
+        
+        tabs.forEach(t => {
+            t.classList.remove('active');
+            t.setAttribute('aria-selected', 'false');
+            t.setAttribute('tabindex', '-1');
+        });
+        
+        tabContents.forEach(c => c.classList.remove('active'));
+        
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+        tab.setAttribute('tabindex', '0');
+        
+        const targetPanel = document.getElementById('tab-' + targetTab);
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+        }
+        
+        this.announceTabChange(targetTab);
+        
+        await this.loadTabData(targetTab);
+    }
+    
+    announceTabChange(tabName) {
+        const liveRegion = document.getElementById('analytics-live-region');
+        if (liveRegion) {
+            const formattedName = tabName.charAt(0).toUpperCase() + tabName.slice(1);
+            liveRegion.textContent = `${formattedName} tab selected. Loading ${formattedName.toLowerCase()} data.`;
+            setTimeout(() => { liveRegion.textContent = ''; }, 2000);
+        }
     }
 
     async loadDashboardData() {
