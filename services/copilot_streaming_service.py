@@ -22,14 +22,14 @@ from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
 
-# Model configuration with fallback hierarchy (Replit AI Integrations compatible)
+# Model configuration with fallback hierarchy (Direct OpenAI API)
 # Primary: gpt-4o-mini (fast, cost-effective)
-# Fallback 1: gpt-4.1-mini (same family, reliable)
-# Fallback 2: gpt-4.1 (high capability)
+# Fallback 1: gpt-4o (reliable, high capability)
+# Fallback 2: gpt-4-turbo (proven stable)
 COPILOT_MODEL_HIERARCHY = [
-    "gpt-4o-mini",    # Fast, cost-effective (Replit AI supported)
-    "gpt-4.1-mini",   # Reliable fallback (Replit AI supported)
-    "gpt-4.1",        # High-end fallback (Replit AI supported)
+    "gpt-4o-mini",        # Fast, cost-effective
+    "gpt-4o",             # Reliable high-capability fallback
+    "gpt-4-turbo",        # Proven stable fallback
 ]
 
 def get_copilot_model() -> str:
@@ -129,19 +129,20 @@ class CopilotStreamingService:
     
     def __init__(self):
         """Initialize OpenAI client with dedicated asyncio thread for eventlet compatibility."""
-        self.api_key = os.getenv("AI_INTEGRATIONS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        self.base_url = os.getenv("AI_INTEGRATIONS_OPENAI_BASE_URL")
+        # Use user's own OPENAI_API_KEY - connect directly to OpenAI (no Replit proxy)
+        self.api_key = os.getenv("OPENAI_API_KEY")
         
         if not self.api_key:
-            logger.warning("No OpenAI API key configured - streaming will be disabled")
+            logger.warning("No OPENAI_API_KEY configured - AI Copilot streaming will be disabled")
             self.client = None
             self.async_client = None
             self.async_loop = None
             self.async_thread = None
         else:
-            # Initialize clients
-            self.client = OpenAI(api_key=self.api_key, base_url=self.base_url if self.base_url else None)
-            self.async_client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url if self.base_url else None)
+            # Initialize clients - connect directly to api.openai.com (no base_url override)
+            self.client = OpenAI(api_key=self.api_key)
+            self.async_client = AsyncOpenAI(api_key=self.api_key)
+            logger.info("✅ OpenAI client initialized - connecting directly to api.openai.com")
             
             # Create dedicated asyncio event loop in background thread for true async streaming
             self.async_loop = None
