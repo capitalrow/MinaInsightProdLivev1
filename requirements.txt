@@ -59,4 +59,3 @@ nest-asyncio
 playwright
 eventlet
 python-dateutil
-openai
