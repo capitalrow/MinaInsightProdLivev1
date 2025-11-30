@@ -915,7 +915,7 @@ Available actions you can suggest:
         messages.append({"role": "user", "content": user_prompt})
             
         response = client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model="gpt-4o-mini",
             messages=messages,  # type: ignore[arg-type]
             max_tokens=800,  # Increased for better responses
             temperature=0.7,
@@ -1272,7 +1272,7 @@ Provide a JSON response with "title" and "body" fields."""
             }
         
         response = client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompts[draft_type]},
                 {"role": "user", "content": user_prompts[draft_type]}

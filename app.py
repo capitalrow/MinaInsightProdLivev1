@@ -782,11 +782,9 @@ def create_app() -> Flask:
 
     # Settings routes
     try:
-        from routes.settings import settings_bp, register_cookie_consent_route
+        from routes.settings import settings_bp
         app.register_blueprint(settings_bp)
-        register_cookie_consent_route(app)
-        csrf.exempt(app.view_functions['save_cookie_consent'])
-        app.logger.info("Settings routes registered (including cookie consent API)")
+        app.logger.info("Settings routes registered")
     except Exception as e:
         app.logger.error(f"Failed to register settings routes: {e}")
 

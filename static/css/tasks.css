@@ -3650,48 +3650,6 @@
     margin: 6px 0;
 }
 
-/* Section Labels - Linear/Notion style */
-#task-menu .task-menu-section-label {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: rgba(148, 163, 184, 0.7);
-    padding: 12px 16px 6px;
-    margin-top: 4px;
-    user-select: none;
-}
-
-/* Danger divider - before destructive actions */
-#task-menu .task-menu-divider-danger {
-    background: rgba(239, 68, 68, 0.2);
-    margin: 8px 0;
-}
-
-/* Destructive action styling - using correct class name */
-#task-menu .task-menu-item-destructive {
-    color: #fca5a5;
-}
-
-#task-menu .task-menu-item-destructive svg {
-    color: #fca5a5;
-}
-
-#task-menu .task-menu-item-destructive:hover {
-    background: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
-}
-
-#task-menu .task-menu-item-destructive:hover svg {
-    color: #ef4444;
-}
-
-/* Touch feedback for mobile */
-#task-menu .task-menu-item:active {
-    background: rgba(255, 255, 255, 0.12);
-    transform: scale(0.98);
-}
-
 /* MOBILE RESPONSIVENESS */
 @media (max-width: 480px) {
     #task-menu {

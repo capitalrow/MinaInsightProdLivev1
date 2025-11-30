@@ -20,9 +20,7 @@ class Config:
     # OpenAI
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     WHISPER_MODEL = os.getenv("WHISPER_MODEL", "whisper-1")
-    OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini-2024-07-18")
-    SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", OPENAI_CHAT_MODEL)
-    AI_PROPOSALS_MODEL = os.getenv("AI_PROPOSALS_MODEL", OPENAI_CHAT_MODEL)
+    SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "gpt-4o-mini")
     AUTO_SUMMARY = os.getenv("AUTO_SUMMARY", "true").lower() == "true"
     LANGUAGE_HINT = os.getenv("LANGUAGE_HINT") or None  # None => auto-detect
 

@@ -174,7 +174,7 @@ If no explicit action items were stated, return an empty array: []
 Format as valid JSON only."""
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a STRICT evidence-based meeting analyst. NEVER invent or infer content. Only extract what is EXPLICITLY stated. Respond with valid JSON only."},
                 {"role": "user", "content": prompt}
