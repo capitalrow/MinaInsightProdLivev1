@@ -417,8 +417,7 @@ class TaskMenuController {
                 this.showToast(newDate ? 'Due date updated' : 'Due date cleared', 'success');
             }
             
-            // Update DOM immediately for visual feedback
-            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            // Update DOM immediately for visual feedback (taskCard already declared above)
             if (taskCard) {
                 const dueDateBadge = taskCard.querySelector('.task-due-date, .due-date-badge');
                 if (dueDateBadge && newDate) {
