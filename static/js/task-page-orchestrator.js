@@ -58,10 +58,6 @@ class TasksPageOrchestrator {
             console.log('[Orchestrator] Step 5: Ensuring TaskActionsMenu...');
             await this._ensureTaskActionsMenu();
 
-            // Step 5.5: Ensure TaskProposalUI exists (AI proposals feature)
-            console.log('[Orchestrator] Step 5.5: Ensuring TaskProposalUI...');
-            await this._ensureTaskProposalUI();
-
             // Step 6: Initialize helper modules
             console.log('[Orchestrator] Step 6: Initializing helper modules...');
             await this._initHelperModules();
@@ -230,28 +226,6 @@ class TasksPageOrchestrator {
         }
     }
 
-    async _ensureTaskProposalUI() {
-        if (window.taskProposalUI) {
-            this.modules.taskProposalUI = window.taskProposalUI;
-            console.log('[Orchestrator] ✅ TaskProposalUI already exists');
-            return;
-        }
-        
-        const taskUI = window.taskBootstrap || this.modules.taskBootstrap;
-        
-        if (typeof TaskProposalUI !== 'undefined') {
-            window.taskProposalUI = new TaskProposalUI(taskUI);
-            this.modules.taskProposalUI = window.taskProposalUI;
-            console.log('[Orchestrator] ✅ TaskProposalUI created');
-        } else if (typeof window.TaskProposalUI !== 'undefined') {
-            window.taskProposalUI = new window.TaskProposalUI(taskUI);
-            this.modules.taskProposalUI = window.taskProposalUI;
-            console.log('[Orchestrator] ✅ TaskProposalUI created (from window.TaskProposalUI)');
-        } else {
-            console.warn('[Orchestrator] ⚠️ TaskProposalUI class not available');
-        }
-    }
-
     async _initHelperModules() {
         const helpers = [
             ['TaskConfirmModal', 'taskConfirmModal'],
@@ -414,17 +388,8 @@ class TasksPageOrchestrator {
 // Create orchestrator instance
 window.tasksOrchestrator = new TasksPageOrchestrator();
 
-// CROWN⁴.6 PERFORMANCE FIX: Defer initialization to allow skeleton to paint first
-// Using double-rAF pattern to ensure browser has painted the skeleton before heavy work
-// This enables <200ms first paint target
-console.log('[Orchestrator] TasksPageOrchestrator loaded - deferring init for skeleton paint');
+// Initialize immediately since we're loaded last
+// All deferred scripts should have executed by now
+window.tasksReady = window.tasksOrchestrator.init();
 
-window.tasksReady = new Promise((resolve) => {
-    // Double requestAnimationFrame: ensures browser has painted at least once
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            console.log('[Orchestrator] Skeleton painted, starting module initialization...');
-            window.tasksOrchestrator.init().then(resolve).catch(resolve);
-        });
-    });
-});
+console.log('[Orchestrator] TasksPageOrchestrator loaded - initializing immediately');

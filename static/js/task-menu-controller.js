@@ -256,16 +256,7 @@ class TaskMenuController {
     }
 
     /**
-     * Detect if running on mobile/touch device
-     */
-    isMobile() {
-        return window.matchMedia('(max-width: 768px)').matches || 
-               ('ontouchstart' in window) ||
-               (navigator.maxTouchPoints > 0);
-    }
-
-    /**
-     * 4. PRIORITY - Change priority with mobile sheet or desktop popover
+     * 4. PRIORITY - Change priority with visual selector (with browser fallback)
      */
     async handlePriority(taskId) {
         console.log(`[TaskMenuController] Changing priority for task ${taskId}`);
@@ -275,29 +266,24 @@ class TaskMenuController {
 
         try {
             const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-            const currentPriority = task.priority || 'medium';
+            const trigger = taskCard || document.body;
+
             let newPriority;
             
-            // Mobile: use bottom sheet (Notion/Linear pattern)
-            if (this.isMobile() && window.taskPrioritySheet?.open) {
-                console.log('[TaskMenuController] Using mobile priority sheet');
-                newPriority = await window.taskPrioritySheet.open(taskId, currentPriority);
-            }
-            // Desktop: use popover selector
-            else if (window.taskPrioritySelector?.show) {
-                console.log('[TaskMenuController] Using desktop priority selector');
-                const trigger = taskCard || document.body;
+            // Try custom modal first, fallback to browser prompt
+            if (window.taskPrioritySelector?.show) {
                 try {
-                    newPriority = await window.taskPrioritySelector.show(trigger, currentPriority);
+                    newPriority = await window.taskPrioritySelector.show(trigger);
                 } catch (e) {
-                    console.warn('[TaskMenuController] Priority selector failed:', e);
+                    console.warn('[TaskMenuController] Priority selector failed, using fallback');
                     newPriority = null;
                 }
             }
             
-            // Final fallback: browser prompt
+            // Fallback: use browser prompt with options
             if (newPriority === undefined || newPriority === null) {
-                if (!window.taskPrioritySheet && !window.taskPrioritySelector) {
+                if (!window.taskPrioritySelector) {
+                    const currentPriority = task.priority || 'medium';
                     const choice = window.prompt(
                         `Set priority for "${task.title || 'Task'}":\n\nOptions: urgent, high, medium, low\n\nCurrent: ${currentPriority}`,
                         currentPriority
@@ -346,7 +332,7 @@ class TaskMenuController {
     }
 
     /**
-     * 5. DUE DATE - Set due date with mobile sheet or desktop picker
+     * 5. DUE DATE - Set due date with date picker (with browser fallback)
      */
     async handleDueDate(taskId) {
         console.log(`[TaskMenuController] Setting due date for task ${taskId}`);
@@ -356,32 +342,26 @@ class TaskMenuController {
 
         try {
             const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-            const currentDate = task.due_date || null;
+            const trigger = taskCard || document.body;
+
             let newDate;
             
-            // Mobile: use bottom sheet (Notion/Linear pattern)
-            if (this.isMobile() && window.taskDateSheet?.open) {
-                console.log('[TaskMenuController] Using mobile date sheet');
-                newDate = await window.taskDateSheet.open(taskId, currentDate);
-            }
-            // Desktop: use popover date picker
-            else if (window.taskDatePicker?.show) {
-                console.log('[TaskMenuController] Using desktop date picker');
-                const trigger = taskCard || document.body;
+            // Try custom date picker first
+            if (window.taskDatePicker?.show) {
                 try {
-                    newDate = await window.taskDatePicker.show(trigger, currentDate);
+                    newDate = await window.taskDatePicker.show(trigger);
                 } catch (e) {
-                    console.warn('[TaskMenuController] Date picker failed:', e);
+                    console.warn('[TaskMenuController] Date picker failed, using fallback');
                     newDate = undefined;
                 }
             }
             
-            // Final fallback: browser prompt
-            if (newDate === undefined && !window.taskDateSheet && !window.taskDatePicker) {
-                const currentDateStr = task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '';
+            // Fallback: use browser input type=date via prompt
+            if (newDate === undefined && !window.taskDatePicker) {
+                const currentDate = task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '';
                 const choice = window.prompt(
                     `Set due date for "${task.title || 'Task'}":\n\nFormat: YYYY-MM-DD (e.g., 2024-12-31)\nLeave empty to clear due date`,
-                    currentDateStr
+                    currentDate
                 );
                 
                 if (choice === null) {
@@ -405,7 +385,6 @@ class TaskMenuController {
             // Use OptimisticUI system
             if (window.optimisticUI?.updateTask) {
                 await window.optimisticUI.updateTask(taskId, { due_date: newDate || null });
-                this.showToast(newDate ? 'Due date updated' : 'Due date cleared', 'success');
             } else {
                 // Direct API fallback
                 const response = await fetch(`/api/tasks/${taskId}`, {
@@ -414,50 +393,8 @@ class TaskMenuController {
                     body: JSON.stringify({ due_date: newDate || null })
                 });
                 if (!response.ok) throw new Error('API call failed');
-                this.showToast(newDate ? 'Due date updated' : 'Due date cleared', 'success');
+                this.showToast('Due date updated', 'success');
             }
-            
-            // Update DOM immediately for visual feedback (taskCard already declared above)
-            if (taskCard) {
-                const dueDateBadge = taskCard.querySelector('.task-due-date, .due-date-badge');
-                if (dueDateBadge && newDate) {
-                    // Format date for display
-                    const date = new Date(newDate);
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const diff = Math.floor((date - today) / (1000 * 60 * 60 * 24));
-                    
-                    let displayText;
-                    if (diff === 0) displayText = 'Today';
-                    else if (diff === 1) displayText = 'Tomorrow';
-                    else if (diff < 0) displayText = 'Overdue';
-                    else if (diff <= 7) displayText = `In ${diff}d`;
-                    else displayText = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    
-                    dueDateBadge.textContent = displayText;
-                    dueDateBadge.style.display = '';
-                    
-                    // Update overdue styling
-                    if (diff < 0) {
-                        dueDateBadge.classList.add('overdue');
-                    } else {
-                        dueDateBadge.classList.remove('overdue');
-                    }
-                } else if (dueDateBadge && !newDate) {
-                    // Clear due date - hide badge
-                    dueDateBadge.style.display = 'none';
-                }
-                
-                // Also check for inline "+ Add due date" button and update it
-                const addDueDateBtn = taskCard.querySelector('[data-inline-action="add-due-date"]');
-                if (addDueDateBtn && newDate) {
-                    addDueDateBtn.style.display = 'none';
-                } else if (addDueDateBtn && !newDate) {
-                    addDueDateBtn.style.display = '';
-                }
-            }
-            
-            console.log('[TaskMenuController] Due date updated successfully:', newDate);
         } catch (error) {
             console.error('[TaskMenuController] Due date update failed:', error);
             this.showToast('Failed to update due date', 'error');
@@ -894,33 +831,32 @@ class TaskMenuController {
 
     /**
      * 13. DELETE - Permanently delete task with confirmation (with browser fallback)
-     * Handles both temp tasks (local only) and server-synced tasks
      */
     async handleDelete(taskId) {
         console.log(`[TaskMenuController] Deleting task ${taskId}`);
         
-        const isTempTask = String(taskId).startsWith('temp_');
-        
         try {
-            // Get task info (from cache, DOM, or API)
             const task = await this.fetchTask(taskId);
-            const taskTitle = task?.title || 'this task';
+            if (!task) {
+                console.error('[TaskMenuController] Task not found:', taskId);
+                return;
+            }
 
-            console.log('[TaskMenuController] Task info retrieved:', taskTitle, isTempTask ? '(temp)' : '(synced)');
+            console.log('[TaskMenuController] Task fetched successfully:', task);
 
             let confirmed = false;
             
             // Try custom confirmation modal
             if (window.taskConfirmModal?.confirmDelete) {
                 try {
-                    confirmed = await window.taskConfirmModal.confirmDelete(taskTitle);
+                    confirmed = await window.taskConfirmModal.confirmDelete(task.title);
                 } catch (e) {
                     console.warn('[TaskMenuController] Delete modal failed, using browser fallback');
-                    confirmed = window.confirm(`Delete task "${taskTitle}" permanently?\n\nThis action cannot be undone.`);
+                    confirmed = window.confirm(`Delete task "${task.title || 'this task'}" permanently?\n\nThis action cannot be undone.`);
                 }
             } else {
                 // Fallback to browser confirm
-                confirmed = window.confirm(`Delete task "${taskTitle}" permanently?\n\nThis action cannot be undone.`);
+                confirmed = window.confirm(`Delete task "${task.title || 'this task'}" permanently?\n\nThis action cannot be undone.`);
             }
             
             console.log('[TaskMenuController] Confirmation result:', confirmed);
@@ -938,32 +874,9 @@ class TaskMenuController {
                 taskCard.style.pointerEvents = 'none';
             }
 
-            console.log('[TaskMenuController] Deleting task...', isTempTask ? '(temp task - local only)' : '(synced task)');
+            console.log('[TaskMenuController] Calling optimisticUI.deleteTask...');
             
-            // Handle temp tasks differently - they only exist locally
-            if (isTempTask) {
-                // Remove from cache
-                if (window.taskCache?.deleteTask) {
-                    await window.taskCache.deleteTask(taskId);
-                }
-                if (window.taskCache?.deleteTempTask) {
-                    await window.taskCache.deleteTempTask(taskId);
-                }
-                
-                // Remove from DOM with animation
-                if (taskCard) {
-                    taskCard.style.transition = 'opacity 0.2s, transform 0.2s';
-                    taskCard.style.opacity = '0';
-                    taskCard.style.transform = 'translateX(-20px)';
-                    setTimeout(() => taskCard.remove(), 200);
-                }
-                
-                this.showToast('Task deleted', 'success');
-                console.log('[TaskMenuController] Temp task deleted successfully');
-                return;
-            }
-            
-            // For synced tasks, use OptimisticUI deleteTask (soft delete with undo window)
+            // Use OptimisticUI deleteTask (soft delete with 15s undo window)
             if (window.optimisticUI?.deleteTask) {
                 await window.optimisticUI.deleteTask(taskId);
             } else {
@@ -996,55 +909,10 @@ class TaskMenuController {
     }
 
     /**
-     * Helper: Fetch task details from cache first, then API
-     * Handles temp tasks (not yet synced to server) gracefully
+     * Helper: Fetch task details from API
      */
     async fetchTask(taskId) {
         try {
-            // 1. Check if this is a temp task (not yet on server)
-            const isTempTask = String(taskId).startsWith('temp_');
-            
-            // 2. Try to get from cache first (works for both temp and synced tasks)
-            if (window.taskCache && typeof window.taskCache.getTask === 'function') {
-                const cachedTask = await window.taskCache.getTask(taskId);
-                if (cachedTask) {
-                    console.log('[TaskMenuController] Task found in cache:', taskId);
-                    return cachedTask;
-                }
-            }
-            
-            // 3. Try optimisticUI cache
-            if (window.optimisticUI?.cache?.getTask) {
-                const cachedTask = await window.optimisticUI.cache.getTask(taskId);
-                if (cachedTask) {
-                    console.log('[TaskMenuController] Task found in optimisticUI cache:', taskId);
-                    return cachedTask;
-                }
-            }
-            
-            // 4. For temp tasks, extract basic info from DOM as fallback
-            if (isTempTask) {
-                const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-                if (taskCard) {
-                    console.log('[TaskMenuController] Extracting temp task from DOM:', taskId);
-                    return {
-                        id: taskId,
-                        title: taskCard.querySelector('.task-title-text')?.textContent?.trim() || 
-                               taskCard.querySelector('.task-title')?.textContent?.trim() || 'Untitled',
-                        status: taskCard.dataset.status || 'todo',
-                        priority: taskCard.dataset.priority || 'medium',
-                        meeting_id: taskCard.dataset.meetingId || null,
-                        labels: [],
-                        _isTemp: true
-                    };
-                }
-                
-                // Temp task not in cache and not in DOM - it may have been deleted
-                console.warn('[TaskMenuController] Temp task not found:', taskId);
-                return null;
-            }
-            
-            // 5. For server tasks, fetch from API
             const response = await fetch(`/api/tasks/${taskId}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch task');
@@ -1053,7 +921,7 @@ class TaskMenuController {
             return data.task;
         } catch (error) {
             console.error('[TaskMenuController] Error fetching task:', error);
-            console.error('[TaskMenuController] Task not found:', taskId);
+            window.toast?.error('Failed to fetch task details');
             return null;
         }
     }

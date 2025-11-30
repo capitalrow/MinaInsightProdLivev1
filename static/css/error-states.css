@@ -21,7 +21,7 @@
     margin: 0 auto var(--space-6);
     background: var(--glass-bg);
     backdrop-filter: var(--backdrop-blur);
-    border: 1px solid color-mix(in srgb, var(--color-danger) 20%, transparent);
+    border: 1px solid rgba(239, 68, 68, 0.2);
     border-radius: var(--radius-3xl);
     display: flex;
     align-items: center;
@@ -34,7 +34,7 @@
     content: '';
     position: absolute;
     inset: -2px;
-    background: linear-gradient(135deg, color-mix(in srgb, var(--color-danger) 30%, transparent), color-mix(in srgb, var(--color-danger) 20%, transparent));
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(220, 38, 38, 0.3));
     border-radius: var(--radius-3xl);
     opacity: 0.5;
     z-index: -1;
@@ -66,8 +66,8 @@
     font-family: var(--font-mono);
     font-size: var(--font-size-sm);
     padding: var(--space-4);
-    background: color-mix(in srgb, var(--color-danger) 10%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-danger) 20%, transparent);
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
     border-radius: var(--radius-lg);
     color: var(--color-danger);
     margin-bottom: var(--space-6);
@@ -88,11 +88,11 @@
 
 /* Network Error */
 .error-network .error-state-icon {
-    border-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+    border-color: rgba(251, 191, 36, 0.2);
 }
 
 .error-network .error-state-icon::before {
-    background: linear-gradient(135deg, color-mix(in srgb, var(--color-warning) 30%, transparent), color-mix(in srgb, var(--color-warning) 20%, transparent));
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.3));
 }
 
 .error-network .error-state-icon svg {
@@ -101,11 +101,11 @@
 
 /* Auth Error */
 .error-auth .error-state-icon {
-    border-color: color-mix(in srgb, var(--color-secondary) 20%, transparent);
+    border-color: rgba(147, 51, 234, 0.2);
 }
 
 .error-auth .error-state-icon::before {
-    background: linear-gradient(135deg, color-mix(in srgb, var(--color-secondary) 30%, transparent), color-mix(in srgb, var(--color-secondary) 20%, transparent));
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.3), rgba(126, 34, 206, 0.3));
 }
 
 .error-auth .error-state-icon svg {
@@ -114,7 +114,7 @@
 
 /* Permission Error */
 .error-permission .error-state-icon svg {
-    color: var(--color-warning);
+    color: #f59e0b;
 }
 
 /* Server Error */
@@ -128,9 +128,9 @@
     align-items: flex-start;
     gap: var(--space-3);
     padding: var(--space-4);
-    background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+    background: rgba(239, 68, 68, 0.1);
     backdrop-filter: var(--backdrop-blur);
-    border: 1px solid color-mix(in srgb, var(--color-danger) 20%, transparent);
+    border: 1px solid rgba(239, 68, 68, 0.2);
     border-radius: var(--radius-lg);
     font-size: var(--font-size-sm);
     color: var(--color-danger);
@@ -144,14 +144,14 @@
 }
 
 .error-state-inline.warning {
-    background: color-mix(in srgb, var(--color-warning) 10%, transparent);
-    border-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+    background: rgba(251, 191, 36, 0.1);
+    border-color: rgba(251, 191, 36, 0.2);
     color: var(--color-warning);
 }
 
 .error-state-inline.info {
-    background: color-mix(in srgb, var(--color-info) 10%, transparent);
-    border-color: color-mix(in srgb, var(--color-info) 20%, transparent);
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.2);
     color: var(--color-info);
 }
 
@@ -185,7 +185,7 @@
     align-items: center;
     gap: var(--space-3);
     padding: var(--space-4) var(--space-6);
-    background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+    background: rgba(239, 68, 68, 0.1);
     backdrop-filter: var(--backdrop-blur);
     border-left: 4px solid var(--color-danger);
     border-radius: var(--radius-lg);
@@ -226,7 +226,7 @@
 }
 
 .error-banner-close:hover {
-    background: color-mix(in srgb, var(--color-surface-light) 50%, transparent);
+    background: rgba(255, 255, 255, 0.1);
     color: var(--color-text);
 }
 
@@ -237,7 +237,7 @@
 
 /* Warning Banner */
 .warning-banner {
-    background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+    background: rgba(251, 191, 36, 0.1);
     border-left-color: var(--color-warning);
 }
 
@@ -247,7 +247,7 @@
 
 /* Info Banner */
 .info-banner {
-    background: color-mix(in srgb, var(--color-info) 10%, transparent);
+    background: rgba(59, 130, 246, 0.1);
     border-left-color: var(--color-info);
 }
 
@@ -257,7 +257,7 @@
 
 /* Success Banner */
 .success-banner {
-    background: color-mix(in srgb, var(--color-success) 10%, transparent);
+    background: rgba(34, 197, 94, 0.1);
     border-left-color: var(--color-success);
 }
 
@@ -273,10 +273,10 @@
     max-width: 400px;
     background: var(--glass-bg);
     backdrop-filter: var(--backdrop-blur);
-    border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+    border: 1px solid rgba(239, 68, 68, 0.3);
     border-radius: var(--radius-xl);
     padding: var(--space-4);
-    box-shadow: 0 10px 40px -10px color-mix(in srgb, var(--color-danger) 30%, transparent);
+    box-shadow: 0 10px 40px -10px rgba(239, 68, 68, 0.3);
     animation: slideIn 0.3s ease-out;
     z-index: 9999;
 }
@@ -321,7 +321,7 @@
 }
 
 .error-toast-close:hover {
-    background: color-mix(in srgb, var(--color-surface-light) 50%, transparent);
+    background: rgba(255, 255, 255, 0.1);
     color: var(--color-text);
 }
 
@@ -337,7 +337,7 @@
     gap: var(--space-2);
     padding: var(--space-3) var(--space-5);
     background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: var(--radius-lg);
     color: var(--color-text);
     font-size: var(--font-size-sm);
@@ -347,7 +347,7 @@
 }
 
 .retry-button:hover {
-    background: color-mix(in srgb, var(--color-surface-light) 50%, transparent);
+    background: rgba(255, 255, 255, 0.1);
     border-color: var(--color-primary);
     transform: translateY(-1px);
 }

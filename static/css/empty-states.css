@@ -22,7 +22,7 @@
     margin: 0 auto var(--space-6);
     background: var(--glass-bg);
     backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-3xl);
     display: flex;
     align-items: center;
@@ -136,13 +136,13 @@
     padding: var(--space-4);
     background: var(--glass-bg);
     backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-xl);
     transition: all var(--transition-base);
 }
 
 .empty-state-feature:hover {
-    border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+    border-color: rgba(99, 102, 241, 0.3);
     transform: translateY(-2px);
 }
 
@@ -200,7 +200,7 @@
     padding: var(--space-4);
     background: var(--glass-bg);
     backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-xl);
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);

@@ -272,8 +272,6 @@ def register_copilot_namespace(socketio):
             )
             
             # Event #6: context_merge - Build context from workspace data
-            # Include user message for semantic search
-            context_data['message'] = user_message
             context = _build_query_context(current_user.id, workspace_id, context_data)
             
             # Add intent classification to context for response generation
@@ -296,9 +294,6 @@ def register_copilot_namespace(socketio):
                 data={'started': True}
             )
             
-            # Capture user_id before background task (Flask-Login context not available in background tasks)
-            captured_user_id = current_user.id
-            
             def stream_task():
                 """Background task for streaming response (uses dedicated async thread)."""
                 try:
@@ -309,7 +304,7 @@ def register_copilot_namespace(socketio):
                         user_message=user_message,
                         context=context,
                         workspace_id=workspace_id,
-                        user_id=captured_user_id
+                        user_id=current_user.id
                     ):
                         # Emit streaming event to specific client
                         socketio.emit('copilot_stream', event, namespace='/copilot', to=client_sid)
@@ -334,7 +329,7 @@ def register_copilot_namespace(socketio):
                     
                     # Store conversation and update embeddings
                     copilot_memory_service.retrain_context(
-                        user_id=captured_user_id,
+                        user_id=current_user.id,
                         workspace_id=workspace_id,
                         interaction_data={
                             'message': user_message,
@@ -360,11 +355,10 @@ def register_copilot_namespace(socketio):
             # Handle error with graceful degradation
             error_session_id = data.get('session_id', 'unknown') if data else 'unknown'
             error_user_message = data.get('message', '')[:100] if data else ''
-            error_user_id = current_user.id if current_user and current_user.is_authenticated else None
             error_response = copilot_error_handler.handle_error(
                 error=e,
                 context={'session_id': error_session_id, 'user_message': error_user_message},
-                user_id=error_user_id
+                user_id=current_user.id
             )
             
             # Record error in metrics
@@ -457,166 +451,73 @@ def register_copilot_namespace(socketio):
 
 def _build_user_context(user_id: int, workspace_id: Optional[int]) -> Dict[str, Any]:
     """
-    Build initial context for copilot bootstrap with comprehensive data and proactive insights.
+    Build initial context for copilot bootstrap.
     
-    CROWN⁹ Enhanced Context Building:
-    - Recent tasks (last 10) with overdue detection
-    - Recent meetings (last 5) with insights
-    - Proactive blockers and alerts
-    - User preferences and patterns
-    - Activity summary with trends
+    Loads:
+    - Recent tasks (last 10)
+    - Recent meetings (last 5)
+    - User preferences
+    - Activity summary
     """
     from models import db, Task, Meeting, User
-    from datetime import datetime, timedelta, date
+    from datetime import datetime, timedelta
     
     context = {
         'loaded_at': datetime.utcnow().isoformat(),
         'user_id': user_id,
-        'workspace_id': workspace_id,
-        'recent_tasks': [],
-        'recent_meetings': [],
-        'proactive_insights': [],
-        'blockers': [],
-        'activity': {}
+        'workspace_id': workspace_id
     }
     
     try:
-        # Defensive null guard for user_id
-        if not user_id:
-            logger.warning("No user_id provided for context building")
-            return context
-        
-        # Get user with null guard
+        # Get user
         user = db.session.get(User, user_id)
         if not user:
-            logger.warning(f"User {user_id} not found")
             return context
         
-        context['user_name'] = getattr(user, 'display_name', None) or getattr(user, 'username', 'User')
-        
-        # Recent tasks with comprehensive data
+        # Recent tasks
         if workspace_id:
-            try:
-                recent_tasks = db.session.query(Task)\
-                    .filter(Task.workspace_id == workspace_id)\
-                    .filter(Task.deleted_at.is_(None))\
-                    .order_by(Task.created_at.desc())\
-                    .limit(10)\
-                    .all()
-                
-                today = date.today()
-                overdue_tasks = []
-                due_soon_tasks = []
-                blocked_tasks = []
-                
-                for t in recent_tasks:
-                    if t is None:
-                        continue
-                    
-                    due_date_val = getattr(t, 'due_date', None)
-                    task_data = {
-                        'id': getattr(t, 'id', None),
-                        'title': getattr(t, 'title', 'Untitled'),
-                        'status': getattr(t, 'status', 'todo'),
-                        'priority': getattr(t, 'priority', 'medium'),
-                        'due_date': due_date_val.isoformat() if due_date_val else None,
-                        'is_overdue': False,
-                        'is_due_soon': False
-                    }
-                    
-                    # Detect overdue tasks
-                    if t.due_date and t.status not in ['completed', 'cancelled']:
-                        if t.due_date < today:
-                            task_data['is_overdue'] = True
-                            overdue_tasks.append(task_data)
-                        elif (t.due_date - today).days <= 3:
-                            task_data['is_due_soon'] = True
-                            due_soon_tasks.append(task_data)
-                    
-                    # Detect blocked tasks
-                    if t.status == 'blocked':
-                        blocked_tasks.append(task_data)
-                    
-                    context['recent_tasks'].append(task_data)
-                
-                # Add proactive insights
-                if overdue_tasks:
-                    context['proactive_insights'].append({
-                        'type': 'overdue_alert',
-                        'severity': 'high',
-                        'message': f"You have {len(overdue_tasks)} overdue task{'s' if len(overdue_tasks) > 1 else ''}",
-                        'count': len(overdue_tasks),
-                        'tasks': overdue_tasks[:3]  # Top 3
-                    })
-                
-                if due_soon_tasks:
-                    context['proactive_insights'].append({
-                        'type': 'due_soon_alert',
-                        'severity': 'medium',
-                        'message': f"{len(due_soon_tasks)} task{'s' if len(due_soon_tasks) > 1 else ''} due in the next 3 days",
-                        'count': len(due_soon_tasks),
-                        'tasks': due_soon_tasks[:3]
-                    })
-                
-                if blocked_tasks:
-                    context['blockers'] = blocked_tasks
-                    context['proactive_insights'].append({
-                        'type': 'blocker_alert',
-                        'severity': 'high',
-                        'message': f"{len(blocked_tasks)} task{'s' if len(blocked_tasks) > 1 else ''} blocked",
-                        'count': len(blocked_tasks)
-                    })
-                    
-            except Exception as task_error:
-                logger.error(f"Error loading tasks: {task_error}", exc_info=True)
+            recent_tasks = db.session.query(Task)\
+                .filter(Task.workspace_id == workspace_id)\
+                .filter(Task.deleted_at.is_(None))\
+                .order_by(Task.created_at.desc())\
+                .limit(10)\
+                .all()
+            
+            context['recent_tasks'] = [
+                {
+                    'id': t.id,
+                    'title': t.title,
+                    'status': t.status,
+                    'priority': t.priority,
+                    'due_date': t.due_date.isoformat() if t.due_date else None
+                }
+                for t in recent_tasks
+            ]
         
-        # Recent meetings with null guards
+        # Recent meetings
         if workspace_id:
-            try:
-                recent_meetings = db.session.query(Meeting)\
-                    .filter(Meeting.workspace_id == workspace_id)\
-                    .order_by(Meeting.created_at.desc())\
-                    .limit(5)\
-                    .all()
-                
-                for m in recent_meetings:
-                    if m is None:
-                        continue
-                    
-                    meeting_data = {
-                        'id': getattr(m, 'id', None),
-                        'title': getattr(m, 'title', 'Untitled Meeting'),
-                        'created_at': m.created_at.isoformat() if getattr(m, 'created_at', None) else None,
-                        'has_transcript': bool(getattr(m, 'transcript', None)),
-                        'has_summary': bool(getattr(m, 'summary', None))
-                    }
-                    context['recent_meetings'].append(meeting_data)
-                    
-            except Exception as meeting_error:
-                logger.error(f"Error loading meetings: {meeting_error}", exc_info=True)
+            recent_meetings = db.session.query(Meeting)\
+                .filter(Meeting.workspace_id == workspace_id)\
+                .order_by(Meeting.created_at.desc())\
+                .limit(5)\
+                .all()
+            
+            context['recent_meetings'] = [
+                {
+                    'id': m.id,
+                    'title': m.title,
+                    'created_at': m.created_at.isoformat()
+                }
+                for m in recent_meetings
+            ]
         
-        # Activity summary with trends
+        # Activity summary
         today = datetime.utcnow().date()
-        tasks_today = len([t for t in context.get('recent_tasks', []) 
-                          if t.get('due_date') and t['due_date'].startswith(today.isoformat())])
-        
-        completed_recently = len([t for t in context.get('recent_tasks', []) 
-                                 if t.get('status') == 'completed'])
-        
         context['activity'] = {
-            'tasks_today': tasks_today,
-            'tasks_completed_recently': completed_recently,
-            'meetings_this_week': len(context.get('recent_meetings', [])),
-            'productivity_score': min(100, completed_recently * 10 + 50) if completed_recently else 50
+            'tasks_today': len([t for t in context.get('recent_tasks', []) 
+                              if t.get('due_date') and t['due_date'].startswith(today.isoformat())]),
+            'meetings_today': 0  # TODO: Filter by meeting date
         }
-        
-        # Add productivity insight
-        if completed_recently >= 3:
-            context['proactive_insights'].append({
-                'type': 'productivity_positive',
-                'severity': 'low',
-                'message': f"Great progress! You've completed {completed_recently} tasks recently."
-            })
         
     except Exception as e:
         logger.error(f"Error building context: {e}", exc_info=True)
@@ -629,171 +530,12 @@ def _build_query_context(
     workspace_id: Optional[int],
     context_filter: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """
-    Build context for specific query with semantic RAG retrieval.
-    
-    CROWN⁹ Enhanced Query Context:
-    - Base workspace context (tasks, meetings)
-    - Query-relevant tasks (keyword search)
-    - Semantic context from embeddings (RAG)
-    - Conversation history for continuity
-    - Intent-specific context filtering
-    """
-    from models import db, Task, Meeting
-    
+    """Build context for specific query based on context filter."""
     # Start with base context
     context = _build_user_context(user_id, workspace_id)
     
-    try:
-        # Retrieve semantic context using RAG (embeddings-based similarity)
-        query_text = context_filter.get('query', '') or context_filter.get('message', '')
-        
-        if query_text and user_id and workspace_id:
-            # Search for query-relevant tasks (keyword matching)
-            # Extract keywords: keep words 3+ chars, strip punctuation
-            import re
-            raw_words = re.findall(r'\b[a-zA-Z]{3,}\b', query_text.lower())
-            
-            # Add stem variants for common suffixes (e.g., transitioning -> transition)
-            keywords = []
-            for w in raw_words:
-                keywords.append(w)
-                # Add stemmed variants
-                if w.endswith('ing') and len(w) > 5:
-                    keywords.append(w[:-3])  # transitioning -> transition
-                if w.endswith('ed') and len(w) > 4:
-                    keywords.append(w[:-2])  # completed -> complet (partial)
-                if w.endswith('s') and len(w) > 4:
-                    keywords.append(w[:-1])  # tasks -> task
-                if w.endswith('tion') and len(w) > 5:
-                    keywords.append(w + 'ing')  # transition -> transitioning
-            
-            keywords = list(set(keywords))  # Remove duplicates
-            logger.info(f"[COPILOT] Query keywords extracted: {keywords} from '{query_text}'")
-            
-            if keywords:
-                # Search tasks matching keywords in title or description
-                from sqlalchemy import or_
-                from datetime import date
-                
-                relevant_tasks = db.session.query(Task)\
-                    .filter(Task.workspace_id == workspace_id)\
-                    .filter(Task.deleted_at.is_(None))\
-                    .filter(or_(
-                        *[Task.title.ilike(f'%{kw}%') for kw in keywords],
-                        *[Task.description.ilike(f'%{kw}%') for kw in keywords if hasattr(Task, 'description')]
-                    ))\
-                    .limit(10)\
-                    .all()
-                
-                logger.info(f"[COPILOT] Keyword search found {len(relevant_tasks)} tasks")
-                
-                if relevant_tasks:
-                    today = date.today()
-                    query_relevant = []
-                    for t in relevant_tasks:
-                        if t is None:
-                            continue
-                        due_date_val = getattr(t, 'due_date', None)
-                        task_data = {
-                            'id': getattr(t, 'id', None),
-                            'title': getattr(t, 'title', 'Untitled'),
-                            'status': getattr(t, 'status', 'todo'),
-                            'priority': getattr(t, 'priority', 'medium'),
-                            'due_date': due_date_val.isoformat() if due_date_val else None,
-                            'is_overdue': t.due_date < today if t.due_date and t.status not in ['completed', 'cancelled'] else False,
-                            'query_match': True
-                        }
-                        query_relevant.append(task_data)
-                        logger.info(f"[COPILOT] Query-relevant task: id={task_data['id']}, title='{task_data['title']}'")
-                    
-                    # PRIORITIZE query-relevant tasks at the TOP of recent_tasks
-                    # This ensures they're within the first 7 tasks shown to the AI
-                    existing_ids = {t['id'] for t in context.get('recent_tasks', [])}
-                    new_relevant = [task for task in query_relevant if task['id'] not in existing_ids]
-                    
-                    # Prepend query-relevant tasks (they're more important than recency)
-                    context['recent_tasks'] = new_relevant + context.get('recent_tasks', [])
-                    
-                    context['query_relevant_tasks'] = query_relevant
-                    logger.info(f"[COPILOT] PRIORITIZED {len(new_relevant)} query-relevant tasks at top of recent_tasks (total: {len(context['recent_tasks'])})")
-                else:
-                    logger.info(f"[COPILOT] No tasks found matching keywords: {keywords}")
-            
-            # Also get semantic context from embeddings (RAG)
-            semantic_contexts = copilot_memory_service.get_semantic_context(
-                query=query_text,
-                user_id=user_id,
-                workspace_id=workspace_id,
-                limit=5
-            )
-            
-            if semantic_contexts:
-                context['semantic_context'] = semantic_contexts
-                context['rag_enabled'] = True
-                logger.debug(f"RAG retrieved {len(semantic_contexts)} relevant contexts")
-        
-        # Get recent conversation history for continuity
-        recent_conversations = copilot_memory_service.get_recent_conversations(
-            user_id=user_id,
-            workspace_id=workspace_id,
-            limit=5
-        )
-        
-        if recent_conversations:
-            context['conversation_history'] = recent_conversations
-        
-        # Apply intent-specific filters
-        intent_type = context_filter.get('intent_type')
-        if intent_type:
-            context = _apply_intent_filter(context, intent_type, context_filter)
-        
-    except Exception as e:
-        logger.error(f"Error building query context with RAG: {e}", exc_info=True)
-    
-    return context
-
-
-def _apply_intent_filter(
-    context: Dict[str, Any],
-    intent_type: str,
-    context_filter: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Apply intent-specific filtering to context.
-    
-    Optimizes context for different query types:
-    - task_query: Focus on tasks
-    - meeting_summary: Focus on meetings
-    - calendar_query: Focus on calendar
-    - analytics_query: Focus on metrics
-    """
-    if intent_type == 'task_query':
-        # For task queries, prioritize task data
-        context['focus'] = 'tasks'
-        # Filter to relevant tasks only
-        status_filter = context_filter.get('status')
-        if status_filter and context.get('recent_tasks'):
-            context['recent_tasks'] = [
-                t for t in context['recent_tasks'] 
-                if t.get('status') == status_filter
-            ]
-    
-    elif intent_type == 'meeting_summary':
-        # For meeting queries, prioritize meeting data
-        context['focus'] = 'meetings'
-        # Add meeting details if available
-        meeting_id = context_filter.get('meeting_id')
-        if meeting_id:
-            context['target_meeting_id'] = meeting_id
-    
-    elif intent_type == 'analytics_query':
-        context['focus'] = 'analytics'
-        # Include productivity metrics
-        context['include_metrics'] = True
-    
-    elif intent_type == 'calendar_query':
-        context['focus'] = 'calendar'
+    # Apply additional filters if provided
+    # TODO: Implement context filtering based on user preferences
     
     return context
 
@@ -876,253 +618,64 @@ def _execute_copilot_action(
     workspace_id: Optional[int]
 ) -> Dict[str, Any]:
     """
-    Execute copilot action with action chaining support.
+    Execute copilot action.
     
-    CROWN⁹ Enhanced Actions:
-    - Single actions: create_task, mark_done, add_to_calendar, schedule_meeting
-    - Action chains: create_and_assign, complete_and_create_followup
-    - Bulk actions: mark_all_done, prioritize_batch
-    
-    Supports multi-step workflows for agentic capability.
+    Supported actions:
+    - create_task
+    - mark_done
+    - add_to_calendar
+    - schedule_meeting
     """
-    from models import db, Task, Meeting
-    from datetime import datetime, timedelta
-    from dateutil.parser import parse as parse_date
-    
-    results = {
-        'success': False,
-        'action': action,
-        'steps': [],
-        'timestamp': datetime.utcnow().isoformat()
-    }
+    from models import db, Task
+    from datetime import datetime
     
     try:
-        # Single action: create_task
         if action == 'create_task':
+            # Create new task
             task = Task(
                 title=parameters.get('title', 'Untitled Task'),
-                description=parameters.get('description'),
                 workspace_id=workspace_id,
                 created_by_id=user_id,
-                assigned_to_id=parameters.get('assigned_to_id') or user_id,
-                status='todo',
+                status='pending',
                 priority=parameters.get('priority', 'medium'),
-                due_date=_parse_date_safe(parameters.get('due_date')),
-                source='copilot'
+                due_date=parameters.get('due_date')
             )
             db.session.add(task)
             db.session.commit()
             
-            results['success'] = True
-            results['task_id'] = task.id
-            results['task'] = task.to_dict() if hasattr(task, 'to_dict') else {'id': task.id, 'title': task.title}
-            results['steps'].append({'action': 'create_task', 'success': True, 'task_id': task.id})
+            return {
+                'success': True,
+                'task_id': task.id,
+                'task': {
+                    'id': task.id,
+                    'title': task.title,
+                    'status': task.status
+                }
+            }
         
-        # Single action: mark_done
         elif action == 'mark_done':
+            # Mark task as complete
             task_id = parameters.get('task_id')
-            if not task_id:
-                return {'success': False, 'error': 'task_id is required'}
-            
             task = db.session.get(Task, task_id)
             
-            if task and (task.workspace_id == workspace_id or workspace_id is None):
+            if task and task.workspace_id == workspace_id:
                 task.status = 'completed'
                 task.completed_at = datetime.utcnow()
                 db.session.commit()
                 
-                results['success'] = True
-                results['task_id'] = task.id
-                results['steps'].append({'action': 'mark_done', 'success': True, 'task_id': task.id})
-            else:
-                results['error'] = 'Task not found or access denied'
+                return {
+                    'success': True,
+                    'task_id': task.id
+                }
         
-        # Action chain: create_and_assign (multi-step)
-        elif action == 'create_and_assign':
-            # Step 1: Create the task
-            task = Task(
-                title=parameters.get('title', 'Untitled Task'),
-                description=parameters.get('description'),
-                workspace_id=workspace_id,
-                created_by_id=user_id,
-                status='todo',
-                priority=parameters.get('priority', 'medium'),
-                due_date=_parse_date_safe(parameters.get('due_date')),
-                source='copilot'
-            )
-            db.session.add(task)
-            db.session.flush()  # Get ID without committing
-            
-            results['steps'].append({'action': 'create_task', 'success': True, 'task_id': task.id})
-            
-            # Step 2: Assign to user
-            assignee_id = parameters.get('assignee_id') or parameters.get('assigned_to_id')
-            if assignee_id:
-                task.assigned_to_id = assignee_id
-                results['steps'].append({'action': 'assign_task', 'success': True, 'assignee_id': assignee_id})
-            
-            # Step 3: Set reminder if specified
-            if parameters.get('set_reminder'):
-                reminder_date = _parse_date_safe(parameters.get('reminder_date'))
-                if reminder_date:
-                    task.reminder_date = reminder_date
-                    results['steps'].append({'action': 'set_reminder', 'success': True})
-            
-            db.session.commit()
-            
-            results['success'] = True
-            results['task_id'] = task.id
-            results['task'] = task.to_dict() if hasattr(task, 'to_dict') else {'id': task.id, 'title': task.title}
+        # Add more actions as needed
         
-        # Action chain: complete_and_followup (multi-step)
-        elif action == 'complete_and_followup':
-            task_id = parameters.get('task_id')
-            if not task_id:
-                return {'success': False, 'error': 'task_id is required'}
-            
-            original_task = db.session.get(Task, task_id)
-            
-            if original_task and (original_task.workspace_id == workspace_id or workspace_id is None):
-                # Step 1: Complete original task
-                original_task.status = 'completed'
-                original_task.completed_at = datetime.utcnow()
-                results['steps'].append({'action': 'complete_task', 'success': True, 'task_id': task_id})
-                
-                # Step 2: Create follow-up task
-                followup_title = parameters.get('followup_title') or f"Follow-up: {original_task.title}"
-                followup_task = Task(
-                    title=followup_title,
-                    description=parameters.get('followup_description'),
-                    workspace_id=workspace_id,
-                    created_by_id=user_id,
-                    assigned_to_id=original_task.assigned_to_id,
-                    status='todo',
-                    priority=parameters.get('priority', original_task.priority),
-                    due_date=_parse_date_safe(parameters.get('followup_due_date')),
-                    depends_on_task_id=original_task.id,
-                    source='copilot'
-                )
-                db.session.add(followup_task)
-                db.session.commit()
-                
-                results['steps'].append({'action': 'create_followup', 'success': True, 'task_id': followup_task.id})
-                results['success'] = True
-                results['original_task_id'] = task_id
-                results['followup_task_id'] = followup_task.id
-            else:
-                results['error'] = 'Original task not found or access denied'
-        
-        # Bulk action: mark_all_done
-        elif action == 'mark_all_done':
-            task_ids = parameters.get('task_ids', [])
-            if not task_ids:
-                return {'success': False, 'error': 'task_ids is required'}
-            
-            completed_count = 0
-            for tid in task_ids:
-                task = db.session.get(Task, tid)
-                if task and (task.workspace_id == workspace_id or workspace_id is None):
-                    task.status = 'completed'
-                    task.completed_at = datetime.utcnow()
-                    completed_count += 1
-            
-            db.session.commit()
-            results['success'] = completed_count > 0
-            results['completed_count'] = completed_count
-            results['steps'].append({'action': 'bulk_complete', 'success': True, 'count': completed_count})
-        
-        # Action: schedule_meeting
-        elif action == 'schedule_meeting':
-            title = parameters.get('title', 'New Meeting')
-            scheduled_start = _parse_date_safe(parameters.get('scheduled_start'))
-            
-            if not scheduled_start:
-                scheduled_start = datetime.utcnow() + timedelta(days=1)  # Default to tomorrow
-            
-            meeting = Meeting(
-                title=title,
-                workspace_id=workspace_id,
-                created_by_id=user_id,
-                scheduled_start=scheduled_start,
-                scheduled_end=scheduled_start + timedelta(hours=1),
-                status='scheduled'
-            )
-            db.session.add(meeting)
-            db.session.commit()
-            
-            results['success'] = True
-            results['meeting_id'] = meeting.id
-            results['meeting'] = {'id': meeting.id, 'title': meeting.title}
-            results['steps'].append({'action': 'schedule_meeting', 'success': True, 'meeting_id': meeting.id})
-        
-        # Action: prioritize_task
-        elif action == 'prioritize_task':
-            task_id = parameters.get('task_id')
-            priority = parameters.get('priority', 'high')
-            
-            if not task_id:
-                return {'success': False, 'error': 'task_id is required'}
-            
-            task = db.session.get(Task, task_id)
-            if task and (task.workspace_id == workspace_id or workspace_id is None):
-                task.priority = priority
-                db.session.commit()
-                results['success'] = True
-                results['task_id'] = task_id
-                results['steps'].append({'action': 'prioritize_task', 'success': True, 'priority': priority})
-            else:
-                results['error'] = 'Task not found or access denied'
-        
-        # Action: snooze_task
-        elif action == 'snooze_task':
-            task_id = parameters.get('task_id')
-            snooze_until = _parse_date_safe(parameters.get('snooze_until'))
-            
-            if not task_id:
-                return {'success': False, 'error': 'task_id is required'}
-            
-            if not snooze_until:
-                snooze_until = datetime.utcnow() + timedelta(days=1)  # Default to tomorrow
-            
-            task = db.session.get(Task, task_id)
-            if task and (task.workspace_id == workspace_id or workspace_id is None):
-                task.snoozed_until = snooze_until
-                db.session.commit()
-                results['success'] = True
-                results['task_id'] = task_id
-                results['steps'].append({'action': 'snooze_task', 'success': True, 'snoozed_until': snooze_until.isoformat()})
-            else:
-                results['error'] = 'Task not found or access denied'
-        
-        else:
-            results['error'] = f'Unknown action: {action}'
-        
-        return results
+        return {'success': False, 'error': f'Unknown action: {action}'}
         
     except Exception as e:
         logger.error(f"Action execution error: {e}", exc_info=True)
         db.session.rollback()
-        return {'success': False, 'error': str(e), 'action': action}
-
-
-def _parse_date_safe(date_input):
-    """Safely parse date string to datetime object."""
-    from datetime import datetime as dt
-    
-    if not date_input:
-        return None
-    
-    if isinstance(date_input, dt):
-        return date_input
-    
-    if isinstance(date_input, str):
-        try:
-            from dateutil.parser import parse as parse_date
-            return parse_date(date_input)
-        except Exception:
-            pass
-    
-    return None
+        return {'success': False, 'error': str(e)}
 
 
 def _broadcast_action_result(

@@ -73,33 +73,6 @@ def copilot_dashboard():
         return redirect(url_for('dashboard.index'))
 
 
-@copilot_bp.route('/api/health')
-def copilot_health():
-    """
-    Health check endpoint for Copilot service.
-    
-    Returns:
-        JSON: Health status of copilot components
-    """
-    health = {
-        'status': 'healthy',
-        'components': {
-            'openai': 'connected' if openai_client else 'not_configured',
-            'streaming': 'available',
-            'websocket': 'available',
-            'memory': 'available'
-        },
-        'timestamp': datetime.utcnow().isoformat()
-    }
-    
-    # Check if OpenAI is working
-    if not openai_client:
-        health['status'] = 'degraded'
-        health['components']['openai'] = 'not_configured'
-    
-    return jsonify(health), 200
-
-
 @copilot_bp.route('/settings')
 @login_required
 def copilot_settings():
@@ -915,7 +888,7 @@ Available actions you can suggest:
         messages.append({"role": "user", "content": user_prompt})
             
         response = client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model="gpt-4o-mini",
             messages=messages,  # type: ignore[arg-type]
             max_tokens=800,  # Increased for better responses
             temperature=0.7,
@@ -1272,7 +1245,7 @@ Provide a JSON response with "title" and "body" fields."""
             }
         
         response = client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompts[draft_type]},
                 {"role": "user", "content": user_prompts[draft_type]}

@@ -157,13 +157,30 @@ class TaskActionsMenu {
      ***************************************************************/
     async handleMenuAction(action, taskId) {
         console.log(`[TaskActionsMenu] Delegating action "${action}" to TaskMenuController`);
-        
+
+        const start = performance.now();
+        window.dispatchEvent(new CustomEvent('task-menu:action', { detail: { action, taskId } }));
+        window.CROWNTelemetry?.recordMetric('task_menu_action_selected', 1, { action, taskId });
+
         // Call unified controller if available
         if (window.taskMenuController) {
             await window.taskMenuController.executeAction(action, taskId);
         } else {
             console.error('[TaskActionsMenu] TaskMenuController not initialized!');
             window.toast?.error('Task menu system not ready. Please refresh the page.');
+        }
+
+        const duration = performance.now() - start;
+        window.CROWNTelemetry?.recordMetric('task_menu_action_duration_ms', duration, { action, taskId });
+
+        try {
+            if (window.reconciliationCycle?.runCycle) {
+                window.reconciliationCycle.runCycle();
+            } else {
+                window.dispatchEvent(new CustomEvent('task-menu:reconcile', { detail: { action, taskId, duration } }));
+            }
+        } catch (reconcileError) {
+            console.warn('[TaskActionsMenu] Failed to trigger reconciliation after action', reconcileError);
         }
     }
     /***************************************************************
@@ -363,6 +380,10 @@ class TaskActionsMenu {
         // Activate tracked menu
         this.activeMenu = menu;
 
+        if (window.CROWNTelemetry) {
+            window.CROWNTelemetry.recordMetric('task_menu_opened', 1, { taskId });
+        }
+
         // Bind actions
         this.bindMenuActions(menu, taskId);
     }
@@ -502,8 +523,7 @@ class TaskActionsMenu {
             // Close menu before executing action
             this.closeMenu();
             
-            // Map action to handler - Complete list of all 13 actions
-            // Supports both HTML template names and JS fallback names
+            // Map action to handler
             const actionMap = {
                 'view-details': 'view-details',
                 'edit': 'edit',
@@ -516,11 +536,10 @@ class TaskActionsMenu {
                 'set-due-date': 'due-date',
                 'assign': 'assign',
                 'labels': 'labels',
+                'jump-to-transcript': 'jump-to-transcript',
                 'duplicate': 'duplicate',
                 'snooze': 'snooze',
                 'merge': 'merge',
-                'jump-to-transcript': 'jump-to-transcript',
-                'jump': 'jump-to-transcript',
                 'archive': 'archive',
                 'delete': 'delete'
             };
@@ -564,6 +583,11 @@ document.addEventListener("DOMContentLoaded", () => {
             console.log("[TaskActionsMenu] Awaiting optimisticUI...");
             setTimeout(initMenu, 100);
         }
+
+        window.addEventListener('taskStoreReady', () => attemptInit('taskStoreReady'));
+        window.addEventListener('optimisticUIReady', () => attemptInit('optimisticUIReady'));
+
+        return window.taskActionsMenu;
     };
     
     // Start initialization with short delay to allow other modules to load

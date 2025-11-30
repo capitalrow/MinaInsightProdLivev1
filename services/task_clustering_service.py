@@ -267,7 +267,7 @@ class TaskClusteringService:
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini-2024-07-18",
+                model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",

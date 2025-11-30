@@ -8,7 +8,6 @@ class TaskPrioritySelector {
         this.popover = null;
         this.resolveCallback = null;
         this.triggerElement = null;
-        this.justOpened = false; // Prevent immediate close from click propagation
         this.init();
     }
 
@@ -20,7 +19,6 @@ class TaskPrioritySelector {
     createPopover() {
         this.popover = document.createElement('div');
         this.popover.className = 'task-priority-selector-popover';
-        this.popover.style.display = 'none'; // Critical: Hide immediately to prevent FOUC
         this.popover.innerHTML = `
             <div class="task-priority-selector-content">
                 <button class="task-priority-option" data-priority="high">
@@ -66,9 +64,6 @@ class TaskPrioritySelector {
         });
 
         document.addEventListener('click', (e) => {
-            // Skip if popover was just opened (prevents immediate close from click propagation)
-            if (this.justOpened) return;
-            
             if (this.popover.classList.contains('visible') && 
                 !this.popover.contains(e.target) &&
                 e.target !== this.triggerElement) {
@@ -85,28 +80,12 @@ class TaskPrioritySelector {
 
     async show(triggerElement) {
         this.triggerElement = triggerElement;
-        this.justOpened = true; // Prevent immediate close from click propagation
 
-        // CRITICAL: Set display BEFORE positioning so dimensions are calculable
-        this.popover.style.display = 'block';
-        this.popover.style.visibility = 'hidden'; // Hide during positioning
+        this.position(triggerElement);
         
-        // Wait for layout to calculate dimensions
+        this.popover.style.display = 'block';
         requestAnimationFrame(() => {
-            this.position(triggerElement);
-            this.popover.style.visibility = 'visible'; // Show after positioning
             this.popover.classList.add('visible');
-            
-            console.log('[TaskPrioritySelector] Popover shown at:', {
-                top: this.popover.style.top,
-                left: this.popover.style.left,
-                display: this.popover.style.display
-            });
-            
-            // Reset justOpened flag after a short delay to allow click propagation to complete
-            setTimeout(() => {
-                this.justOpened = false;
-            }, 150);
         });
 
         return new Promise((resolve) => {
@@ -115,41 +94,24 @@ class TaskPrioritySelector {
     }
 
     position(triggerElement) {
-        // Default to center of screen if no valid trigger
-        if (!triggerElement || triggerElement === document.body) {
-            const popoverRect = this.popover.getBoundingClientRect();
-            const centerX = Math.max(16, (window.innerWidth - popoverRect.width) / 2);
-            const centerY = Math.max(16, (window.innerHeight - popoverRect.height) / 2);
-            this.popover.style.top = `${centerY}px`;
-            this.popover.style.left = `${centerX}px`;
-            console.log('[TaskPrioritySelector] Centered popover (no valid trigger)');
-            return;
-        }
+        if (!triggerElement) return;
 
         const triggerRect = triggerElement.getBoundingClientRect();
         const popoverRect = this.popover.getBoundingClientRect();
         
-        // Calculate initial position below the trigger
         let top = triggerRect.bottom + 8;
         let left = triggerRect.left;
 
-        // Flip to above if not enough space below
-        if (top + popoverRect.height > window.innerHeight - 16) {
-            top = Math.max(16, triggerRect.top - popoverRect.height - 8);
+        if (top + popoverRect.height > window.innerHeight) {
+            top = triggerRect.top - popoverRect.height - 8;
         }
 
-        // Ensure popover stays within horizontal bounds
-        if (left + popoverRect.width > window.innerWidth - 16) {
+        if (left + popoverRect.width > window.innerWidth) {
             left = window.innerWidth - popoverRect.width - 16;
         }
 
         if (left < 16) {
             left = 16;
-        }
-
-        // Ensure top doesn't go off-screen
-        if (top < 16) {
-            top = 16;
         }
 
         this.popover.style.top = `${top}px`;

@@ -288,7 +288,7 @@ Refined:"""
         
         # Call GPT-4o-mini (fast and cheap for simple transformations)
         response = client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",

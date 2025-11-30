@@ -59,66 +59,66 @@ class AnalysisService:
         """,
         
         "brief_action": """
-        You are a STRICT evidence-based task extraction specialist. Extract ONLY action items that are EXPLICITLY stated in the transcript.
+        You are an expert task extraction specialist. Your job is to extract ALL action items from this transcript - be GENEROUS, not restrictive.
         
-        CORE PHILOSOPHY: ZERO HALLUCINATION
-        If you cannot find the EXACT words in the transcript, DO NOT extract it.
-        It is better to miss a task than to invent one.
+        CORE PHILOSOPHY: Extract first, filter later
+        The quality filtering happens in a separate validation pipeline. Your role is to catch EVERYTHING.
         
-        STRICT EXTRACTION RULES:
-        1. ONLY extract tasks where the speaker EXPLICITLY commits to an action
-        2. The evidence_quote MUST be a VERBATIM quote that appears word-for-word in the transcript
-        3. If the transcript is about "testing" something, do NOT invent related tasks like "check pages" or "update settings"
-        4. When in doubt, DO NOT extract
+        EXTRACT ALL OF THESE:
+        ✓ Work commitments: "I need to...", "I'll...", "I must..."
+        ✓ Personal tasks: "Buy groceries", "Clean room", "Get cash from ATM"
+        ✓ Proposals: "We could...", "What about...", "Consider..."
+        ✓ Suggestions: "We should...", "Let's...", "Why don't we..."
+        ✓ Questions that imply action: "Who will handle X?", "When should we Y?"
+        ✓ Planning statements: "I'm planning to...", "I'll prepare..."
         
-        VALID PATTERNS (extract these):
-        ✓ "I will work on X" → Extract "Work on X"
-        ✓ "I need to do Y today" → Extract "Do Y"
-        ✓ "The action item is Z" → Extract "Z"
+        MINIMUM FILTERING (only skip these):
+        ✗ Pure commentary: "That's interesting", "I agree", "Hmm"
+        ✗ Incomplete fragments: "And then I", "So basically"
+        ✗ Questions without implied action: "How are you?", "What do you think?"
         
-        INVALID PATTERNS (DO NOT extract):
-        ✗ Implied tasks not explicitly stated
-        ✗ Tasks the AI thinks "should" happen based on context
-        ✗ Recommendations you would make to the speaker
-        ✗ Any task where you cannot provide a VERBATIM quote from the transcript
+        ANTI-HALLUCINATION RULES:
+        1. NEVER invent tasks not mentioned in transcript
+        2. Each action must have EXACT quote evidence from transcript
+        3. Better to extract too much than miss real tasks
         
         FEW-SHOT EXAMPLES:
         
-        Example 1 - Explicit Task:
-        Transcript: "The critical action I will take is to work on the AI Copilot page and make sure it's fully functioning. That's due today."
+        Example 1 - Real Meeting:
+        Transcript: "We need to update the budget proposal by Friday. Sarah will review the marketing strategy and send feedback by EOD Thursday."
         Output: {{
-            "brief_summary": "Speaker stated one critical action item regarding the AI Copilot page.",
+            "brief_summary": "Team discussed upcoming deadlines for budget proposal and marketing strategy review.",
             "action_plan": [
-                {{"action": "Work on the AI Copilot page and make sure it's fully functioning", "evidence_quote": "The critical action I will take is to work on the AI Copilot page and make sure it's fully functioning", "owner": "Not specified", "priority": "high", "due": "today"}}
+                {{"action": "Update the budget proposal", "evidence_quote": "We need to update the budget proposal by Friday", "owner": "Not specified", "priority": "high", "due": "Friday"}},
+                {{"action": "Review marketing strategy and send feedback", "evidence_quote": "Sarah will review the marketing strategy and send feedback by EOD Thursday", "owner": "Sarah", "priority": "high", "due": "Thursday"}}
             ]
         }}
         
-        Example 2 - Testing Session (NO extra tasks):
-        Transcript: "Just testing the live transcription as well as checking the insights."
+        Example 2 - Mixed Testing + Real Tasks:
+        Transcript: "I'm testing the task extraction. I also need to clean my bedroom today, get 30 pounds from the ATM, and buy a train ticket for tomorrow."
         Output: {{
-            "brief_summary": "Testing session for transcription and insights functionality.",
+            "brief_summary": "Session involved system testing and personal task planning including household chores, financial transactions, and travel preparation.",
+            "action_plan": [
+                {{"action": "Clean bedroom", "evidence_quote": "I also need to clean my bedroom today", "owner": "Not specified", "priority": "medium", "due": "today"}},
+                {{"action": "Get 30 pounds from ATM", "evidence_quote": "get 30 pounds from the ATM", "owner": "Not specified", "priority": "medium", "due": "Not specified"}},
+                {{"action": "Buy train ticket for tomorrow", "evidence_quote": "buy a train ticket for tomorrow", "owner": "Not specified", "priority": "high", "due": "tomorrow"}}
+            ]
+        }}
+        
+        Example 3 - Pure Conversation:
+        Transcript: "Hey, how was your weekend? I went hiking. The weather was great."
+        Output: {{
+            "brief_summary": "Casual conversation about weekend activities.",
             "action_plan": []
-        }}
-        NOTE: Do NOT invent tasks like "check the session page" or "update the meetings page" - these were never stated.
-        
-        Example 3 - Multiple Explicit Tasks:
-        Transcript: "I need to clean my bedroom today, get 30 pounds from the ATM, and buy a train ticket for tomorrow."
-        Output: {{
-            "brief_summary": "Personal task planning for household chores, finances, and travel.",
-            "action_plan": [
-                {{"action": "Clean bedroom", "evidence_quote": "I need to clean my bedroom today", "owner": "Not specified", "priority": "medium", "due": "today"}},
-                {{"action": "Get 30 pounds from the ATM", "evidence_quote": "get 30 pounds from the ATM", "owner": "Not specified", "priority": "medium", "due": "Not specified"}},
-                {{"action": "Buy a train ticket for tomorrow", "evidence_quote": "buy a train ticket for tomorrow", "owner": "Not specified", "priority": "medium", "due": "tomorrow"}}
-            ]
         }}
         
         Return ONLY valid JSON:
         {{
-            "brief_summary": "2-3 sentence FACTUAL summary of what was discussed",
+            "brief_summary": "2-3 sentence summary describing what was discussed",
             "action_plan": [
                 {{
-                    "action": "Task description from transcript", 
-                    "evidence_quote": "VERBATIM quote from transcript (MUST appear word-for-word)",
+                    "action": "Clear task description", 
+                    "evidence_quote": "EXACT quote from transcript (REQUIRED)",
                     "owner": "Person mentioned or 'Not specified'", 
                     "priority": "high/medium/low",
                     "due": "Date/time mentioned or 'Not specified'"
@@ -132,91 +132,88 @@ class AnalysisService:
         
         # Standard Level Prompts
         "standard_executive": """
-        You are a STRICT evidence-based meeting analyst. Extract ONLY action items, decisions, and risks that are EXPLICITLY stated in the transcript.
+        You are an expert meeting analyst. Your job is to extract ALL action items, decisions, and risks from this transcript - be GENEROUS, not restrictive.
         
-        CORE PHILOSOPHY: ZERO HALLUCINATION
-        If you cannot find the EXACT words in the transcript, DO NOT extract it.
-        It is better to miss an item than to invent one that wasn't said.
+        CORE PHILOSOPHY: Extract first, filter later
+        Quality filtering happens in a separate validation pipeline. Your role is to catch EVERYTHING that might be actionable.
         
-        STRICT EXTRACTION RULES:
-        1. ONLY extract items where the speaker EXPLICITLY states them
-        2. The evidence_quote MUST be a VERBATIM quote that appears word-for-word in the transcript
-        3. If the transcript is about "testing" something, do NOT invent related tasks
-        4. Do NOT add tasks you think "should" happen - only what was ACTUALLY said
-        5. When in doubt, DO NOT extract
+        EXTRACTION GUIDELINES:
         
-        For ACTIONS:
-        ✓ ONLY extract explicit commitments: "I will...", "I need to...", "The action is..."
-        ✗ Do NOT extract implied tasks, suggestions you would make, or contextual inferences
+        For ACTIONS - Include evidence_quote for each:
+        ✓ Work commitments: "I need to...", "I'll...", "We must..."
+        ✓ Personal tasks: "Clean bedroom", "Get cash", "Buy ticket"
+        ✓ Proposals: "We could...", "What about...", "Consider..."
+        ✓ Suggestions: "We should...", "Let's...", "Why don't we..."
+        ✓ Planning statements: "I'm planning to...", "I'll prepare..."
+        ✗ ONLY skip: Pure commentary, incomplete fragments, or pure questions without implied action
         
-        For DECISIONS:
-        ✓ ONLY extract explicit decisions: "We decided...", "We're going with...", "Approved..."
-        ✗ Do NOT extract implied decisions or assumptions
+        For DECISIONS - Include evidence_quote for each:
+        ✓ Explicit decisions: "We decided...", "Approved...", "We're going with..."
+        ✓ Strong agreements: "Agreed", "Confirmed", "Settled on..."
         
-        For RISKS:
-        ✓ ONLY extract explicitly stated concerns: "I'm worried about...", "The risk is..."
-        ✗ Do NOT extract risks you think exist but weren't mentioned
+        For RISKS - Include evidence_quote for each:
+        ✓ Concerns: "I'm concerned...", "Worried about..."
+        ✓ Risk statements: "The risk is...", "Potential issue..."
+        ✓ Blockers: "This might prevent...", "Could cause problems..."
+        
+        ANTI-HALLUCINATION RULES:
+        1. NEVER invent content not in transcript
+        2. Every claim must have EXACT quote evidence from transcript
+        3. Better to extract too much than miss real items
+        4. If summary says "budget proposal", that phrase MUST appear in transcript
         
         FEW-SHOT EXAMPLES:
         
-        Example 1 - Explicit Content:
-        Transcript: "We decided to proceed with cloud migration. John will lead the team. There's risk around downtime."
+        Example 1 - Real Meeting:
+        Transcript: "We decided to move forward with the cloud migration. John will lead the infrastructure team and coordinate with vendors. This carries some risk around downtime during cutover."
         Output: {{
-            "summary_md": "Team decided on cloud migration with John as lead. Downtime risk noted.",
+            "summary_md": "Team decided to proceed with cloud migration. John assigned as lead for infrastructure coordination. Potential downtime risk identified during cutover phase.",
             "actions": [
-                {{"text": "Lead the team for cloud migration", "evidence_quote": "John will lead the team", "owner": "John", "due": "Not specified"}}
+                {{"text": "Lead infrastructure team and coordinate with vendors for cloud migration", "evidence_quote": "John will lead the infrastructure team and coordinate with vendors", "owner": "John", "due": "Not specified"}}
             ],
             "decisions": [
-                {{"text": "Proceed with cloud migration", "evidence_quote": "We decided to proceed with cloud migration", "impact": "Not specified"}}
+                {{"text": "Proceed with cloud migration", "evidence_quote": "We decided to move forward with the cloud migration", "impact": "Not specified"}}
             ],
             "risks": [
-                {{"text": "Downtime risk", "evidence_quote": "There's risk around downtime", "mitigation": "Not specified"}}
+                {{"text": "Potential downtime during cutover", "evidence_quote": "This carries some risk around downtime during cutover", "mitigation": "Not specified"}}
             ]
         }}
         
-        Example 2 - Testing Session with ONE Real Task:
-        Transcript: "Just testing the transcription. The critical action I will take that is due today is to work on the AI Copilot page."
+        Example 2 - Mixed Testing + Real Tasks:
+        Transcript: "I'm testing the task extraction. I also need to clean my bedroom today, get 30 pounds from the ATM, and buy a train ticket for tomorrow to work."
         Output: {{
-            "summary_md": "Testing session with one explicit action item regarding the AI Copilot page.",
+            "summary_md": "Session involved system testing and personal task planning including household chores, financial transactions, and travel preparation.",
             "actions": [
-                {{"text": "Work on the AI Copilot page", "evidence_quote": "The critical action I will take that is due today is to work on the AI Copilot page", "owner": "Not specified", "due": "today"}}
+                {{"text": "Clean bedroom", "evidence_quote": "I also need to clean my bedroom today", "owner": "Not specified", "due": "today"}},
+                {{"text": "Get 30 pounds from ATM", "evidence_quote": "get 30 pounds from the ATM", "owner": "Not specified", "due": "Not specified"}},
+                {{"text": "Buy train ticket for tomorrow to work", "evidence_quote": "buy a train ticket for tomorrow to work", "owner": "Not specified", "due": "tomorrow"}}
             ],
             "decisions": [],
             "risks": []
         }}
-        NOTE: Do NOT add extra tasks like "check session page" or "update meetings" - these were never stated!
         
-        Example 3 - Pure Conversation (NO extraction):
-        Transcript: "How was your weekend? I went hiking."
-        Output: {{
-            "summary_md": "Casual conversation about weekend activities.",
-            "actions": [],
-            "decisions": [],
-            "risks": []
-        }}
-        
-        Return ONLY valid JSON with VERBATIM evidence quotes:
+        Return ONLY valid JSON with evidence quotes:
         {{
-            "summary_md": "FACTUAL summary of what was ACTUALLY said (no embellishment or inference)",
+            "summary_md": "Factual summary of what was ACTUALLY discussed (2-3 paragraphs). No invention. State clearly if this was testing/casual conversation.",
             "actions": [
                 {{
-                    "text": "Task exactly as stated", 
-                    "evidence_quote": "VERBATIM quote from transcript (MUST appear word-for-word)",
+                    "text": "Clear actionable task", 
+                    "evidence_quote": "REQUIRED: EXACT quote from transcript",
                     "owner": "Person name or 'Not specified'", 
-                    "due": "Date/time mentioned or 'Not specified'"
+                    "due": "Exact date/time mentioned or 'Not specified'"
                 }}
             ],
             "decisions": [
                 {{
-                    "text": "Decision exactly as stated",
-                    "evidence_quote": "VERBATIM quote from transcript",
+                    "text": "Decision made",
+                    "evidence_quote": "REQUIRED: EXACT quote from transcript",
                     "impact": "Impact mentioned or 'Not specified'"
                 }}
             ],
             "risks": [
                 {{
-                    "text": "Risk exactly as stated",
-                    "evidence_quote": "VERBATIM quote from transcript",
+                    "text": "Risk or concern",
+                    "evidence_quote": "REQUIRED: EXACT quote from transcript",
                     "mitigation": "Mitigation mentioned or 'Not specified'"
                 }}
             ]

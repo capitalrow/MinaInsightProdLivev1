@@ -49,12 +49,6 @@ class User(UserMixin, Base):
     role: Mapped[str] = mapped_column(String(32), default="user")  # user, admin, owner
     timezone: Mapped[Optional[str]] = mapped_column(String(64), default="UTC")
     
-    # Email verification & password reset tokens
-    email_verification_token: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    email_verification_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    password_reset_token: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    password_reset_expires: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
     # Workspace relationship
     workspace_id: Mapped[Optional[int]] = mapped_column(ForeignKey("workspaces.id"), nullable=True)
     workspace: Mapped[Optional["Workspace"]] = relationship(back_populates="members", foreign_keys=[workspace_id])

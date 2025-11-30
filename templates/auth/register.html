@@ -87,25 +87,11 @@
                         {% endif %}
                     </div>
 
-                    <div class="form-group consent-group">
-                        <div class="consent-header">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                            </svg>
-                            <span class="consent-title">Privacy & Data Protection</span>
-                        </div>
-                        
+                    <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" name="terms" class="checkbox" required>
-                            <span>I agree to the <a href="{{ url_for('pages.terms') }}" class="auth-link">Terms of Service</a> and <a href="{{ url_for('pages.privacy') }}" class="auth-link">Privacy Policy</a>, including how my data is processed and protected <strong>(required)</strong></span>
+                            <span>I agree to the <a href="{{ url_for('pages.terms') }}" class="auth-link">Terms of Service</a> and <a href="{{ url_for('pages.privacy') }}" class="auth-link">Privacy Policy</a></span>
                         </label>
-                        
-                        <label class="checkbox-label optional-consent">
-                            <input type="checkbox" name="marketing_consent" class="checkbox">
-                            <span>Send me product updates, tips, and occasional marketing emails (you can unsubscribe anytime)</span>
-                        </label>
-                        
-                        <p class="consent-note">We encrypt your data and never sell it. You can export or delete your data at any time from Settings.</p>
                     </div>
 
                     <button type="submit" class="btn btn-primary w-full btn-lg">
@@ -279,47 +265,6 @@
     border-radius: var(--radius-sm);
     border: 1px solid var(--color-border);
     cursor: pointer;
-}
-
-.consent-group {
-    background: var(--glass-bg);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    border-radius: var(--radius-lg);
-    padding: var(--space-4);
-    margin-top: var(--space-2);
-}
-
-.consent-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-bottom: var(--space-3);
-    color: var(--color-primary);
-}
-
-.consent-title {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-}
-
-.consent-group .checkbox-label {
-    margin-bottom: var(--space-3);
-}
-
-.consent-group .checkbox-label:last-of-type {
-    margin-bottom: var(--space-2);
-}
-
-.optional-consent {
-    opacity: 0.9;
-}
-
-.consent-note {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-    margin: 0;
-    line-height: 1.5;
-    padding-left: var(--space-6);
 }
 
 .password-strength {

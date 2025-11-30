@@ -45,9 +45,7 @@ class UptimeMonitor:
         """Check database connectivity."""
         try:
             from models import db
-            from sqlalchemy import text
-            db.session.execute(text('SELECT 1'))
-            db.session.rollback()
+            db.session.execute('SELECT 1')
             
             return {
                 'status': 'healthy',
