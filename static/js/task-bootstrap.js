@@ -25,11 +25,37 @@ class TaskBootstrap {
     }
 
     /**
-     * Show loading state with skeleton loaders
+     * CROWN⁴.6: State transition guard
+     * Prevents reverting from 'tasks' state to loading/empty/error
+     * unless explicitly forced (e.g., for full refresh)
+     * @param {string} targetState - State trying to transition to
+     * @param {boolean} force - Force transition even from 'tasks' state
+     * @returns {boolean} Whether transition is allowed
      */
-    showLoadingState() {
+    _canTransitionTo(targetState, force = false) {
+        // Always allow forced transitions
+        if (force) return true;
+        
+        // Once tasks are rendered, don't revert to overlay states
+        // This prevents visual flicker during background sync/validation
+        if (this.currentState === 'tasks' && ['loading', 'empty', 'error'].includes(targetState)) {
+            console.log(`🛡️ [StateGuard] Blocked transition from 'tasks' to '${targetState}'`);
+            return false;
+        }
+        
+        return true;
+    }
+
+    /**
+     * Show loading state with skeleton loaders
+     * CROWN⁴.6: Guarded - won't revert from 'tasks' state
+     * @param {boolean} force - Force show even if tasks already rendered
+     */
+    showLoadingState(force = false) {
+        if (!this._canTransitionTo('loading', force)) return;
+        
         console.log('📊 Showing loading state');
-        this.hideAllStates();
+        this._hideOverlayStates();
         const loadingState = document.getElementById('tasks-loading-state');
         if (loadingState) {
             loadingState.style.display = 'flex';
@@ -39,10 +65,18 @@ class TaskBootstrap {
 
     /**
      * Show empty state when no tasks exist
+     * CROWN⁴.6: Guarded - won't revert from 'tasks' state
+     * @param {boolean} force - Force show even if tasks already rendered
      */
-    showEmptyState() {
+    showEmptyState(force = false) {
+        if (!this._canTransitionTo('empty', force)) return;
+        
         console.log('📭 Showing empty state');
-        this.hideAllStates();
+        this._hideOverlayStates();
+        // Also hide task list for empty state
+        const tasksContainer = document.getElementById('tasks-list-container');
+        if (tasksContainer) tasksContainer.style.display = 'none';
+        
         const emptyState = document.getElementById('tasks-empty-state');
         if (emptyState) {
             emptyState.style.display = 'block';
@@ -52,14 +86,21 @@ class TaskBootstrap {
 
     /**
      * Show error state with retry option
+     * CROWN⁴.6: Guarded - won't revert from 'tasks' state
      * @param {string} errorMessage - Optional custom error message
+     * @param {boolean} force - Force show even if tasks already rendered
      */
-    showErrorState(errorMessage) {
+    showErrorState(errorMessage, force = false) {
+        if (!this._canTransitionTo('error', force)) return;
+        
         console.log('❌ Showing error state:', errorMessage);
-        this.hideAllStates();
+        this._hideOverlayStates();
+        // Also hide task list for error state
+        const tasksContainer = document.getElementById('tasks-list-container');
+        if (tasksContainer) tasksContainer.style.display = 'none';
+        
         const errorState = document.getElementById('tasks-error-state');
         if (errorState) {
-            // Update error message if provided
             if (errorMessage) {
                 const messageEl = errorState.querySelector('.error-state-message');
                 if (messageEl) {
@@ -76,7 +117,7 @@ class TaskBootstrap {
      */
     showTasksList() {
         console.log('✅ Showing tasks list');
-        this.hideAllStates();
+        this._hideOverlayStates();
         const tasksContainer = document.getElementById('tasks-list-container');
         if (tasksContainer) {
             tasksContainer.style.display = 'flex';
@@ -85,17 +126,17 @@ class TaskBootstrap {
     }
 
     /**
-     * Hide all state containers (including tasks list)
+     * CROWN⁴.6: Hide only overlay states (loading/empty/error)
+     * Never hides task list - that's handled explicitly in showEmptyState/showErrorState
      */
-    hideAllStates() {
-        const states = [
+    _hideOverlayStates() {
+        const overlayStates = [
             'tasks-loading-state',
             'tasks-empty-state',
-            'tasks-error-state',
-            'tasks-list-container'  // CROWN⁴.5: Also hide tasks list to prevent stale content
+            'tasks-error-state'
         ];
         
-        states.forEach(stateId => {
+        overlayStates.forEach(stateId => {
             const el = document.getElementById(stateId);
             if (el) {
                 el.style.display = 'none';
@@ -104,16 +145,30 @@ class TaskBootstrap {
     }
 
     /**
+     * Hide all state containers (including tasks list)
+     * CROWN⁴.6: Use _hideOverlayStates() for normal transitions
+     * This method now only used for forced full resets
+     */
+    hideAllStates() {
+        this._hideOverlayStates();
+        const tasksContainer = document.getElementById('tasks-list-container');
+        if (tasksContainer) {
+            tasksContainer.style.display = 'none';
+        }
+    }
+
+    /**
      * Bootstrap tasks page with cache-first loading
      * Target: <200ms first paint
      * @returns {Promise<Object>} Bootstrap results
      */
     async bootstrap() {
-        console.log('🚀 Starting CROWN⁴.5 cache-first bootstrap...');
+        console.log('🚀 Starting CROWN⁴.6 cache-first bootstrap...');
         this.perf.cache_load_start = performance.now();
 
-        // CROWN⁴.5: Show loading state immediately for perceived performance
-        this.showLoadingState();
+        // CROWN⁴.6: Skeleton is already visible in HTML by default
+        // Just set the internal state to track it (no DOM manipulation needed)
+        this.currentState = 'loading';
 
         try {
             // Step 1: Load from cache immediately (target: <50ms)

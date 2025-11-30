@@ -1,0 +1,122 @@
+{# CROWN⁴.6 Reusable Skeleton Components #}
+{# Include this in pages that need skeleton loading #}
+
+{# KPI/Stats Card Skeleton #}
+{% macro stat_card_skeleton(count=3) %}
+<div class="skeleton-kpi-grid" id="stats-skeleton">
+    {% for i in range(count) %}
+    <div class="skeleton-kpi-card">
+        <div class="skeleton skeleton-kpi-icon"></div>
+        <div class="skeleton skeleton-kpi-label" style="width: 60%;"></div>
+        <div class="skeleton skeleton-kpi-value" style="width: 40%;"></div>
+    </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# Meeting Card Skeleton #}
+{% macro meeting_card_skeleton(count=3) %}
+<div class="skeleton-list" id="meetings-skeleton">
+    {% for i in range(count) %}
+    <div class="skeleton-meeting-card">
+        <div class="skeleton-meeting-header">
+            <div class="skeleton skeleton-avatar"></div>
+            <div class="skeleton skeleton-meeting-title" style="width: 70%;"></div>
+        </div>
+        <div class="skeleton-meeting-meta">
+            <div class="skeleton skeleton-meeting-tag"></div>
+            <div class="skeleton skeleton-meeting-tag" style="width: 60px;"></div>
+        </div>
+        <div class="skeleton skeleton-meeting-description" style="width: 90%;"></div>
+        <div class="skeleton skeleton-meeting-description" style="width: 60%;"></div>
+    </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# Task Card Skeleton #}
+{% macro task_card_skeleton(count=5) %}
+<div class="skeleton-list" id="tasks-skeleton">
+    {% for i in range(count) %}
+    <div class="skeleton-list-item">
+        <div class="skeleton skeleton-avatar small"></div>
+        <div class="skeleton-list-content">
+            <div class="skeleton skeleton-text" style="width: 80%;"></div>
+            <div class="skeleton skeleton-text small" style="width: 50%;"></div>
+        </div>
+        <div class="skeleton skeleton-button" style="width: 60px;"></div>
+    </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# Chart Skeleton #}
+{% macro chart_skeleton(height='400px') %}
+<div class="skeleton-chart" id="chart-skeleton" style="height: {{ height }};">
+    <div class="skeleton skeleton-chart-header"></div>
+    <div class="skeleton skeleton-chart-body"></div>
+</div>
+{% endmacro %}
+
+{# Table Skeleton #}
+{% macro table_skeleton(rows=5, cols=4) %}
+<div class="skeleton-table" id="table-skeleton">
+    <div class="skeleton-table-header">
+        {% for i in range(cols) %}
+        <div class="skeleton skeleton-table-cell" style="width: {{ 100 // cols }}%;"></div>
+        {% endfor %}
+    </div>
+    {% for row in range(rows) %}
+    <div class="skeleton-table-row">
+        {% for col in range(cols) %}
+        <div class="skeleton skeleton-table-cell" style="width: {{ (60 + (loop.index * 10)) % 100 }}%;"></div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# Calendar Event Skeleton #}
+{% macro calendar_skeleton(count=4) %}
+<div class="skeleton-list" id="calendar-skeleton">
+    {% for i in range(count) %}
+    <div class="skeleton-list-item">
+        <div style="width: 60px; text-align: center;">
+            <div class="skeleton skeleton-text" style="width: 40px; margin: 0 auto;"></div>
+            <div class="skeleton skeleton-text large" style="width: 30px; margin: 4px auto 0;"></div>
+        </div>
+        <div class="skeleton-list-content" style="margin-left: 16px;">
+            <div class="skeleton skeleton-text" style="width: 70%;"></div>
+            <div class="skeleton skeleton-text small" style="width: 40%;"></div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# Settings Panel Skeleton #}
+{% macro settings_skeleton() %}
+<div id="settings-skeleton" style="display: flex; flex-direction: column; gap: var(--space-4);">
+    <div class="skeleton-card">
+        <div class="skeleton skeleton-heading" style="width: 30%;"></div>
+        <div class="skeleton skeleton-text" style="width: 80%;"></div>
+        <div class="skeleton skeleton-text" style="width: 60%;"></div>
+        <div class="skeleton skeleton-button" style="margin-top: var(--space-4);"></div>
+    </div>
+    <div class="skeleton-card">
+        <div class="skeleton skeleton-heading" style="width: 40%;"></div>
+        <div class="skeleton skeleton-text" style="width: 70%;"></div>
+        <div class="skeleton skeleton-button" style="margin-top: var(--space-4);"></div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Generic Section Skeleton #}
+{% macro section_skeleton(id, lines=3) %}
+<div class="skeleton-card" id="{{ id }}-skeleton">
+    <div class="skeleton skeleton-heading"></div>
+    {% for i in range(lines) %}
+    <div class="skeleton skeleton-text" style="width: {{ 90 - (i * 15) }}%;"></div>
+    {% endfor %}
+</div>
+{% endmacro %}
