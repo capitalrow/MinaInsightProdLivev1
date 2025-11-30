@@ -334,7 +334,7 @@
     </header>
 
     <!-- KPI Cards -->
-    <section class="kpi-grid" role="region" aria-label="Key Performance Indicators">
+    <section class="kpi-grid crown5-tile-grid" role="region" aria-label="Key Performance Indicators">
         <article class="kpi-card" data-widget="kpi-meetings" role="article" aria-labelledby="kpi-meetings-label" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, transparent 100%);" tabindex="0">
             <div class="flex justify-between items-start mb-2">
                 <p id="kpi-meetings-label" class="text-tertiary text-sm font-medium">Total Meetings</p>
@@ -392,7 +392,7 @@
 
     <!-- Overview Tab -->
     <div id="tab-overview" class="analytics-tab-content active" role="tabpanel" aria-labelledby="tab-overview-btn" tabindex="0">
-        <div class="charts-primary-grid">
+        <div class="charts-primary-grid crown5-tile-grid">
             <div class="chart-card" data-widget="chart-activity" role="figure" aria-label="Meeting Activity Trend chart">
                 <h2 class="text-lg font-semibold mb-4" id="chart-activity-title">Meeting Activity Trend</h2>
                 <div class="chart-frame">
@@ -454,7 +454,7 @@
     <!-- Engagement Tab -->
     <div id="tab-engagement" class="analytics-tab-content" role="tabpanel" aria-labelledby="tab-engagement-btn" tabindex="0">
         <!-- Speaking Time Analysis (T2.33) -->
-        <div class="charts-primary-grid mb-6" data-widget="chart-speaking-time">
+        <div class="charts-primary-grid crown5-tile-grid mb-6" data-widget="chart-speaking-time">
             <div class="chart-card" role="figure" aria-labelledby="chart-speaking-time-title" aria-describedby="chart-speaking-time-desc">
                 <h2 class="text-lg font-semibold mb-1" id="chart-speaking-time-title">Speaking Time Distribution</h2>
                 <p class="text-sm text-secondary mb-4" id="chart-speaking-time-desc">Breakdown of talk time across participants</p>
@@ -766,11 +766,12 @@
     function handleNewSession(data) {
         console.log('📬 New session affects analytics:', data);
         
-        // Increment total meetings KPI
+        // Increment total meetings KPI with CROWN5+ micro-pulse
         const totalMeetingsEl = kpiElements.totalMeetings;
         if (totalMeetingsEl) {
             const currentValue = parseInt(totalMeetingsEl.textContent) || 0;
             animateCounter(totalMeetingsEl, currentValue, currentValue + 1, 500);
+            addShimmerEffect(totalMeetingsEl.closest('.kpi-card'));
         }
         
         // Show subtle notification
@@ -865,29 +866,38 @@
     }
     
     /**
-     * Add shimmer effect to element
+     * CROWN5+ KPI shimmer effect with micro-pulse animation
      * @param {HTMLElement} element - Element to shimmer
      */
     function addShimmerEffect(element) {
         if (!element) return;
         
-        element.classList.add('kpi-shimmer');
+        element.classList.add('crown5-updating');
+        
+        const valueEl = element.querySelector('.text-3xl') || element.querySelector('p[id^="kpi-"]') || element.querySelector('h3');
+        if (valueEl) {
+            valueEl.classList.add('crown5-value-updating');
+        }
+        
         setTimeout(() => {
-            element.classList.remove('kpi-shimmer');
-        }, 1000);
+            element.classList.remove('crown5-updating');
+            if (valueEl) {
+                valueEl.classList.remove('crown5-value-updating');
+            }
+        }, 600);
     }
     
     /**
-     * Add pulse effect to element
+     * CROWN5+ pulse effect for chart cards
      * @param {HTMLElement} element - Element to pulse
      */
     function addPulseEffect(element) {
         if (!element) return;
         
-        element.style.animation = 'chartPulse 0.5s ease-out';
+        element.classList.add('crown5-reconciling');
         setTimeout(() => {
-            element.style.animation = '';
-        }, 500);
+            element.classList.remove('crown5-reconciling');
+        }, 1500);
     }
     
     /**
