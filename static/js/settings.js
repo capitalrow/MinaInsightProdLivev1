@@ -1132,10 +1132,223 @@
     window.SettingsAPI = SettingsAPI;
     window.SettingsUI = SettingsUI;
 
+    const DataRightsController = {
+        userEmail: null,
+
+        init() {
+            this.userEmail = document.querySelector('.settings-container')?.dataset?.userEmail || '';
+            this.bindEvents();
+        },
+
+        bindEvents() {
+            const exportBtn = document.getElementById('export-data-btn');
+            const manageConsentBtn = document.getElementById('manage-consent-btn');
+            const deleteAccountBtn = document.getElementById('delete-account-btn');
+            const consentModal = document.getElementById('consent-modal');
+            const deleteModal = document.getElementById('delete-modal');
+
+            if (exportBtn) {
+                exportBtn.addEventListener('click', () => this.exportData());
+            }
+
+            if (manageConsentBtn) {
+                manageConsentBtn.addEventListener('click', () => this.openConsentModal());
+            }
+
+            if (deleteAccountBtn) {
+                deleteAccountBtn.addEventListener('click', () => this.openDeleteModal());
+            }
+
+            document.querySelectorAll('.modal-close, .modal-cancel, .modal-overlay').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    if (e.target.closest('.modal-content') && !e.target.classList.contains('modal-close') && !e.target.classList.contains('modal-cancel')) {
+                        return;
+                    }
+                    this.closeModals();
+                });
+            });
+
+            const saveConsentBtn = document.getElementById('save-consent-btn');
+            if (saveConsentBtn) {
+                saveConsentBtn.addEventListener('click', () => this.saveConsent());
+            }
+
+            const deleteConfirmEmail = document.getElementById('delete-confirm-email');
+            const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+            if (deleteConfirmEmail && confirmDeleteBtn) {
+                deleteConfirmEmail.addEventListener('input', (e) => {
+                    const emailMatch = e.target.value.toLowerCase() === this.userEmail.toLowerCase();
+                    confirmDeleteBtn.disabled = !emailMatch;
+                });
+            }
+
+            if (confirmDeleteBtn) {
+                confirmDeleteBtn.addEventListener('click', () => this.deleteAccount());
+            }
+        },
+
+        async exportData() {
+            const btn = document.getElementById('export-data-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="btn-spinner"></span> Exporting...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/export/user-data', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'mina-data-export-' + new Date().toISOString().split('T')[0] + '.json';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    SettingsUI.showToast('Your data has been exported successfully', 'success');
+                } else {
+                    throw new Error('Export failed');
+                }
+            } catch (error) {
+                console.error('Export error:', error);
+                SettingsUI.showToast('Failed to export data. Please try again.', 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        },
+
+        openConsentModal() {
+            const modal = document.getElementById('consent-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                this.loadConsentPreferences();
+            }
+        },
+
+        openDeleteModal() {
+            const modal = document.getElementById('delete-modal');
+            const emailInput = document.getElementById('delete-confirm-email');
+            if (modal) {
+                modal.style.display = 'flex';
+                if (emailInput) {
+                    emailInput.value = '';
+                }
+                const confirmBtn = document.getElementById('confirm-delete-btn');
+                if (confirmBtn) {
+                    confirmBtn.disabled = true;
+                }
+            }
+        },
+
+        closeModals() {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.style.display = 'none';
+            });
+        },
+
+        async loadConsentPreferences() {
+            try {
+                const response = await SettingsAPI.getPreferences();
+                if (response.success && response.preferences) {
+                    const gdprConsent = response.preferences.gdpr_consent || {};
+                    const marketingCheckbox = document.getElementById('marketing-consent-checkbox');
+                    const analyticsCheckbox = document.getElementById('analytics-consent-checkbox');
+                    
+                    if (marketingCheckbox) {
+                        marketingCheckbox.checked = gdprConsent.marketing_consent || false;
+                    }
+                    if (analyticsCheckbox) {
+                        analyticsCheckbox.checked = response.preferences.privacy?.anonymous_usage_stats || false;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load consent preferences:', error);
+            }
+        },
+
+        async saveConsent() {
+            const marketingCheckbox = document.getElementById('marketing-consent-checkbox');
+            const analyticsCheckbox = document.getElementById('analytics-consent-checkbox');
+            const btn = document.getElementById('save-consent-btn');
+
+            const consent = {
+                marketing_consent: marketingCheckbox?.checked || false,
+                analytics_consent: analyticsCheckbox?.checked || false,
+                updated_at: new Date().toISOString()
+            };
+
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                await SettingsAPI.updatePreferences('gdpr_consent', consent);
+                await SettingsAPI.updatePreferences('privacy', {
+                    anonymous_usage_stats: analyticsCheckbox?.checked || false
+                });
+                
+                if (window.MinaCookieConsent) {
+                    const cookieConsent = window.MinaCookieConsent.getConsent() || {};
+                    cookieConsent.marketing = consent.marketing_consent;
+                    cookieConsent.analytics = consent.analytics_consent;
+                }
+
+                SettingsUI.showToast('Consent preferences saved', 'success');
+                this.closeModals();
+            } catch (error) {
+                console.error('Failed to save consent:', error);
+                SettingsUI.showToast('Failed to save preferences', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Preferences';
+            }
+        },
+
+        async deleteAccount() {
+            const btn = document.getElementById('confirm-delete-btn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Deleting...';
+
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const response = await fetch('/auth/delete-account', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                if (response.ok) {
+                    window.location.href = '/?deleted=true';
+                } else {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Delete failed');
+                }
+            } catch (error) {
+                console.error('Delete account error:', error);
+                SettingsUI.showToast('Failed to delete account. Please try again.', 'error');
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+    };
+
+    window.DataRightsController = DataRightsController;
+
     document.addEventListener('DOMContentLoaded', () => {
         if (window.location.pathname.startsWith('/settings')) {
             window.settingsManager = new SettingsManager();
             window.settingsManager.init();
+            DataRightsController.init();
         }
     });
 

@@ -88,6 +88,7 @@ def register():
         confirm_password = request.form.get('confirm_password', '')
         first_name = request.form.get('first_name', '').strip()
         last_name = request.form.get('last_name', '').strip()
+        marketing_consent = request.form.get('marketing_consent') == 'on'
         
         # Validation
         errors = []
@@ -151,6 +152,19 @@ def register():
             
             # Assign user to workspace (circular FK handled by post_update=True)
             user.workspace_id = workspace.id
+            
+            # Store GDPR consent in user preferences
+            import json
+            from datetime import datetime as dt
+            gdpr_consent = {
+                'terms_accepted': True,
+                'terms_accepted_at': dt.utcnow().isoformat(),
+                'marketing_consent': marketing_consent,
+                'marketing_consent_at': dt.utcnow().isoformat() if marketing_consent else None,
+                'ip_address': request.headers.get('X-Forwarded-For', request.remote_addr),
+                'user_agent': request.headers.get('User-Agent', '')[:500]
+            }
+            user.preferences = json.dumps({'gdpr_consent': gdpr_consent})
             
             # Create verification token for passive verification
             verification_token = auth_email_service.create_verification_token(user)
@@ -654,3 +668,63 @@ def resend_verification():
     except Exception as e:
         logging.error(f"Resend verification failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to send verification email'}), 500
+
+
+@auth_bp.route('/delete-account', methods=['POST'])
+@login_required
+def delete_account():
+    """Delete user account and all associated data (GDPR right to erasure).
+    
+    This endpoint permanently removes:
+    - User profile and preferences
+    - All meetings and recordings
+    - All transcripts and summaries
+    - All tasks and action items
+    - Workspace memberships
+    """
+    from models import Meeting, Task, Transcript
+    
+    try:
+        user_id = current_user.id
+        user_email = current_user.email
+        username = current_user.username
+        
+        logging.info(f"Initiating account deletion for user {username} (ID: {user_id})")
+        
+        # Delete user's meetings (cascade will handle related transcripts, etc.)
+        meetings = db.session.query(Meeting).filter_by(user_id=user_id).all()
+        for meeting in meetings:
+            db.session.delete(meeting)
+        
+        # Delete user's tasks
+        tasks = db.session.query(Task).filter_by(user_id=user_id).all()
+        for task in tasks:
+            db.session.delete(task)
+        
+        # Logout user before deletion
+        logout_user()
+        
+        # Delete the user (this will cascade delete workspace memberships if configured)
+        user = db.session.query(User).get(user_id)
+        if user:
+            db.session.delete(user)
+        
+        db.session.commit()
+        
+        logging.info(f"Account deleted successfully for user {username} (ID: {user_id})")
+        
+        # Send confirmation email if email service is available
+        try:
+            auth_email_service.send_account_deleted_email(
+                user_email=user_email,
+                first_name=username
+            )
+        except Exception as email_error:
+            logging.warning(f"Could not send deletion confirmation email: {email_error}")
+        
+        return jsonify({'success': True, 'message': 'Account deleted successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Account deletion failed: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to delete account. Please try again.'}), 500
