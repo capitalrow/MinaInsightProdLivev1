@@ -222,7 +222,7 @@
     <script src="{{ url_for('static', filename='js/cookie-consent.js') }}" defer></script>
     {% block extra_js %}{% endblock %}
     
-    <!-- Cookie Consent Banner -->
+    <!-- Cookie Consent Banner (hidden by default, shown via JS if no consent exists) -->
     <div id="cookie-consent-banner" class="cookie-consent-banner" role="dialog" aria-labelledby="cookie-consent-title" aria-modal="true">
         <div class="cookie-consent-inner">
             <div class="cookie-consent-content">
@@ -230,28 +230,31 @@
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                     </svg>
-                    Privacy & Cookies
+                    Your Privacy Choices
                 </h4>
-                <p>We use cookies to enhance your experience. Essential cookies are required for the service to function. You can choose to enable optional cookies for analytics and marketing.</p>
+                <p>We respect your privacy. Choose your cookie preferences below.</p>
                 <div class="cookie-consent-options">
-                    <label class="disabled">
+                    <label class="disabled" title="Required for login, security, and basic functionality">
                         <input type="checkbox" checked disabled>
-                        <span>Essential (Required)</span>
+                        <span>Essential</span>
+                        <small class="cookie-desc">(Required for site functionality)</small>
                     </label>
-                    <label>
+                    <label title="Help us understand how you use Mina to improve the experience">
                         <input type="checkbox" id="consent-analytics">
                         <span>Analytics</span>
+                        <small class="cookie-desc">(Usage insights)</small>
                     </label>
-                    <label>
+                    <label title="Personalized content and offers based on your interests">
                         <input type="checkbox" id="consent-marketing">
                         <span>Marketing</span>
+                        <small class="cookie-desc">(Personalized offers)</small>
                     </label>
                 </div>
-                <p><a href="{{ url_for('pages.privacy') }}">Privacy Policy</a> | <a href="{{ url_for('pages.cookies') }}">Cookie Policy</a></p>
+                <p class="cookie-links"><a href="{{ url_for('pages.privacy') }}">Privacy Policy</a> | <a href="{{ url_for('pages.cookies') }}">Cookie Policy</a></p>
             </div>
             <div class="cookie-consent-actions">
-                <button class="btn btn-essential" data-cookie-action="essential">Essential Only</button>
-                <button class="btn btn-selected" data-cookie-action="selected">Accept Selected</button>
+                <button class="btn btn-reject" data-cookie-action="essential">Reject All</button>
+                <button class="btn btn-selected" data-cookie-action="selected">Save Preferences</button>
                 <button class="btn btn-accept-all" data-cookie-action="all">Accept All</button>
             </div>
         </div>
