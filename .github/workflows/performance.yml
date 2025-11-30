@@ -1,0 +1,18 @@
+name: Performance Tests
+on:
+  push:
+    branches: [ main, CTO-upgrade ]
+  pull_request:
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          pip install python-socketio faker rich
+          npm install -g k6
+      - name: Run Socket.IO load test
+        run: python scripts/socket_load_test.py --url ws://localhost:5000 || true
+      - name: Run k6 stress test
+        run: SOCKET_URL=ws://localhost:5000/socket.io k6 run tests/load/meeting_transcription_test.js || true

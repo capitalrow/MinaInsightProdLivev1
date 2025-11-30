@@ -1,0 +1,243 @@
+name: MINA E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 6 * * *' # Daily at 6 AM UTC
+
+jobs:
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+      fail-fast: false
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: mina_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: mina_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://mina_test:test_password@localhost:5432/mina_test
+      SESSION_SECRET: test-secret-key-for-ci
+      NODE_ENV: test
+      CI: true
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Install Node.js dependencies
+      run: npm ci
+
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps ${{ matrix.browser }}
+
+    - name: Setup test database
+      run: |
+        python -c "
+        from app import app, db
+        with app.app_context():
+            db.create_all()
+        "
+
+    - name: Run E2E tests
+      run: npm run test:e2e:${{ matrix.browser }}
+      env:
+        PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ matrix.browser }}
+        path: |
+          tests/results/
+          test-results/
+        retention-days: 7
+
+    - name: Upload Playwright traces
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: playwright-traces-${{ matrix.browser }}
+        path: test-results/
+        retention-days: 7
+
+    - name: Generate test report
+      if: always()
+      run: |
+        echo "## E2E Test Results (${{ matrix.browser }})" >> $GITHUB_STEP_SUMMARY
+        if [ -f "tests/results/test-summary.json" ]; then
+          echo "### Summary" >> $GITHUB_STEP_SUMMARY
+          cat tests/results/test-summary.json >> $GITHUB_STEP_SUMMARY
+        fi
+
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: e2e-tests
+
+    env:
+      DATABASE_URL: postgresql://mina_test:test_password@localhost:5432/mina_test
+      SESSION_SECRET: test-secret-key-for-ci
+      NODE_ENV: test
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: mina_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: mina_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        npm ci
+        npx playwright install chromium
+
+    - name: Setup test database
+      run: |
+        python -c "
+        from app import app, db
+        with app.app_context():
+            db.create_all()
+        "
+
+    - name: Run performance tests
+      run: npm run test:performance
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-test-results
+        path: tests/results/performance/
+        retention-days: 30
+
+  accessibility-tests:
+    name: Accessibility Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      DATABASE_URL: postgresql://mina_test:test_password@localhost:5432/mina_test
+      SESSION_SECRET: test-secret-key-for-ci
+      NODE_ENV: test
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: mina_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: mina_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        npm ci
+        npx playwright install chromium
+
+    - name: Setup test database
+      run: |
+        python -c "
+        from app import app, db
+        with app.app_context():
+            db.create_all()
+        "
+
+    - name: Run accessibility tests
+      run: npm run test:accessibility
+
+    - name: Upload accessibility results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: accessibility-test-results
+        path: tests/results/accessibility/
+        retention-days: 30
