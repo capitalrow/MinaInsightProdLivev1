@@ -304,39 +304,43 @@ def get_productivity_analytics():
         
         avg_efficiency = sum(a.meeting_efficiency_score for a in efficiency_scores if a.meeting_efficiency_score is not None) / len(efficiency_scores) if efficiency_scores else 0
         
-        # Weekly completion trend for historical chart data
-        from sqlalchemy import cast, Date, extract
-        weeks_to_show = min(4, max(1, days // 7))
+        # Weekly completion trend using SQL date_trunc for accurate calendar week grouping
         completion_trend = []
         
-        for week_idx in range(weeks_to_show):
-            week_start = cutoff_date + timedelta(weeks=week_idx)
-            week_end = week_start + timedelta(weeks=1)
+        if meeting_ids:
+            from sqlalchemy import literal_column, case
+            from sqlalchemy.sql import text
             
-            # Get meetings in this week
-            week_meeting_ids = [m.id for m in meetings if week_start <= m.created_at < week_end]
+            # Use date_trunc to group by ISO calendar weeks
+            week_data = db.session.query(
+                func.date_trunc('week', Task.created_at).label('week_start'),
+                func.count(Task.id).label('total_tasks'),
+                func.sum(case((Task.status == 'completed', 1), else_=0)).label('completed_tasks')
+            ).filter(
+                Task.meeting_id.in_(meeting_ids),
+                Task.created_at >= cutoff_date
+            ).group_by(
+                func.date_trunc('week', Task.created_at)
+            ).order_by(
+                func.date_trunc('week', Task.created_at)
+            ).all()
             
-            if week_meeting_ids:
-                week_total = db.session.query(Task).filter(
-                    Task.meeting_id.in_(week_meeting_ids)
-                ).count()
-                week_completed = db.session.query(Task).filter(
-                    Task.meeting_id.in_(week_meeting_ids),
-                    Task.status == 'completed'
-                ).count()
-                week_rate = round((week_completed / week_total * 100), 1) if week_total > 0 else 0
-            else:
-                week_total = 0
-                week_completed = 0
-                week_rate = 0
-            
-            completion_trend.append({
-                'week': week_idx + 1,
-                'week_start': week_start.strftime('%Y-%m-%d'),
-                'total_tasks': week_total,
-                'completed_tasks': week_completed,
-                'completion_rate': week_rate
-            })
+            for row in week_data:
+                week_start_date = row.week_start
+                total = int(row.total_tasks or 0)
+                completed = int(row.completed_tasks or 0)
+                rate = round((completed / total * 100), 1) if total > 0 else 0
+                
+                # Format week label as "Nov 18" style for clarity
+                week_label = week_start_date.strftime('%b %d') if week_start_date else 'Unknown'
+                
+                completion_trend.append({
+                    'week_label': week_label,
+                    'week_start': week_start_date.strftime('%Y-%m-%d') if week_start_date else None,
+                    'total_tasks': total,
+                    'completed_tasks': completed,
+                    'completion_rate': rate
+                })
         
         return jsonify({
             'success': True,
