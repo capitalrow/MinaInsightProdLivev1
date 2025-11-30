@@ -8,7 +8,6 @@ from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
 from functools import wraps
 from models import db, User, Workspace
-from services.auth_email_service import auth_email_service
 import re
 import logging
 import traceback
@@ -152,23 +151,8 @@ def register():
             # Assign user to workspace (circular FK handled by post_update=True)
             user.workspace_id = workspace.id
             
-            # Create verification token for passive verification
-            verification_token = auth_email_service.create_verification_token(user)
-            
             # Commit both user and workspace together
             db.session.commit()
-            
-            # Send welcome email (non-blocking - don't fail registration if email fails)
-            try:
-                base_url = request.url_root
-                auth_email_service.send_welcome_email(
-                    user_email=user.email,
-                    first_name=first_name or username,
-                    base_url=base_url,
-                    verification_token=verification_token
-                )
-            except Exception as email_error:
-                logging.warning(f"Welcome email failed (non-blocking): {email_error}")
             
             # Auto-login the new user for smooth onboarding
             login_user(user)
@@ -509,148 +493,3 @@ def api_check_email():
         return jsonify({'available': False, 'message': 'Email is already registered'})
     
     return jsonify({'available': True, 'message': 'Email is available'})
-
-
-@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
-@auth_rate_limit("3 per minute")
-def forgot_password():
-    """Request password reset email."""
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
-    
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        
-        if not email:
-            flash('Please enter your email address', 'error')
-            return render_template('auth/forgot_password.html')
-        
-        if not is_valid_email(email):
-            flash('Please enter a valid email address', 'error')
-            return render_template('auth/forgot_password.html')
-        
-        user = db.session.query(User).filter_by(email=email).first()
-        
-        if user:
-            try:
-                reset_token = auth_email_service.create_password_reset_token(user)
-                db.session.commit()
-                
-                base_url = request.url_root
-                auth_email_service.send_password_reset_email(
-                    user_email=user.email,
-                    first_name=user.first_name or user.username,
-                    reset_token=reset_token,
-                    base_url=base_url
-                )
-                logging.info(f"Password reset email sent to {email}")
-            except Exception as e:
-                logging.error(f"Password reset email failed: {e}")
-        
-        flash('If an account exists with that email, you will receive a password reset link shortly.', 'info')
-        return redirect(url_for('auth.login'))
-    
-    return render_template('auth/forgot_password.html')
-
-
-@auth_bp.route('/reset-password/<token>', methods=['GET', 'POST'])
-def reset_password(token):
-    """Reset password using token from email."""
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
-    
-    user = db.session.query(User).filter_by(password_reset_token=token).first()
-    
-    if not user or not auth_email_service.verify_password_reset_token(user, token):
-        flash('This password reset link is invalid or has expired. Please request a new one.', 'error')
-        return redirect(url_for('auth.forgot_password'))
-    
-    if request.method == 'POST':
-        new_password = request.form.get('password', '')
-        confirm_password = request.form.get('confirm_password', '')
-        
-        if not new_password:
-            flash('Please enter a new password', 'error')
-            return render_template('auth/reset_password.html', token=token)
-        
-        valid, message = is_valid_password(new_password)
-        if not valid:
-            flash(message, 'error')
-            return render_template('auth/reset_password.html', token=token)
-        
-        if new_password != confirm_password:
-            flash('Passwords do not match', 'error')
-            return render_template('auth/reset_password.html', token=token)
-        
-        try:
-            user.set_password(new_password)
-            auth_email_service.clear_password_reset_token(user)
-            db.session.commit()
-            
-            auth_email_service.send_password_changed_email(
-                user_email=user.email,
-                first_name=user.first_name or user.username
-            )
-            
-            logging.info(f"Password reset completed for user {user.username}")
-            flash('Your password has been updated. Please log in with your new password.', 'success')
-            return redirect(url_for('auth.login'))
-            
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Password reset failed: {e}")
-            flash('Something went wrong. Please try again.', 'error')
-    
-    return render_template('auth/reset_password.html', token=token)
-
-
-@auth_bp.route('/verify-email/<token>')
-def verify_email(token):
-    """Verify user email via token link (passive verification)."""
-    user = db.session.query(User).filter_by(email_verification_token=token).first()
-    
-    if not user:
-        return render_template('auth/verify_error.html')
-    
-    if auth_email_service.verify_email_token(user, token):
-        auth_email_service.mark_email_verified(user)
-        db.session.commit()
-        logging.info(f"Email verified for user {user.username}")
-        
-        if current_user.is_authenticated:
-            flash('Your email has been verified!', 'success')
-            return redirect(url_for('dashboard.index'))
-        else:
-            flash('Your email has been verified! Please log in.', 'success')
-            return redirect(url_for('auth.login'))
-    
-    return render_template('auth/verify_error.html')
-
-
-@auth_bp.route('/resend-verification', methods=['POST'])
-@login_required
-def resend_verification():
-    """Resend email verification for logged-in user."""
-    if current_user.is_verified:
-        return jsonify({'success': True, 'message': 'Email already verified'})
-    
-    try:
-        verification_token = auth_email_service.create_verification_token(current_user)
-        db.session.commit()
-        
-        base_url = request.url_root
-        result = auth_email_service.send_verification_email(
-            user_email=current_user.email,
-            first_name=current_user.first_name or current_user.username,
-            verification_token=verification_token,
-            base_url=base_url
-        )
-        
-        if result['success']:
-            return jsonify({'success': True, 'message': 'Verification email sent'})
-        else:
-            return jsonify({'success': False, 'error': result.get('error', 'Failed to send email')}), 500
-            
-    except Exception as e:
-        logging.error(f"Resend verification failed: {e}")
-        return jsonify({'success': False, 'error': 'Failed to send verification email'}), 500

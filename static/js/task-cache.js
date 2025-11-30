@@ -1512,46 +1512,6 @@ class TaskCache {
     }
 
     /**
-     * CROWN⁴.6: Cache prefetched task detail for instant modal opens
-     * @param {string|number} taskId - Task ID
-     * @param {Object} detailData - Task detail data from API
-     * @returns {Promise<void>}
-     */
-    async setTaskDetail(taskId, detailData) {
-        await this.init();
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['metadata'], 'readwrite');
-            const store = transaction.objectStore('metadata');
-            const request = store.put({
-                key: `task_detail_${taskId}`,
-                value: detailData,
-                task_id: taskId,
-                updated_at: Date.now()
-            });
-
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    /**
-     * CROWN⁴.6: Get prefetched task detail for instant modal opens
-     * @param {string|number} taskId - Task ID
-     * @returns {Promise<Object|null>}
-     */
-    async getTaskDetail(taskId) {
-        await this.init();
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['metadata'], 'readonly');
-            const store = transaction.objectStore('metadata');
-            const request = store.get(`task_detail_${taskId}`);
-
-            request.onsuccess = () => resolve(request.result?.value || null);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    /**
      * CROWN⁴.5: Track event sequence number and detect gaps
      * MONOTONIC: Only accepts non-decreasing event_ids to prevent backwards rollback
      * @param {number} event_id - Event ID from server

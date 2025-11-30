@@ -57,5 +57,3 @@ pgvector
 python-socketio[client]
 nest-asyncio
 playwright
-eventlet
-python-dateutil

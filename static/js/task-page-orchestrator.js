@@ -388,17 +388,8 @@ class TasksPageOrchestrator {
 // Create orchestrator instance
 window.tasksOrchestrator = new TasksPageOrchestrator();
 
-// CROWN⁴.6 PERFORMANCE FIX: Defer initialization to allow skeleton to paint first
-// Using double-rAF pattern to ensure browser has painted the skeleton before heavy work
-// This enables <200ms first paint target
-console.log('[Orchestrator] TasksPageOrchestrator loaded - deferring init for skeleton paint');
+// Initialize immediately since we're loaded last
+// All deferred scripts should have executed by now
+window.tasksReady = window.tasksOrchestrator.init();
 
-window.tasksReady = new Promise((resolve) => {
-    // Double requestAnimationFrame: ensures browser has painted at least once
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            console.log('[Orchestrator] Skeleton painted, starting module initialization...');
-            window.tasksOrchestrator.init().then(resolve).catch(resolve);
-        });
-    });
-});
+console.log('[Orchestrator] TasksPageOrchestrator loaded - initializing immediately');

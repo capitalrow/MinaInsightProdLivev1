@@ -30,39 +30,23 @@ class MinaTasksLinear {
         this.filter = 'all';
         this.sortBy = 'default';
         
-        // CROWN⁴.6: Defer init to allow skeleton to paint first
-        // Use requestAnimationFrame (fires right after first render) instead of requestIdleCallback
-        // (which waits for idle thread and delays too long)
-        requestAnimationFrame(() => this.init());
+        this.init();
     }
     
     async init() {
-        console.log('[Mina Tasks] Initializing Linear-inspired interface (deferred)...');
+        console.log('[Mina Tasks] Initializing Linear-inspired interface...');
         
-        // CROWN⁴.6: Skeleton is now visible by default in HTML
-        // No need to call showSkeletonLoader() - prevents double flash
-        // TaskBootstrap handles initial loading state
+        // Phase 1: Instant skeleton (0ms)
+        this.showSkeletonLoader();
         
         // Phase 2: Load tasks with aggressive caching
         const tasksPromise = this.loadTasksOptimized();
         
-        // Phase 3: Setup interactions - defer to idle callback for non-critical setup
+        // Phase 3: Setup interactions (parallel)
         this.setupEventListeners();
-        
-        // Defer WebSocket and prefetching to requestIdleCallback
-        if ('requestIdleCallback' in window) {
-            requestIdleCallback(() => {
-                this.setupWebSocket();
-                this.setupPrefetching();
-                this.setupOfflineDetection();
-            }, { timeout: 500 });
-        } else {
-            setTimeout(() => {
-                this.setupWebSocket();
-                this.setupPrefetching();
-                this.setupOfflineDetection();
-            }, 50);
-        }
+        this.setupWebSocket();
+        this.setupPrefetching();
+        this.setupOfflineDetection();
         
         // Phase 4: Wait for tasks, then animate in
         const tasks = await tasksPromise;
@@ -84,24 +68,23 @@ class MinaTasksLinear {
             console.warn(`[Performance] Load time exceeded target by ${(loadTime - this.PERFORMANCE_TARGET_MS).toFixed(2)}ms`);
         }
         
-        // Start prefetching related data - defer to idle
-        if ('requestIdleCallback' in window) {
-            requestIdleCallback(() => this.prefetchRelatedData(), { timeout: 1000 });
-        } else {
-            setTimeout(() => this.prefetchRelatedData(), 100);
-        }
+        // Start prefetching related data
+        this.prefetchRelatedData();
     }
     
     /**
      * Show skeleton loader instantly (0ms perceived load time)
-     * CROWN⁴.6: Now defers to TaskBootstrap for state management
-     * Skeleton is visible by default in HTML - no action needed
+     * Skeleton morphs into real content with smooth transition
      */
     showSkeletonLoader() {
-        // CROWN⁴.6: Skeleton is visible by default in HTML
-        // TaskBootstrap manages the state transitions
-        // This method kept for backwards compatibility but is now a no-op
-        console.log('[Linear] Skeleton already visible by default');
+        const container = document.getElementById('tasks-list-container');
+        const loadingState = document.getElementById('tasks-loading-state');
+        
+        if (container) container.classList.add('hidden');
+        if (loadingState) {
+            loadingState.classList.remove('hidden');
+            loadingState.style.opacity = '1';
+        }
     }
     
     /**
@@ -437,7 +420,6 @@ class MinaTasksLinear {
      * FLIP Animation: First, Last, Invert, Play
      * Smooth, natural movement that guides user's attention
      * Inspired by Linear's "ink flows" aesthetic
-     * CROWN⁴.6: Coordinates with TaskBootstrap for state management
      */
     renderTasksWithFLIP(tasks) {
         const container = document.getElementById('tasks-list-container');
@@ -446,16 +428,8 @@ class MinaTasksLinear {
         
         if (!container) return;
         
-        // CROWN⁴.6: Use TaskBootstrap's state management if available
-        // This ensures consistent state transitions across modules
-        if (window.taskBootstrap && typeof window.taskBootstrap.showTasksList === 'function') {
-            window.taskBootstrap.showTasksList();
-        } else {
-            // Fallback: Hide skeleton loader directly
-            if (loadingState) {
-                loadingState.style.display = 'none';
-            }
-        }
+        // Hide skeleton loader
+        if (loadingState) loadingState.classList.add('hidden');
         
         // CRITICAL FIX: Don't replace server-rendered DOM - hydrate it!
         // Server already rendered task cards with all event listeners attached
@@ -1090,19 +1064,11 @@ class MinaTasksLinear {
     }
 }
 
-// CROWN⁴.6 PERFORMANCE FIX: Defer initialization to allow skeleton to paint first
-// Using double-rAF pattern ensures browser paints skeleton before heavy FLIP work
-function initMinaTasksLinear() {
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            console.log('[Linear] Skeleton painted, initializing FLIP animations...');
-            window.minaTasksLinear = new MinaTasksLinear();
-        });
-    });
-}
-
+// Initialize when DOM is ready
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initMinaTasksLinear);
+    document.addEventListener('DOMContentLoaded', () => {
+        window.minaTasksLinear = new MinaTasksLinear();
+    });
 } else {
-    initMinaTasksLinear();
+    window.minaTasksLinear = new MinaTasksLinear();
 }

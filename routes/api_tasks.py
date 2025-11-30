@@ -2117,13 +2117,36 @@ def get_all_summary_tasks():
     session_filter = request.args.get('session_id', type=int)
     completed_filter = request.args.get('completed')
     try:
-        stmt = select(Summary).filter(Summary.actions != None)
+        stmt = select(Summary).join(Session, Summary.session_id == Session.id)
+
         if session_filter:
+            session = db.session.execute(
+                select(Session).where(Session.id == session_filter)
+            ).scalar_one_or_none()
+
+            if not session:
+                return jsonify({"success": False, "error": "Session not found"}), 404
+
+            if session.workspace_id != current_user.workspace_id:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "Not authorized to view tasks for this session",
+                        }
+                    ),
+                    403,
+                )
+
             stmt = stmt.filter(Summary.session_id == session_filter)
+
+        stmt = stmt.filter(Session.workspace_id == current_user.workspace_id)
+        stmt = stmt.filter(Summary.actions != None)
+
         summaries = db.session.execute(stmt).scalars().all()
         tasks = []
         for summary in summaries:
-            if not summary.actions: 
+            if not summary.actions:
                 continue
             for idx, task in enumerate(summary.actions):
                 # Apply completion filter if provided
