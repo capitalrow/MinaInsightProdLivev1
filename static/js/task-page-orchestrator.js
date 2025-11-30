@@ -58,6 +58,10 @@ class TasksPageOrchestrator {
             console.log('[Orchestrator] Step 5: Ensuring TaskActionsMenu...');
             await this._ensureTaskActionsMenu();
 
+            // Step 5.5: Ensure TaskProposalUI exists (AI proposals feature)
+            console.log('[Orchestrator] Step 5.5: Ensuring TaskProposalUI...');
+            await this._ensureTaskProposalUI();
+
             // Step 6: Initialize helper modules
             console.log('[Orchestrator] Step 6: Initializing helper modules...');
             await this._initHelperModules();
@@ -223,6 +227,28 @@ class TasksPageOrchestrator {
             console.log('[Orchestrator] ✅ TaskActionsMenu created (from window.TaskActionsMenu)');
         } else {
             console.warn('[Orchestrator] ⚠️ TaskActionsMenu class not available');
+        }
+    }
+
+    async _ensureTaskProposalUI() {
+        if (window.taskProposalUI) {
+            this.modules.taskProposalUI = window.taskProposalUI;
+            console.log('[Orchestrator] ✅ TaskProposalUI already exists');
+            return;
+        }
+        
+        const taskUI = window.taskBootstrap || this.modules.taskBootstrap;
+        
+        if (typeof TaskProposalUI !== 'undefined') {
+            window.taskProposalUI = new TaskProposalUI(taskUI);
+            this.modules.taskProposalUI = window.taskProposalUI;
+            console.log('[Orchestrator] ✅ TaskProposalUI created');
+        } else if (typeof window.TaskProposalUI !== 'undefined') {
+            window.taskProposalUI = new window.TaskProposalUI(taskUI);
+            this.modules.taskProposalUI = window.taskProposalUI;
+            console.log('[Orchestrator] ✅ TaskProposalUI created (from window.TaskProposalUI)');
+        } else {
+            console.warn('[Orchestrator] ⚠️ TaskProposalUI class not available');
         }
     }
 
