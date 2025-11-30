@@ -752,7 +752,7 @@ window.__FIRST_PAINT_START = performance.now();
 <script defer src="{{ url_for('static', filename='js/task-actions-menu.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-bulk-operations.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-drag-drop.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-proposal-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-proposal-ui.js') }}?v=4" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-idle-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -817,5 +817,5 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 <script defer src="{{ url_for('static', filename='js/ai-partner-nudges.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Task Page Orchestrator - MUST BE LAST to coordinate module initialization -->
-<script defer src="{{ url_for('static', filename='js/task-page-orchestrator.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-page-orchestrator.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
 {% endblock %}
