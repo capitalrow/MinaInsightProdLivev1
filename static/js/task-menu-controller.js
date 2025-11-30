@@ -405,6 +405,7 @@ class TaskMenuController {
             // Use OptimisticUI system
             if (window.optimisticUI?.updateTask) {
                 await window.optimisticUI.updateTask(taskId, { due_date: newDate || null });
+                this.showToast(newDate ? 'Due date updated' : 'Due date cleared', 'success');
             } else {
                 // Direct API fallback
                 const response = await fetch(`/api/tasks/${taskId}`, {
@@ -413,8 +414,51 @@ class TaskMenuController {
                     body: JSON.stringify({ due_date: newDate || null })
                 });
                 if (!response.ok) throw new Error('API call failed');
-                this.showToast('Due date updated', 'success');
+                this.showToast(newDate ? 'Due date updated' : 'Due date cleared', 'success');
             }
+            
+            // Update DOM immediately for visual feedback
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (taskCard) {
+                const dueDateBadge = taskCard.querySelector('.task-due-date, .due-date-badge');
+                if (dueDateBadge && newDate) {
+                    // Format date for display
+                    const date = new Date(newDate);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const diff = Math.floor((date - today) / (1000 * 60 * 60 * 24));
+                    
+                    let displayText;
+                    if (diff === 0) displayText = 'Today';
+                    else if (diff === 1) displayText = 'Tomorrow';
+                    else if (diff < 0) displayText = 'Overdue';
+                    else if (diff <= 7) displayText = `In ${diff}d`;
+                    else displayText = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    
+                    dueDateBadge.textContent = displayText;
+                    dueDateBadge.style.display = '';
+                    
+                    // Update overdue styling
+                    if (diff < 0) {
+                        dueDateBadge.classList.add('overdue');
+                    } else {
+                        dueDateBadge.classList.remove('overdue');
+                    }
+                } else if (dueDateBadge && !newDate) {
+                    // Clear due date - hide badge
+                    dueDateBadge.style.display = 'none';
+                }
+                
+                // Also check for inline "+ Add due date" button and update it
+                const addDueDateBtn = taskCard.querySelector('[data-inline-action="add-due-date"]');
+                if (addDueDateBtn && newDate) {
+                    addDueDateBtn.style.display = 'none';
+                } else if (addDueDateBtn && !newDate) {
+                    addDueDateBtn.style.display = '';
+                }
+            }
+            
+            console.log('[TaskMenuController] Due date updated successfully:', newDate);
         } catch (error) {
             console.error('[TaskMenuController] Due date update failed:', error);
             this.showToast('Failed to update due date', 'error');
