@@ -296,7 +296,7 @@ def tasks():
             )\
             .filter(
                 or_(
-                    Task.workspace_id == current_user.workspace_id,
+                    Task.workspace_id == workspace_id_str,  # VARCHAR comparison (tasks.workspace_id is VARCHAR)
                     Meeting.workspace_id == current_user.workspace_id,  # INTEGER comparison
                     Session.workspace_id == current_user.workspace_id,  # INTEGER comparison
                 )

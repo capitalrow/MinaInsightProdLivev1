@@ -9,6 +9,7 @@ class TaskDatePicker {
         this.resolveCallback = null;
         this.currentTaskId = null;
         this.triggerElement = null;
+        this.justOpened = false; // Prevent immediate close from click propagation
         this.init();
     }
 
@@ -84,6 +85,9 @@ class TaskDatePicker {
         });
 
         document.addEventListener('click', (e) => {
+            // Skip if popover was just opened (prevents immediate close from click propagation)
+            if (this.justOpened) return;
+            
             if (this.popover.classList.contains('visible') && 
                 !this.popover.contains(e.target) &&
                 e.target !== this.triggerElement) {
@@ -100,15 +104,30 @@ class TaskDatePicker {
 
     async show(triggerElement) {
         this.triggerElement = triggerElement;
+        this.justOpened = true; // Prevent immediate close from click propagation
         
         const dateInput = this.popover.querySelector('.task-date-input');
         dateInput.value = '';
 
-        this.position(triggerElement);
-        
+        // CRITICAL: Set display BEFORE positioning so dimensions are calculable
         this.popover.style.display = 'block';
+        this.popover.style.visibility = 'hidden'; // Hide during positioning
+        
+        // Wait for layout to calculate dimensions
         requestAnimationFrame(() => {
+            this.position(triggerElement);
+            this.popover.style.visibility = 'visible'; // Show after positioning
             this.popover.classList.add('visible');
+            
+            console.log('[TaskDatePicker] Popover shown at:', {
+                top: this.popover.style.top,
+                left: this.popover.style.left
+            });
+            
+            // Reset justOpened flag after a short delay
+            setTimeout(() => {
+                this.justOpened = false;
+            }, 150);
         });
 
         return new Promise((resolve) => {
@@ -117,7 +136,15 @@ class TaskDatePicker {
     }
 
     position(triggerElement) {
-        if (!triggerElement) return;
+        // Default to center of screen if no valid trigger
+        if (!triggerElement || triggerElement === document.body) {
+            const popoverRect = this.popover.getBoundingClientRect();
+            const centerX = Math.max(16, (window.innerWidth - popoverRect.width) / 2);
+            const centerY = Math.max(16, (window.innerHeight - popoverRect.height) / 2);
+            this.popover.style.top = `${centerY}px`;
+            this.popover.style.left = `${centerX}px`;
+            return;
+        }
 
         const triggerRect = triggerElement.getBoundingClientRect();
         const popoverRect = this.popover.getBoundingClientRect();
@@ -125,16 +152,23 @@ class TaskDatePicker {
         let top = triggerRect.bottom + 8;
         let left = triggerRect.left;
 
-        if (top + popoverRect.height > window.innerHeight) {
-            top = triggerRect.top - popoverRect.height - 8;
+        // Flip to above if not enough space below
+        if (top + popoverRect.height > window.innerHeight - 16) {
+            top = Math.max(16, triggerRect.top - popoverRect.height - 8);
         }
 
-        if (left + popoverRect.width > window.innerWidth) {
+        // Ensure popover stays within horizontal bounds
+        if (left + popoverRect.width > window.innerWidth - 16) {
             left = window.innerWidth - popoverRect.width - 16;
         }
 
         if (left < 16) {
             left = 16;
+        }
+
+        // Ensure top doesn't go off-screen
+        if (top < 16) {
+            top = 16;
         }
 
         this.popover.style.top = `${top}px`;

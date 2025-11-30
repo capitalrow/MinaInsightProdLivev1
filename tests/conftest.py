@@ -5,101 +5,6 @@ import pytest
 import os
 import sys
 from pathlib import Path
-import types
-
-# Provide a lightweight stub for python-dotenv to avoid optional dependency failures during tests
-if 'dotenv' not in sys.modules:
-    dotenv_stub = types.SimpleNamespace(load_dotenv=lambda *args, **kwargs: None)
-    sys.modules['dotenv'] = dotenv_stub
-
-# Provide a lightweight SocketIO stub to avoid optional async dependencies
-if 'flask_socketio' not in sys.modules:
-    flask_socketio_stub = types.ModuleType('flask_socketio')
-
-    def _noop(*args, **kwargs):
-        return None
-
-    class SocketIO:  # type: ignore
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def init_app(self, app):
-            return None
-
-        def on(self, *args, **kwargs):
-            def decorator(func):
-                return func
-
-            return decorator
-
-        def event(self, func):
-            return func
-
-        def emit(self, *args, **kwargs):
-            return None
-
-        def run(self, *args, **kwargs):
-            return None
-
-        def test_client(self, *args, **kwargs):
-            return None
-
-    flask_socketio_stub.SocketIO = SocketIO
-    flask_socketio_stub.emit = _noop
-    flask_socketio_stub.join_room = _noop
-    flask_socketio_stub.leave_room = _noop
-    flask_socketio_stub.disconnect = _noop
-    flask_socketio_stub.SocketIOTestClient = object
-    sys.modules['flask_socketio'] = flask_socketio_stub
-
-# Stub memory store to avoid external database and OpenAI dependencies during tests
-if 'server.models.memory_store' not in sys.modules:
-    memory_store_stub = types.ModuleType('server.models.memory_store')
-
-    class MemoryStore:  # type: ignore
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def add_memory(self, *args, **kwargs):
-            return True
-
-        def search_memory(self, *args, **kwargs):
-            return []
-
-        def latest_memories(self, *args, **kwargs):
-            return []
-
-    memory_store_stub.MemoryStore = MemoryStore
-    sys.modules['server.models.memory_store'] = memory_store_stub
-
-# Stub sklearn dependency used by optional diarization service
-if 'sklearn' not in sys.modules:
-    sklearn_stub = types.ModuleType('sklearn')
-    sklearn_cluster_stub = types.ModuleType('sklearn.cluster')
-
-    class DBSCAN:  # type: ignore
-        def __init__(self, *args, **kwargs):
-            pass
-
-    sklearn_cluster_stub.DBSCAN = DBSCAN
-    sklearn_stub.cluster = sklearn_cluster_stub
-
-    sys.modules['sklearn'] = sklearn_stub
-    sys.modules['sklearn.cluster'] = sklearn_cluster_stub
-
-# Stub feature flag models that rely on PostgreSQL-specific types
-if 'models.core_models' not in sys.modules:
-    core_models_stub = types.ModuleType('models.core_models')
-
-    class _Placeholder:  # type: ignore
-        pass
-
-    core_models_stub.FeatureFlag = _Placeholder
-    core_models_stub.FlagAuditLog = _Placeholder
-    core_models_stub.Customer = _Placeholder
-    core_models_stub.Subscription = _Placeholder
-
-    sys.modules['models.core_models'] = core_models_stub
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -109,7 +14,6 @@ sys.path.insert(0, str(project_root))
 os.environ['FLASK_ENV'] = 'testing'
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 os.environ['SESSION_SECRET'] = 'test-secret-key-for-testing-only'
-os.environ.setdefault('OPENAI_API_KEY', 'test-api-key')
 
 @pytest.fixture(scope='session')
 def app():

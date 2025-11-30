@@ -439,6 +439,76 @@ def export_settings():
         }), 500
 
 
+# Cookie consent endpoint - public, no login required
+# This is a blueprint route but we need to register it on the app
+def register_cookie_consent_route(app):
+    """Register the cookie consent API route on the main app."""
+    
+    @app.route('/api/cookie-consent', methods=['POST'])
+    def save_cookie_consent():
+        """
+        Save cookie consent preferences.
+        
+        This endpoint is public (no login required) because cookie consent
+        must be collected before users can log in.
+        
+        Request Body:
+            {
+                "essential": true,
+                "analytics": true/false,
+                "marketing": true/false,
+                "version": "1",
+                "timestamp": "ISO 8601 date"
+            }
+        
+        Returns:
+            JSON: Success/error response
+        """
+        from datetime import datetime
+        from flask import session
+        
+        try:
+            data = request.get_json() or {}
+            
+            consent = {
+                'essential': True,
+                'analytics': data.get('analytics', False),
+                'marketing': data.get('marketing', False),
+                'version': data.get('version', '1'),
+                'timestamp': data.get('timestamp', datetime.utcnow().isoformat()),
+                'ip_address': request.headers.get('X-Forwarded-For', request.remote_addr),
+                'user_agent': request.headers.get('User-Agent', '')[:500]
+            }
+            
+            session['cookie_consent'] = consent
+            
+            if current_user.is_authenticated:
+                from app import db
+                try:
+                    preferences = _get_user_preferences(current_user)
+                    preferences['cookie_consent'] = consent
+                    current_user.preferences = json.dumps(preferences)
+                    db.session.commit()
+                    logger.info(f"Saved cookie consent for user {current_user.id}")
+                except Exception as e:
+                    logger.warning(f"Failed to save cookie consent to user profile: {e}")
+                    db.session.rollback()
+            
+            logger.info(f"Cookie consent recorded: analytics={consent['analytics']}, marketing={consent['marketing']}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Cookie preferences saved'
+            }), 200
+        
+        except Exception as e:
+            logger.error(f"Error saving cookie consent: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save preferences'
+            }), 500
+
+
 def _get_user_preferences(user) -> Dict[str, Any]:
     """
     Get user preferences with defaults for missing values.

@@ -51,7 +51,7 @@ jobs:
         cache: 'npm'
 
     - name: Setup Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v4
       with:
         python-version: '3.11'
         cache: 'pip'
@@ -76,7 +76,7 @@ jobs:
         "
 
     - name: Run E2E tests
-      run: npm run test:e2e -- --project=${{ matrix.browser }}
+      run: npm run test:e2e:${{ matrix.browser }}
       env:
         PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
 
@@ -144,7 +144,7 @@ jobs:
         cache: 'npm'
 
     - name: Setup Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v4
       with:
         python-version: '3.11'
         cache: 'pip'
@@ -211,7 +211,7 @@ jobs:
         cache: 'npm'
 
     - name: Setup Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v4
       with:
         python-version: '3.11'
         cache: 'pip'
