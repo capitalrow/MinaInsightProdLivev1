@@ -16,21 +16,16 @@ class TaskClusteringService:
     """Service for grouping related tasks using semantic similarity."""
     
     def __init__(self):
-        """Initialize clustering service with OpenAI for embeddings."""
+        """Initialize clustering service with OpenAI for embeddings (direct connection)."""
         self.api_key = os.environ.get('OPENAI_API_KEY')
         self.client = None
-        
-        # Check if using Replit AI proxy (doesn't support embeddings)
-        base_url = os.environ.get('OPENAI_BASE_URL', '')
-        if 'modelfarm' in base_url or 'replit' in base_url.lower():
-            logger.info("⚠️ AI clustering disabled: Replit AI Integrations does not support embeddings API - using keyword fallback")
-            return
         
         if self.api_key:
             try:
                 from openai import OpenAI
+                # Connect directly to OpenAI (no base_url override)
                 self.client = OpenAI(api_key=self.api_key)
-                logger.info("✅ TaskClusteringService initialized with OpenAI")
+                logger.info("✅ TaskClusteringService initialized with OpenAI (direct)")
             except Exception as e:
                 logger.error(f"❌ Failed to initialize OpenAI: {e}")
         else:
