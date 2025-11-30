@@ -2584,23 +2584,12 @@ Avoid duplicating existing tasks. Focus on concrete next steps."""
 Based on this {context_source}, suggest {max_proposals} actionable tasks.
 Format as JSON array: [{{"title": "...", "description": "...", "priority": "medium", "category": "..."}}]"""
                 
-                # Stream from OpenAI using Replit AI Integrations
-                # This uses Replit's managed credentials and bills to your Replit credits
-                from openai import OpenAI
-                ai_base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-                ai_api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+                # Stream from OpenAI
+                client = get_openai_client()
+                if not client:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'OpenAI client not available'})}\n\n"
+                    return
                 
-                if not ai_base_url or not ai_api_key:
-                    logger.warning("AI Integrations not configured, falling back to standard client")
-                    client = get_openai_client()
-                    if not client:
-                        yield f"data: {json.dumps({'type': 'error', 'message': 'OpenAI client not available'})}\n\n"
-                        return
-                else:
-                    client = OpenAI(api_key=ai_api_key, base_url=ai_base_url)
-                
-                # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
-                # Using gpt-4o-mini for task proposals as it's cost-effective
                 stream = client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
@@ -2608,7 +2597,8 @@ Format as JSON array: [{{"title": "...", "description": "...", "priority": "medi
                         {"role": "user", "content": user_prompt}
                     ],
                     stream=True,
-                    max_completion_tokens=800
+                    temperature=0.7,
+                    max_tokens=800
                 )
                 
                 full_response = ""
