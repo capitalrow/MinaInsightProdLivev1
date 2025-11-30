@@ -515,15 +515,173 @@ class AnalyticsDashboard {
 
     async loadDashboardData() {
         try {
-            const response = await fetch(`/api/analytics/dashboard?days=${this.selectedDateRange}`);
-            const data = await response.json();
+            const [dashboardRes, kpiComparisonRes, topicsRes] = await Promise.all([
+                fetch(`/api/analytics/dashboard?days=${this.selectedDateRange}`),
+                fetch(`/api/analytics/kpi-comparison?days=${this.selectedDateRange}`),
+                fetch(`/api/analytics/topic-distribution?days=${this.selectedDateRange}`)
+            ]);
             
-            if (data.success) {
-                this.updateOverviewCharts(data.dashboard);
+            const [dashboardData, kpiComparisonData, topicsData] = await Promise.all([
+                dashboardRes.json(),
+                kpiComparisonRes.json(),
+                topicsRes.json()
+            ]);
+            
+            if (dashboardData.success) {
+                this.updateOverviewCharts(dashboardData.dashboard);
+            }
+            
+            if (kpiComparisonData.success) {
+                this.updateKPIComparisons(kpiComparisonData.kpis);
+            }
+            
+            if (topicsData.success) {
+                this.updateTopicsDistribution(topicsData);
             }
         } catch (error) {
             console.error('Failed to load dashboard data:', error);
         }
+    }
+
+    updateKPIComparisons(kpis) {
+        const kpiConfig = {
+            'total_meetings': { 
+                badgeId: 'kpi-meetings-badge', 
+                comparisonId: 'kpi-meetings-comparison',
+                valueId: 'kpi-meetings-value',
+                format: 'integer'
+            },
+            'action_items': { 
+                badgeId: 'kpi-tasks-badge', 
+                comparisonId: 'kpi-tasks-comparison',
+                valueId: 'kpi-tasks-value',
+                format: 'integer'
+            },
+            'hours_saved': { 
+                badgeId: 'kpi-hours-badge', 
+                comparisonId: 'kpi-hours-comparison',
+                valueId: 'kpi-hours-value',
+                format: 'hours'
+            },
+            'avg_duration': { 
+                badgeId: 'kpi-duration-badge', 
+                comparisonId: 'kpi-duration-comparison',
+                valueId: 'kpi-duration-value',
+                format: 'minutes'
+            }
+        };
+
+        for (const [key, config] of Object.entries(kpiConfig)) {
+            const kpiData = kpis[key];
+            if (!kpiData) continue;
+
+            const badge = document.getElementById(config.badgeId);
+            const comparison = document.getElementById(config.comparisonId);
+            const valueEl = document.getElementById(config.valueId);
+            const card = badge?.closest('.kpi-card');
+
+            if (badge) {
+                const change = kpiData.change;
+                const trend = kpiData.trend;
+                
+                if (change === 0 || change === null || change === undefined) {
+                    badge.textContent = '→';
+                    badge.style.background = 'rgba(107, 114, 128, 0.1)';
+                    badge.style.color = 'var(--color-tertiary)';
+                    badge.setAttribute('aria-label', 'No change');
+                } else if (trend === 'up') {
+                    const displayChange = key === 'hours_saved' ? `+${kpiData.value - kpiData.previous}h` : `+${Math.abs(change)}%`;
+                    badge.textContent = displayChange;
+                    badge.style.background = 'rgba(34, 197, 94, 0.1)';
+                    badge.style.color = 'var(--color-success)';
+                    badge.setAttribute('aria-label', `${Math.abs(change)} percent increase`);
+                } else {
+                    const displayChange = key === 'hours_saved' ? `-${kpiData.previous - kpiData.value}h` : `-${Math.abs(change)}%`;
+                    badge.textContent = displayChange;
+                    badge.style.background = 'rgba(239, 68, 68, 0.1)';
+                    badge.style.color = 'var(--color-error)';
+                    badge.setAttribute('aria-label', `${Math.abs(change)} percent decrease`);
+                }
+                
+                if (card) {
+                    this.triggerKpiUpdate(card);
+                }
+            }
+
+            if (comparison) {
+                const prev = kpiData.previous || 0;
+                const curr = kpiData.value || 0;
+                const diff = curr - prev;
+                
+                if (diff === 0) {
+                    comparison.textContent = 'Same as previous period';
+                } else if (diff > 0) {
+                    comparison.innerHTML = `<span style="color: var(--color-success)">↑</span> ${Math.abs(diff)} more than last period`;
+                } else {
+                    comparison.innerHTML = `<span style="color: var(--color-error)">↓</span> ${Math.abs(diff)} fewer than last period`;
+                }
+            }
+
+            if (valueEl) {
+                this.animateKpiValue(valueEl, kpiData.value, 400);
+            }
+        }
+
+        if (kpis.completion_rate !== undefined) {
+            const badge = document.getElementById('kpi-tasks-badge');
+            const comparison = document.getElementById('kpi-tasks-comparison');
+            if (badge) {
+                badge.textContent = `${Math.round(kpis.completion_rate.value)}%`;
+                badge.setAttribute('aria-label', `${Math.round(kpis.completion_rate.value)} percent complete`);
+            }
+            if (comparison) {
+                comparison.textContent = `${Math.round(kpis.completion_rate.value)}% completion rate`;
+            }
+        }
+    }
+
+    updateTopicsDistribution(data) {
+        const container = document.getElementById('topics-distribution');
+        if (!container) return;
+
+        const topicColors = [
+            'var(--color-primary, #6366f1)',
+            '#8b5cf6',
+            '#06b6d4',
+            '#10b981',
+            '#f59e0b',
+            '#ef4444'
+        ];
+
+        if (!data.has_data || !data.topics || data.topics.length === 0) {
+            container.innerHTML = `
+                <div class="crown5-empty-state" role="status">
+                    <div class="crown5-empty-illustration">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z"/>
+                        </svg>
+                    </div>
+                    <p class="crown5-empty-title">No topics detected yet</p>
+                    <p class="crown5-empty-description">${data.message || 'Record and analyze meetings to see topic distribution'}</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = data.topics.map((topic, idx) => {
+            const color = topicColors[idx % topicColors.length];
+            return `
+                <div role="listitem" aria-label="${topic.name}: ${topic.percentage} percent" class="crown5-fade-in" style="animation-delay: ${idx * 50}ms">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="font-medium">${topic.name}</span>
+                        <span class="text-tertiary" aria-hidden="true">${topic.percentage}%</span>
+                    </div>
+                    <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${topic.percentage}" aria-valuemin="0" aria-valuemax="100" aria-label="${topic.name} ${topic.percentage} percent">
+                        <div class="h-full transition-all duration-500" style="width: ${topic.percentage}%; background: ${color}"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
 
     async loadTabData(tab) {

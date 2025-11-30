@@ -335,48 +335,48 @@
 
     <!-- KPI Cards -->
     <section class="kpi-grid crown5-tile-grid" role="region" aria-label="Key Performance Indicators">
-        <article class="kpi-card" data-widget="kpi-meetings" role="article" aria-labelledby="kpi-meetings-label" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, transparent 100%);" tabindex="0">
+        <article class="kpi-card" data-widget="kpi-meetings" data-kpi="total_meetings" role="article" aria-labelledby="kpi-meetings-label" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, transparent 100%);" tabindex="0">
             <div class="flex justify-between items-start mb-2">
                 <p id="kpi-meetings-label" class="text-tertiary text-sm font-medium">Total Meetings</p>
-                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);" aria-label="12 percent increase">
-                    +12%
+                <span id="kpi-meetings-badge" class="kpi-badge px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(107, 114, 128, 0.1); color: var(--color-tertiary);" aria-label="Calculating change">
+                    —
                 </span>
             </div>
-            <p class="text-3xl font-bold mb-1" id="kpi-meetings-value" aria-live="polite">{{ total_meetings|default(0) }}</p>
-            <p class="text-sm text-secondary">↑ 3 more than last month</p>
+            <p class="text-3xl font-bold mb-1 crown5-kpi-value" id="kpi-meetings-value" data-format="integer" aria-live="polite">{{ total_meetings|default(0) }}</p>
+            <p class="text-sm text-secondary kpi-comparison" id="kpi-meetings-comparison">Loading comparison...</p>
         </article>
         
-        <article class="kpi-card" data-widget="kpi-tasks" role="article" aria-labelledby="kpi-tasks-label" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, transparent 100%);" tabindex="0">
+        <article class="kpi-card" data-widget="kpi-tasks" data-kpi="action_items" role="article" aria-labelledby="kpi-tasks-label" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, transparent 100%);" tabindex="0">
             <div class="flex justify-between items-start mb-2">
                 <p id="kpi-tasks-label" class="text-tertiary text-sm font-medium">Action Items</p>
-                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);" aria-label="{{ task_completion_rate|default(0) }} percent complete">
+                <span id="kpi-tasks-badge" class="kpi-badge px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);" aria-label="{{ task_completion_rate|default(0) }} percent complete">
                     {{ task_completion_rate|default(0) }}%
                 </span>
             </div>
-            <p class="text-3xl font-bold mb-1" id="kpi-tasks-value" aria-live="polite">{{ total_tasks|default(0) }}</p>
-            <p class="text-sm text-secondary">{{ task_completion_rate|default(0) }}% completion rate</p>
+            <p class="text-3xl font-bold mb-1 crown5-kpi-value" id="kpi-tasks-value" data-format="integer" aria-live="polite">{{ total_tasks|default(0) }}</p>
+            <p class="text-sm text-secondary kpi-comparison" id="kpi-tasks-comparison">{{ task_completion_rate|default(0) }}% completion rate</p>
         </article>
         
-        <article class="kpi-card" data-widget="kpi-hours" role="article" aria-labelledby="kpi-hours-label" style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, transparent 100%);" tabindex="0">
+        <article class="kpi-card" data-widget="kpi-hours" data-kpi="hours_saved" role="article" aria-labelledby="kpi-hours-label" style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, transparent 100%);" tabindex="0">
             <div class="flex justify-between items-start mb-2">
                 <p id="kpi-hours-label" class="text-tertiary text-sm font-medium">Hours Saved</p>
-                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);" aria-label="8 hours increase">
-                    +8h
+                <span id="kpi-hours-badge" class="kpi-badge px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(107, 114, 128, 0.1); color: var(--color-tertiary);" aria-label="Calculating change">
+                    —
                 </span>
             </div>
-            <p class="text-3xl font-bold mb-1" id="kpi-hours-value" aria-live="polite">{{ hours_saved|default(0) }}</p>
-            <p class="text-sm text-secondary">This week vs last week</p>
+            <p class="text-3xl font-bold mb-1 crown5-kpi-value" id="kpi-hours-value" data-format="hours" aria-live="polite">{{ hours_saved|default(0) }}</p>
+            <p class="text-sm text-secondary kpi-comparison" id="kpi-hours-comparison">Loading comparison...</p>
         </article>
         
-        <article class="kpi-card" data-widget="kpi-duration" role="article" aria-labelledby="kpi-duration-label" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, transparent 100%);" tabindex="0">
+        <article class="kpi-card" data-widget="kpi-duration" data-kpi="avg_duration" role="article" aria-labelledby="kpi-duration-label" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, transparent 100%);" tabindex="0">
             <div class="flex justify-between items-start mb-2">
                 <p id="kpi-duration-label" class="text-tertiary text-sm font-medium">Avg Meeting Length</p>
-                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(249, 115, 22, 0.1); color: var(--color-warning);" aria-label="No change">
-                    →
+                <span id="kpi-duration-badge" class="kpi-badge px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(107, 114, 128, 0.1); color: var(--color-tertiary);" aria-label="Calculating change">
+                    —
                 </span>
             </div>
-            <p class="text-3xl font-bold mb-1" id="kpi-duration-value" aria-live="polite">{{ avg_duration|default(45) }}m</p>
-            <p class="text-sm text-secondary">Across all meetings</p>
+            <p class="text-3xl font-bold mb-1 crown5-kpi-value" id="kpi-duration-value" data-format="minutes" aria-live="polite">{{ avg_duration|default(0) }}m</p>
+            <p class="text-sm text-secondary kpi-comparison" id="kpi-duration-comparison">Loading comparison...</p>
         </article>
     </section>
 
@@ -418,33 +418,15 @@
 
             <div class="chart-card" data-widget="chart-topics" role="figure" aria-label="Top Topics breakdown">
                 <h2 class="text-lg font-semibold mb-4" id="chart-topics-title">Top Topics</h2>
-                <div role="list" aria-label="Meeting topics ranked by frequency" style="display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-2) 0;">
-                    <div role="listitem" aria-label="Product Strategy: 45 percent">
-                        <div class="flex justify-between text-sm mb-1">
-                            <span class="font-medium">Product Strategy</span>
-                            <span class="text-tertiary" aria-hidden="true">45%</span>
+                <div id="topics-distribution" role="list" aria-label="Meeting topics ranked by frequency" aria-live="polite" style="display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-2) 0;">
+                    <div class="crown5-empty-state" role="status">
+                        <div class="crown5-empty-illustration">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z"/>
+                            </svg>
                         </div>
-                        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100" aria-label="Product Strategy 45 percent">
-                            <div class="h-full bg-primary" style="width: 45%"></div>
-                        </div>
-                    </div>
-                    <div role="listitem" aria-label="Engineering: 30 percent">
-                        <div class="flex justify-between text-sm mb-1">
-                            <span class="font-medium">Engineering</span>
-                            <span class="text-tertiary" aria-hidden="true">30%</span>
-                        </div>
-                        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow="30" aria-valuemin="0" aria-valuemax="100" aria-label="Engineering 30 percent">
-                            <div class="h-full bg-purple-500" style="width: 30%"></div>
-                        </div>
-                    </div>
-                    <div role="listitem" aria-label="Design Review: 25 percent">
-                        <div class="flex justify-between text-sm mb-1">
-                            <span class="font-medium">Design Review</span>
-                            <span class="text-tertiary" aria-hidden="true">25%</span>
-                        </div>
-                        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100" aria-label="Design Review 25 percent">
-                            <div class="h-full bg-cyan-500" style="width: 25%"></div>
-                        </div>
+                        <p class="crown5-empty-title">Loading topics...</p>
+                        <p class="crown5-empty-description">Analyzing meeting content</p>
                     </div>
                 </div>
             </div>
