@@ -749,8 +749,8 @@ def get_analytics_header():
         ).first()
         
         # Use deterministic fallback for empty data (fixed epoch, not now())
-        last_updated = latest_analytics[0]
-        count = latest_analytics[1] or 0
+        last_updated = latest_analytics[0] if latest_analytics else None
+        count = (latest_analytics[1] if latest_analytics else 0) or 0
         
         # Use fixed epoch for empty workspaces to ensure stable ETag
         if last_updated is None:
