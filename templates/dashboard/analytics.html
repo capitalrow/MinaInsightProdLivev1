@@ -4,6 +4,28 @@
 
 {% block extra_css %}
 <style>
+/* Screen Reader Only - Accessibility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Focus styles for accessibility */
+.analytics-tab:focus-visible,
+.kpi-card:focus-visible,
+.chart-card:focus-visible,
+.btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
 /* Analytics Workspace - Properly Constrained */
 .analytics-workspace {
     width: clamp(960px, 90vw, 1440px);
@@ -274,147 +296,152 @@
 {% endblock %}
 
 {% block content %}
-<div class="analytics-workspace">
+<div class="analytics-workspace" role="main" aria-label="Analytics Dashboard">
+    <!-- Screen reader live region for KPI updates -->
+    <div id="analytics-live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+    
     <!-- Header with Filters -->
-    <div class="analytics-header">
+    <header class="analytics-header" role="banner">
         <div class="flex justify-between items-start mb-4">
             <div>
-                <h1 class="analytics-title">Analytics</h1>
-                <p class="analytics-subtitle">Insights from your meetings and productivity</p>
+                <h1 class="analytics-title" id="analytics-page-title">Analytics</h1>
+                <p class="analytics-subtitle" id="analytics-page-desc">Insights from your meetings and productivity</p>
             </div>
-            <div class="flex gap-3">
-                <select class="date-range-select">
+            <div class="flex gap-3" role="toolbar" aria-label="Analytics controls">
+                <label for="date-range-select" class="sr-only">Select date range</label>
+                <select id="date-range-select" class="date-range-select" aria-describedby="date-range-help">
                     <option value="7">Last 7 days</option>
                     <option value="30" selected>Last 30 days</option>
                     <option value="90">Last 90 days</option>
                     <option value="365">Last year</option>
                 </select>
-                <button class="btn btn-outline" id="customizeWidgetsBtn">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span id="date-range-help" class="sr-only">Filter analytics data by time period</span>
+                <button class="btn btn-outline" id="customizeWidgetsBtn" aria-label="Customize dashboard widgets" aria-haspopup="dialog">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
                     </svg>
-                    Customize
+                    <span>Customize</span>
                 </button>
-                <button class="btn btn-outline">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button class="btn btn-outline" id="exportAnalyticsBtn" aria-label="Export analytics data">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                     </svg>
-                    Export
+                    <span>Export</span>
                 </button>
             </div>
         </div>
-    </div>
+    </header>
 
     <!-- KPI Cards -->
-    <div class="kpi-grid">
-        <div class="kpi-card" data-widget="kpi-meetings" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, transparent 100%);">
+    <section class="kpi-grid" role="region" aria-label="Key Performance Indicators">
+        <article class="kpi-card" data-widget="kpi-meetings" role="article" aria-labelledby="kpi-meetings-label" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, transparent 100%);" tabindex="0">
             <div class="flex justify-between items-start mb-2">
-                <p class="text-tertiary text-sm font-medium">Total Meetings</p>
-                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);">
+                <p id="kpi-meetings-label" class="text-tertiary text-sm font-medium">Total Meetings</p>
+                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);" aria-label="12 percent increase">
                     +12%
                 </span>
             </div>
-            <p class="text-3xl font-bold mb-1">{{ total_meetings|default(0) }}</p>
+            <p class="text-3xl font-bold mb-1" id="kpi-meetings-value" aria-live="polite">{{ total_meetings|default(0) }}</p>
             <p class="text-sm text-secondary">↑ 3 more than last month</p>
-        </div>
+        </article>
         
-        <div class="kpi-card" data-widget="kpi-tasks" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, transparent 100%);">
+        <article class="kpi-card" data-widget="kpi-tasks" role="article" aria-labelledby="kpi-tasks-label" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, transparent 100%);" tabindex="0">
             <div class="flex justify-between items-start mb-2">
-                <p class="text-tertiary text-sm font-medium">Action Items</p>
-                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);">
+                <p id="kpi-tasks-label" class="text-tertiary text-sm font-medium">Action Items</p>
+                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);" aria-label="{{ task_completion_rate|default(0) }} percent complete">
                     {{ task_completion_rate|default(0) }}%
                 </span>
             </div>
-            <p class="text-3xl font-bold mb-1">{{ total_tasks|default(0) }}</p>
+            <p class="text-3xl font-bold mb-1" id="kpi-tasks-value" aria-live="polite">{{ total_tasks|default(0) }}</p>
             <p class="text-sm text-secondary">{{ task_completion_rate|default(0) }}% completion rate</p>
-        </div>
+        </article>
         
-        <div class="kpi-card" data-widget="kpi-hours" style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, transparent 100%);">
+        <article class="kpi-card" data-widget="kpi-hours" role="article" aria-labelledby="kpi-hours-label" style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, transparent 100%);" tabindex="0">
             <div class="flex justify-between items-start mb-2">
-                <p class="text-tertiary text-sm font-medium">Hours Saved</p>
-                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);">
+                <p id="kpi-hours-label" class="text-tertiary text-sm font-medium">Hours Saved</p>
+                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);" aria-label="8 hours increase">
                     +8h
                 </span>
             </div>
-            <p class="text-3xl font-bold mb-1">{{ hours_saved|default(0) }}</p>
+            <p class="text-3xl font-bold mb-1" id="kpi-hours-value" aria-live="polite">{{ hours_saved|default(0) }}</p>
             <p class="text-sm text-secondary">This week vs last week</p>
-        </div>
+        </article>
         
-        <div class="kpi-card" data-widget="kpi-duration" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, transparent 100%);">
+        <article class="kpi-card" data-widget="kpi-duration" role="article" aria-labelledby="kpi-duration-label" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, transparent 100%);" tabindex="0">
             <div class="flex justify-between items-start mb-2">
-                <p class="text-tertiary text-sm font-medium">Avg Meeting Length</p>
-                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(249, 115, 22, 0.1); color: var(--color-warning);">
+                <p id="kpi-duration-label" class="text-tertiary text-sm font-medium">Avg Meeting Length</p>
+                <span class="px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(249, 115, 22, 0.1); color: var(--color-warning);" aria-label="No change">
                     →
                 </span>
             </div>
-            <p class="text-3xl font-bold mb-1">{{ avg_duration|default(45) }}m</p>
+            <p class="text-3xl font-bold mb-1" id="kpi-duration-value" aria-live="polite">{{ avg_duration|default(45) }}m</p>
             <p class="text-sm text-secondary">Across all meetings</p>
-        </div>
-    </div>
+        </article>
+    </section>
 
     <!-- Tabs Navigation -->
-    <div class="mb-6">
-        <div class="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-            <button class="analytics-tab active" data-tab="overview">Overview</button>
-            <button class="analytics-tab" data-tab="engagement">Engagement</button>
-            <button class="analytics-tab" data-tab="productivity">Productivity</button>
-            <button class="analytics-tab" data-tab="insights">Insights</button>
+    <nav class="mb-6" aria-label="Analytics sections">
+        <div class="flex gap-1 border-b border-gray-200 dark:border-gray-700" role="tablist" aria-label="Analytics tabs">
+            <button class="analytics-tab active" data-tab="overview" role="tab" id="tab-overview-btn" aria-selected="true" aria-controls="tab-overview" tabindex="0">Overview</button>
+            <button class="analytics-tab" data-tab="engagement" role="tab" id="tab-engagement-btn" aria-selected="false" aria-controls="tab-engagement" tabindex="-1">Engagement</button>
+            <button class="analytics-tab" data-tab="productivity" role="tab" id="tab-productivity-btn" aria-selected="false" aria-controls="tab-productivity" tabindex="-1">Productivity</button>
+            <button class="analytics-tab" data-tab="insights" role="tab" id="tab-insights-btn" aria-selected="false" aria-controls="tab-insights" tabindex="-1">Insights</button>
         </div>
-    </div>
+    </nav>
 
     <!-- Overview Tab -->
-    <div id="tab-overview" class="analytics-tab-content active">
+    <div id="tab-overview" class="analytics-tab-content active" role="tabpanel" aria-labelledby="tab-overview-btn" tabindex="0">
         <div class="charts-primary-grid">
-            <div class="chart-card" data-widget="chart-activity">
-                <h2 class="text-lg font-semibold mb-4">Meeting Activity Trend</h2>
+            <div class="chart-card" data-widget="chart-activity" role="figure" aria-label="Meeting Activity Trend chart">
+                <h2 class="text-lg font-semibold mb-4" id="chart-activity-title">Meeting Activity Trend</h2>
                 <div class="chart-frame">
-                    <canvas id="meetingActivityChart"></canvas>
+                    <canvas id="meetingActivityChart" aria-describedby="chart-activity-title" role="img" aria-label="Line chart showing meeting activity over time"></canvas>
                 </div>
             </div>
 
-            <div class="chart-card" data-widget="chart-task-status">
-                <h2 class="text-lg font-semibold mb-4">Task Status</h2>
+            <div class="chart-card" data-widget="chart-task-status" role="figure" aria-label="Task Status chart">
+                <h2 class="text-lg font-semibold mb-4" id="chart-task-status-title">Task Status</h2>
                 <div class="chart-frame chart-doughnut">
-                    <canvas id="taskStatusChart"></canvas>
+                    <canvas id="taskStatusChart" aria-describedby="chart-task-status-title" role="img" aria-label="Doughnut chart showing task completion status"></canvas>
                 </div>
             </div>
         </div>
 
         <div class="charts-equal-grid">
-            <div class="chart-card" data-widget="chart-speaker">
-                <h2 class="text-lg font-semibold mb-4">Speaker Distribution</h2>
+            <div class="chart-card" data-widget="chart-speaker" role="figure" aria-label="Speaker Distribution chart">
+                <h2 class="text-lg font-semibold mb-4" id="chart-speaker-title">Speaker Distribution</h2>
                 <div class="chart-frame">
-                    <canvas id="speakerChart"></canvas>
+                    <canvas id="speakerChart" role="img" aria-describedby="chart-speaker-title" aria-label="Bar chart showing distribution of speaking time across meeting participants"></canvas>
                 </div>
             </div>
 
-            <div class="chart-card" data-widget="chart-topics">
-                <h2 class="text-lg font-semibold mb-4">Top Topics</h2>
-                <div style="display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-2) 0;">
-                    <div>
+            <div class="chart-card" data-widget="chart-topics" role="figure" aria-label="Top Topics breakdown">
+                <h2 class="text-lg font-semibold mb-4" id="chart-topics-title">Top Topics</h2>
+                <div role="list" aria-label="Meeting topics ranked by frequency" style="display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-2) 0;">
+                    <div role="listitem" aria-label="Product Strategy: 45 percent">
                         <div class="flex justify-between text-sm mb-1">
                             <span class="font-medium">Product Strategy</span>
-                            <span class="text-tertiary">45%</span>
+                            <span class="text-tertiary" aria-hidden="true">45%</span>
                         </div>
-                        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100" aria-label="Product Strategy 45 percent">
                             <div class="h-full bg-primary" style="width: 45%"></div>
                         </div>
                     </div>
-                    <div>
+                    <div role="listitem" aria-label="Engineering: 30 percent">
                         <div class="flex justify-between text-sm mb-1">
                             <span class="font-medium">Engineering</span>
-                            <span class="text-tertiary">30%</span>
+                            <span class="text-tertiary" aria-hidden="true">30%</span>
                         </div>
-                        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow="30" aria-valuemin="0" aria-valuemax="100" aria-label="Engineering 30 percent">
                             <div class="h-full bg-purple-500" style="width: 30%"></div>
                         </div>
                     </div>
-                    <div>
+                    <div role="listitem" aria-label="Design Review: 25 percent">
                         <div class="flex justify-between text-sm mb-1">
                             <span class="font-medium">Design Review</span>
-                            <span class="text-tertiary">25%</span>
+                            <span class="text-tertiary" aria-hidden="true">25%</span>
                         </div>
-                        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100" aria-label="Design Review 25 percent">
                             <div class="h-full bg-cyan-500" style="width: 25%"></div>
                         </div>
                     </div>
@@ -424,35 +451,35 @@
     </div>
 
     <!-- Engagement Tab -->
-    <div id="tab-engagement" class="analytics-tab-content">
+    <div id="tab-engagement" class="analytics-tab-content" role="tabpanel" aria-labelledby="tab-engagement-btn" tabindex="0">
         <!-- Speaking Time Analysis (T2.33) -->
         <div class="charts-primary-grid mb-6" data-widget="chart-speaking-time">
-            <div class="chart-card">
-                <h2 class="text-lg font-semibold mb-1">Speaking Time Distribution</h2>
-                <p class="text-sm text-secondary mb-4">Breakdown of talk time across participants</p>
+            <div class="chart-card" role="figure" aria-label="Speaking Time Distribution chart">
+                <h2 class="text-lg font-semibold mb-1" id="chart-speaking-time-title">Speaking Time Distribution</h2>
+                <p class="text-sm text-secondary mb-4" id="chart-speaking-time-desc">Breakdown of talk time across participants</p>
                 <div class="chart-frame">
-                    <canvas id="speakingTimeBarChart"></canvas>
+                    <canvas id="speakingTimeBarChart" role="img" aria-describedby="chart-speaking-time-title chart-speaking-time-desc" aria-label="Bar chart showing speaking time for each participant"></canvas>
                 </div>
             </div>
 
-            <div class="chart-card">
-                <h2 class="text-lg font-semibold mb-1">Speaking Balance</h2>
-                <p class="text-sm text-secondary mb-4">Percentage of total meeting time</p>
+            <div class="chart-card" role="figure" aria-label="Speaking Balance chart">
+                <h2 class="text-lg font-semibold mb-1" id="chart-speaking-balance-title">Speaking Balance</h2>
+                <p class="text-sm text-secondary mb-4" id="chart-speaking-balance-desc">Percentage of total meeting time</p>
                 <div class="chart-frame chart-doughnut">
-                    <canvas id="speakingTimePieChart"></canvas>
+                    <canvas id="speakingTimePieChart" role="img" aria-describedby="chart-speaking-balance-title chart-speaking-balance-desc" aria-label="Pie chart showing speaking time balance across participants"></canvas>
                 </div>
             </div>
         </div>
 
         <!-- Detailed Speaking Time Breakdown -->
         <div class="charts-single mb-6">
-            <div class="chart-card">
-                <h2 class="text-lg font-semibold mb-1">Participant Details</h2>
-                <p class="text-sm text-secondary mb-4">Individual speaking metrics and balance indicators</p>
-                <div id="speakingTimeDetails" class="flex flex-col gap-4">
+            <div class="chart-card" role="region" aria-label="Participant speaking details">
+                <h2 class="text-lg font-semibold mb-1" id="participant-details-title">Participant Details</h2>
+                <p class="text-sm text-secondary mb-4" id="participant-details-desc">Individual speaking metrics and balance indicators</p>
+                <div id="speakingTimeDetails" class="flex flex-col gap-4" role="list" aria-describedby="participant-details-title participant-details-desc" aria-live="polite">
                     <!-- Will be populated by JavaScript -->
-                    <div class="text-center text-secondary py-8">
-                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="text-center text-secondary py-8" role="status">
+                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         Loading speaking time data...
@@ -463,13 +490,13 @@
 
         <!-- Participation Balance Metrics (T2.34) -->
         <div class="charts-single mb-6" data-widget="chart-participation">
-            <div class="chart-card">
-                <h2 class="text-lg font-semibold mb-1">Participation Balance Overview</h2>
-                <p class="text-sm text-secondary mb-4">Multi-dimensional engagement metrics across all participants</p>
-                <div id="participationBalanceMetrics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="chart-card" role="region" aria-label="Participation balance metrics">
+                <h2 class="text-lg font-semibold mb-1" id="participation-overview-title">Participation Balance Overview</h2>
+                <p class="text-sm text-secondary mb-4" id="participation-overview-desc">Multi-dimensional engagement metrics across all participants</p>
+                <div id="participationBalanceMetrics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" role="list" aria-describedby="participation-overview-title participation-overview-desc" aria-live="polite">
                     <!-- Will be populated by JavaScript -->
-                    <div class="text-center text-secondary py-8 col-span-full">
-                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="text-center text-secondary py-8 col-span-full" role="status">
+                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                         </svg>
                         Loading participation balance metrics...
@@ -480,32 +507,32 @@
 
         <!-- Participation and Sentiment -->
         <div class="charts-equal-grid" data-widget="chart-sentiment">
-            <div class="chart-card">
-                <h2 class="text-lg font-semibold mb-4">Participation Rate</h2>
+            <div class="chart-card" role="figure" aria-label="Participation Rate radar chart">
+                <h2 class="text-lg font-semibold mb-4" id="participation-rate-title">Participation Rate</h2>
                 <div class="chart-frame chart-radar">
-                    <canvas id="participationChart"></canvas>
+                    <canvas id="participationChart" role="img" aria-describedby="participation-rate-title" aria-label="Radar chart showing participation rates across different meeting dimensions"></canvas>
                 </div>
             </div>
 
-            <div class="chart-card">
-                <h2 class="text-lg font-semibold mb-4">Meeting Sentiment</h2>
+            <div class="chart-card" role="figure" aria-label="Meeting Sentiment chart">
+                <h2 class="text-lg font-semibold mb-4" id="sentiment-title">Meeting Sentiment</h2>
                 <div class="chart-frame">
-                    <canvas id="sentimentChart"></canvas>
+                    <canvas id="sentimentChart" role="img" aria-describedby="sentiment-title" aria-label="Chart showing sentiment analysis of meeting conversations"></canvas>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Productivity Tab -->
-    <div id="tab-productivity" class="analytics-tab-content">
+    <div id="tab-productivity" class="analytics-tab-content" role="tabpanel" aria-labelledby="tab-productivity-btn" tabindex="0">
         <!-- Action Items Completion (T2.38) -->
         <div class="charts-single mb-6" data-widget="action-items">
-            <div class="chart-card">
-                <h2 class="text-lg font-semibold mb-1">Action Item Completion Rate</h2>
-                <p class="text-sm text-secondary mb-4">Track progress of meeting action items</p>
-                <div id="actionItemsCompletion">
-                    <div class="text-center text-secondary py-8">
-                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="chart-card" role="region" aria-label="Action item completion tracking">
+                <h2 class="text-lg font-semibold mb-1" id="action-items-title">Action Item Completion Rate</h2>
+                <p class="text-sm text-secondary mb-4" id="action-items-desc">Track progress of meeting action items</p>
+                <div id="actionItemsCompletion" role="list" aria-describedby="action-items-title action-items-desc" aria-live="polite">
+                    <div class="text-center text-secondary py-8" role="status">
+                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                         </svg>
                         Select a meeting to view action items
@@ -516,12 +543,12 @@
         
         <!-- Topic Trends Timeline (T2.36) -->
         <div class="charts-single mb-6" data-widget="topic-trends">
-            <div class="chart-card">
-                <h2 class="text-lg font-semibold mb-1">Topic Evolution Timeline</h2>
-                <p class="text-sm text-secondary mb-4">How conversation topics developed throughout meetings</p>
-                <div id="topicTrendsTimeline">
-                    <div class="text-center text-secondary py-8">
-                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="chart-card" role="region" aria-label="Topic evolution analysis">
+                <h2 class="text-lg font-semibold mb-1" id="topic-trends-title">Topic Evolution Timeline</h2>
+                <p class="text-sm text-secondary mb-4" id="topic-trends-desc">How conversation topics developed throughout meetings</p>
+                <div id="topicTrendsTimeline" role="list" aria-describedby="topic-trends-title topic-trends-desc" aria-live="polite">
+                    <div class="text-center text-secondary py-8" role="status">
+                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
                         </svg>
                         Select a meeting to view topic trends
@@ -532,12 +559,12 @@
 
         <!-- Q&A Tracking (T2.37) -->
         <div class="charts-single mb-6" data-widget="qa-tracking">
-            <div class="chart-card">
-                <h2 class="text-lg font-semibold mb-1">Question & Answer Tracking</h2>
-                <p class="text-sm text-secondary mb-4">Questions asked during meetings and their resolution status</p>
-                <div id="qaTracking">
-                    <div class="text-center text-secondary py-8">
-                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="chart-card" role="region" aria-label="Question and answer analytics">
+                <h2 class="text-lg font-semibold mb-1" id="qa-tracking-title">Question & Answer Tracking</h2>
+                <p class="text-sm text-secondary mb-4" id="qa-tracking-desc">Questions asked during meetings and their resolution status</p>
+                <div id="qaTracking" role="list" aria-describedby="qa-tracking-title qa-tracking-desc" aria-live="polite">
+                    <div class="text-center text-secondary py-8" role="status">
+                        <svg class="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         Select a meeting to view Q&A analytics
@@ -547,41 +574,41 @@
         </div>
 
         <div class="charts-single">
-            <div class="chart-card">
-                <h2 class="text-lg font-semibold mb-4">Task Completion Over Time</h2>
+            <div class="chart-card" role="figure" aria-label="Task Completion Over Time chart">
+                <h2 class="text-lg font-semibold mb-4" id="task-completion-title">Task Completion Over Time</h2>
                 <div class="chart-frame">
-                    <canvas id="productivityChart"></canvas>
+                    <canvas id="productivityChart" role="img" aria-describedby="task-completion-title" aria-label="Line chart showing task completion trends over time"></canvas>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Insights Tab -->
-    <div id="tab-insights" class="analytics-tab-content">
+    <div id="tab-insights" class="analytics-tab-content" role="tabpanel" aria-labelledby="tab-insights-btn" tabindex="0">
         <div class="charts-equal-grid">
-            <div class="chart-card">
-                <h3 class="font-semibold mb-4">Key Insights</h3>
-                <div style="display: flex; flex-direction: column; gap: var(--space-3);">
-                    <div class="p-3 rounded-lg" style="background: rgba(34, 197, 94, 0.1); border-left: 3px solid var(--color-success);">
+            <div class="chart-card" role="region" aria-labelledby="key-insights-title">
+                <h3 class="font-semibold mb-4" id="key-insights-title">Key Insights</h3>
+                <div role="list" aria-label="Key performance insights" style="display: flex; flex-direction: column; gap: var(--space-3);">
+                    <div class="p-3 rounded-lg" role="listitem" style="background: rgba(34, 197, 94, 0.1); border-left: 3px solid var(--color-success);">
                         <p class="font-medium text-sm mb-1">High Completion Rate</p>
                         <p class="text-sm text-secondary">85% of tasks completed on time this month</p>
                     </div>
-                    <div class="p-3 rounded-lg" style="background: rgba(249, 115, 22, 0.1); border-left: 3px solid var(--color-warning);">
+                    <div class="p-3 rounded-lg" role="listitem" style="background: rgba(249, 115, 22, 0.1); border-left: 3px solid var(--color-warning);">
                         <p class="font-medium text-sm mb-1">Long Meetings Trend</p>
                         <p class="text-sm text-secondary">Average meeting length increased by 12 minutes</p>
                     </div>
-                    <div class="p-3 rounded-lg" style="background: rgba(99, 102, 241, 0.1); border-left: 3px solid var(--color-primary);">
+                    <div class="p-3 rounded-lg" role="listitem" style="background: rgba(99, 102, 241, 0.1); border-left: 3px solid var(--color-primary);">
                         <p class="font-medium text-sm mb-1">Active Participation</p>
                         <p class="text-sm text-secondary">More balanced speaking time distribution</p>
                     </div>
                 </div>
             </div>
 
-            <div class="chart-card">
-                <h3 class="font-semibold mb-4">Recommendations</h3>
-                <div style="display: flex; flex-direction: column; gap: var(--space-3);">
-                    <div class="flex gap-3 items-start">
-                        <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <div class="chart-card" role="region" aria-labelledby="recommendations-title">
+                <h3 class="font-semibold mb-4" id="recommendations-title">Recommendations</h3>
+                <div role="list" aria-label="Actionable recommendations" style="display: flex; flex-direction: column; gap: var(--space-3);">
+                    <div class="flex gap-3 items-start" role="listitem">
+                        <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0" aria-hidden="true">
                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
@@ -591,8 +618,8 @@
                             <p class="text-sm text-secondary">Consider 25-minute or 50-minute blocks</p>
                         </div>
                     </div>
-                    <div class="flex gap-3 items-start">
-                        <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <div class="flex gap-3 items-start" role="listitem">
+                        <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0" aria-hidden="true">
                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
@@ -602,8 +629,8 @@
                             <p class="text-sm text-secondary">3 tasks have no due date assigned</p>
                         </div>
                     </div>
-                    <div class="flex gap-3 items-start">
-                        <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <div class="flex gap-3 items-start" role="listitem">
+                        <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0" aria-hidden="true">
                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/>
                             </svg>
@@ -620,32 +647,33 @@
 </div>
 
 <!-- Widget Customization Modal -->
-<div id="widgetCustomizationModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden border border-gray-200 dark:border-gray-700">
+<div id="widgetCustomizationModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-description">
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden border border-gray-200 dark:border-gray-700" role="document">
         <div class="p-6 border-b border-gray-200 dark:border-gray-700">
             <div class="flex justify-between items-center">
-                <h2 class="text-2xl font-bold">Customize Analytics Dashboard</h2>
-                <button id="closeCustomizeModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <h2 id="modal-title" class="text-2xl font-bold">Customize Analytics Dashboard</h2>
+                <button id="closeCustomizeModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" aria-label="Close dialog">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                 </button>
             </div>
-            <p class="text-sm text-secondary mt-2">Show or hide widgets to personalize your analytics view</p>
+            <p id="modal-description" class="text-sm text-secondary mt-2">Show or hide widgets to personalize your analytics view</p>
         </div>
         <div class="p-6 overflow-y-auto max-h-[calc(80vh-180px)]">
-            <div id="widgetToggles" class="space-y-3">
+            <fieldset id="widgetToggles" class="space-y-3" aria-label="Widget visibility options">
+                <legend class="sr-only">Toggle widget visibility</legend>
                 <!-- Will be populated by JavaScript -->
-            </div>
+            </fieldset>
         </div>
         <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-between gap-3">
-            <button id="resetWidgetsBtn" class="btn btn-outline">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button id="resetWidgetsBtn" class="btn btn-outline" aria-label="Reset all widgets to default visibility">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
-                Reset to Default
+                <span>Reset to Default</span>
             </button>
-            <button id="saveWidgetsBtn" class="btn btn-primary">
+            <button id="saveWidgetsBtn" class="btn btn-primary" aria-label="Save widget preferences">
                 Save Preferences
             </button>
         </div>
