@@ -20,6 +20,12 @@ class TaskClusteringService:
         self.api_key = os.environ.get('OPENAI_API_KEY')
         self.client = None
         
+        # Check if using Replit AI proxy (doesn't support embeddings)
+        base_url = os.environ.get('OPENAI_BASE_URL', '')
+        if 'modelfarm' in base_url or 'replit' in base_url.lower():
+            logger.info("⚠️ AI clustering disabled: Replit AI Integrations does not support embeddings API - using keyword fallback")
+            return
+        
         if self.api_key:
             try:
                 from openai import OpenAI
@@ -28,7 +34,7 @@ class TaskClusteringService:
             except Exception as e:
                 logger.error(f"❌ Failed to initialize OpenAI: {e}")
         else:
-            logger.warning("⚠️ OPENAI_API_KEY not set - using fallback clustering")
+            logger.debug("⚠️ OPENAI_API_KEY not set - using fallback clustering")
     
     def cluster_tasks(self, tasks: List[Dict], num_clusters: Optional[int] = None) -> Dict:
         """
