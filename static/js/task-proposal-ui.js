@@ -4,24 +4,34 @@ class TaskProposalUI {
         this.currentStream = null;
         this.currentAbortController = null;
         this.modal = null;
-        this.proposals = [];
         this.isStreaming = false;
         this.streamTimeout = null;
         this.STREAM_TIMEOUT_MS = 30000;
+        
         this.meetingId = null;
         this.meetingTitle = null;
-        this.totalProposals = 0;
-        this.acceptedCount = 0;
         this.metadataReceived = false;
-        this.pendingProposals = [];
         this.buttonMeetingId = null;
+        
+        this.proposalMap = new Map();
+        this.pendingProposals = [];
+        this.acceptedProposalIds = new Set();
+        this.processingProposalIds = new Set();
+        
         this.init();
     }
 
     init() {
         this.createModal();
         this.bindEvents();
-        console.log('[TaskProposalUI] Initialized with modal');
+        console.log('[TaskProposalUI] Initialized with idempotent handlers');
+    }
+
+    generateProposalId(task) {
+        const titleHash = task.title ? task.title.substring(0, 50) : '';
+        const priorityHash = task.priority || 'medium';
+        const meetingHash = this.meetingId || 'no-meeting';
+        return `proposal_${meetingHash}_${titleHash}_${priorityHash}`.replace(/\s+/g, '_').toLowerCase();
     }
 
     createModal() {
@@ -35,6 +45,7 @@ class TaskProposalUI {
         overlay.className = 'ai-proposals-modal-overlay';
         overlay.innerHTML = `
             <div class="ai-proposals-modal" role="dialog" aria-labelledby="ai-proposals-title" aria-modal="true">
+                <div class="ai-proposals-drag-handle"></div>
                 <div class="ai-proposals-header">
                     <h2 id="ai-proposals-title" class="ai-proposals-title">
                         <svg class="ai-sparkle" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -92,11 +103,15 @@ class TaskProposalUI {
                 e.preventDefault();
                 await this.startProposalStream(target);
             } else if (target.classList.contains('btn-accept-proposal')) {
+                e.preventDefault();
+                e.stopPropagation();
                 await this.acceptProposal(target);
             } else if (target.classList.contains('btn-reject-proposal')) {
+                e.preventDefault();
                 await this.rejectProposal(target);
             } else if (target.classList.contains('btn-accept-all')) {
-                await this.acceptAllProposals();
+                e.preventDefault();
+                await this.acceptAllProposals(target);
             } else if (target.classList.contains('btn-retry')) {
                 const generateBtn = document.querySelector('.btn-generate-proposals');
                 if (generateBtn) {
@@ -135,6 +150,16 @@ class TaskProposalUI {
         }
     }
 
+    resetState() {
+        this.proposalMap.clear();
+        this.pendingProposals = [];
+        this.acceptedProposalIds.clear();
+        this.processingProposalIds.clear();
+        this.meetingId = null;
+        this.meetingTitle = null;
+        this.metadataReceived = false;
+    }
+
     async startProposalStream(button) {
         const meetingId = button.dataset.meetingId;
         
@@ -146,18 +171,12 @@ class TaskProposalUI {
             Generating...
         `;
 
-        this.proposals = [];
-        this.meetingId = null;
-        this.meetingTitle = null;
-        this.totalProposals = 0;
-        this.acceptedCount = 0;
-        this.metadataReceived = false;
-        this.pendingProposals = [];
+        this.resetState();
         this.buttonMeetingId = meetingId ? parseInt(meetingId) : null;
         this.openModal();
         this.showStreamingState();
 
-        const requestBody = { max_proposals: 3 };
+        const requestBody = { max_proposals: 5 };
         if (meetingId && meetingId.trim() !== '') {
             requestBody.meeting_id = parseInt(meetingId);
         }
@@ -208,8 +227,6 @@ class TaskProposalUI {
                 }
             }
 
-            this.onStreamComplete();
-
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.log('[TaskProposalUI] Stream aborted');
@@ -218,6 +235,7 @@ class TaskProposalUI {
                 this.showError(error.message || 'Failed to generate proposals');
             }
         } finally {
+            this.onStreamComplete();
             this.cleanup();
             button.disabled = false;
             button.innerHTML = `
@@ -260,53 +278,60 @@ class TaskProposalUI {
                 this.meetingTitle = data.meeting_title;
                 this.metadataReceived = true;
                 console.log('[TaskProposalUI] Meeting context:', this.meetingId, this.meetingTitle);
-                
-                if (this.pendingProposals.length > 0) {
-                    console.log('[TaskProposalUI] Processing', this.pendingProposals.length, 'queued proposals');
-                    this.pendingProposals.forEach(task => {
-                        task.meeting_id = this.meetingId;
-                        task.meeting_title = this.meetingTitle;
-                        this.proposals.push(task);
-                        this.totalProposals++;
-                        this.renderProposal(task);
-                    });
-                    this.pendingProposals = [];
-                }
+                this.drainPendingProposals();
                 break;
+                
             case 'proposal':
                 if (data.task) {
                     if (this.metadataReceived) {
-                        data.task.meeting_id = this.meetingId;
-                        data.task.meeting_title = this.meetingTitle;
-                        this.proposals.push(data.task);
-                        this.totalProposals++;
-                        this.renderProposal(data.task);
+                        this.addProposal(data.task);
                     } else {
-                        console.log('[TaskProposalUI] Queueing proposal until metadata received');
                         this.pendingProposals.push(data.task);
                     }
                 }
                 break;
+                
             case 'done':
                 if (!this.metadataReceived && this.pendingProposals.length > 0) {
-                    console.log('[TaskProposalUI] No metadata received, using button meetingId:', this.buttonMeetingId);
+                    console.log('[TaskProposalUI] No metadata, using fallback meetingId:', this.buttonMeetingId);
                     this.meetingId = this.buttonMeetingId;
                     this.meetingTitle = null;
-                    this.pendingProposals.forEach(task => {
-                        task.meeting_id = this.meetingId;
-                        task.meeting_title = this.meetingTitle;
-                        this.proposals.push(task);
-                        this.totalProposals++;
-                        this.renderProposal(task);
-                    });
-                    this.pendingProposals = [];
+                    this.drainPendingProposals();
                 }
-                this.onStreamComplete();
                 break;
+                
             case 'error':
                 this.showError(data.message || 'An error occurred');
                 break;
         }
+    }
+
+    drainPendingProposals() {
+        if (this.pendingProposals.length === 0) return;
+        
+        console.log('[TaskProposalUI] Draining', this.pendingProposals.length, 'pending proposals');
+        const proposals = [...this.pendingProposals];
+        this.pendingProposals = [];
+        
+        proposals.forEach(task => {
+            this.addProposal(task);
+        });
+    }
+
+    addProposal(task) {
+        task.meeting_id = this.meetingId;
+        task.meeting_title = this.meetingTitle;
+        
+        const proposalId = this.generateProposalId(task);
+        
+        if (this.proposalMap.has(proposalId)) {
+            console.log('[TaskProposalUI] Duplicate proposal ignored:', proposalId);
+            return;
+        }
+        
+        task.proposal_id = proposalId;
+        this.proposalMap.set(proposalId, task);
+        this.renderProposal(task);
     }
 
     showStreamingState() {
@@ -336,10 +361,9 @@ class TaskProposalUI {
             streamingEl.remove();
         }
 
-        const index = this.proposals.length - 1;
         const card = document.createElement('div');
         card.className = 'ai-proposal-card';
-        card.dataset.proposalIndex = index;
+        card.dataset.proposalId = task.proposal_id;
         
         const meetingSource = task.meeting_title 
             ? `<span class="meeting-source"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${this.escapeHtml(task.meeting_title)}</span>`
@@ -362,13 +386,13 @@ class TaskProposalUI {
                 ${task.category ? `<span class="category-pill">${this.escapeHtml(task.category)}</span>` : ''}
             </div>
             <div class="ai-proposal-actions">
-                <button class="btn-accept-proposal" data-proposal-index="${index}">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button class="btn-accept-proposal" data-proposal-id="${task.proposal_id}">
+                    <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
-                    Accept
+                    <span class="btn-text">Accept</span>
                 </button>
-                <button class="btn-reject-proposal" data-proposal-index="${index}">
+                <button class="btn-reject-proposal" data-proposal-id="${task.proposal_id}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -396,7 +420,7 @@ class TaskProposalUI {
             streamingEl.remove();
         }
 
-        if (this.proposals.length === 0) {
+        if (this.proposalMap.size === 0) {
             this.showEmpty();
         }
 
@@ -408,18 +432,19 @@ class TaskProposalUI {
         const countEl = footer.querySelector('.proposals-count');
         const acceptAllBtn = footer.querySelector('.btn-accept-all');
         
-        const activeProposals = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected)');
-        const count = activeProposals.length;
-        const acceptedCards = this.modal.querySelectorAll('.ai-proposal-card.accepted');
+        const activeCards = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected)');
+        const activeCount = activeCards.length;
+        const totalCount = this.proposalMap.size;
+        const acceptedCount = this.acceptedProposalIds.size;
         
-        if (count > 0) {
+        if (activeCount > 0) {
             footer.style.display = 'flex';
-            if (acceptedCards.length > 0) {
-                countEl.textContent = `${count} of ${this.totalProposals} remaining`;
+            if (acceptedCount > 0) {
+                countEl.textContent = `${activeCount} of ${totalCount} remaining`;
             } else {
-                countEl.textContent = `${count} suggestion${count !== 1 ? 's' : ''} available`;
+                countEl.textContent = `${activeCount} suggestion${activeCount !== 1 ? 's' : ''} available`;
             }
-            acceptAllBtn.disabled = false;
+            acceptAllBtn.disabled = this.processingProposalIds.size > 0;
         } else {
             footer.style.display = 'none';
         }
@@ -441,6 +466,7 @@ class TaskProposalUI {
     showAllAccepted() {
         const content = this.modal.querySelector('.ai-proposals-content');
         const footer = this.modal.querySelector('.ai-proposals-footer');
+        const acceptedCount = this.acceptedProposalIds.size;
         
         content.innerHTML = `
             <div class="ai-proposals-complete">
@@ -451,7 +477,7 @@ class TaskProposalUI {
                     </svg>
                 </div>
                 <h4>All done!</h4>
-                <p>${this.acceptedCount} task${this.acceptedCount !== 1 ? 's' : ''} added to your list</p>
+                <p>${acceptedCount} task${acceptedCount !== 1 ? 's' : ''} added to your list</p>
                 <button class="btn-close-complete" onclick="this.closest('.ai-proposals-modal-overlay').classList.remove('visible'); document.body.style.overflow = '';">
                     Close
                 </button>
@@ -486,13 +512,36 @@ class TaskProposalUI {
     }
 
     async acceptProposal(button) {
-        const index = parseInt(button.dataset.proposalIndex);
-        const proposal = this.proposals[index];
-        if (!proposal) return;
+        const proposalId = button.dataset.proposalId;
+        
+        if (this.acceptedProposalIds.has(proposalId)) {
+            console.log('[TaskProposalUI] Proposal already accepted:', proposalId);
+            return;
+        }
+        
+        if (this.processingProposalIds.has(proposalId)) {
+            console.log('[TaskProposalUI] Proposal already processing:', proposalId);
+            return;
+        }
+        
+        const proposal = this.proposalMap.get(proposalId);
+        if (!proposal) {
+            console.error('[TaskProposalUI] Proposal not found:', proposalId);
+            return;
+        }
 
         const card = button.closest('.ai-proposal-card');
+        
+        this.processingProposalIds.add(proposalId);
+        
         button.disabled = true;
-        button.classList.add('btn-loading');
+        const btnText = button.querySelector('.btn-text');
+        const btnIcon = button.querySelector('.btn-icon');
+        if (btnText) btnText.textContent = 'Creating...';
+        if (btnIcon) btnIcon.classList.add('animate-spin');
+        
+        const rejectBtn = card.querySelector('.btn-reject-proposal');
+        if (rejectBtn) rejectBtn.disabled = true;
 
         try {
             const taskData = {
@@ -500,7 +549,8 @@ class TaskProposalUI {
                 description: proposal.description || '',
                 priority: proposal.priority || 'medium',
                 status: 'todo',
-                source: 'ai_proposal'
+                source: 'ai_proposal',
+                proposal_id: proposalId
             };
             
             if (proposal.meeting_id) {
@@ -514,54 +564,83 @@ class TaskProposalUI {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to create task');
+                const errorData = await response.json().catch(() => ({}));
+                if (errorData.duplicate) {
+                    console.log('[TaskProposalUI] Task already exists (server dedupe)');
+                    this.acceptedProposalIds.add(proposalId);
+                    this.markCardAsAccepted(card, proposal.title);
+                    return;
+                }
+                throw new Error(errorData.error || 'Failed to create task');
             }
 
             const data = await response.json();
-            this.acceptedCount++;
+            this.acceptedProposalIds.add(proposalId);
             
-            card.classList.add('accepted');
-            card.innerHTML = `
-                <div class="ai-proposal-success">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                    <span>Task created: ${this.escapeHtml(proposal.title)}</span>
-                </div>
-            `;
+            this.markCardAsAccepted(card, proposal.title);
 
             if (window.toast) {
                 window.toast.success('Task created successfully');
             }
 
-            if (window.taskCache && typeof window.taskCache.invalidate === 'function') {
-                window.taskCache.invalidate();
-            }
-
-            if (this.taskUI && typeof this.taskUI.loadTasks === 'function') {
-                this.taskUI.loadTasks();
-            }
-
+            this.refreshTaskList();
             this.updateFooter();
-            
-            const remainingCards = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected)');
-            if (remainingCards.length === 0 && !this.isStreaming) {
-                this.showAllAccepted();
-            }
+            this.checkAllAccepted();
 
         } catch (error) {
             console.error('[TaskProposalUI] Accept error:', error);
+            
+            this.processingProposalIds.delete(proposalId);
             button.disabled = false;
-            button.classList.remove('btn-loading');
+            if (btnText) btnText.textContent = 'Accept';
+            if (btnIcon) btnIcon.classList.remove('animate-spin');
+            if (rejectBtn) rejectBtn.disabled = false;
             
             if (window.toast) {
-                window.toast.error('Failed to create task');
+                window.toast.error(error.message || 'Failed to create task');
             }
+        } finally {
+            this.processingProposalIds.delete(proposalId);
+        }
+    }
+
+    markCardAsAccepted(card, taskTitle) {
+        card.classList.add('accepted');
+        card.innerHTML = `
+            <div class="ai-proposal-success">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>Task created: ${this.escapeHtml(taskTitle)}</span>
+            </div>
+        `;
+    }
+
+    refreshTaskList() {
+        if (window.taskCache && typeof window.taskCache.invalidate === 'function') {
+            window.taskCache.invalidate();
+        }
+
+        if (this.taskUI && typeof this.taskUI.loadTasks === 'function') {
+            this.taskUI.loadTasks();
+        }
+    }
+
+    checkAllAccepted() {
+        const remainingCards = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected)');
+        if (remainingCards.length === 0 && !this.isStreaming && this.acceptedProposalIds.size > 0) {
+            setTimeout(() => this.showAllAccepted(), 300);
         }
     }
 
     async rejectProposal(button) {
+        const proposalId = button.dataset.proposalId;
         const card = button.closest('.ai-proposal-card');
+        
+        if (this.processingProposalIds.has(proposalId)) {
+            return;
+        }
+        
         card.classList.add('rejected');
         
         setTimeout(() => {
@@ -579,19 +658,39 @@ class TaskProposalUI {
                 this.updateFooter();
                 
                 const remainingCards = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected)');
-                if (remainingCards.length === 0 && !this.isStreaming) {
+                if (remainingCards.length === 0 && !this.isStreaming && this.acceptedProposalIds.size === 0) {
                     this.showEmpty();
                 }
             }, 300);
         }, 100);
     }
 
-    async acceptAllProposals() {
+    async acceptAllProposals(button) {
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin">
+                    <circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"></circle>
+                </svg>
+                Accepting...
+            `;
+        }
+        
         const acceptBtns = this.modal.querySelectorAll('.ai-proposal-card:not(.accepted):not(.rejected) .btn-accept-proposal');
         
         for (const btn of acceptBtns) {
             await this.acceptProposal(btn);
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 200));
+        }
+        
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Accept All
+            `;
         }
     }
 

@@ -494,6 +494,32 @@ def create_task():
         if not data.get('title'):
             return jsonify({'success': False, 'message': 'Title is required'}), 400
         
+        # DEDUPE: Check for proposal_id to prevent duplicate task creation from AI proposals
+        # Uses origin_hash field (VARCHAR(64)) to store SHA-256 hash of proposal_id
+        proposal_id = data.get('proposal_id')
+        proposal_hash = None
+        if proposal_id and data.get('source') == 'ai_proposal':
+            import hashlib
+            # Hash the proposal_id to ensure it fits in 64 chars
+            proposal_hash = hashlib.sha256(proposal_id.encode()).hexdigest()
+            
+            # Check if a task with this exact proposal hash already exists
+            existing_task = db.session.query(Task).filter(
+                Task.workspace_id == current_user.workspace_id,
+                Task.origin_hash == proposal_hash,
+                Task.source == 'ai_proposal',
+                Task.deleted_at.is_(None)
+            ).first()
+            
+            if existing_task:
+                logger.info(f"Duplicate AI proposal task detected: {proposal_hash[:16]}...")
+                return jsonify({
+                    'success': True,
+                    'duplicate': True,
+                    'message': 'Task already exists',
+                    'task': existing_task.to_dict()
+                }), 200
+        
         # meeting_id is OPTIONAL - supports standalone tasks from Tasks page
         meeting = None
         meeting_id = data.get('meeting_id')
@@ -540,6 +566,11 @@ def create_task():
             )
         ).scalar() or -1
         
+        # Determine source and origin_hash for AI proposals vs manual creation
+        task_source = data.get('source', 'manual')
+        # Use the pre-computed proposal_hash (SHA-256, 64 chars) for origin_hash
+        origin_hash_value = proposal_hash if task_source == 'ai_proposal' else None
+        
         task = Task(
             title=data['title'].strip(),
             description=data.get('description', '').strip() or None,
@@ -551,8 +582,9 @@ def create_task():
             assigned_to_id=assigned_to_id,
             status='todo',
             created_by_id=current_user.id,
-            extracted_by_ai=False,
-            source='manual',
+            extracted_by_ai=task_source == 'ai_proposal',
+            source=task_source,
+            origin_hash=origin_hash_value,
             position=max_position + 1
         )
         
