@@ -27,6 +27,7 @@
 .skeleton-meta{height:14px;background:#e5e7eb;border-radius:4px;width:40%}
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=6">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ai-proposals-modal.css') }}?v=1">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/linear-inspired-animations.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-heatmap.css') }}?v=2">
@@ -752,7 +753,7 @@ window.__FIRST_PAINT_START = performance.now();
 <script defer src="{{ url_for('static', filename='js/task-actions-menu.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-bulk-operations.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-drag-drop.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-proposal-ui.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-proposal-ui.js') }}?v=7" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-idle-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
