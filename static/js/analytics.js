@@ -1292,25 +1292,39 @@ class AnalyticsDashboard {
 
     updateProductivityCharts(productivity) {
         const ctx = document.getElementById('productivityChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
 
         if (this.charts.productivity) {
             this.charts.productivity.destroy();
         }
 
-        // Generate trend visualization around the actual completion rate from API
-        const completionRate = productivity.tasks.completion_rate || 0;
-        const weeks = 4;
-        const trendData = Array(weeks).fill(0).map((_, i) => {
-            // Add slight variance for visual trend effect, centered on real completion rate
-            const variance = (Math.random() - 0.5) * 20;
-            return Math.max(0, Math.min(100, completionRate + variance));
-        });
+        const completionTrend = productivity.completion_trend || [];
+        
+        if (completionTrend.length === 0 || completionTrend.every(w => w.total_tasks === 0)) {
+            if (chartFrame) {
+                this.renderCrown5EmptyChart(
+                    chartFrame,
+                    'line',
+                    'No task data yet',
+                    'Complete meetings with action items to see productivity trends'
+                );
+            }
+            return;
+        }
+        
+        if (chartFrame) {
+            this.hideCrown5EmptyChart(chartFrame);
+        }
+
+        const labels = completionTrend.map(w => `Week ${w.week}`);
+        const trendData = completionTrend.map(w => w.completion_rate);
+        const taskCounts = completionTrend.map(w => ({ total: w.total_tasks, completed: w.completed_tasks }));
 
         this.charts.productivity = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                labels: labels,
                 datasets: [{
                     label: 'Completion Rate (%)',
                     data: trendData,
@@ -1328,7 +1342,14 @@ class AnalyticsDashboard {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: (item) => `${item.parsed.y.toFixed(1)}%`
+                            label: (item) => {
+                                const idx = item.dataIndex;
+                                const counts = taskCounts[idx];
+                                return [
+                                    `Completion: ${item.parsed.y.toFixed(1)}%`,
+                                    `Tasks: ${counts.completed}/${counts.total}`
+                                ];
+                            }
                         }
                     }
                 },
