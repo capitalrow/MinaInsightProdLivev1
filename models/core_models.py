@@ -1,24 +1,8 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import JSON
-from sqlalchemy.dialects.postgresql import JSONB as PostgresJSONB
-from sqlalchemy import TypeDecorator
+from sqlalchemy.dialects.postgresql import JSONB
 from models import db
-
-
-class JSONBCompatible(TypeDecorator):
-    """
-    A JSONB type that falls back to JSON for non-PostgreSQL databases (e.g., SQLite in tests).
-    This allows tests to run with SQLite while production uses PostgreSQL JSONB.
-    """
-    impl = JSON
-    cache_ok = True
-
-    def load_dialect_impl(self, dialect):
-        if dialect.name == 'postgresql':
-            return dialect.type_descriptor(PostgresJSONB())
-        return dialect.type_descriptor(JSON())
 
 class FeatureFlag(db.Model):
     __tablename__ = "feature_flags"
@@ -35,8 +19,8 @@ class FlagAuditLog(db.Model):
     flag_key = db.Column(db.String(80), nullable=False, index=True)
     action = db.Column(db.String(16), nullable=False)  # "create", "update", "delete", "toggle"
     user_id = db.Column(db.String(64), nullable=False, index=True)
-    old_value = db.Column(JSONBCompatible)  # {"enabled": false, "note": "..."}
-    new_value = db.Column(JSONBCompatible)  # {"enabled": true, "note": "..."}
+    old_value = db.Column(JSONB)  # {"enabled": false, "note": "..."}
+    new_value = db.Column(JSONB)  # {"enabled": true, "note": "..."}
     ip_address = db.Column(db.String(45))
     user_agent = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True, nullable=False)

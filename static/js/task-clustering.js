@@ -306,9 +306,10 @@ class TaskClusteringManager {
             filteredTasks = allTasks.filter(t => t.status === 'completed' || t.status === 'done');
         }
         
-        // Re-render flat list (renderTasks automatically updates counters via _updateCountersFromDOM)
+        // Re-render flat list
         if (window.taskBootstrap) {
             await window.taskBootstrap.renderTasks(filteredTasks);
+            await window.taskBootstrap.updateCounters(filteredTasks);
         }
         
         // Restore selection state after view switches back

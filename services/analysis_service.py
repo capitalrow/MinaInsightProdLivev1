@@ -17,22 +17,11 @@ from app import db
 from models.session import Session
 from models.segment import Segment
 from models.summary import Summary, SummaryLevel, SummaryStyle
+from server.models.memory_store import MemoryStore
 from services.text_matcher import TextMatcher
-import os
+
+memory = MemoryStore()
 import inspect
-
-# Lazy-load MemoryStore to avoid PostgreSQL connection at import time in test environments
-_memory = None
-
-def get_memory_store():
-    """Lazy load MemoryStore to avoid connection at import time in tests."""
-    global _memory
-    if _memory is None:
-        db_url = os.environ.get("DATABASE_URL", "")
-        if db_url.startswith("postgresql"):
-            from server.models.memory_store import MemoryStore
-            _memory = MemoryStore()
-    return _memory
 
 logger = logging.getLogger(__name__)
 text_matcher = TextMatcher()
@@ -59,66 +48,66 @@ class AnalysisService:
         """,
         
         "brief_action": """
-        You are a STRICT evidence-based task extraction specialist. Extract ONLY action items that are EXPLICITLY stated in the transcript.
+        You are an expert task extraction specialist. Your job is to extract ALL action items from this transcript - be GENEROUS, not restrictive.
         
-        CORE PHILOSOPHY: ZERO HALLUCINATION
-        If you cannot find the EXACT words in the transcript, DO NOT extract it.
-        It is better to miss a task than to invent one.
+        CORE PHILOSOPHY: Extract first, filter later
+        The quality filtering happens in a separate validation pipeline. Your role is to catch EVERYTHING.
         
-        STRICT EXTRACTION RULES:
-        1. ONLY extract tasks where the speaker EXPLICITLY commits to an action
-        2. The evidence_quote MUST be a VERBATIM quote that appears word-for-word in the transcript
-        3. If the transcript is about "testing" something, do NOT invent related tasks like "check pages" or "update settings"
-        4. When in doubt, DO NOT extract
+        EXTRACT ALL OF THESE:
+        ✓ Work commitments: "I need to...", "I'll...", "I must..."
+        ✓ Personal tasks: "Buy groceries", "Clean room", "Get cash from ATM"
+        ✓ Proposals: "We could...", "What about...", "Consider..."
+        ✓ Suggestions: "We should...", "Let's...", "Why don't we..."
+        ✓ Questions that imply action: "Who will handle X?", "When should we Y?"
+        ✓ Planning statements: "I'm planning to...", "I'll prepare..."
         
-        VALID PATTERNS (extract these):
-        ✓ "I will work on X" → Extract "Work on X"
-        ✓ "I need to do Y today" → Extract "Do Y"
-        ✓ "The action item is Z" → Extract "Z"
+        MINIMUM FILTERING (only skip these):
+        ✗ Pure commentary: "That's interesting", "I agree", "Hmm"
+        ✗ Incomplete fragments: "And then I", "So basically"
+        ✗ Questions without implied action: "How are you?", "What do you think?"
         
-        INVALID PATTERNS (DO NOT extract):
-        ✗ Implied tasks not explicitly stated
-        ✗ Tasks the AI thinks "should" happen based on context
-        ✗ Recommendations you would make to the speaker
-        ✗ Any task where you cannot provide a VERBATIM quote from the transcript
+        ANTI-HALLUCINATION RULES:
+        1. NEVER invent tasks not mentioned in transcript
+        2. Each action must have EXACT quote evidence from transcript
+        3. Better to extract too much than miss real tasks
         
         FEW-SHOT EXAMPLES:
         
-        Example 1 - Explicit Task:
-        Transcript: "The critical action I will take is to work on the AI Copilot page and make sure it's fully functioning. That's due today."
+        Example 1 - Real Meeting:
+        Transcript: "We need to update the budget proposal by Friday. Sarah will review the marketing strategy and send feedback by EOD Thursday."
         Output: {{
-            "brief_summary": "Speaker stated one critical action item regarding the AI Copilot page.",
+            "brief_summary": "Team discussed upcoming deadlines for budget proposal and marketing strategy review.",
             "action_plan": [
-                {{"action": "Work on the AI Copilot page and make sure it's fully functioning", "evidence_quote": "The critical action I will take is to work on the AI Copilot page and make sure it's fully functioning", "owner": "Not specified", "priority": "high", "due": "today"}}
+                {{"action": "Update the budget proposal", "evidence_quote": "We need to update the budget proposal by Friday", "owner": "Not specified", "priority": "high", "due": "Friday"}},
+                {{"action": "Review marketing strategy and send feedback", "evidence_quote": "Sarah will review the marketing strategy and send feedback by EOD Thursday", "owner": "Sarah", "priority": "high", "due": "Thursday"}}
             ]
         }}
         
-        Example 2 - Testing Session (NO extra tasks):
-        Transcript: "Just testing the live transcription as well as checking the insights."
+        Example 2 - Mixed Testing + Real Tasks:
+        Transcript: "I'm testing the task extraction. I also need to clean my bedroom today, get 30 pounds from the ATM, and buy a train ticket for tomorrow."
         Output: {{
-            "brief_summary": "Testing session for transcription and insights functionality.",
+            "brief_summary": "Session involved system testing and personal task planning including household chores, financial transactions, and travel preparation.",
+            "action_plan": [
+                {{"action": "Clean bedroom", "evidence_quote": "I also need to clean my bedroom today", "owner": "Not specified", "priority": "medium", "due": "today"}},
+                {{"action": "Get 30 pounds from ATM", "evidence_quote": "get 30 pounds from the ATM", "owner": "Not specified", "priority": "medium", "due": "Not specified"}},
+                {{"action": "Buy train ticket for tomorrow", "evidence_quote": "buy a train ticket for tomorrow", "owner": "Not specified", "priority": "high", "due": "tomorrow"}}
+            ]
+        }}
+        
+        Example 3 - Pure Conversation:
+        Transcript: "Hey, how was your weekend? I went hiking. The weather was great."
+        Output: {{
+            "brief_summary": "Casual conversation about weekend activities.",
             "action_plan": []
-        }}
-        NOTE: Do NOT invent tasks like "check the session page" or "update the meetings page" - these were never stated.
-        
-        Example 3 - Multiple Explicit Tasks:
-        Transcript: "I need to clean my bedroom today, get 30 pounds from the ATM, and buy a train ticket for tomorrow."
-        Output: {{
-            "brief_summary": "Personal task planning for household chores, finances, and travel.",
-            "action_plan": [
-                {{"action": "Clean bedroom", "evidence_quote": "I need to clean my bedroom today", "owner": "Not specified", "priority": "medium", "due": "today"}},
-                {{"action": "Get 30 pounds from the ATM", "evidence_quote": "get 30 pounds from the ATM", "owner": "Not specified", "priority": "medium", "due": "Not specified"}},
-                {{"action": "Buy a train ticket for tomorrow", "evidence_quote": "buy a train ticket for tomorrow", "owner": "Not specified", "priority": "medium", "due": "tomorrow"}}
-            ]
         }}
         
         Return ONLY valid JSON:
         {{
-            "brief_summary": "2-3 sentence FACTUAL summary of what was discussed",
+            "brief_summary": "2-3 sentence summary describing what was discussed",
             "action_plan": [
                 {{
-                    "action": "Task description from transcript", 
-                    "evidence_quote": "VERBATIM quote from transcript (MUST appear word-for-word)",
+                    "action": "Clear task description", 
+                    "evidence_quote": "EXACT quote from transcript (REQUIRED)",
                     "owner": "Person mentioned or 'Not specified'", 
                     "priority": "high/medium/low",
                     "due": "Date/time mentioned or 'Not specified'"
@@ -132,91 +121,88 @@ class AnalysisService:
         
         # Standard Level Prompts
         "standard_executive": """
-        You are a STRICT evidence-based meeting analyst. Extract ONLY action items, decisions, and risks that are EXPLICITLY stated in the transcript.
+        You are an expert meeting analyst. Your job is to extract ALL action items, decisions, and risks from this transcript - be GENEROUS, not restrictive.
         
-        CORE PHILOSOPHY: ZERO HALLUCINATION
-        If you cannot find the EXACT words in the transcript, DO NOT extract it.
-        It is better to miss an item than to invent one that wasn't said.
+        CORE PHILOSOPHY: Extract first, filter later
+        Quality filtering happens in a separate validation pipeline. Your role is to catch EVERYTHING that might be actionable.
         
-        STRICT EXTRACTION RULES:
-        1. ONLY extract items where the speaker EXPLICITLY states them
-        2. The evidence_quote MUST be a VERBATIM quote that appears word-for-word in the transcript
-        3. If the transcript is about "testing" something, do NOT invent related tasks
-        4. Do NOT add tasks you think "should" happen - only what was ACTUALLY said
-        5. When in doubt, DO NOT extract
+        EXTRACTION GUIDELINES:
         
-        For ACTIONS:
-        ✓ ONLY extract explicit commitments: "I will...", "I need to...", "The action is..."
-        ✗ Do NOT extract implied tasks, suggestions you would make, or contextual inferences
+        For ACTIONS - Include evidence_quote for each:
+        ✓ Work commitments: "I need to...", "I'll...", "We must..."
+        ✓ Personal tasks: "Clean bedroom", "Get cash", "Buy ticket"
+        ✓ Proposals: "We could...", "What about...", "Consider..."
+        ✓ Suggestions: "We should...", "Let's...", "Why don't we..."
+        ✓ Planning statements: "I'm planning to...", "I'll prepare..."
+        ✗ ONLY skip: Pure commentary, incomplete fragments, or pure questions without implied action
         
-        For DECISIONS:
-        ✓ ONLY extract explicit decisions: "We decided...", "We're going with...", "Approved..."
-        ✗ Do NOT extract implied decisions or assumptions
+        For DECISIONS - Include evidence_quote for each:
+        ✓ Explicit decisions: "We decided...", "Approved...", "We're going with..."
+        ✓ Strong agreements: "Agreed", "Confirmed", "Settled on..."
         
-        For RISKS:
-        ✓ ONLY extract explicitly stated concerns: "I'm worried about...", "The risk is..."
-        ✗ Do NOT extract risks you think exist but weren't mentioned
+        For RISKS - Include evidence_quote for each:
+        ✓ Concerns: "I'm concerned...", "Worried about..."
+        ✓ Risk statements: "The risk is...", "Potential issue..."
+        ✓ Blockers: "This might prevent...", "Could cause problems..."
+        
+        ANTI-HALLUCINATION RULES:
+        1. NEVER invent content not in transcript
+        2. Every claim must have EXACT quote evidence from transcript
+        3. Better to extract too much than miss real items
+        4. If summary says "budget proposal", that phrase MUST appear in transcript
         
         FEW-SHOT EXAMPLES:
         
-        Example 1 - Explicit Content:
-        Transcript: "We decided to proceed with cloud migration. John will lead the team. There's risk around downtime."
+        Example 1 - Real Meeting:
+        Transcript: "We decided to move forward with the cloud migration. John will lead the infrastructure team and coordinate with vendors. This carries some risk around downtime during cutover."
         Output: {{
-            "summary_md": "Team decided on cloud migration with John as lead. Downtime risk noted.",
+            "summary_md": "Team decided to proceed with cloud migration. John assigned as lead for infrastructure coordination. Potential downtime risk identified during cutover phase.",
             "actions": [
-                {{"text": "Lead the team for cloud migration", "evidence_quote": "John will lead the team", "owner": "John", "due": "Not specified"}}
+                {{"text": "Lead infrastructure team and coordinate with vendors for cloud migration", "evidence_quote": "John will lead the infrastructure team and coordinate with vendors", "owner": "John", "due": "Not specified"}}
             ],
             "decisions": [
-                {{"text": "Proceed with cloud migration", "evidence_quote": "We decided to proceed with cloud migration", "impact": "Not specified"}}
+                {{"text": "Proceed with cloud migration", "evidence_quote": "We decided to move forward with the cloud migration", "impact": "Not specified"}}
             ],
             "risks": [
-                {{"text": "Downtime risk", "evidence_quote": "There's risk around downtime", "mitigation": "Not specified"}}
+                {{"text": "Potential downtime during cutover", "evidence_quote": "This carries some risk around downtime during cutover", "mitigation": "Not specified"}}
             ]
         }}
         
-        Example 2 - Testing Session with ONE Real Task:
-        Transcript: "Just testing the transcription. The critical action I will take that is due today is to work on the AI Copilot page."
+        Example 2 - Mixed Testing + Real Tasks:
+        Transcript: "I'm testing the task extraction. I also need to clean my bedroom today, get 30 pounds from the ATM, and buy a train ticket for tomorrow to work."
         Output: {{
-            "summary_md": "Testing session with one explicit action item regarding the AI Copilot page.",
+            "summary_md": "Session involved system testing and personal task planning including household chores, financial transactions, and travel preparation.",
             "actions": [
-                {{"text": "Work on the AI Copilot page", "evidence_quote": "The critical action I will take that is due today is to work on the AI Copilot page", "owner": "Not specified", "due": "today"}}
+                {{"text": "Clean bedroom", "evidence_quote": "I also need to clean my bedroom today", "owner": "Not specified", "due": "today"}},
+                {{"text": "Get 30 pounds from ATM", "evidence_quote": "get 30 pounds from the ATM", "owner": "Not specified", "due": "Not specified"}},
+                {{"text": "Buy train ticket for tomorrow to work", "evidence_quote": "buy a train ticket for tomorrow to work", "owner": "Not specified", "due": "tomorrow"}}
             ],
             "decisions": [],
             "risks": []
         }}
-        NOTE: Do NOT add extra tasks like "check session page" or "update meetings" - these were never stated!
         
-        Example 3 - Pure Conversation (NO extraction):
-        Transcript: "How was your weekend? I went hiking."
-        Output: {{
-            "summary_md": "Casual conversation about weekend activities.",
-            "actions": [],
-            "decisions": [],
-            "risks": []
-        }}
-        
-        Return ONLY valid JSON with VERBATIM evidence quotes:
+        Return ONLY valid JSON with evidence quotes:
         {{
-            "summary_md": "FACTUAL summary of what was ACTUALLY said (no embellishment or inference)",
+            "summary_md": "Factual summary of what was ACTUALLY discussed (2-3 paragraphs). No invention. State clearly if this was testing/casual conversation.",
             "actions": [
                 {{
-                    "text": "Task exactly as stated", 
-                    "evidence_quote": "VERBATIM quote from transcript (MUST appear word-for-word)",
+                    "text": "Clear actionable task", 
+                    "evidence_quote": "REQUIRED: EXACT quote from transcript",
                     "owner": "Person name or 'Not specified'", 
-                    "due": "Date/time mentioned or 'Not specified'"
+                    "due": "Exact date/time mentioned or 'Not specified'"
                 }}
             ],
             "decisions": [
                 {{
-                    "text": "Decision exactly as stated",
-                    "evidence_quote": "VERBATIM quote from transcript",
+                    "text": "Decision made",
+                    "evidence_quote": "REQUIRED: EXACT quote from transcript",
                     "impact": "Impact mentioned or 'Not specified'"
                 }}
             ],
             "risks": [
                 {{
-                    "text": "Risk exactly as stated",
-                    "evidence_quote": "VERBATIM quote from transcript",
+                    "text": "Risk or concern",
+                    "evidence_quote": "REQUIRED: EXACT quote from transcript",
                     "mitigation": "Mitigation mentioned or 'Not specified'"
                 }}
             ]
@@ -380,21 +366,18 @@ class AnalysisService:
         logger.info(f"Generating summary for session {session_id}")
 
         # --- Memory-aware context (NEW) ---
-        memory_context = ""
         try:
-            memory = get_memory_store()
-            if memory:
-                related_memories = memory.search_memory(f"session_{session_id}", top_k=10)
-                if related_memories:
-                    joined = "\n".join([m["content"] for m in related_memories])
-                    memory_context = f"\n\nPreviously recalled notes:\n{joined}\n\n"
-                    logger.info(f"Added {len(related_memories)} related memories to context.")
-                else:
-                    logger.info("No related memories found for this session.")
+            memory_context = ""
+            related_memories = memory.search_memory(f"session_{session_id}", top_k=10)
+            if related_memories:
+                joined = "\n".join([m["content"] for m in related_memories])
+                memory_context = f"\n\nPreviously recalled notes:\n{joined}\n\n"
+                logger.info(f"Added {len(related_memories)} related memories to context.")
             else:
-                logger.info("Memory store not available, skipping memory retrieval.")
+                logger.info("No related memories found for this session.")
         except Exception as e:
             logger.warning(f"Memory retrieval skipped: {e}")
+            memory_context = ""
         # -----------------------------------
 
         # Load session and segments
@@ -459,19 +442,11 @@ class AnalysisService:
                     'validation_warning': validation_result['reason']
                 }
             else:
-                # Generate insights using OpenAI engine only - no mock fallbacks in production
+                # Generate insights using configured engine with level and style
                 if engine == 'openai_gpt':
                     summary_data = AnalysisService._analyse_with_openai(context_with_memory, level, style)
                 else:
-                    # AI service unavailable - return informative error instead of fake data
-                    logger.error("AI analysis unavailable: OpenAI API key not configured")
-                    summary_data = {
-                        'summary_md': '## AI Analysis Unavailable\n\nThe AI-powered meeting analysis service is currently unavailable. Please ensure your OpenAI API key is properly configured to enable meeting summaries and insights.',
-                        'actions': [],
-                        'decisions': [],
-                        'risks': [],
-                        'error': 'AI service unavailable - OpenAI API key not configured'
-                    }
+                    summary_data = AnalysisService._analyse_with_mock(context_with_memory, list(final_segments), level, style)
                 
                 # Attach any validation warnings to summary data for UI display
                 if validation_result.get('warning'):
@@ -485,28 +460,24 @@ class AnalysisService:
 
         # --- Store summary + key insights back into memory (NEW) ---
         try:
-            memory = get_memory_store()
-            if memory:
-                def _safe(text):
-                    return text.strip() if isinstance(text, str) else ""
+            def _safe(text):
+                return text.strip() if isinstance(text, str) else ""
 
-                # store main summary
-                if summary_data.get("summary_md"):
-                    memory.add_memory(session_id, "summary_bot", _safe(summary_data["summary_md"]), source_type="summary")
+            # store main summary
+            if summary_data.get("summary_md"):
+                memory.add_memory(session_id, "summary_bot", _safe(summary_data["summary_md"]), source_type="summary")
 
-                # store highlights / actions / decisions for semantic recall
-                for item in summary_data.get("actions", []) or []:
-                    memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="action_item")
+            # store highlights / actions / decisions for semantic recall
+            for item in summary_data.get("actions", []) or []:
+                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="action_item")
 
-                for item in summary_data.get("decisions", []) or []:
-                    memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="decision")
+            for item in summary_data.get("decisions", []) or []:
+                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="decision")
 
-                for item in summary_data.get("risks", []) or []:
-                    memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="risk")
+            for item in summary_data.get("risks", []) or []:
+                memory.add_memory(session_id, "summary_bot", _safe(item.get("text")), source_type="risk")
 
-                logger.info("Summary data stored back into MemoryStore successfully.")
-            else:
-                logger.info("Memory store not available, skipping summary persistence to memory.")
+            logger.info("Summary data stored back into MemoryStore successfully.")
         except Exception as e:
             logger.warning(f"Could not persist summary to MemoryStore: {e}")
         
@@ -1024,6 +995,144 @@ class AnalysisService:
                 return "standard_bullet"
             else:  # EXECUTIVE, ACTION default to executive for standard
                 return "standard_executive"
+    
+    @staticmethod
+    def _analyse_with_mock(context: str, segments: List[Segment], level: SummaryLevel, style: SummaryStyle) -> Dict:
+        """
+        Generate mock analysis for testing and development with multi-level and multi-style support.
+        
+        Args:
+            context: Meeting transcript context
+            segments: List of segments for analysis
+            level: Summary detail level
+            style: Summary style type
+            
+        Returns:
+            Mock analysis results dictionary
+        """
+        # Create realistic mock insights based on transcript content and style
+        word_count = len(context.split()) if context else 0
+        
+        # Generate different content based on level and style
+        brief_summary = "Key decisions were made during this meeting with several action items identified for follow-up."
+        
+        if level == SummaryLevel.BRIEF:
+            if style == SummaryStyle.ACTION:
+                summary_md = "## Action Summary\nCritical tasks were identified and assigned during this meeting."
+            else:
+                summary_md = "## Executive Brief\nStrategic discussions resulted in key business decisions."
+        elif level == SummaryLevel.DETAILED:
+            summary_md = f"""## Comprehensive Meeting Analysis
+
+### Overview
+This meeting encompassed {word_count} words of detailed discussion across multiple strategic and operational areas.
+
+### Strategic Outcomes
+- Key business decisions were finalized
+- Strategic direction was clarified
+- Resource allocation was discussed
+
+### Operational Details
+- Implementation plans were reviewed
+- Timeline considerations were addressed
+- Team responsibilities were assigned
+
+### Technical Considerations
+- Technical approaches were evaluated
+- Architecture decisions were made
+- Development priorities were set"""
+        else:  # STANDARD
+            if style == SummaryStyle.TECHNICAL:
+                summary_md = f"""## Technical Meeting Summary
+This meeting covered {word_count} words focusing on technical implementation and architecture decisions.
+
+### Technical Decisions
+- Architecture approaches were evaluated
+- Technology choices were made
+- Implementation strategies were discussed"""
+            else:
+                summary_md = f"""## Meeting Summary
+This meeting covered {word_count} words of discussion. Key topics discussed included the main agenda items and various decisions were made.
+
+### Key Discussion Points
+- Primary topics were addressed
+- Team collaboration was evident
+- Several action items were identified"""
+        
+        detailed_summary = f"""## Comprehensive Analysis
+
+This meeting involved extensive discussion across {word_count} words of content, covering strategic, operational, and technical aspects of the project.
+
+### Strategic Overview
+The meeting addressed high-level business objectives and strategic direction. Key stakeholders participated in decision-making processes that will impact future operations.
+
+### Operational Focus
+Day-to-day operational concerns were discussed, including resource allocation, timeline management, and team coordination.
+
+### Technical Considerations
+Technical implementation details were reviewed, including architecture decisions, technology choices, and development approaches.
+
+### Outcomes and Next Steps
+Multiple action items were identified with clear ownership and timelines. Follow-up meetings were scheduled to track progress."""
+        
+        # CRITICAL: Mock data must also pass validation to prevent hallucination
+        # Generate candidate mock actions
+        mock_actions_candidates = [
+            {"text": "Follow up on discussed action items", "owner": "unknown", "due": "unknown"},
+            {"text": "Prepare report based on meeting outcomes", "owner": "unknown", "due": "next week"}
+        ] if word_count > 50 else []
+        
+        # Validate mock actions against transcript (ZERO TOLERANCE for hallucination)
+        text_matcher_instance = TextMatcher()
+        if mock_actions_candidates and context:
+            logger.warning("[MOCK DATA] Validating mock actions against transcript...")
+            mock_actions = text_matcher_instance.validate_task_list(mock_actions_candidates, context)
+            rejected = len(mock_actions_candidates) - len(mock_actions)
+            if rejected > 0:
+                logger.warning(f"[MOCK DATA] ⚠️ Rejected {rejected} hallucinated mock tasks")
+        else:
+            mock_actions = []
+        
+        # Mock decisions
+        mock_decisions = [
+            {"text": "Agreed to proceed with the discussed approach"},
+            {"text": "Decided to schedule follow-up meeting if needed"}
+        ] if word_count > 30 else []
+        
+        # Mock risks
+        mock_risks = [
+            {"text": "Timeline may be challenging", "mitigation": "Regular check-ins to monitor progress"},
+            {"text": "Resource allocation needs clarification", "mitigation": "Schedule resource planning meeting"}
+        ] if word_count > 100 else []
+        
+        # Generate style-specific mock content
+        executive_insights = [
+            {"insight": "Strategic alignment achieved", "impact": "Improved business outcomes", "timeline": "Q1 next year", "stakeholders": "Executive team"},
+            {"insight": "Resource allocation optimized", "impact": "Cost savings identified", "timeline": "This quarter", "stakeholders": "Operations team"}
+        ] if style == SummaryStyle.EXECUTIVE or level == SummaryLevel.DETAILED else []
+        
+        technical_details = [
+            {"area": "Architecture", "details": "Microservices approach selected", "decisions": "API-first design", "next_steps": "Design service boundaries"},
+            {"area": "Technology Stack", "details": "Modern framework adoption", "decisions": "React/Node.js combination", "next_steps": "Set up development environment"}
+        ] if style == SummaryStyle.TECHNICAL or level == SummaryLevel.DETAILED else []
+        
+        action_plan = [
+            {"phase": "Planning", "tasks": "Finalize requirements and specifications", "owner": "Product team", "timeline": "Week 1-2"},
+            {"phase": "Development", "tasks": "Implement core functionality", "owner": "Engineering team", "timeline": "Week 3-8"},
+            {"phase": "Testing", "tasks": "Quality assurance and user testing", "owner": "QA team", "timeline": "Week 7-10"}
+        ] if style == SummaryStyle.ACTION or level == SummaryLevel.DETAILED else []
+
+        return {
+            'summary_md': summary_md,
+            'brief_summary': brief_summary,
+            'detailed_summary': detailed_summary if level == SummaryLevel.DETAILED else None,
+            'actions': mock_actions,
+            'decisions': mock_decisions,
+            'risks': mock_risks,
+            'executive_insights': executive_insights,
+            'technical_details': technical_details,
+            'action_plan': action_plan
+        }
     
     @staticmethod
     def _persist_summary(session_id: int, summary_data: Dict, engine: str, level: SummaryLevel, style: SummaryStyle) -> Summary:

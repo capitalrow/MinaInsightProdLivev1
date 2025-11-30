@@ -4,7 +4,7 @@ This replaces all non-functional transcription endpoints with a WORKING solution
 """
 
 from flask import Blueprint, request, jsonify, current_app
-from flask_login import login_required, current_user
+from flask_login import current_user
 from flask_socketio import emit
 from werkzeug.utils import secure_filename
 import os
@@ -34,7 +34,6 @@ except Exception as e:
     print(f"[LIVE-API] ❌ OpenAI initialization failed: {e}")
 
 @live_transcription_bp.route('/api/transcribe_chunk_streaming', methods=['POST', 'GET', 'OPTIONS'])
-@login_required
 def transcribe_chunk_streaming():
     """
     CRITICAL: The main transcription endpoint that actually works

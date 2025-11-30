@@ -51,8 +51,8 @@
     gap: 10px;
     padding: 6px 12px;
     border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
     width: fit-content;
 }
 
@@ -60,23 +60,22 @@
     flex-shrink: 0;
 }
 
-/* Muted priority colors - Linear-inspired refinement */
 .task-priority-high {
-    background: rgba(239, 68, 68, 0.1);
-    color: #f87171;
-    border: none;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .task-priority-medium {
-    background: rgba(156, 163, 175, 0.08);
-    color: #a1a1aa;
-    border: none;
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(245, 158, 11, 0.1) 100%);
+    color: #fcd34d;
+    border: 1px solid rgba(251, 191, 36, 0.3);
 }
 
 .task-priority-low {
-    background: rgba(156, 163, 175, 0.05);
-    color: #71717a;
-    border: none;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .task-priority-desc {

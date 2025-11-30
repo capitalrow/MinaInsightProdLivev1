@@ -325,20 +325,11 @@ class CROWNTelemetry {
         const cacheHitRatio = this.getCacheHitRatio();
         const totalLag = this.getTotalSequenceLag();
         
-        // CROWN⁴.6: Also check customMetrics for first_paint_ms from bootstrap event
-        const bootstrapTime = this.sessionMetrics.bootstrapTime ?? 
-            this.sessionMetrics.customMetrics?.first_paint_ms ?? null;
-        
-        // Determine status correctly - must be a valid number to pass
-        const bootstrapStatus = (typeof bootstrapTime === 'number' && bootstrapTime < this.targets.bootstrap) 
-            ? 'pass' 
-            : (bootstrapTime === null ? 'not_measured' : 'fail');
-        
         return {
             bootstrap: {
-                time: bootstrapTime,
+                time: this.sessionMetrics.bootstrapTime,
                 target: this.targets.bootstrap,
-                status: bootstrapStatus
+                status: this.sessionMetrics.bootstrapTime < this.targets.bootstrap ? 'pass' : 'fail'
             },
             propagation: {
                 avg: avgPropagation,

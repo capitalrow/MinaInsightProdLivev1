@@ -97,7 +97,8 @@ def get_providers_status():
         if not current_user.is_authenticated:
             return jsonify({'success': False, 'error': 'Authentication required'}), 401
 
-        # Get authentication status from user preferences stored in database
+        # This would be async in a real implementation
+        # For now, return mock status based on user preferences
         user = db.session.get(User, current_user.id)
         preferences = json.loads(user.preferences or '{}')
         integrations = preferences.get('integrations', {})
@@ -160,8 +161,8 @@ def authenticate_provider(provider: str):
                 'error': 'Credentials are required'
             }), 400
         
-        # Store authentication status in user preferences
-        # Full OAuth flow would require external service integration
+        # For demo purposes, mark as authenticated
+        # In real implementation, this would use the calendar service
         user = db.session.get(User, current_user.id)
         preferences = json.loads(user.preferences or '{}')
         
@@ -279,66 +280,69 @@ def get_calendar_events():
         else:
             end_date = start_date + timedelta(days=7)
         
-        # Get Mina meetings from database within the date range
-        events = []
+        # For demo purposes, return mock events
+        # In real implementation, this would use calendar_service.get_all_events()
+        mock_events = []
         
-        # Query meetings created by the user within date range
-        from models import Meeting
-        meetings = db.session.query(Meeting).filter(
-            Meeting.workspace_id == current_user.workspace_id,
-            Meeting.created_at >= start_date,
-            Meeting.created_at <= end_date,
-            Meeting.is_archived != True
-        ).order_by(Meeting.created_at).all()
-        
-        # Convert meetings to calendar events format
-        for meeting in meetings:
-            event = {
-                'id': f'mina_{meeting.id}',
-                'title': meeting.title or 'Untitled Meeting',
-                'description': meeting.description or '',
-                'start_time': meeting.actual_start.isoformat() if meeting.actual_start else meeting.created_at.isoformat(),
-                'end_time': meeting.actual_end.isoformat() if meeting.actual_end else (meeting.actual_start or meeting.created_at + timedelta(hours=1)).isoformat() if meeting.actual_start else (meeting.created_at + timedelta(hours=1)).isoformat(),
-                'location': 'Mina Meeting',
-                'provider': 'mina',
-                'is_mina_meeting': True,
-                'meeting_id': meeting.id,
-                'status': meeting.status
-            }
-            events.append(event)
-        
-        # Check for external calendar integrations
+        # Check which providers are authenticated
         user = db.session.get(User, current_user.id)
         preferences = json.loads(user.preferences or '{}')
         integrations = preferences.get('integrations', {})
         
-        # Track connected providers for empty state guidance
-        connected_providers = []
         if integrations.get('google_calendar', {}).get('authenticated'):
-            connected_providers.append('google')
+            mock_events.extend([
+                {
+                    'id': 'google_1',
+                    'title': 'Team Standup',
+                    'description': 'Daily team synchronization meeting',
+                    'start_time': (start_date + timedelta(days=1, hours=9)).isoformat(),
+                    'end_time': (start_date + timedelta(days=1, hours=9, minutes=30)).isoformat(),
+                    'location': 'Google Meet',
+                    'provider': 'google',
+                    'attendees': ['team@company.com'],
+                    'meeting_url': 'https://meet.google.com/abc-def-ghi'
+                },
+                {
+                    'id': 'google_2', 
+                    'title': 'Product Review',
+                    'description': 'Monthly product review and planning',
+                    'start_time': (start_date + timedelta(days=3, hours=14)).isoformat(),
+                    'end_time': (start_date + timedelta(days=3, hours=15)).isoformat(),
+                    'location': 'Conference Room A',
+                    'provider': 'google',
+                    'attendees': ['product@company.com', 'dev@company.com'],
+                    'is_mina_meeting': True
+                }
+            ])
+        
         if integrations.get('outlook_calendar', {}).get('authenticated'):
-            connected_providers.append('outlook')
+            mock_events.extend([
+                {
+                    'id': 'outlook_1',
+                    'title': 'Client Call',
+                    'description': 'Weekly check-in with key client',
+                    'start_time': (start_date + timedelta(days=2, hours=11)).isoformat(),
+                    'end_time': (start_date + timedelta(days=2, hours=12)).isoformat(),
+                    'location': 'Microsoft Teams',
+                    'provider': 'outlook',
+                    'attendees': ['client@bigcorp.com'],
+                    'meeting_url': 'https://teams.microsoft.com/l/meetup-join/abc'
+                }
+            ])
         
         # Filter by provider if specified
         if provider_filter:
-            if provider_filter == 'mina':
-                pass  # Already have only Mina events
-            elif provider_filter in connected_providers:
-                events = []  # External provider events require OAuth integration
-            else:
-                events = []  # Requested provider not connected
+            mock_events = [e for e in mock_events if e['provider'] == provider_filter]
         
         # Sort events by start time
-        events.sort(key=lambda x: x['start_time'])
+        mock_events.sort(key=lambda x: x['start_time'])
         
         return jsonify({
             'success': True,
-            'events': events,
+            'events': mock_events,
             'start_date': start_date.isoformat(),
             'end_date': end_date.isoformat(),
-            'total_count': len(events),
-            'connected_providers': connected_providers,
-            'available_providers': ['mina'] + connected_providers
+            'total_count': len(mock_events)
         }), 200
     
     except Exception as e:
@@ -407,52 +411,25 @@ def create_calendar_event():
                 'error': f'Invalid datetime format: {e}'
             }), 400
         
-        # If this is a Mina meeting, create a real Meeting record in the database
-        from models import Meeting
+        # For demo purposes, create a mock event
+        # In real implementation, this would use calendar_service.create_event()
+        event_id = f"{data['provider']}_{datetime.utcnow().timestamp()}"
         
-        is_mina_meeting = data.get('is_mina_meeting', False)
+        created_event = {
+            'id': event_id,
+            'title': data['title'],
+            'description': data.get('description', ''),
+            'start_time': start_time.isoformat(),
+            'end_time': end_time.isoformat(),
+            'location': data.get('location', ''),
+            'provider': data['provider'],
+            'attendees': data.get('attendees', []),
+            'meeting_url': data.get('meeting_url'),
+            'is_mina_meeting': data.get('is_mina_meeting', False),
+            'created_at': datetime.utcnow().isoformat()
+        }
         
-        if is_mina_meeting or data['provider'].lower() == 'mina':
-            # Create a real meeting in the database
-            meeting = Meeting(
-                title=data['title'],
-                description=data.get('description', ''),
-                workspace_id=current_user.workspace_id,
-                organizer_id=current_user.id,
-                scheduled_start=start_time,
-                scheduled_end=end_time,
-                status='scheduled',
-                meeting_url=data.get('meeting_url'),
-                location=data.get('location', '')
-            )
-            db.session.add(meeting)
-            db.session.commit()
-            
-            event_id = f"mina_{meeting.id}"
-            created_event = {
-                'id': event_id,
-                'meeting_id': meeting.id,
-                'title': meeting.title,
-                'description': meeting.description,
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat(),
-                'location': meeting.location,
-                'provider': 'mina',
-                'attendees': data.get('attendees', []),
-                'meeting_url': meeting.meeting_url,
-                'is_mina_meeting': True,
-                'created_at': meeting.created_at.isoformat()
-            }
-            logger.info(f"Created Mina meeting {meeting.id} for user {current_user.id}")
-        else:
-            # External calendar providers (Google/Outlook) require OAuth integration
-            # Return validation response - external calendar events cannot be created without OAuth
-            return jsonify({
-                'success': False,
-                'error': f'External calendar provider "{data["provider"]}" requires OAuth authentication. Please connect your calendar in Settings first.',
-                'requires_oauth': True,
-                'provider': data['provider']
-            }), 400
+        logger.info(f"Created calendar event {event_id} for user {current_user.id}")
         
         return jsonify({
             'success': True,
@@ -510,71 +487,34 @@ def create_event_from_summary():
                 'error': f'Invalid provider: {provider_str}'
             }), 400
         
-        # Query real summary data from database
-        from models import Summary, Meeting
-        
-        summary = db.session.query(Summary).filter_by(id=summary_id).first()
-        if not summary:
-            return jsonify({
-                'success': False,
-                'error': 'Summary not found'
-            }), 404
-        
-        # Verify user has access to this summary's meeting
-        meeting = db.session.query(Meeting).filter_by(
-            id=summary.meeting_id,
-            workspace_id=current_user.workspace_id
-        ).first()
-        
-        if not meeting:
-            return jsonify({
-                'success': False,
-                'error': 'Access denied or meeting not found'
-            }), 403
-        
-        # Build summary data from real database record
+        # Get summary data (mock for demo)
+        # In real implementation, this would query the Summary model
         summary_data = {
-            'id': summary.id,
-            'title': meeting.title or 'Untitled Meeting',
-            'summary_md': summary.summary_md or '',
-            'actions': summary.action_items or [],
-            'decisions': summary.decisions or [],
-            'session_id': summary.meeting_id
+            'id': summary_id,
+            'title': 'Project Planning Meeting',
+            'summary_md': 'Discussed Q4 roadmap and resource allocation',
+            'actions': [
+                {'text': 'Update project timeline'},
+                {'text': 'Schedule follow-up with stakeholders'}
+            ],
+            'decisions': [
+                {'text': 'Approved budget increase for Q4'}
+            ],
+            'session_id': 123
         }
         
         # Create event from summary
         title = data.get('title', f"Follow-up: {summary_data['title']}")
-        
-        # Format action items (handle different data structures)
-        actions_text = ""
-        if summary_data['actions']:
-            action_items = []
-            for a in summary_data['actions']:
-                if isinstance(a, dict):
-                    action_items.append(a.get('text', a.get('description', str(a))))
-                else:
-                    action_items.append(str(a))
-            actions_text = '\n'.join([f"• {item}" for item in action_items])
-        
-        # Format decisions
-        decisions_text = ""
-        if summary_data['decisions']:
-            decision_items = []
-            for d in summary_data['decisions']:
-                if isinstance(d, dict):
-                    decision_items.append(d.get('text', d.get('description', str(d))))
-                else:
-                    decision_items.append(str(d))
-            decisions_text = '\n'.join([f"• {item}" for item in decision_items])
-        
         description = f"""Meeting Summary:
 {summary_data['summary_md']}
-"""
-        if actions_text:
-            description += f"\nAction Items:\n{actions_text}\n"
-        if decisions_text:
-            description += f"\nKey Decisions:\n{decisions_text}\n"
-        description += "\nGenerated by Mina Meeting Intelligence"
+
+Action Items:
+• {', '.join([a['text'] for a in summary_data['actions']])}
+
+Key Decisions:
+• {', '.join([d['text'] for d in summary_data['decisions']])}
+
+Generated by Mina Meeting Intelligence"""
         
         # Set default time (1 week from now)
         if data.get('start_time'):

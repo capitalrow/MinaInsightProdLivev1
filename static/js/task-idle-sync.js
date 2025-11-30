@@ -299,9 +299,9 @@ class IdleSyncService {
                 emptyState.style.display = 'block';
             }
             
-            // Reset counters from DOM (after cards removed)
-            if (window.taskBootstrap && typeof window.taskBootstrap._updateCountersFromDOM === 'function') {
-                window.taskBootstrap._updateCountersFromDOM();
+            // Reset counters
+            if (window.taskBootstrap) {
+                await window.taskBootstrap.updateCounters([]);
             }
             
             removedCount = localTasks.length;
@@ -364,9 +364,8 @@ class IdleSyncService {
         if (updatedCount > 0 || addedCount > 0 || removedCount > 0) {
             console.log(`🔄 [Idle Sync] DOM reconciled: ${addedCount} added, ${updatedCount} updated, ${removedCount} removed`);
             
-            // CROWN⁴.6 FIX: Use DOM-based counter for single source of truth
-            if (window.taskBootstrap && typeof window.taskBootstrap._updateCountersFromDOM === 'function') {
-                window.taskBootstrap._updateCountersFromDOM();
+            if (window.taskBootstrap) {
+                await window.taskBootstrap.updateCounters(serverTasks);
             }
 
             // Telemetry

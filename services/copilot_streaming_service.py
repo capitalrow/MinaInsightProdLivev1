@@ -22,23 +22,6 @@ from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
 
-# Model configuration with fallback hierarchy
-# Primary: gpt-4o-mini (fast, cost-effective)
-# Fallback 1: gpt-4 (stable, widely available)
-# Fallback 2: gpt-4-turbo (high capability)
-COPILOT_MODEL_HIERARCHY = [
-    "gpt-4o-mini-2024-07-18",  # Most accessible, fast
-    "gpt-4",                   # Stable fallback
-    "gpt-4-turbo",             # High-end fallback
-]
-
-def get_copilot_model() -> str:
-    """Get the OpenAI model to use for copilot, respecting env override."""
-    env_model = os.getenv("COPILOT_MODEL")
-    if env_model:
-        return env_model
-    return COPILOT_MODEL_HIERARCHY[0]
-
 # Import metrics collector (lazy to avoid circular import)
 _metrics_collector = None
 def get_metrics_collector():
@@ -140,8 +123,12 @@ class CopilotStreamingService:
             self.async_thread = None
         else:
             # Initialize clients
-            self.client = OpenAI(api_key=self.api_key, base_url=self.base_url if self.base_url else None)
-            self.async_client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url if self.base_url else None)
+            client_kwargs = {"api_key": self.api_key}
+            if self.base_url:
+                client_kwargs["base_url"] = self.base_url
+                
+            self.client = OpenAI(**client_kwargs)
+            self.async_client = AsyncOpenAI(**client_kwargs)
             
             # Create dedicated asyncio event loop in background thread for true async streaming
             self.async_loop = None
@@ -292,30 +279,15 @@ class CopilotStreamingService:
             # Build messages with system prompt and context
             messages = self._build_messages(user_message, context)
             
-            # Start streaming (SYNC) with model fallback
-            model_to_use = get_copilot_model()
-            stream = None
-            last_error = None
-            
-            for model in [model_to_use] + [m for m in COPILOT_MODEL_HIERARCHY if m != model_to_use]:
-                try:
-                    stream = self.client.chat.completions.create(
-                        model=model,
-                        messages=messages,  # type: ignore[arg-type]
-                        temperature=0.7,
-                        max_tokens=1500,
-                        stream=True,
-                        stream_options={"include_usage": True}
-                    )
-                    logger.info(f"Copilot streaming using model: {model}")
-                    break
-                except Exception as model_error:
-                    last_error = model_error
-                    logger.warning(f"Model {model} unavailable: {model_error}, trying fallback...")
-                    continue
-            
-            if stream is None:
-                raise last_error or Exception("No available models")
+            # Start streaming (SYNC)
+            stream = self.client.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1500,
+                stream=True,
+                stream_options={"include_usage": True}
+            )
             
             current_section = None
             buffer = ""
@@ -448,30 +420,15 @@ class CopilotStreamingService:
             # Build messages with system prompt and context
             messages = self._build_messages(user_message, context)
             
-            # Start streaming with model fallback
-            model_to_use = get_copilot_model()
-            stream = None
-            last_error = None
-            
-            for model in [model_to_use] + [m for m in COPILOT_MODEL_HIERARCHY if m != model_to_use]:
-                try:
-                    stream = await self.async_client.chat.completions.create(
-                        model=model,
-                        messages=messages,  # type: ignore[arg-type]
-                        temperature=0.7,
-                        max_tokens=1500,
-                        stream=True,
-                        stream_options={"include_usage": True}
-                    )
-                    logger.info(f"Copilot async streaming using model: {model}")
-                    break
-                except Exception as model_error:
-                    last_error = model_error
-                    logger.warning(f"Model {model} unavailable: {model_error}, trying fallback...")
-                    continue
-            
-            if stream is None:
-                raise last_error or Exception("No available models")
+            # Start streaming
+            stream = await self.async_client.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1500,
+                stream=True,
+                stream_options={"include_usage": True}
+            )
             
             current_section = None
             buffer = ""
@@ -574,13 +531,7 @@ class CopilotStreamingService:
         context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, str]]:
         """
-        Build message array with system prompt and CROWN⁹ enhanced context.
-        
-        CROWN⁹ Enhanced Context Building:
-        - User workspace context (tasks, meetings)
-        - Proactive insights (overdue, blockers, due soon)
-        - Semantic context from RAG retrieval
-        - Conversation history for continuity
+        Build message array with system prompt and context.
         
         Args:
             user_message: User's query
@@ -589,151 +540,42 @@ class CopilotStreamingService:
         Returns:
             List of message dictionaries for OpenAI API
         """
-        # System prompt defining Copilot's role (Industry-leading)
+        # System prompt defining Copilot's role
         system_prompt = """You are Mina Copilot, the cognitive thread that connects every thought, task, and moment of work.
 
 Your purpose is to perceive, interpret, and synchronize — bridging meetings, tasks, calendar, and analytics through natural dialogue.
 
-CAPABILITIES:
-- Understand user's workspace: meetings, tasks, calendar, analytics
-- Provide actionable insights with clear next steps
-- Execute actions: create tasks, schedule meetings, prioritize work
-- Surface blockers and overdue items proactively
-- Learn from interactions to improve over time
+When responding:
+1. **Summary** - Provide context overview first
+2. **Actions** - Suggest interactive next steps
+3. **Insights** - Surface trends or blockers
+4. **Next Steps** - Recommend future guidance
 
-RESPONSE STRUCTURE (use markdown headers):
-Start with a direct answer to the query, then use these section headers:
-
-### Actions
-Specific, actionable next steps. Format action buttons as: [Button Text](#)
-
-### Insights  
-Relevant patterns, blockers, or observations from the data.
-
-### Next Steps
-Forward-looking recommendations.
-
-FORMATTING RULES:
-- Use ### for section headers (NOT ** bold **)
-- Use bullet points with - for lists
-- Use [text](#) for action buttons
-- Keep responses concise and well-structured
-
-CRITICAL GUIDELINES:
-- ALWAYS use the ACTUAL data from the context provided (real task names, real meeting titles, real dates)
-- NEVER output placeholders like [Task Name], [Date], [Meeting Title], or similar bracket text
-- If no relevant data exists in context, say so clearly instead of using placeholder text
-- Be concise but thorough
-- Prioritize actionable responses
-- Reference specific data with exact names and dates from the context
-- Maintain calm, professional, intelligent tone
-- Never say "I don't have access" — use the context provided
-- When listing tasks, use the exact titles: "Schedule a follow-up with client" NOT "[Task Name]"
-- When mentioning dates, use the actual date: "December 1, 2024" NOT "[Date]" """
+Be concise, intelligent, and emotionally calm. Every query is both reflection and action."""
         
         messages = [{"role": "system", "content": system_prompt}]
         
-        # Build comprehensive context
+        # Add context if provided
         if context:
             context_parts = []
             
-            # Proactive insights (HIGH PRIORITY - surface first)
-            if context.get('proactive_insights'):
-                insights = context['proactive_insights']
-                insight_lines = []
-                for insight in insights:
-                    severity = insight.get('severity', 'medium')
-                    emoji = '🔴' if severity == 'high' else '🟡' if severity == 'medium' else '🟢'
-                    insight_lines.append(f"{emoji} {insight.get('message', '')}")
-                if insight_lines:
-                    context_parts.append("⚠️ PROACTIVE ALERTS:\n" + "\n".join(insight_lines))
-            
-            # Blockers (HIGH PRIORITY)
-            if context.get('blockers'):
-                blockers = context['blockers']
-                blocker_lines = [f"- {b.get('title', 'Untitled')} (blocked)" for b in blockers[:3]]
-                context_parts.append(f"🚫 BLOCKERS ({len(blockers)}):\n" + "\n".join(blocker_lines))
-            
-            # Query-relevant tasks (HIGH PRIORITY - matches user's question)
-            if context.get('query_relevant_tasks'):
-                relevant = context['query_relevant_tasks']
-                relevant_lines = []
-                for t in relevant[:5]:
-                    status = t.get('status', 'todo')
-                    status_label = status.upper() if status else 'TODO'
-                    status_emoji = '✅' if status == 'completed' else '🔴' if t.get('is_overdue') else '📋'
-                    priority = t.get('priority', 'medium')
-                    priority_tag = f"[{priority.upper()}]" if priority in ['high', 'urgent'] else ""
-                    due = f" (due: {t.get('due_date')})" if t.get('due_date') else ""
-                    # Include explicit status text for AI accuracy
-                    relevant_lines.append(f"{status_emoji} {t.get('title', 'Untitled')} - STATUS: {status_label} {priority_tag}{due}")
-                context_parts.append(f"🎯 MATCHING TASKS (found {len(relevant)} matching your query):\n" + "\n".join(relevant_lines))
-            
-            # Recent tasks
             if context.get('recent_tasks'):
                 tasks = context['recent_tasks']
-                task_lines = []
-                for t in tasks[:10]:  # Increased from 7 to 10 for better coverage
-                    status = t.get('status', 'todo')
-                    status_label = status.upper() if status else 'TODO'
-                    status_emoji = '✅' if status == 'completed' else '🔴' if t.get('is_overdue') else '📋'
-                    priority = t.get('priority', 'medium')
-                    priority_tag = f"[{priority.upper()}]" if priority in ['high', 'urgent'] else ""
-                    due = f" (due: {t.get('due_date')})" if t.get('due_date') else ""
-                    # Include explicit status text for AI accuracy
-                    task_lines.append(f"{status_emoji} {t.get('title', 'Untitled')} [{status_label}] {priority_tag}{due}")
-                context_parts.append(f"📋 RECENT TASKS ({len(tasks)}):\n" + "\n".join(task_lines))
+                context_parts.append(f"Recent Tasks ({len(tasks)} items):\n" + 
+                                   "\n".join([f"- {t.get('title', 'Untitled')}" for t in tasks[:5]]))
             
-            # Recent meetings
             if context.get('recent_meetings'):
                 meetings = context['recent_meetings']
-                meeting_lines = []
-                for m in meetings[:5]:
-                    has_summary = "📝" if m.get('has_summary') else ""
-                    meeting_lines.append(f"- {m.get('title', 'Untitled')} {has_summary}")
-                context_parts.append(f"📅 RECENT MEETINGS ({len(meetings)}):\n" + "\n".join(meeting_lines))
+                context_parts.append(f"Recent Meetings ({len(meetings)} items):\n" +
+                                   "\n".join([f"- {m.get('title', 'Untitled')}" for m in meetings[:3]]))
             
-            # Semantic context from RAG (HIGH VALUE)
-            if context.get('semantic_context'):
-                semantic = context['semantic_context']
-                if semantic:
-                    semantic_lines = []
-                    for s in semantic[:3]:
-                        text = s.get('text', '')[:100]
-                        similarity = s.get('similarity', 0)
-                        if similarity > 0.7:
-                            semantic_lines.append(f"- {text}...")
-                    if semantic_lines:
-                        context_parts.append("🧠 RELATED CONTEXT:\n" + "\n".join(semantic_lines))
-            
-            # Conversation history for continuity
-            if context.get('conversation_history'):
-                history = context['conversation_history']
-                if history:
-                    recent_messages = [f"User: {h.get('message', '')[:50]}..." for h in history[:2]]
-                    if recent_messages:
-                        context_parts.append("💬 RECENT CONVERSATION:\n" + "\n".join(recent_messages))
-            
-            # Activity summary
-            if context.get('activity'):
-                activity = context['activity']
-                tasks_today = activity.get('tasks_today', 0)
-                completed = activity.get('tasks_completed_recently', 0)
-                productivity = activity.get('productivity_score', 50)
-                context_parts.append(f"📊 ACTIVITY: {tasks_today} tasks due today, {completed} completed recently, productivity score: {productivity}%")
-            
-            # User name for personalization
-            if context.get('user_name'):
-                context_parts.insert(0, f"👤 User: {context['user_name']}")
-            
-            # Add summary if provided
             if context.get('summary'):
-                context_parts.append(f"📌 Context: {context['summary']}")
+                context_parts.append(f"Context: {context['summary']}")
             
             if context_parts:
                 messages.append({
                     "role": "system",
-                    "content": "WORKSPACE CONTEXT:\n\n" + "\n\n".join(context_parts)
+                    "content": "Context from your workspace:\n\n" + "\n\n".join(context_parts)
                 })
         
         # Add user message
@@ -753,14 +595,14 @@ CRITICAL GUIDELINES:
         """
         text_lower = text.lower()
         
-        # Look for section markers (supporting ### header format)
-        if any(marker in text_lower for marker in ['### summary', '## summary', '**summary**', 'summary:']):
+        # Look for section markers
+        if any(marker in text_lower for marker in ['## summary', '**summary**', 'summary:']):
             return 'summary'
-        elif any(marker in text_lower for marker in ['### actions', '## actions', '**actions**', 'actions:', 'you can:']):
+        elif any(marker in text_lower for marker in ['## actions', '**actions**', 'actions:', 'you can:']):
             return 'actions'
-        elif any(marker in text_lower for marker in ['### insights', '## insights', '**insights**', 'insights:', 'trends:']):
+        elif any(marker in text_lower for marker in ['## insights', '**insights**', 'insights:', 'trends:']):
             return 'insights'
-        elif any(marker in text_lower for marker in ['### next steps', '### next', '## next', '**next steps**', 'next steps:', 'recommend:']):
+        elif any(marker in text_lower for marker in ['## next', '**next steps**', 'next steps:', 'recommend:']):
             return 'next_steps'
         
         return None

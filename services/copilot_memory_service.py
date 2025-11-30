@@ -68,25 +68,29 @@ class CopilotMemoryService:
         
         try:
             # Store user message
-            user_msg = CopilotConversation()
-            user_msg.user_id = user_id
-            user_msg.role = 'user'
-            user_msg.message = message
-            user_msg.session_id = session_id
+            user_msg = CopilotConversation(
+                user_id=user_id,
+                role='user',
+                message=message,
+                session_id=session_id,
+                created_at=datetime.utcnow()
+            )
             db.session.add(user_msg)
             
             # Store assistant response
-            assistant_msg = CopilotConversation()
-            assistant_msg.user_id = user_id
-            assistant_msg.role = 'assistant'
-            assistant_msg.message = response
-            assistant_msg.session_id = session_id
+            assistant_msg = CopilotConversation(
+                user_id=user_id,
+                role='assistant',
+                message=response,
+                session_id=session_id,
+                created_at=datetime.utcnow()
+            )
             db.session.add(assistant_msg)
             
             db.session.commit()
             
             logger.debug(f"Stored conversation pair for user {user_id}, session {session_id}")
-            return assistant_msg.id  # type: ignore[return-value]
+            return assistant_msg.id
             
         except Exception as e:
             logger.error(f"Failed to store conversation: {e}", exc_info=True)
@@ -216,19 +220,20 @@ class CopilotMemoryService:
         from models.copilot_embedding import CopilotEmbedding
         
         try:
-            emb = CopilotEmbedding()
-            emb.user_id = user_id
-            emb.workspace_id = workspace_id
-            emb.text = text
-            emb.embedding = embedding
-            emb.context_type = context_type
-            emb.created_at = datetime.utcnow()
+            emb = CopilotEmbedding(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                text=text,
+                embedding=embedding,
+                context_type=context_type,
+                created_at=datetime.utcnow()
+            )
             
             db.session.add(emb)
             db.session.commit()
             
             logger.debug(f"Stored embedding {emb.id} for user {user_id}")
-            return emb.id  # type: ignore[return-value]
+            return emb.id
             
         except Exception as e:
             logger.error(f"Failed to store embedding: {e}", exc_info=True)
@@ -315,12 +320,7 @@ class CopilotMemoryService:
         limit: int = 5
     ) -> List[Dict[str, Any]]:
         """
-        Retrieve semantically similar context using vector similarity search (RAG).
-        
-        CROWN⁹ Enhanced RAG:
-        - Uses pgvector for cosine similarity search
-        - Falls back to recent conversations if embeddings unavailable
-        - Combines embeddings with conversation history
+        Retrieve semantically similar context using embeddings.
         
         Args:
             query: User query
@@ -329,88 +329,16 @@ class CopilotMemoryService:
             limit: Number of similar contexts to return
             
         Returns:
-            List of similar contexts with similarity scores
+            List of similar contexts
         """
-        from models import db
+        # Generate embedding for query
+        query_embedding = self.generate_embedding(query)
+        if not query_embedding:
+            return []
         
-        results = []
-        
-        try:
-            # Generate embedding for query
-            query_embedding = self.generate_embedding(query)
-            
-            if query_embedding:
-                # Use pgvector cosine similarity search
-                try:
-                    from models.copilot_embedding import CopilotEmbedding
-                    from sqlalchemy import text
-                    
-                    # Build similarity search query using pgvector
-                    # Uses cosine distance: 1 - (a <=> b) gives similarity score
-                    embedding_str = f"[{','.join(str(x) for x in query_embedding)}]"
-                    
-                    sql_query = text("""
-                        SELECT 
-                            id,
-                            text,
-                            context_type,
-                            created_at,
-                            1 - (embedding <=> :query_embedding::vector) as similarity
-                        FROM copilot_embeddings
-                        WHERE user_id = :user_id
-                        AND (workspace_id = :workspace_id OR workspace_id IS NULL)
-                        ORDER BY embedding <=> :query_embedding::vector
-                        LIMIT :limit
-                    """)
-                    
-                    result = db.session.execute(sql_query, {
-                        'query_embedding': embedding_str,
-                        'user_id': user_id,
-                        'workspace_id': workspace_id,
-                        'limit': limit
-                    })
-                    
-                    for row in result:
-                        similarity_score = float(row.similarity) if row.similarity else 0.0
-                        
-                        # Only include results with reasonable similarity (> 0.5)
-                        if similarity_score > 0.5:
-                            results.append({
-                                'id': row.id,
-                                'text': row.text,
-                                'context_type': row.context_type,
-                                'created_at': row.created_at.isoformat() if row.created_at else None,
-                                'similarity': round(similarity_score, 3),
-                                'source': 'embedding'
-                            })
-                    
-                    logger.debug(f"RAG search found {len(results)} similar contexts for query")
-                    
-                except Exception as embed_error:
-                    logger.warning(f"Vector similarity search failed, using fallback: {embed_error}")
-            
-            # Supplement with recent conversations if needed
-            if len(results) < limit:
-                remaining = limit - len(results)
-                conversations = self.get_recent_conversations(user_id, workspace_id, remaining)
-                
-                for conv in conversations:
-                    # Check if already in results to avoid duplicates
-                    if not any(r.get('text') == conv.get('message') for r in results):
-                        results.append({
-                            'text': conv.get('message', ''),
-                            'context_type': 'conversation',
-                            'created_at': conv.get('created_at'),
-                            'similarity': 0.3,  # Lower score for non-semantic matches
-                            'source': 'conversation_history'
-                        })
-            
-            return results[:limit]
-            
-        except Exception as e:
-            logger.error(f"Semantic context retrieval failed: {e}", exc_info=True)
-            # Fallback to recent conversations
-            return self.get_recent_conversations(user_id, workspace_id, limit)
+        # TODO: Implement vector similarity search
+        # For now, return recent conversations as fallback
+        return self.get_recent_conversations(user_id, workspace_id, limit)
     
     def clear_cache(self):
         """Clear embedding cache."""

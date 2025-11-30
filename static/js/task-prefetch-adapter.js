@@ -71,15 +71,21 @@ class TaskPrefetchAdapter {
             
             /**
              * Hydrate function - write through to IndexedDB
-             * CROWN⁴.6: Uses setTaskDetail method for proper cache persistence
              */
             hydrateFn: async (taskId, data) => {
-                if (!window.taskCache || typeof window.taskCache.setTaskDetail !== 'function') {
+                if (!window.taskCache) {
                     return;
                 }
 
                 try {
-                    await window.taskCache.setTaskDetail(taskId, data);
+                    // Write task detail to IndexedDB for cache consistency
+                    await window.taskCache.put('task_details', {
+                        id: `detail_${taskId}`,
+                        task_id: taskId,
+                        data: data,
+                        timestamp: Date.now()
+                    });
+
                     console.log(`💾 Hydrated task ${taskId} to IndexedDB`);
                 } catch (error) {
                     console.warn(`⚠️ Failed to hydrate task ${taskId}:`, error);

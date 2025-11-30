@@ -4,11 +4,10 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/toast-notifications.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="container settings-container" data-user-id="{{ current_user.id }}">
+<div class="container settings-container">
     <div class="settings-header">
         <h1 class="settings-title">Settings</h1>
         <p class="settings-subtitle">Manage your account and preferences</p>
@@ -27,20 +26,20 @@
 
     <div class="settings-card">
         <h2 class="settings-card-title">Workspace Details</h2>
-        <form data-form="workspace">
+        <form>
             <div style="display: flex; flex-direction: column; gap: var(--space-4);">
                 <div>
                     <label class="block text-sm font-medium mb-2">Workspace Name</label>
-                    <input type="text" name="name" value="{{ workspace.name if workspace else 'My Workspace' }}" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <input type="text" value="My Workspace" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2">Workspace URL</label>
-                    <input type="text" name="slug" value="{{ workspace.slug if workspace else 'my-workspace' }}.mina.app" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800" readonly>
+                    <input type="text" value="my-workspace.mina.app" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
                     <p class="text-xs text-secondary mt-1">Your team's unique workspace identifier</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2">Industry</label>
-                    <select name="industry" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <select class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
                         <option>Technology</option>
                         <option>Finance</option>
                         <option>Healthcare</option>
@@ -60,43 +59,32 @@
     <div class="settings-card">
         <div class="flex justify-between items-center mb-4">
             <h2 class="settings-card-title" style="margin-bottom: 0;">Team Members</h2>
-            <button class="btn btn-primary btn-sm" data-action="invite-member">Invite Member</button>
+            <button class="btn btn-primary btn-sm">Invite Member</button>
         </div>
         
         <div style="display: flex; flex-direction: column; gap: var(--space-3);">
-            {% if workspace_members and workspace_members|length > 0 %}
+            {% if workspace_members %}
             {% for member in workspace_members %}
-            <div class="member-row flex justify-between items-center p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+            <div class="flex justify-between items-center p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition">
                 <div class="flex items-center gap-3">
-                    <div class="avatar" style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--color-primary) 0%, #9333ea 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
-                        {{ (member.email[0] if member.email else member.username[0] if member.username else 'U')|upper }}
-                    </div>
+                    <div class="avatar">{{ member.email[0]|upper }}</div>
                     <div>
-                        <p class="font-medium">{{ member.email or member.username }}</p>
-                        <p class="text-sm text-secondary">{{ (member.role or 'member')|capitalize }}</p>
+                        <p class="font-medium">{{ member.email }}</p>
+                        <p class="text-sm text-secondary">{{ member.role|capitalize }}</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <select class="member-role-select p-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" data-member-id="{{ member.id }}" data-original-value="{{ member.role or 'member' }}">
-                        <option value="owner" {% if member.role == 'owner' %}selected{% endif %}>Owner</option>
-                        <option value="admin" {% if member.role == 'admin' %}selected{% endif %}>Admin</option>
-                        <option value="member" {% if member.role == 'member' or not member.role %}selected{% endif %}>Member</option>
-                        <option value="viewer" {% if member.role == 'viewer' %}selected{% endif %}>Viewer</option>
-                    </select>
-                    {% if member.id != current_user.id %}
-                    <button class="btn btn-sm btn-ghost" data-action="remove-member" data-member-id="{{ member.id }}" data-member-name="{{ member.email or member.username }}">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                    {% endif %}
-                </div>
+                <select class="p-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">
+                    <option {% if member.role == 'owner' %}selected{% endif %}>Owner</option>
+                    <option {% if member.role == 'admin' %}selected{% endif %}>Admin</option>
+                    <option {% if member.role == 'member' %}selected{% endif %}>Member</option>
+                    <option {% if member.role == 'viewer' %}selected{% endif %}>Viewer</option>
+                </select>
             </div>
             {% endfor %}
             {% else %}
             <div class="text-center py-8">
                 <p class="text-secondary">No team members yet</p>
-                <button class="btn btn-primary btn-sm mt-4" data-action="invite-member">Invite your first member</button>
+                <button class="btn btn-primary btn-sm mt-4">Invite your first member</button>
             </div>
             {% endif %}
         </div>
@@ -154,26 +142,47 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6);">
             <div style="padding: var(--space-4); background: linear-gradient(135deg, var(--color-primary) 0%, #9333ea 100%); border-radius: var(--radius-lg); color: white;">
                 <p class="text-sm opacity-90 mb-1">Total Meetings</p>
-                <p class="text-3xl font-bold" data-stat="meetings">{{ workspace_meetings_count or 0 }}</p>
-                <p class="text-xs opacity-75 mt-1">All time</p>
+                <p class="text-3xl font-bold">247</p>
+                <p class="text-xs opacity-75 mt-1">+12 this month</p>
             </div>
 
             <div style="padding: var(--space-4); background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: var(--radius-lg); color: white;">
                 <p class="text-sm opacity-90 mb-1">Hours Recorded</p>
-                <p class="text-3xl font-bold" data-stat="hours">{{ workspace_hours or 0 }}</p>
-                <p class="text-xs opacity-75 mt-1">Estimated</p>
+                <p class="text-3xl font-bold">486</p>
+                <p class="text-xs opacity-75 mt-1">+38 this month</p>
             </div>
 
             <div style="padding: var(--space-4); background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: var(--radius-lg); color: white;">
                 <p class="text-sm opacity-90 mb-1">Team Members</p>
-                <p class="text-3xl font-bold" data-stat="members">{{ workspace_members|length if workspace_members else 1 }}</p>
+                <p class="text-3xl font-bold">{{ workspace_members|length if workspace_members else 1 }}</p>
                 <p class="text-xs opacity-75 mt-1">Active users</p>
             </div>
 
             <div style="padding: var(--space-4); background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: var(--radius-lg); color: white;">
                 <p class="text-sm opacity-90 mb-1">Storage Used</p>
-                <p class="text-3xl font-bold" data-stat="storage">-</p>
-                <p class="text-xs opacity-75 mt-1">Available soon</p>
+                <p class="text-3xl font-bold">24GB</p>
+                <p class="text-xs opacity-75 mt-1">of 100GB</p>
+            </div>
+        </div>
+
+        <div style="padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg);">
+            <h3 class="font-semibold mb-3">Recent Activity</h3>
+            <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="text-secondary">Oct 3, 2025</span>
+                    <span>•</span>
+                    <span>Product Strategy Meeting recorded (1h 24m)</span>
+                </div>
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="text-secondary">Oct 2, 2025</span>
+                    <span>•</span>
+                    <span>Engineering Sync transcript generated</span>
+                </div>
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="text-secondary">Oct 1, 2025</span>
+                    <span>•</span>
+                    <span>New member invited: jane.doe@company.com</span>
+                </div>
             </div>
         </div>
     </div>
@@ -186,7 +195,7 @@
                     <h3 class="font-semibold text-lg">Professional Plan</h3>
                     <p class="text-sm text-secondary">Unlimited recordings, advanced AI features</p>
                 </div>
-                <button class="btn btn-sm btn-ghost" data-action="manage-billing">Manage Plan</button>
+                <button class="btn btn-sm btn-ghost">Manage Plan</button>
             </div>
             <div class="flex items-baseline gap-2">
                 <span class="text-3xl font-bold">$49</span>
@@ -198,28 +207,28 @@
         <div style="display: flex; flex-direction: column; gap: var(--space-3);">
             <div class="flex justify-between items-center">
                 <span class="text-sm">Next billing date</span>
-                <span class="text-sm font-medium">-</span>
+                <span class="text-sm font-medium">November 3, 2025</span>
             </div>
             <div class="flex justify-between items-center">
                 <span class="text-sm">Payment method</span>
-                <span class="text-sm font-medium">-</span>
+                <span class="text-sm font-medium">•••• 4242</span>
             </div>
             <div style="padding-top: var(--space-3); border-top: 1px solid var(--color-border);">
-                <button class="btn btn-ghost btn-sm" data-action="update-payment">Update Payment Method</button>
-                <button class="btn btn-ghost btn-sm ml-2" data-action="view-billing-history">View Billing History</button>
+                <button class="btn btn-ghost btn-sm">Update Payment Method</button>
+                <button class="btn btn-ghost btn-sm ml-2">View Billing History</button>
             </div>
         </div>
     </div>
 
-    <div class="settings-card" style="border-color: var(--color-error);">
-        <h2 class="settings-card-title" style="color: var(--color-error); -webkit-text-fill-color: var(--color-error); background: none;">Danger Zone</h2>
+    <div class="card" style="border-color: var(--color-error);">
+        <h2 class="text-xl font-semibold mb-4" style="color: var(--color-error);">Danger Zone</h2>
         <div style="display: flex; flex-direction: column; gap: var(--space-5);">
             <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-border);">
                 <div>
                     <p class="font-medium">Transfer Ownership</p>
                     <p class="text-sm text-secondary">Transfer workspace ownership to another admin</p>
                 </div>
-                <button class="btn btn-sm btn-ghost" data-action="transfer-ownership">Transfer</button>
+                <button class="btn btn-sm btn-ghost">Transfer</button>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -227,15 +236,10 @@
                     <p class="font-medium" style="color: var(--color-error);">Delete Workspace</p>
                     <p class="text-sm text-secondary">Permanently delete this workspace and all associated data</p>
                 </div>
-                <button class="btn btn-sm" style="background: var(--color-error); color: white;" data-action="delete-workspace">Delete Workspace</button>
+                <button class="btn btn-sm" style="background: var(--color-error); color: white;">Delete Workspace</button>
             </div>
         </div>
     </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
-<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock %}

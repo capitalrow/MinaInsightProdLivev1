@@ -16,7 +16,6 @@ class OptimisticUI {
     /**
      * ENTERPRISE-GRADE: Rehydrate pending operations from IndexedDB on page load
      * Restores ALL operation types (create/update/delete) from offline_queue
-     * CRITICAL FIX: Filters out stale operations older than 2 minutes
      * This ensures retry mechanism works after page refresh
      */
     async rehydratePendingOperations() {
@@ -31,34 +30,14 @@ class OptimisticUI {
             // Get all pending operations from offline_queue (supports create/update/delete)
             const operations = await this.cache.getAllPendingOperations();
             
-            // CRITICAL FIX: Filter out stale operations before adding to memory
-            // Stale operations (older than 2 minutes) likely already succeeded on server
-            const now = Date.now();
-            const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
-            const freshOperations = new Map();
-            const staleOpIds = [];
+            // Restore to in-memory map
+            this.pendingOperations = operations;
             
-            for (const [opId, op] of operations.entries()) {
-                const opTime = op.timestamp ? new Date(op.timestamp).getTime() : 0;
-                const opAge = now - opTime;
-                
-                // Filter out stale create operations (likely already succeeded)
-                if (op.type === 'create' && opAge > STALE_THRESHOLD_MS) {
-                    console.log(`🧹 [Rehydrate] Skipping stale operation: ${opId} (age: ${Math.round(opAge/1000)}s)`);
-                    staleOpIds.push(opId);
-                } else {
-                    freshOperations.set(opId, op);
-                }
-            }
-            
-            // Restore only fresh operations to in-memory map
-            this.pendingOperations = freshOperations;
-            
-            console.log(`✅ [Offline-First] Rehydration complete: ${freshOperations.size} fresh operations (${staleOpIds.length} stale filtered)`);
+            console.log(`✅ [Offline-First] Rehydration complete: ${operations.size} operations restored`);
             
             // Log breakdown by type
-            const breakdown = { create: 0, update: 0, delete: 0, failed: 0, skipped: staleOpIds.length };
-            for (const [opId, op] of freshOperations.entries()) {
+            const breakdown = { create: 0, update: 0, delete: 0, failed: 0 };
+            for (const [opId, op] of operations.entries()) {
                 breakdown[op.type] = (breakdown[op.type] || 0) + 1;
                 if (op.failed) breakdown.failed++;
                 
@@ -69,7 +48,7 @@ class OptimisticUI {
             this.rehydrationComplete = true;
             
             // Auto-retry pending (non-failed) operations if online
-            if (window.wsManager && window.wsManager.getConnectionStatus('/tasks')) {
+            if (window.wsManager && window.wsManager.isConnected('/tasks')) {
                 const pendingOps = Array.from(this.pendingOperations.entries())
                     .filter(([_, op]) => !op.failed);
                 
@@ -226,7 +205,6 @@ class OptimisticUI {
      * @returns {Promise<Object>} Created task
      */
     async createTask(taskData) {
-        console.log('🔥 [OptimisticUI] createTask called with:', taskData);
         // ENTERPRISE-GRADE: Wait for cache to be ready (prevents init race conditions)
         if (window.cacheManagerReady) {
             console.log('⏳ [Offline-First] Waiting for cacheManager to initialize...');
@@ -303,7 +281,6 @@ class OptimisticUI {
                 console.error('❌ Failed to persist pending operation:', err);
             });
             
-            console.log('🔥 [OptimisticUI] About to call _syncToServer for create operation');
             this._syncToServer(opId, 'create', taskData, tempId);
 
             return optimisticTask;
@@ -500,26 +477,26 @@ class OptimisticUI {
     }
 
     /**
-     * Archive task (mark as completed - Task model has no archived_at column)
+     * Archive task (soft delete for completed tasks)
      * @param {number|string} taskId
      * @returns {Promise<Object>}
      */
     async archiveTask(taskId) {
         return this.updateTask(taskId, {
-            status: 'completed',
-            completed_at: new Date().toISOString()
+            archived_at: new Date().toISOString(),
+            status: 'archived'
         });
     }
 
     /**
-     * Unarchive task (restore to todo status)
+     * Unarchive task (restore from archive)
      * @param {number|string} taskId
      * @returns {Promise<Object>}
      */
     async unarchiveTask(taskId) {
         return this.updateTask(taskId, {
-            status: 'todo',
-            completed_at: null
+            archived_at: null,
+            status: 'todo'
         });
     }
 
@@ -547,12 +524,8 @@ class OptimisticUI {
             const container = document.getElementById('tasks-list-container');
             if (container) {
                 const tasks = await this.cache.getTasks();
-                // Filter out deleted tasks and archived (completed/cancelled) tasks
-                const activeTasks = tasks.filter(t => {
-                    if (t.deleted_at) return false;
-                    const status = (t.status || '').toLowerCase();
-                    return status !== 'completed' && status !== 'cancelled';
-                });
+                // Filter out deleted and archived tasks
+                const activeTasks = tasks.filter(t => !t.deleted_at && !t.archived_at);
                 await window.taskBootstrap.renderTasks(activeTasks, { fromCache: true });
             }
         }
@@ -1034,20 +1007,30 @@ class OptimisticUI {
 
     /**
      * Update task counters
-     * CROWN⁴.6: Delegates to TaskStateStore for single source of truth
-     * All counter updates MUST go through TaskStateStore
      */
     _updateCounters() {
-        // PRIMARY: Use TaskStateStore (single source of truth)
-        if (window.taskStateStore && window.taskStateStore._initialized) {
-            window.taskStateStore.forceRefresh();
-            return;
-        }
-        
-        // FALLBACK: Delegate to TaskBootstrap if TaskStateStore not ready
-        if (window.taskBootstrap && typeof window.taskBootstrap._updateCountersFromDOM === 'function') {
-            window.taskBootstrap._updateCountersFromDOM();
-        }
+        const cards = document.querySelectorAll('.task-card');
+        const counters = {
+            all: cards.length,
+            todo: 0,
+            in_progress: 0,
+            completed: 0,
+            overdue: 0
+        };
+
+        cards.forEach(card => {
+            const status = card.dataset.status || 'todo';
+            if (counters[status] !== undefined) {
+                counters[status]++;
+            }
+        });
+
+        Object.entries(counters).forEach(([key, count]) => {
+            const badge = document.querySelector(`[data-counter="${key}"]`);
+            if (badge) {
+                badge.textContent = count;
+            }
+        });
     }
 
     /**
@@ -1086,14 +1069,8 @@ class OptimisticUI {
                     return;
                 } catch (httpError) {
                     console.error(`❌ [HTTP Fallback] Failed:`, httpError);
-                    
-                    // CRITICAL FIX: Trigger rollback so UI reflects actual server state
-                    await this._reconcileFailure(opId, type, taskId, httpError);
-                    
-                    // Show user-friendly error
-                    if (window.toast) {
-                        window.toast.error(`Failed to save changes: ${httpError.message || 'Network error'}`);
-                    }
+                    // If HTTP also fails, defer to offline queue
+                    console.log(`💾 Keeping pending operation ${opId} for later reconciliation`);
                     return;
                 }
             }
@@ -1312,7 +1289,6 @@ class OptimisticUI {
 
     /**
      * Reconcile successful server response
-     * CRITICAL FIX: Properly finalizes creates for all transport paths (WebSocket, HTTP, duplicate)
      * @param {string} opId
      * @param {string} type
      * @param {Object} serverData
@@ -1341,152 +1317,35 @@ class OptimisticUI {
 
         if (type === 'create') {
             // Replace temp ID with real ID
-            // Handle various response formats:
-            // - serverData.result.task (WebSocket ack with result wrapper)
-            // - serverData.result.existing_task (WebSocket duplicate detection)
-            // - serverData.existing_task (HTTP API duplicate detection)
-            // - serverData.task (direct task wrapper from HTTP API)
-            // - serverData (task object directly)
-            const realTask = serverData?.result?.task || 
-                           serverData?.result?.existing_task || 
-                           serverData?.existing_task ||
-                           serverData?.task || 
-                           serverData;
+            const realTask = serverData.task || serverData;
             const tempId = operation.tempId;
-            const isDuplicate = serverData?.result?.duplicate === true || 
-                               serverData?.is_duplicate === true;
-            
-            // CRITICAL: Verify we have a valid task ID before proceeding
-            if (!realTask?.id) {
-                console.error('❌ [Reconcile] No task ID in server response:', serverData);
-                throw new Error('Server response missing task ID');
-            }
-            
-            // Log duplicate detection for debugging
-            if (isDuplicate) {
-                console.log(`ℹ️ [Reconcile] Duplicate detected, using existing task ID ${realTask.id}`);
-            }
-            
-            console.log(`✅ [Reconcile] Got real task ID ${realTask.id} for temp ${tempId}`);
 
-            // CRITICAL FIX: Finalize create by updating DOM and clearing syncing badge
-            await this._finalizeCreate(tempId, realTask);
+            // Update DOM
+            const card = document.querySelector(`[data-task-id="${tempId}"]`);
+            if (card) {
+                card.dataset.taskId = realTask.id;
+                card.classList.remove('optimistic-create');
+            }
+
+            // Reconcile temp task with real ID: remove from tempTasks Map, persist to IndexedDB
+            await this.cache.reconcileTempTask(realTask.id, tempId);
 
         } else if (type === 'update') {
             // Update with server truth
-            // Handle various response formats
-            const realTask = serverData?.result?.task || serverData?.task || serverData;
-            
-            if (realTask?.id) {
-                await this.cache.saveTask(realTask);
-                this._updateTaskInDOM(taskId, realTask);
-            } else {
-                console.warn('⚠️ [Reconcile] Update response missing task ID, using taskId:', taskId);
-            }
+            const realTask = serverData.task || serverData;
+            await this.cache.saveTask(realTask);
+            this._updateTaskInDOM(taskId, realTask);
         }
 
-        // Remove operation from in-memory map
+        // Remove operation
         this.pendingOperations.delete(opId);
 
         // Mark event as synced
-        try {
-            const events = await this.cache.getPendingEvents();
-            const relatedEvent = events.find(e => e.task_id === taskId || e.task_id === operation.tempId);
-            if (relatedEvent) {
-                await this.cache.markEventSynced(relatedEvent.id);
-            }
-        } catch (eventError) {
-            console.warn('⚠️ Failed to mark event as synced:', eventError);
+        const events = await this.cache.getPendingEvents();
+        const relatedEvent = events.find(e => e.task_id === taskId || e.task_id === operation.tempId);
+        if (relatedEvent) {
+            await this.cache.markEventSynced(relatedEvent.id);
         }
-        
-        // CROWN⁴.6: Refresh related widgets after successful sync
-        // This ensures Meeting Heatmap, counters, and other widgets reflect the updated data
-        this._refreshRelatedWidgets(type, taskId, serverData);
-    }
-    
-    /**
-     * CRITICAL FIX: Finalize task creation - replaces temp task with real task in DOM and cache
-     * Called by _reconcileSuccess for all create paths (WebSocket, HTTP, duplicate)
-     * @param {string} tempId - Temporary task ID
-     * @param {Object} realTask - Server-confirmed task with real ID
-     */
-    async _finalizeCreate(tempId, realTask) {
-        console.log(`🔧 [Finalize] Replacing temp ${tempId} with real task ${realTask.id}`);
-        
-        // Step 1: Update DOM - replace temp ID with real ID and clear syncing badge
-        const card = document.querySelector(`[data-task-id="${tempId}"]`);
-        if (card) {
-            card.dataset.taskId = realTask.id;
-            card.classList.remove('optimistic-create');
-            
-            // CRITICAL: Clear syncing badge
-            const syncBadge = card.querySelector('.sync-status-badge');
-            if (syncBadge) {
-                syncBadge.remove();
-                console.log(`✅ [Finalize] Cleared syncing badge for task ${realTask.id}`);
-            }
-            
-            // Update any other temp-specific UI elements
-            card.classList.remove('syncing');
-            card.removeAttribute('data-temp-id');
-        } else {
-            console.warn(`⚠️ [Finalize] No card found for temp ID ${tempId}`);
-        }
-
-        // Step 2: Reconcile in cache - remove from temp_tasks, add to tasks
-        try {
-            await this.cache.reconcileTempTask(realTask.id, tempId);
-            console.log(`✅ [Finalize] Cache reconciled for task ${realTask.id}`);
-        } catch (cacheError) {
-            console.error('❌ [Finalize] Cache reconciliation failed:', cacheError);
-        }
-        
-        // Step 3: CROWN⁴.6 - Reconcile TaskStateStore (single source of truth)
-        if (window.taskStateStore) {
-            window.taskStateStore.reconcileTempTask(tempId, realTask.id, realTask);
-            console.log(`✅ [Finalize] TaskStateStore reconciled: ${tempId} → ${realTask.id}`);
-        }
-        
-        // Step 4: Update counters after successful finalization
-        this._updateCounters();
-    }
-    
-    /**
-     * Refresh related widgets after successful task sync
-     * CROWN⁴.6: Ensures cross-widget consistency after task changes
-     * @param {string} type - Operation type (create, update, delete)
-     * @param {number|string} taskId
-     * @param {Object} serverData
-     */
-    _refreshRelatedWidgets(type, taskId, serverData) {
-        // Debounce to prevent multiple rapid refreshes
-        if (this._widgetRefreshTimeout) {
-            clearTimeout(this._widgetRefreshTimeout);
-        }
-        
-        this._widgetRefreshTimeout = setTimeout(() => {
-            console.log(`🔄 [CROWN⁴.6] Refreshing related widgets after ${type} sync`);
-            
-            // 1. Refresh Meeting Heatmap (task counts per meeting)
-            if (window.meetingHeatmap?.refresh) {
-                window.meetingHeatmap.refresh().catch(err => {
-                    console.warn('⚠️ Failed to refresh meeting heatmap:', err);
-                });
-            }
-            
-            // 2. Update tab counters (All/Active/Archived)
-            this._updateCounters();
-            
-            // 3. Dispatch event for other widgets to react
-            window.dispatchEvent(new CustomEvent('task:synced', {
-                detail: { type, taskId, task: serverData?.task }
-            }));
-            
-            // 4. Invalidate IndexedDB cache for meeting metrics
-            if (this.cache?.invalidate) {
-                this.cache.invalidate('meeting_metrics').catch(() => {});
-            }
-        }, 100); // 100ms debounce
     }
 
     /**
@@ -1612,13 +1471,7 @@ class OptimisticUI {
     }
 }
 
-// Export class for orchestrator
-window.OptimisticUI = OptimisticUI;
+// Export singleton
+window.optimisticUI = new OptimisticUI();
 
-// Auto-instantiate if taskCache is ready
-if (window.taskCache && window.taskCache.ready) {
-    window.optimisticUI = new OptimisticUI();
-    console.log('⚡ CROWN⁴.5 OptimisticUI loaded (auto-instantiated)');
-} else {
-    console.log('⚡ CROWN⁴.5 OptimisticUI class loaded (orchestrator will instantiate)');
-}
+console.log('⚡ CROWN⁴.5 OptimisticUI loaded');

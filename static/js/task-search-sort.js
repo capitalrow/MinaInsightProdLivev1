@@ -78,16 +78,8 @@ class TaskSearchSort {
             });
         });
         
-        // Apply initial filter immediately if tasks already in DOM (server-rendered)
-        // This ensures filter counts match tab counters on page load
-        const initialTasks = this.tasksContainer?.querySelectorAll('.task-card') || [];
-        if (initialTasks.length > 0) {
-            console.log(`[TaskSearchSort] Found ${initialTasks.length} server-rendered tasks, applying initial filter`);
-            this.applyFiltersAndSort();
-        } else {
-            // If no tasks in DOM yet, the bootstrap:complete event will trigger filtering
-            console.log('[TaskSearchSort] No tasks in DOM yet, waiting for bootstrap');
-        }
+        // Initial count update
+        this.updateCounts();
     }
     
     updateClearButton() {
@@ -117,22 +109,17 @@ class TaskSearchSort {
         });
         
         // 2. Apply archive filter (from filter tabs: All/Active/Archived)
-        // Filter is based on task.status field: 'todo', 'in_progress', 'pending', 'blocked', 'completed', 'cancelled'
-        // Active = todo, in_progress, pending, blocked (not completed/cancelled)
-        // Archived = completed or cancelled
+        // CRITICAL: Deleted tasks should NEVER show up, regardless of filter
+        visibleTasks = visibleTasks.filter(task => !task.dataset.deletedAt);
         
         if (this.currentFilter === 'active') {
-            visibleTasks = visibleTasks.filter(task => {
-                const status = task.dataset.status || 'todo';
-                return status !== 'completed' && status !== 'cancelled';
-            });
+            // Active = not archived (deleted already filtered above)
+            visibleTasks = visibleTasks.filter(task => !task.dataset.archivedAt);
         } else if (this.currentFilter === 'archived') {
-            visibleTasks = visibleTasks.filter(task => {
-                const status = task.dataset.status || 'todo';
-                return status === 'completed' || status === 'cancelled';
-            });
+            // Archived = has archived_at timestamp (deleted already filtered above)
+            visibleTasks = visibleTasks.filter(task => task.dataset.archivedAt);
         }
-        // 'all' shows both active and archived tasks
+        // 'all' shows active + archived (deleted already filtered above)
         
         // 2.5. Apply quick filter (from Quick Actions Bar)
         if (this.quickFilter) {

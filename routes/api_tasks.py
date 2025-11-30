@@ -19,7 +19,6 @@ from services.event_broadcaster import EventBroadcaster
 from services.event_sequencer import event_sequencer
 from services.deduper import deduper
 from services.task_embedding_service import get_embedding_service
-from services.cache_validator import CacheValidator
 
 logger = logging.getLogger(__name__)
 event_broadcaster = EventBroadcaster()
@@ -181,24 +180,9 @@ def list_tasks():
         # Paginate
         tasks = db.paginate(stmt, page=page, per_page=per_page, error_out=False)
         
-        # CROWN⁴.5: Generate checksum for cache validation
-        task_dicts = [task.to_dict() for task in tasks.items]
-        checksum = None
-        if task_dicts:
-            try:
-                # Generate aggregate checksum from individual task checksums
-                sorted_tasks = sorted(task_dicts, key=lambda t: t.get('id', 0))
-                item_checksums = [CacheValidator.generate_checksum(t) for t in sorted_tasks]
-                import hashlib
-                aggregate_data = ''.join(item_checksums)
-                checksum = hashlib.sha256(aggregate_data.encode('utf-8')).hexdigest()
-            except Exception as checksum_err:
-                logger.warning(f"Failed to generate checksum: {checksum_err}")
-                checksum = None
-        
-        response = {
+        return jsonify({
             'success': True,
-            'tasks': task_dicts,
+            'tasks': [task.to_dict() for task in tasks.items],
             'pagination': {
                 'page': tasks.page,
                 'pages': tasks.pages,
@@ -207,12 +191,7 @@ def list_tasks():
                 'has_next': tasks.has_next,
                 'has_prev': tasks.has_prev
             }
-        }
-        
-        if checksum:
-            response['checksum'] = checksum
-        
-        return jsonify(response)
+        })
         
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -227,15 +206,9 @@ def get_task(task_id):
         detail (str): Response detail level ('mini' for prefetching, default: full)
     """
     try:
-        # Use outerjoin to support tasks without meetings
-        # Filter by workspace_id from task OR meeting (for tasks without meeting_id)
-        workspace_id_str = str(current_user.workspace_id)
-        task = db.session.query(Task).outerjoin(Meeting).filter(
+        task = db.session.query(Task).join(Meeting).filter(
             Task.id == task_id,
-            or_(
-                Task.workspace_id == workspace_id_str,
-                Meeting.workspace_id == current_user.workspace_id
-            )
+            Meeting.workspace_id == current_user.workspace_id
         ).first()
         
         if not task:
@@ -411,8 +384,6 @@ def get_meeting_heatmap():
         # Query meetings with task counts
         from sqlalchemy import case
         
-        logger.debug(f"[MeetingHeatmap] User workspace_id: {current_user.workspace_id} (type: {type(current_user.workspace_id).__name__})")
-        
         # Subquery to count tasks per meeting
         task_counts = db.session.query(
             Task.meeting_id,
@@ -440,8 +411,6 @@ def get_meeting_heatmap():
             func.coalesce(task_counts.c.total_tasks, 0).desc(),
             Meeting.created_at.desc()
         ).limit(20).all()  # Limit to top 20 meetings
-        
-        logger.debug(f"[MeetingHeatmap] Found {len(meetings)} meetings with task data")
         
         # Build response
         heatmap_data = []
@@ -486,7 +455,7 @@ def get_meeting_heatmap():
 @api_tasks_bp.route('/', methods=['POST'])
 @login_required
 def create_task():
-    """Create a new task (supports both meeting-linked and standalone tasks)."""
+    """Create a new task."""
     try:
         data = request.get_json()
         
@@ -494,18 +463,17 @@ def create_task():
         if not data.get('title'):
             return jsonify({'success': False, 'message': 'Title is required'}), 400
         
-        # meeting_id is OPTIONAL - supports standalone tasks from Tasks page
-        meeting = None
-        meeting_id = data.get('meeting_id')
-        if meeting_id:
-            # Verify meeting exists and belongs to user's workspace
-            meeting = db.session.query(Meeting).filter_by(
-                id=meeting_id,
-                workspace_id=current_user.workspace_id
-            ).first()
-            
-            if not meeting:
-                return jsonify({'success': False, 'message': 'Invalid meeting ID'}), 400
+        if not data.get('meeting_id'):
+            return jsonify({'success': False, 'message': 'Meeting ID is required'}), 400
+        
+        # Verify meeting exists and belongs to user's workspace
+        meeting = db.session.query(Meeting).filter_by(
+            id=data['meeting_id'],
+            workspace_id=current_user.workspace_id
+        ).first()
+        
+        if not meeting:
+            return jsonify({'success': False, 'message': 'Invalid meeting ID'}), 400
         
         # Parse due date if provided
         due_date = None
@@ -527,24 +495,15 @@ def create_task():
         
         # CROWN⁴.5 Phase 3: Calculate next position for drag-drop ordering
         # Assign position = max(existing positions) + 1 to append new tasks at end
-        # Handle both standalone tasks (workspace_id set) and meeting-linked tasks (via Meeting join)
-        from sqlalchemy import or_
-        
-        max_position = db.session.query(func.max(Task.position)).outerjoin(
-            Meeting, Task.meeting_id == Meeting.id
-        ).filter(
-            Task.deleted_at.is_(None),
-            or_(
-                Task.workspace_id == current_user.workspace_id,
-                Meeting.workspace_id == current_user.workspace_id
-            )
+        max_position = db.session.query(func.max(Task.position)).join(Meeting).filter(
+            Meeting.workspace_id == current_user.workspace_id,
+            Task.deleted_at.is_(None)
         ).scalar() or -1
         
         task = Task(
             title=data['title'].strip(),
             description=data.get('description', '').strip() or None,
-            meeting_id=meeting_id,  # Can be None for standalone tasks
-            workspace_id=current_user.workspace_id,  # Required for standalone tasks
+            meeting_id=data['meeting_id'],
             priority=data.get('priority', 'medium'),
             category=data.get('category', '').strip() or None,
             due_date=due_date,
@@ -552,7 +511,6 @@ def create_task():
             status='todo',
             created_by_id=current_user.id,
             extracted_by_ai=False,
-            source='manual',
             position=max_position + 1
         )
         
@@ -595,7 +553,7 @@ def create_task():
         try:
             task_data = task.to_dict()
             task_data['action'] = 'created'
-            task_data['meeting_title'] = meeting.title if meeting else None
+            task_data['meeting_title'] = meeting.title
             
             event = event_sequencer.create_event(
                 event_type=EventType.TASK_CREATE_MANUAL,
@@ -603,7 +561,7 @@ def create_task():
                 payload={
                     'task_id': task.id,
                     'task': task_data,
-                    'meeting_id': meeting.id if meeting else None,
+                    'meeting_id': meeting.id,
                     'workspace_id': str(current_user.workspace_id),
                     'action': 'created'
                 },
@@ -618,11 +576,11 @@ def create_task():
         # Broadcast task_update event (legacy broadcast for backward compatibility)
         task_dict = task.to_dict()
         task_dict['action'] = 'created'
-        task_dict['meeting_title'] = meeting.title if meeting else None
+        task_dict['meeting_title'] = meeting.title
         event_broadcaster.broadcast_task_update(
             task_id=task.id,
             task_data=task_dict,
-            meeting_id=meeting.id if meeting else None,
+            meeting_id=meeting.id,
             workspace_id=current_user.workspace_id,
             user_id=current_user.id
         )
@@ -2104,12 +2062,10 @@ def parse_natural_due_date(due_date_text):
         # If all parsing fails, default to one week from now
         return date.today() + timedelta(days=7)
 
-@api_tasks_bp.route('/summary-tasks', methods=['GET'])
-def get_all_summary_tasks():
+@api_tasks_bp.route('', methods=['GET'])
+def get_all_tasks():
     """
-    List all action items from session summaries (legacy format).
-    NOTE: For proper task management, use GET /api/tasks/ which returns Task model data.
-    
+    List all action items across sessions.
     Query params:
       - session_id: (optional) filter by session
       - completed: (optional) "true"/"false" to filter by completion status

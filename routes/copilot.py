@@ -18,6 +18,7 @@ from collections import Counter
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from openai import OpenAI
+from server.models.memory_store import MemoryStore
 
 
 logger = logging.getLogger(__name__)
@@ -34,18 +35,8 @@ if openai_api_key:
     except Exception as e:
         logger.error(f"Failed to initialize OpenAI client: {e}")
 
-# Lazy-load MemoryStore to avoid PostgreSQL connection at import time in test environments
-_memory = None
-
-def get_memory_store():
-    """Lazy load MemoryStore to avoid connection at import time in tests."""
-    global _memory
-    if _memory is None:
-        db_url = os.environ.get("DATABASE_URL", "")
-        if db_url.startswith("postgresql"):
-            from server.models.memory_store import MemoryStore
-            _memory = MemoryStore()
-    return _memory
+# Memory store for context retrieval (e.g., recent summaries, relevant info)
+memory = MemoryStore()
 
 # System prompt defining the Copilot's role and tone
 SYSTEM_PROMPT = (
@@ -71,33 +62,6 @@ def copilot_dashboard():
         logger.error(f"Error loading AI Copilot: {e}")
         flash('Failed to load AI Copilot. Please try again.', 'error')
         return redirect(url_for('dashboard.index'))
-
-
-@copilot_bp.route('/api/health')
-def copilot_health():
-    """
-    Health check endpoint for Copilot service.
-    
-    Returns:
-        JSON: Health status of copilot components
-    """
-    health = {
-        'status': 'healthy',
-        'components': {
-            'openai': 'connected' if openai_client else 'not_configured',
-            'streaming': 'available',
-            'websocket': 'available',
-            'memory': 'available'
-        },
-        'timestamp': datetime.utcnow().isoformat()
-    }
-    
-    # Check if OpenAI is working
-    if not openai_client:
-        health['status'] = 'degraded'
-        health['components']['openai'] = 'not_configured'
-    
-    return jsonify(health), 200
 
 
 @copilot_bp.route('/settings')
@@ -170,9 +134,9 @@ def chat_with_copilot():
         return jsonify({"success": False, "error": "AI engine not available"}), 500
     try:
         # Use GPT-4 model to generate a response (streaming omitted for simplicity)
-        response = openai_client.chat.completions.create(
+        response = openai_client.chat_completions.create(
             model="gpt-4",
-            messages=messages,  # type: ignore[arg-type]
+            messages=messages,
             temperature=0.7,
             max_tokens=500
         )
@@ -180,10 +144,10 @@ def chat_with_copilot():
         ai_message = None
         if hasattr(response, 'choices') and response.choices:
             choice = response.choices[0]
-            ai_message = choice.message.content if hasattr(choice.message, 'content') else None
+            ai_message = choice.message.get('content') if hasattr(choice, 'message') else None
         if not ai_message:
-            # Fallback: provide generic message
-            ai_message = "I understand your question. Let me help you with that."
+            # Fallback: use response content directly if structured differently
+            ai_message = response.get('content') if isinstance(response, dict) else str(response)
         logger.debug(f"Copilot response (truncated): {ai_message[:100]}...")
         return jsonify({"success": True, "response": ai_message}), 200
     except Exception as e:
@@ -916,7 +880,7 @@ Available actions you can suggest:
             
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=messages,  # type: ignore[arg-type]
+            messages=messages,
             max_tokens=800,  # Increased for better responses
             temperature=0.7,
             presence_penalty=0.1,  # Encourage diverse responses
@@ -933,25 +897,27 @@ Available actions you can suggest:
         # Save conversation to database for future context
         try:
             # Save user message
-            user_conv = CopilotConversation()
-            user_conv.user_id = user_id
-            user_conv.role = 'user'
-            user_conv.message = message
-            user_conv.session_id = session_id
-            user_conv.context_filter = context
-            user_conv.prompt_tokens = response.usage.prompt_tokens if response.usage else None
-            user_conv.completion_tokens = 0
+            user_conv = CopilotConversation(
+                user_id=user_id,
+                role='user',
+                message=message,
+                session_id=session_id,
+                context_filter=context,
+                prompt_tokens=response.usage.prompt_tokens if hasattr(response, 'usage') else None,
+                completion_tokens=0
+            )
             models_db.session.add(user_conv)
             
             # Save assistant response
-            assistant_conv = CopilotConversation()
-            assistant_conv.user_id = user_id
-            assistant_conv.role = 'assistant'
-            assistant_conv.message = ai_response
-            assistant_conv.session_id = session_id
-            assistant_conv.context_filter = context
-            assistant_conv.prompt_tokens = 0
-            assistant_conv.completion_tokens = response.usage.completion_tokens if response.usage else None
+            assistant_conv = CopilotConversation(
+                user_id=user_id,
+                role='assistant',
+                message=ai_response,
+                session_id=session_id,
+                context_filter=context,
+                prompt_tokens=0,
+                completion_tokens=response.usage.completion_tokens if hasattr(response, 'usage') else None
+            )
             models_db.session.add(assistant_conv)
             models_db.session.commit()
             
@@ -1171,12 +1137,11 @@ def _generate_draft_content(
                     .first()
                 
                 if summary:
-                    summary_text = summary.brief_summary or (summary.summary_md[:500] if summary.summary_md else "")
                     meeting_context = f"""
 Meeting: {meeting.title}
 Date: {meeting.created_at.strftime('%B %d, %Y')}
 
-Summary: {summary_text}
+Summary: {summary.brief_summary or summary.summary_md[:500]}
 
 Key Decisions:
 {chr(10).join([f"- {d}" for d in (summary.decisions[:3] if summary.decisions else [])])}

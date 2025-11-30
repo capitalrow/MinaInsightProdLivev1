@@ -225,18 +225,13 @@ class TaskEventHandler:
                 logger.info(f"Task {task.id} has NULL workspace_id, access denied for non-owner")
                 return False
             
-            # Normalize types to handle int vs string comparisons
-            task_ws_id = int(task.workspace_id) if task.workspace_id is not None else None
-            user_ws_id = int(user.workspace_id) if user.workspace_id is not None else None
-            
             # Allow access if task belongs to same workspace as user
-            if task_ws_id == user_ws_id:
-                logger.debug(f"Workspace access granted: User {user_id} (ws={user_ws_id}) can access task {task.id} (ws={task_ws_id})")
+            if task.workspace_id == user.workspace_id:
                 return True
             
             # DENY: Different workspace and not the creator
-            logger.warning(f"Access denied: User {user_id} (workspace {user_ws_id}, type={type(user.workspace_id)}) "
-                         f"cannot access task {task.id} (workspace {task_ws_id}, type={type(task.workspace_id)}, "
+            logger.warning(f"Access denied: User {user_id} (workspace {user.workspace_id}) "
+                         f"cannot access task {task.id} (workspace {task.workspace_id}, "
                          f"created_by {task.created_by_id})")
             return False
             
@@ -244,7 +239,7 @@ class TaskEventHandler:
             logger.error(f"Workspace access check failed: {e}", exc_info=True)
             return False
     
-    def handle_event(
+    async def handle_event(
         self,
         event_type: str,
         payload: Dict[str, Any],
@@ -253,9 +248,6 @@ class TaskEventHandler:
     ) -> Dict[str, Any]:
         """
         Route event to appropriate handler based on event type.
-        
-        NOTE: This is a synchronous method to avoid asyncio/eventlet conflicts.
-        Flask-SocketIO with eventlet expects sync handlers.
         
         Args:
             event_type: Event type (e.g., 'task_create:manual')
@@ -303,8 +295,8 @@ class TaskEventHandler:
                     'error': f'Unknown event type: {event_type}'
                 }
             
-            # Call handler (synchronous)
-            result = handler(payload, user_id, session_id)
+            # Call handler
+            result = await handler(payload, user_id, session_id)
             
             # Log event to ledger
             self._log_event(event_type, payload, user_id, session_id, result.get('success', False))
@@ -384,7 +376,7 @@ class TaskEventHandler:
     
     # Event Handlers Implementation
     
-    def _handle_tasks_bootstrap(
+    async def _handle_tasks_bootstrap(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -440,7 +432,7 @@ class TaskEventHandler:
             logger.error(f"Bootstrap failed: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
     
-    def _handle_tasks_ws_subscribe(
+    async def _handle_tasks_ws_subscribe(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -479,7 +471,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_nlp_proposed(
+    async def _handle_task_nlp_proposed(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -509,7 +501,7 @@ class TaskEventHandler:
             logger.error(f"NLP propose failed: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_create_manual(
+    async def _handle_task_create_manual(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -594,7 +586,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_create_nlp_accept(
+    async def _handle_task_create_nlp_accept(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -605,9 +597,9 @@ class TaskEventHandler:
         Accept NLP-proposed task.
         """
         # Reuse manual creation logic
-        return self._handle_task_create_manual(payload, user_id, session_id)
+        return await self._handle_task_create_manual(payload, user_id, session_id)
     
-    def _handle_task_update_title(
+    async def _handle_task_update_title(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -645,7 +637,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_update_status_toggle(
+    async def _handle_task_update_status_toggle(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -714,7 +706,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_update_priority(
+    async def _handle_task_update_priority(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -752,7 +744,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_update_due(
+    async def _handle_task_update_due(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -792,7 +784,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_update_assign(
+    async def _handle_task_update_assign(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -829,7 +821,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_update_labels(
+    async def _handle_task_update_labels(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -866,7 +858,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_snooze(
+    async def _handle_task_snooze(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -913,7 +905,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_merge(
+    async def _handle_task_merge(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -970,7 +962,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_task_link_jump_to_span(
+    async def _handle_task_link_jump_to_span(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -1011,7 +1003,7 @@ class TaskEventHandler:
             logger.error(f"Jump to span failed: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
     
-    def _handle_filter_apply(
+    async def _handle_filter_apply(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -1042,7 +1034,7 @@ class TaskEventHandler:
                 db.session.commit()
             
             # Return filtered tasks (delegate to bootstrap)
-            return self._handle_tasks_bootstrap(
+            return await self._handle_tasks_bootstrap(
                 {'page': 1, 'page_size': 50, 'filters': filters},
                 user_id,
                 session_id
@@ -1053,7 +1045,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_tasks_refresh(
+    async def _handle_tasks_refresh(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -1064,9 +1056,9 @@ class TaskEventHandler:
         Manual refresh request.
         """
         # Delegate to bootstrap
-        return self._handle_tasks_bootstrap(payload, user_id, session_id)
+        return await self._handle_tasks_bootstrap(payload, user_id, session_id)
     
-    def _handle_tasks_idle_sync(
+    async def _handle_tasks_idle_sync(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -1106,7 +1098,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_tasks_offline_queue_replay(
+    async def _handle_tasks_offline_queue_replay(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -1184,7 +1176,7 @@ class TaskEventHandler:
                                     continue
                     
                     # Process event
-                    result = self.handle_event(
+                    result = await self.handle_event(
                         event_type=str(event.event_type) if hasattr(event, 'event_type') else 'unknown',
                         payload=event.payload if hasattr(event, 'payload') and event.payload else {},
                         user_id=user_id,
@@ -1229,7 +1221,7 @@ class TaskEventHandler:
                 'total_queued': len(payload.get('queued_events', []))
             }
     
-    def _handle_task_delete(
+    async def _handle_task_delete(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -1267,7 +1259,7 @@ class TaskEventHandler:
             db.session.rollback()
             return {'success': False, 'error': str(e)}
     
-    def _handle_tasks_multiselect_bulk(
+    async def _handle_tasks_multiselect_bulk(
         self,
         payload: Dict[str, Any],
         user_id: int,
@@ -1286,19 +1278,19 @@ class TaskEventHandler:
             for task_id in task_ids:
                 # Dispatch to appropriate handler
                 if operation == 'complete':
-                    result = self._handle_task_update_status_toggle(
+                    result = await self._handle_task_update_status_toggle(
                         {'task_id': task_id},
                         user_id,
                         session_id
                     )
                 elif operation == 'delete':
-                    result = self._handle_task_delete(
+                    result = await self._handle_task_delete(
                         {'task_id': task_id},
                         user_id,
                         session_id
                     )
                 elif operation == 'priority':
-                    result = self._handle_task_update_priority(
+                    result = await self._handle_task_update_priority(
                         {'task_id': task_id, 'priority': operation_data.get('priority')},
                         user_id,
                         session_id

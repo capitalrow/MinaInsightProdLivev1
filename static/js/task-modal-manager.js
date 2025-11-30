@@ -15,10 +15,6 @@ class TaskModalManager {
         this.currentTaskId = null;
         this.currentTaskData = null;
         
-        // CRITICAL FIX: Track successful submission to prevent "Save as draft?" dialog
-        // After successful save, close() should NOT prompt for draft confirmation
-        this._submitSuccess = false;
-        
         this.selectors = {
             datePicker: null,
             assigneeSelector: null,
@@ -117,9 +113,7 @@ class TaskModalManager {
         });
         
         this.form.addEventListener('submit', (e) => {
-            console.log('[TaskModalManager] 🔥 FORM SUBMIT EVENT TRIGGERED!');
             e.preventDefault();
-            console.log('[TaskModalManager] Default prevented, calling handleSubmit...');
             this.handleSubmit();
         });
         
@@ -248,12 +242,7 @@ class TaskModalManager {
     }
     
     close() {
-        // CRITICAL FIX: Skip draft prompt if we just successfully saved
-        // This prevents the "Save as draft?" dialog from appearing after successful task creation
-        if (this._submitSuccess) {
-            console.log('[TaskModalManager] Closing after successful submit, skipping draft prompt');
-            this._submitSuccess = false; // Reset flag
-        } else if (this.mode === 'create' && this.hasUnsavedChanges()) {
+        if (this.mode === 'create' && this.hasUnsavedChanges()) {
             const shouldSave = confirm('Save as draft?');
             if (shouldSave) {
                 this.saveDraft();
@@ -368,10 +357,6 @@ class TaskModalManager {
             }
             
             this.clearDraft();
-            
-            // CRITICAL FIX: Mark submit as successful BEFORE calling close()
-            // This prevents the "Save as draft?" prompt from appearing
-            this._submitSuccess = true;
             
             this.close();
             

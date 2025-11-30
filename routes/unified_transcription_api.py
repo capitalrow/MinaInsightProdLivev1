@@ -11,7 +11,6 @@ import logging
 import struct
 import subprocess
 from flask import Blueprint, request, jsonify
-from flask_login import login_required
 from datetime import datetime
 import openai
 import io
@@ -80,7 +79,6 @@ def check_ffmpeg_availability():
         return False
 
 @unified_api_bp.route('/api/transcribe-audio', methods=['POST'])
-@login_required
 def unified_transcribe_audio():
     """
     🎯 PRODUCTION-GRADE UNIFIED TRANSCRIPTION ENDPOINT

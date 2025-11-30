@@ -1,15 +1,15 @@
-# app.py (hardened) - Production-ready with Google SRE best practices
+# app.py (hardened)
 import os
 import json
 import signal
 import logging
 import uuid
-from typing import Optional, Any
+from typing import Optional
 from werkzeug.middleware.proxy_fix import ProxyFix
-from flask import Flask, render_template, request, g, jsonify, flash, redirect, url_for
+from flask import Flask, render_template, request, g, jsonify
 from flask_socketio import SocketIO
 from flask_login import LoginManager
-from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
@@ -21,6 +21,13 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from server.routes.metrics import metrics_bp
 from server.utils.logger import get_logger
 from server.routes.memory_api import memory_bp
+#from routes.export import export_bp
+#from routes.summary import summary_bp
+#from routes.flags import flags_bp
+#from routes.billing import billing_bp
+#from routes.integrations import integrations_bp
+#from routes.teams import teams_bp
+#from routes.comments import comments_bp
 from server.models.memory_store import MemoryStore
 import openai
 import numpy as np
@@ -371,8 +378,15 @@ def create_app() -> Flask:
     app.config["WTF_CSRF_SSL_STRICT"] = True  # Enforce HTTPS referer/origin checks (ProxyFix sets is_secure)
     app.config["WTF_CSRF_CHECK_DEFAULT"] = True  # Enable CSRF by default
     
-    # Store CSRF protect for blueprint access
-    app.extensions['csrf'] = csrf
+    # Exempt Socket.IO Engine.IO endpoint from CSRF (polling/handshake POST requests)
+    # Socket.IO uses its own connection-level authentication
+    # We wrap the error handler to allow Socket.IO requests through
+    original_error_handler = csrf._error_response
+    def custom_csrf_error(reason):
+        if request.path.startswith('/socket.io'):
+            return None  # Allow request to proceed
+        return original_error_handler(reason)
+    csrf._error_response = custom_csrf_error
 
     # Configure Flask-Limiter for production-grade rate limiting
     # Use Redis if available, fallback to memory storage
@@ -389,8 +403,8 @@ def create_app() -> Flask:
         swallow_errors=True,  # Don't crash app if rate limiter fails
     )
     
-    # Make limiter available via extensions (proper Flask pattern)
-    app.extensions['limiter'] = limiter
+    # Make limiter available for route decorators
+    app.limiter = limiter
     
     storage_type = "Redis" if redis_url else "Memory"
     app.logger.info(f"✅ Flask-Limiter configured ({storage_type} backend): 100/min, 1000/hour per IP")
@@ -503,28 +517,19 @@ def create_app() -> Flask:
             "pool_pre_ping": True,
         }
         
-        # Initialize database models with Flask-Migrate (production-safe)
+        # Initialize database models
         try:
             from models import db
             from flask_migrate import Migrate
 
             db.init_app(app)
             migrate = Migrate(app, db)
-            
-            # Store migrate for CLI access
-            app.extensions['migrate'] = migrate
 
-            # PRODUCTION PATTERN: Only use db.create_all() in development
-            # In production, always use Flask-Migrate: flask db upgrade
-            is_production = os.getenv("REPLIT_DEPLOYMENT") or os.getenv("FLASK_ENV") == "production"
-            
-            if is_production:
-                app.logger.info("✅ Database configured (production mode - use 'flask db upgrade' for migrations)")
-            else:
-                # Development fallback: create missing tables
-                with app.app_context():
-                    db.create_all()
-                app.logger.info("✅ Database connected and initialized (development mode - auto-created tables)")
+            # Create all tables that don't exist yet (development fallback)
+            with app.app_context():
+                db.create_all()
+
+            app.logger.info("✅ Database connected and initialized (migrations enabled)")
         except Exception as e:
             app.logger.warning(f"⚠️ Database initialization failed: {e}")
             app.logger.info("Continuing without database persistence")
@@ -545,7 +550,7 @@ def create_app() -> Flask:
                 return None
         
         @login_manager.unauthorized_handler
-        def handle_unauthorized_access():
+        def unauthorized():
             """Handle unauthorized access - return JSON for API routes, redirect for pages."""
             from flask import request, jsonify
             # Check if this is an API request (starts with /api/)
@@ -898,9 +903,21 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.error(f"Failed to register ops routes: {e}")
     
-    # Mock API fix blueprints removed - using real implementations:
-    # - api_meetings_bp (routes/api_meetings.py) - Real database queries
-    # - api_analytics_bp (routes/api_analytics.py) - Real analytics with workspace filtering
+    # Missing API endpoints - temporarily disabled due to circular import
+    # Quick fix for analytics and meetings endpoints
+    try:
+        from routes.quick_analytics_fix import quick_analytics_bp
+        app.register_blueprint(quick_analytics_bp)
+        app.logger.info("Quick analytics fix registered")
+    except Exception as e:
+        app.logger.error(f"Failed to register quick analytics fix: {e}")
+        
+    try:
+        from routes.meetings_api_fix import meetings_api_fix_bp
+        app.register_blueprint(meetings_api_fix_bp)
+        app.logger.info("Quick meetings API fix registered")
+    except Exception as e:
+        app.logger.error(f"Failed to register meetings API fix: {e}")
     
     # CROWN 4.6 Sessions API for delta synchronization
     try:
@@ -911,101 +928,40 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.error(f"Failed to register CROWN Sessions API: {e}")
 
-    # Register production health check endpoints (Google SRE standard)
-    try:
-        from routes.health_production import health_production_bp, mark_startup_complete
-        app.register_blueprint(health_production_bp)
-        app.logger.info("✅ Production health endpoints registered (/health/live, /health/ready, /health/startup)")
-    except Exception as e:
-        app.logger.error(f"Failed to register production health endpoints: {e}")
-    
-    # other blueprints (guarded) with explicit logging
+    # other blueprints (guarded)
     _optional = [
         ("routes.final_upload", "final_bp", "/api"),
+        #("routes.export", "export_bp", "/api"),
         ("routes.insights", "insights_bp", "/api"),
         ("routes.nudges", "nudges_bp", "/api"),
         ("routes.team_collaboration", "team_bp", "/api"),
         ("routes.advanced_analytics", "analytics_bp", "/api"),
         ("routes.integration_marketplace", "integrations_bp", "/api"),
+        ("routes.health", "health_bp", "/health"),
         ("routes.metrics_stream", "metrics_stream_bp", "/api"),
         ("routes.error_handlers", "errors_bp", None),
     ]
-    
-    loaded_optional = []
-    failed_optional = []
     for mod_name, bp_name, prefix in _optional:
         try:
             mod = __import__(mod_name, fromlist=[bp_name])
             bp = getattr(mod, bp_name)
             app.register_blueprint(bp, url_prefix=prefix) if prefix else app.register_blueprint(bp)
-            loaded_optional.append(mod_name)
-        except Exception as e:
-            failed_optional.append((mod_name, str(e)[:50]))
-    
-    if loaded_optional:
-        app.logger.info(f"Optional blueprints loaded: {len(loaded_optional)}")
-    if failed_optional:
-        app.logger.debug(f"Optional blueprints skipped (expected): {[f[0] for f in failed_optional]}")
+        except Exception:
+            pass
 
-    # Fallback health endpoints for compatibility
+    # basic /healthz if health blueprint absent
     @app.get("/healthz")
     def healthz():
         return {"ok": True, "uptime": True}, 200
-
-    # CSRF token refresh endpoint for auto-recovery (enterprise pattern)
-    @app.get("/api/csrf-token")
-    def get_csrf_token():
-        """
-        Provide fresh CSRF token for auto-recovery.
-        Used by frontend to silently retry failed requests.
-        """
-        from flask_wtf.csrf import generate_csrf
-        return jsonify({'token': generate_csrf()})
+    
+    # alias /health for CI/testing compatibility
+    @app.get("/health")
+    def health():
+        return {"ok": True, "uptime": True}, 200
 
     # Security-hardened error handlers - prevent information leakage
-    
-    @app.errorhandler(CSRFError)
-    def handle_csrf_error(e):
-        """
-        Enterprise-grade CSRF error handling.
-        - Comprehensive logging for security monitoring
-        - User-friendly messages (no technical jargon)
-        - API vs browser differentiation
-        - Fresh token provision for auto-retry
-        """
-        from flask_wtf.csrf import generate_csrf
-        
-        app.logger.warning(
-            f"CSRF validation failed | "
-            f"IP: {request.remote_addr} | "
-            f"Endpoint: {request.endpoint} | "
-            f"User-Agent: {request.headers.get('User-Agent', 'unknown')[:100]} | "
-            f"Referer: {request.headers.get('Referer', 'none')} | "
-            f"Reason: {e.description}"
-        )
-        
-        if request.accept_mimetypes.accept_html and not request.path.startswith('/api/'):
-            flash('Your session expired. Please try again.', 'warning')
-            referrer = request.referrer or url_for('auth.login')
-            return redirect(referrer)
-        
-        new_token = generate_csrf()
-        return jsonify({
-            'error': 'csrf_token_expired',
-            'message': 'Session expired. Please refresh and try again.',
-            'new_token': new_token,
-            'refresh_required': True,
-            'request_id': g.get('request_id')
-        }), 419
-    
     @app.errorhandler(400)
     def bad_request(e):
-        # For browser form submissions on non-API routes, show a user-friendly page
-        if request.accept_mimetypes.accept_html and not request.path.startswith('/api/'):
-            flash('There was a problem with your request. Please try again.', 'error')
-            referrer = request.referrer or url_for('main.index')
-            return redirect(referrer)
-        
         return jsonify({
             'error': 'bad_request',
             'message': 'The request could not be understood',
@@ -1133,28 +1089,74 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.error(f"❌ Failed to initialize Redis manager: {e}")
     
-    # Run startup validation and mark as complete
-    try:
-        from utils.startup_validation import run_startup_validation
-        startup_report = run_startup_validation()
-        
-        # Store report for health endpoint access
-        app.extensions['startup_report'] = startup_report.to_dict()
-        
-        # Mark startup complete for health probes
-        try:
-            from routes.health_production import mark_startup_complete
-            mark_startup_complete()
-        except ImportError:
-            pass
-            
-    except Exception as e:
-        app.logger.warning(f"Startup validation skipped: {e}")
-    
-    app.logger.info("✅ Mina app ready for traffic")
+    app.logger.info("Mina app ready")
     return app
 
 # WSGI entrypoints
+app = create_app()
+
+@app.route("/api/memory/search", methods=["POST"])
+def search_memory():
+    try:
+        data = request.get_json()
+        query = data.get("query")
+        if not query:
+            return jsonify({"error": "Missing query"}), 400
+
+        # 1. Create embedding for the query
+        embed_response = openai.embeddings.create(
+            input=query,
+            model="text-embedding-3-large"
+        )
+        query_embedding = embed_response.data[0].embedding
+
+        # 2. Run similarity search
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT id, content,
+                   1 - (embedding <=> %s::vector) AS similarity
+            FROM memory_embeddings
+            ORDER BY similarity DESC
+            LIMIT 5;
+        """, (query_embedding,))
+
+        results = [
+            {"id": r[0], "content": r[1], "similarity": round(r[2], 4)}
+            for r in cur.fetchall()
+        ]
+
+        cur.close()
+        conn.close()
+
+        return jsonify({"results": results, "count": len(results)}), 200
+
+    except Exception as e:
+        print("❌ Error in search_memory:", e)
+        return jsonify({"error": str(e)}), 500
+        
+logger = get_logger()
+logger.info("🚀 Starting Mina backend...")
+
+app.register_blueprint(metrics_bp)
+
+@app.before_request
+def before_request():
+    logger.info(f"Incoming request: {request.method} {request.path}")
+
+@app.after_request
+def after_request(response):
+    logger.info(f"Completed: {request.path} [{response.status_code}]")
+    return response
+
+# graceful shutdown for local/threading runs
+def _shutdown(*_):
+    app.logger.info("Shutting down gracefully…")
+    # In threading mode, there is no socketio.stop(); process will exit.
+signal.signal(signal.SIGTERM, _shutdown)
+signal.signal(signal.SIGINT, _shutdown)
+
 app = create_app()
 
 # Initialize Memory Persistence safely after Flask app context is ready
@@ -1257,3 +1259,8 @@ if __name__ == "__main__":
         app.config.get("SOCKETIO_PATH", "/socket.io")
     )
     socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False, log_output=True)
+
+if __name__ == "__main__":
+    app.logger.info("🚀 Mina at http://0.0.0.0:5000  (Socket.IO path %s)", app.config.get("SOCKETIO_PATH", "/socket.io"))
+    socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False, log_output=True)
+

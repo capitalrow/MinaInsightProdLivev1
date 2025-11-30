@@ -4,11 +4,10 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/toast-notifications.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="container settings-container" data-user-id="{{ current_user.id }}">
+<div class="container settings-container">
     <div class="settings-header">
         <h1 class="settings-title">Settings</h1>
         <p class="settings-subtitle">Manage your account and preferences</p>
@@ -27,13 +26,13 @@
 
     <div class="settings-card">
         <h2 class="settings-card-title">Personal Information</h2>
-        <form data-form="profile">
+        <form method="POST">
             <div style="display: flex; flex-direction: column; gap: var(--space-4);">
                 <div>
                     <label class="block text-sm font-medium mb-2">Profile Picture</label>
                     <div style="display: flex; align-items: center; gap: var(--space-4);">
-                        <div class="avatar-preview" style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, var(--color-primary) 0%, #9333ea 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: 600;">
-                            {{ current_user.username[0].upper() if current_user.username else 'U' }}
+                        <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, var(--color-primary) 0%, #9333ea 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: 600;">
+                            {{ user.username[0].upper() if user.username else 'U' }}
                         </div>
                         <div>
                             <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('avatar-upload').click()">Change Photo</button>
@@ -45,16 +44,16 @@
 
                 <div>
                     <label class="block text-sm font-medium mb-2">Full Name</label>
-                    <input type="text" name="full_name" value="{{ current_user.display_name or '' }}" placeholder="John Doe" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <input type="text" name="full_name" placeholder="John Doe" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium mb-2">Username</label>
-                    <input type="text" name="username" value="{{ current_user.username }}" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <input type="text" name="username" value="{{ user.username }}" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2">Email</label>
-                    <input type="email" name="email" value="{{ current_user.email }}" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <input type="email" name="email" value="{{ user.email }}" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
                 </div>
 
                 <div>
@@ -77,12 +76,12 @@
 
     <div class="settings-card">
         <h2 class="settings-card-title">Regional Settings</h2>
-        <form data-form="profile">
+        <form method="POST">
             <div style="display: flex; flex-direction: column; gap: var(--space-4);">
                 <div>
                     <label class="block text-sm font-medium mb-2">Timezone</label>
                     <select name="timezone" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
-                        <option value="America/New_York">Eastern Time (ET)</option>
+                        <option value="America/New_York" selected>Eastern Time (ET)</option>
                         <option value="America/Chicago">Central Time (CT)</option>
                         <option value="America/Denver">Mountain Time (MT)</option>
                         <option value="America/Los_Angeles">Pacific Time (PT)</option>
@@ -99,12 +98,12 @@
                     <label class="block text-sm font-medium mb-2">Language</label>
                     <select name="language" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
                         <option value="en" selected>English</option>
-                        <option value="es">Espanol</option>
-                        <option value="fr">Francais</option>
+                        <option value="es">Español</option>
+                        <option value="fr">Français</option>
                         <option value="de">Deutsch</option>
-                        <option value="zh">Chinese</option>
-                        <option value="ja">Japanese</option>
-                        <option value="pt">Portugues</option>
+                        <option value="zh">中文</option>
+                        <option value="ja">日本語</option>
+                        <option value="pt">Português</option>
                     </select>
                     <p class="text-xs text-secondary mt-1">Interface language (transcription language set in Preferences)</p>
                 </div>
@@ -141,7 +140,7 @@
                     <p class="font-medium">Two-Factor Authentication</p>
                     <p class="text-sm text-secondary">Add an extra layer of security to your account</p>
                 </div>
-                <button class="btn btn-sm btn-primary" data-action="enable-2fa">Enable</button>
+                <button class="btn btn-sm btn-primary">Enable</button>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-border);">
@@ -149,7 +148,7 @@
                     <p class="font-medium">Active Sessions</p>
                     <p class="text-sm text-secondary">Manage your active login sessions</p>
                 </div>
-                <button class="btn btn-sm btn-ghost" data-action="view-sessions">View Sessions</button>
+                <button class="btn btn-sm btn-ghost">View Sessions</button>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -157,27 +156,27 @@
                     <p class="font-medium">Login History</p>
                     <p class="text-sm text-secondary">Review your recent login activity</p>
                 </div>
-                <button class="btn btn-sm btn-ghost" data-action="view-history">View History</button>
+                <button class="btn btn-sm btn-ghost">View History</button>
             </div>
         </div>
     </div>
 
     <div class="settings-card">
         <h2 class="settings-card-title">Change Password</h2>
-        <form action="{{ url_for('auth.change_password') }}" method="POST">
+        <form method="POST" action="{{ url_for('auth.change_password') }}">
             <div style="display: flex; flex-direction: column; gap: var(--space-4);">
                 <div>
                     <label class="block text-sm font-medium mb-2">Current Password</label>
-                    <input type="password" name="current_password" required class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <input type="password" name="current_password" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2">New Password</label>
-                    <input type="password" name="new_password" required class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <input type="password" name="new_password" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
                     <p class="text-xs text-secondary mt-1">Must be at least 8 characters with a mix of letters, numbers, and symbols</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2">Confirm New Password</label>
-                    <input type="password" name="confirm_password" required class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <input type="password" name="confirm_password" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
                 </div>
             </div>
             
@@ -195,7 +194,7 @@
                     <p class="font-medium">Export Your Data</p>
                     <p class="text-sm text-secondary">Download all your meetings, transcripts, and settings</p>
                 </div>
-                <button class="btn btn-sm btn-ghost" data-action="export-data">Export Data</button>
+                <button class="btn btn-sm btn-ghost">Export Data</button>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -203,15 +202,10 @@
                     <p class="font-medium" style="color: var(--color-error);">Delete Account</p>
                     <p class="text-sm text-secondary">Permanently delete your account and all associated data</p>
                 </div>
-                <button class="btn btn-sm" style="background: var(--color-error); color: white;" data-action="delete-account">Delete Account</button>
+                <button class="btn btn-sm" style="background: var(--color-error); color: white;">Delete Account</button>
             </div>
         </div>
     </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
-<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock %}
