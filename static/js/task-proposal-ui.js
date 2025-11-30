@@ -81,23 +81,44 @@ class TaskProposalUI {
             this.currentStream = reader;
             const decoder = new TextDecoder();
             let buffer = '';
+            let chunkCount = 0;
+            let proposalCount = 0;
+
+            console.log('[TaskProposalUI] Starting stream read loop...');
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    console.log('[TaskProposalUI] Stream complete. Chunks:', chunkCount, 'Proposals:', proposalCount);
+                    break;
+                }
 
-                buffer += decoder.decode(value, { stream: true });
+                chunkCount++;
+                const decoded = decoder.decode(value, { stream: true });
+                buffer += decoded;
+                
+                if (chunkCount <= 3 || chunkCount % 10 === 0) {
+                    console.log(`[TaskProposalUI] Chunk ${chunkCount}: ${decoded.substring(0, 100)}...`);
+                }
+                
                 const lines = buffer.split('\n');
-                buffer = lines.pop(); // Keep incomplete line in buffer
+                buffer = lines.pop();
 
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
-                        const data = JSON.parse(line.substring(6));
-                        this.handleStreamEvent(data);
+                        try {
+                            const data = JSON.parse(line.substring(6));
+                            console.log('[TaskProposalUI] Event received:', data.type, data.type === 'proposal' ? data.task?.title : '');
+                            if (data.type === 'proposal') proposalCount++;
+                            this.handleStreamEvent(data);
+                        } catch (parseError) {
+                            console.error('[TaskProposalUI] JSON parse error:', parseError, 'Line:', line);
+                        }
                     }
                 }
             }
 
+            console.log('[TaskProposalUI] Stream processing complete');
             // Complete
             this.hideStreamingState();
             if (window.CROWNTelemetry) {
@@ -257,31 +278,45 @@ class TaskProposalUI {
     }
 
     handleStreamEvent(data) {
+        console.log('[TaskProposalUI] handleStreamEvent:', data.type);
         switch (data.type) {
             case 'chunk':
-                // Update streaming text (optional: show live text accumulation)
                 break;
             
             case 'proposal':
+                console.log('[TaskProposalUI] Rendering proposal:', data.task?.title);
                 this.renderProposal(data.task);
                 break;
             
             case 'done':
+                console.log('[TaskProposalUI] Stream done event received');
                 this.hideStreamingState();
                 break;
             
             case 'error':
+                console.error('[TaskProposalUI] Stream error:', data.message);
                 this.showError(data.message);
                 this.hideStreamingState();
                 break;
+                
+            default:
+                console.warn('[TaskProposalUI] Unknown event type:', data.type);
         }
     }
 
     renderProposal(task) {
-        if (!this.proposalContainer) return;
+        console.log('[TaskProposalUI] renderProposal called with:', task);
+        if (!this.proposalContainer) {
+            console.error('[TaskProposalUI] No proposal container!');
+            return;
+        }
 
         const content = this.proposalContainer.querySelector('.proposals-content');
-        if (!content) return;
+        if (!content) {
+            console.error('[TaskProposalUI] No proposals-content element!');
+            return;
+        }
+        console.log('[TaskProposalUI] Appending proposal card to content element');
 
         const proposalCard = document.createElement('div');
         proposalCard.className = 'task-card ai-proposal proposal-enter';
