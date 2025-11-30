@@ -824,7 +824,10 @@ class AnalyticsDashboard {
 
     updateParticipationChart(engagement) {
         const ctx = document.getElementById('participationChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
+
+        this.hideCrown5EmptyChart(chartFrame);
 
         if (this.charts.participation) {
             this.charts.participation.destroy();
@@ -873,14 +876,24 @@ class AnalyticsDashboard {
 
     async updateSentimentChart() {
         const ctx = document.getElementById('sentimentChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
 
         try {
             const response = await fetch(`/api/analytics/sentiment?days=${this.selectedDateRange}`);
             const data = await response.json();
             
-            if (!data.success || !data.sentiment.trend) return;
+            if (!data.success || !data.sentiment.trend || data.sentiment.trend.length === 0) {
+                this.renderCrown5EmptyChart(
+                    chartFrame,
+                    'line',
+                    'No sentiment data yet',
+                    'Record meetings to see emotional trends'
+                );
+                return;
+            }
 
+            this.hideCrown5EmptyChart(chartFrame);
             const trend = data.sentiment.trend;
             const labels = trend.map(t => {
                 const date = new Date(t.date);
@@ -1042,7 +1055,10 @@ class AnalyticsDashboard {
 
     createSpeakingTimeBarChart(labels, values, colors) {
         const ctx = document.getElementById('speakingTimeBarChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
+
+        this.hideCrown5EmptyChart(chartFrame);
 
         if (this.charts.speakingTimeBar) {
             this.charts.speakingTimeBar.destroy();
@@ -1093,7 +1109,10 @@ class AnalyticsDashboard {
 
     createSpeakingTimePieChart(labels, values, percentages, colors) {
         const ctx = document.getElementById('speakingTimePieChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
+
+        this.hideCrown5EmptyChart(chartFrame);
 
         if (this.charts.speakingTimePie) {
             this.charts.speakingTimePie.destroy();
@@ -1210,17 +1229,41 @@ class AnalyticsDashboard {
     }
 
     showEmptySpeakingTimeState() {
-        const container = document.getElementById('speakingTimeDetails');
-        if (!container) return;
-
-        container.innerHTML = AnalyticsDashboard.CROWN5_EMPTY_STATES.productivity(
-            `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
-                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>`,
-            'No speaking data yet',
-            'Record meetings to see who contributes and how time is distributed across participants.'
-        );
+        const barCtx = document.getElementById('speakingTimeBarChart');
+        const pieCtx = document.getElementById('speakingTimePieChart');
+        const detailsContainer = document.getElementById('speakingTimeDetails');
+        
+        const barFrame = barCtx?.closest('.chart-frame');
+        const pieFrame = pieCtx?.closest('.chart-frame');
+        
+        if (barFrame) {
+            this.renderCrown5EmptyChart(
+                barFrame,
+                'bar',
+                'No speaking data yet',
+                'Record meetings to see time distribution'
+            );
+        }
+        
+        if (pieFrame) {
+            this.renderCrown5EmptyChart(
+                pieFrame,
+                'donut',
+                'No balance data yet',
+                'Record meetings to see participation balance'
+            );
+        }
+        
+        if (detailsContainer) {
+            detailsContainer.innerHTML = AnalyticsDashboard.CROWN5_EMPTY_STATES.productivity(
+                `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
+                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                </svg>`,
+                'No speaking data yet',
+                'Record meetings to see who contributes and how time is distributed across participants.'
+            );
+        }
     }
 
     /**
@@ -1229,7 +1272,15 @@ class AnalyticsDashboard {
      */
     updateParticipationBalanceMetrics(communication) {
         const container = document.getElementById('participationBalanceMetrics');
-        if (!container || !communication || !communication.top_speakers) {
+        if (!container) return;
+        
+        if (!communication || !communication.top_speakers || communication.top_speakers.length === 0) {
+            container.innerHTML = `
+                ${this.createBalanceMetricCard('Speaking Time Balance', NaN, 'No Data', 'Record meetings to see metrics', 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z')}
+                ${this.createBalanceMetricCard('Contribution Equity', NaN, 'No Data', 'Record meetings to see metrics', 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z')}
+                ${this.createBalanceMetricCard('Engagement Dispersion', NaN, 'No Data', 'Record meetings to see metrics', 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z')}
+                ${this.createBalanceMetricCard('Participation Health', NaN, 'No Data', 'Record meetings to see metrics', 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z')}
+            `;
             return;
         }
 
