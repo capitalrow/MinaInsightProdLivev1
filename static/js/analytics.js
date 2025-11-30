@@ -515,16 +515,20 @@ class AnalyticsDashboard {
 
     async loadDashboardData() {
         try {
-            const [dashboardRes, kpiComparisonRes, topicsRes] = await Promise.all([
+            const [dashboardRes, kpiComparisonRes, topicsRes, healthRes, insightsRes] = await Promise.all([
                 fetch(`/api/analytics/dashboard?days=${this.selectedDateRange}`),
                 fetch(`/api/analytics/kpi-comparison?days=${this.selectedDateRange}`),
-                fetch(`/api/analytics/topic-distribution?days=${this.selectedDateRange}`)
+                fetch(`/api/analytics/topic-distribution?days=${this.selectedDateRange}`),
+                fetch(`/api/analytics/meeting-health?days=${this.selectedDateRange}`),
+                fetch(`/api/analytics/actionable-insights?days=${this.selectedDateRange}`)
             ]);
             
-            const [dashboardData, kpiComparisonData, topicsData] = await Promise.all([
+            const [dashboardData, kpiComparisonData, topicsData, healthData, insightsData] = await Promise.all([
                 dashboardRes.json(),
                 kpiComparisonRes.json(),
-                topicsRes.json()
+                topicsRes.json(),
+                healthRes.json(),
+                insightsRes.json()
             ]);
             
             if (dashboardData.success) {
@@ -537,6 +541,14 @@ class AnalyticsDashboard {
             
             if (topicsData.success) {
                 this.updateTopicsDistribution(topicsData);
+            }
+            
+            if (healthData.success) {
+                this.updateMeetingHealthScore(healthData.health_score);
+            }
+            
+            if (insightsData.success) {
+                this.updateActionableInsights(insightsData.insights);
             }
         } catch (error) {
             console.error('Failed to load dashboard data:', error);
@@ -678,6 +690,174 @@ class AnalyticsDashboard {
                     </div>
                     <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${topic.percentage}" aria-valuemin="0" aria-valuemax="100" aria-label="${topic.name} ${topic.percentage} percent">
                         <div class="h-full transition-all duration-500" style="width: ${topic.percentage}%; background: ${color}"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    updateMeetingHealthScore(healthScore) {
+        const scoreValue = document.getElementById('health-score-value');
+        const scoreMessage = document.getElementById('health-score-message');
+        const scoreTrend = document.getElementById('health-score-trend');
+        const scoreArc = document.getElementById('health-score-arc');
+        
+        const effectivenessEl = document.getElementById('health-effectiveness');
+        const engagementEl = document.getElementById('health-engagement');
+        const followthroughEl = document.getElementById('health-followthrough');
+        const decisionsEl = document.getElementById('health-decisions');
+
+        if (!healthScore || healthScore.meetings_analyzed === 0) {
+            if (scoreValue) scoreValue.textContent = '—';
+            if (scoreMessage) scoreMessage.textContent = 'Record meetings to see your health score';
+            if (scoreTrend) scoreTrend.innerHTML = '';
+            if (scoreArc) scoreArc.style.strokeDasharray = '0, 100';
+            return;
+        }
+
+        const score = healthScore.score;
+        const breakdown = healthScore.breakdown || {};
+
+        if (scoreValue) {
+            this.animateHealthScore(scoreValue, scoreArc, score);
+        }
+
+        if (scoreMessage) {
+            scoreMessage.textContent = healthScore.status_message;
+        }
+
+        const statusColors = {
+            'excellent': '#22c55e',
+            'good': '#3b82f6',
+            'fair': '#f59e0b',
+            'needs_attention': '#ef4444'
+        };
+        
+        if (scoreArc) {
+            scoreArc.style.stroke = statusColors[healthScore.status] || 'var(--color-primary)';
+        }
+
+        if (scoreTrend) {
+            const change = healthScore.change;
+            const trend = healthScore.trend;
+            
+            if (trend === 'improving') {
+                scoreTrend.innerHTML = `
+                    <span class="flex items-center gap-1 text-sm" style="color: var(--color-success);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M7 17l5-5 5 5M7 7h10"/>
+                        </svg>
+                        +${Math.abs(change)} from last period
+                    </span>
+                `;
+            } else if (trend === 'declining') {
+                scoreTrend.innerHTML = `
+                    <span class="flex items-center gap-1 text-sm" style="color: var(--color-error);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M7 7l5 5 5-5M7 17h10"/>
+                        </svg>
+                        ${change} from last period
+                    </span>
+                `;
+            } else {
+                scoreTrend.innerHTML = `
+                    <span class="flex items-center gap-1 text-sm text-tertiary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"/>
+                        </svg>
+                        Stable
+                    </span>
+                `;
+            }
+        }
+
+        if (effectivenessEl) effectivenessEl.textContent = `${breakdown.effectiveness || 0}%`;
+        if (engagementEl) engagementEl.textContent = `${breakdown.engagement || 0}%`;
+        if (followthroughEl) followthroughEl.textContent = `${breakdown.follow_through || 0}%`;
+        if (decisionsEl) decisionsEl.textContent = `${breakdown.decision_velocity || 0}%`;
+    }
+
+    animateHealthScore(valueEl, arcEl, targetScore) {
+        const startTime = performance.now();
+        const duration = 1000;
+        
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            
+            const currentScore = Math.round(targetScore * eased);
+            valueEl.textContent = currentScore;
+            
+            if (arcEl) {
+                arcEl.style.strokeDasharray = `${currentScore}, 100`;
+            }
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+        
+        requestAnimationFrame(animate);
+    }
+
+    updateActionableInsights(insights) {
+        const insightsContainer = document.getElementById('actionable-insights-container');
+        const insightsCount = document.getElementById('insights-count');
+        if (!insightsContainer) return;
+
+        if (insightsCount) {
+            if (insights && insights.length > 0) {
+                insightsCount.textContent = `${insights.length} recommendation${insights.length > 1 ? 's' : ''}`;
+            } else {
+                insightsCount.textContent = '';
+            }
+        }
+
+        if (!insights || insights.length === 0) {
+            insightsContainer.innerHTML = `
+                <div class="crown5-empty-state" role="status">
+                    <div class="crown5-empty-illustration">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                        </svg>
+                    </div>
+                    <p class="crown5-empty-title">No insights available yet</p>
+                    <p class="crown5-empty-description">Record more meetings to get personalized recommendations</p>
+                </div>
+            `;
+            return;
+        }
+
+        const typeIcons = {
+            'warning': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`,
+            'info': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
+            'success': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`
+        };
+
+        const typeColors = {
+            'warning': { bg: 'rgba(245, 158, 11, 0.1)', text: '#f59e0b', border: 'rgba(245, 158, 11, 0.2)' },
+            'info': { bg: 'rgba(59, 130, 246, 0.1)', text: '#3b82f6', border: 'rgba(59, 130, 246, 0.2)' },
+            'success': { bg: 'rgba(34, 197, 94, 0.1)', text: '#22c55e', border: 'rgba(34, 197, 94, 0.2)' }
+        };
+
+        insightsContainer.innerHTML = insights.slice(0, 4).map((insight, idx) => {
+            const colors = typeColors[insight.type] || typeColors.info;
+            const icon = typeIcons[insight.type] || typeIcons.info;
+            
+            return `
+                <div class="insight-card crown5-fade-in" role="article" style="animation-delay: ${idx * 100}ms; background: ${colors.bg}; border: 1px solid ${colors.border}; border-radius: var(--radius-md); padding: var(--space-4);">
+                    <div class="flex items-start gap-3">
+                        <div style="color: ${colors.text}; flex-shrink: 0;">
+                            ${icon}
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="font-semibold text-sm mb-1">${insight.title}</h4>
+                            <p class="text-sm text-secondary">${insight.description}</p>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs font-medium" style="background: ${colors.bg}; color: ${colors.text};">
+                            ${insight.priority}
+                        </span>
                     </div>
                 </div>
             `;
