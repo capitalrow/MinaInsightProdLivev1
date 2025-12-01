@@ -213,6 +213,9 @@ class AnalyticsDashboard {
         // Set up widget customization
         this.setupWidgetCustomization();
         
+        // Set up deep dive accordions
+        this.setupAccordions();
+        
         // Load initial data
         await this.loadDashboardData();
         
@@ -221,6 +224,56 @@ class AnalyticsDashboard {
         
         // Apply widget preferences
         this.applyWidgetPreferences();
+    }
+    
+    setupAccordions() {
+        const accordionSections = document.querySelectorAll('.deep-dive-section');
+        
+        accordionSections.forEach(section => {
+            const header = section.querySelector('.deep-dive-header');
+            const content = section.querySelector('.deep-dive-content');
+            if (!header || !content) return;
+            
+            header.removeAttribute('onclick');
+            
+            const isOpen = section.classList.contains('open');
+            header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            
+            if (isOpen) {
+                content.style.maxHeight = '2000px';
+            } else {
+                content.style.maxHeight = '0';
+            }
+            
+            header.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const currentlyOpen = section.classList.contains('open');
+                
+                if (currentlyOpen) {
+                    section.classList.remove('open');
+                    header.setAttribute('aria-expanded', 'false');
+                    content.style.maxHeight = '0';
+                } else {
+                    section.classList.add('open');
+                    header.setAttribute('aria-expanded', 'true');
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                    setTimeout(() => {
+                        if (section.classList.contains('open')) {
+                            content.style.maxHeight = '2000px';
+                        }
+                    }, 400);
+                }
+            });
+            
+            header.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    header.click();
+                }
+            });
+        });
     }
 
     loadWidgetPreferences() {
@@ -516,7 +569,7 @@ class AnalyticsDashboard {
                 fetch(`/api/analytics/dashboard?days=${this.selectedDateRange}`),
                 fetch(`/api/analytics/kpi-comparison?days=${this.selectedDateRange}`),
                 fetch(`/api/analytics/topic-distribution?days=${this.selectedDateRange}`),
-                fetch(`/api/analytics/meeting-health?days=${this.selectedDateRange}`),
+                fetch(`/api/analytics/health-score?days=${this.selectedDateRange}`),
                 fetch(`/api/analytics/actionable-insights?days=${this.selectedDateRange}`)
             ]);
             
@@ -958,10 +1011,111 @@ class AnalyticsDashboard {
         // Update Task Status Chart
         this.updateTaskStatusChart(dashboard);
         
+        // Update Task Completion Trend Chart
+        this.updateTaskCompletionChart(dashboard);
+        
         // Load and update Speaker Distribution
         this.loadCommunicationData().then(commData => {
             this.updateSpeakerChart(commData || {});
         });
+    }
+    
+    updateTaskCompletionChart(dashboard) {
+        const ctx = document.getElementById('taskCompletionChart');
+        const chartFrame = ctx?.closest('.chart-frame');
+        if (!ctx || !chartFrame) return;
+        
+        if (this.charts.taskCompletion) {
+            this.charts.taskCompletion.destroy();
+            this.charts.taskCompletion = null;
+        }
+        
+        const taskStatus = dashboard?.productivity?.task_status || {};
+        const completed = taskStatus.completed || 0;
+        const inProgress = taskStatus.in_progress || 0;
+        const pending = taskStatus.pending || 0;
+        const totalTasks = completed + inProgress + pending;
+        
+        if (totalTasks === 0) {
+            ctx.style.display = 'none';
+            this.renderCrown5EmptyChart(
+                chartFrame,
+                'bar',
+                'No tasks yet',
+                'Create tasks to track completion'
+            );
+            return;
+        }
+        
+        ctx.style.display = '';
+        this.hideCrown5EmptyChart(chartFrame);
+        
+        const completionRate = dashboard?.productivity?.completion_rate || 0;
+        const remainingRate = 100 - completionRate;
+        
+        this.charts.taskCompletion = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Progress'],
+                datasets: [{
+                    label: 'Completed',
+                    data: [completionRate],
+                    backgroundColor: 'rgb(34, 197, 94)',
+                    borderRadius: 4
+                }, {
+                    label: 'Remaining',
+                    data: [remainingRate],
+                    backgroundColor: 'rgba(156, 163, 175, 0.3)',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2.5,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (item) => {
+                                if (item.datasetIndex === 0) {
+                                    return `Completed: ${Math.round(completionRate)}% (${completed} tasks)`;
+                                }
+                                return `Remaining: ${Math.round(remainingRate)}% (${inProgress + pending} tasks)`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        max: 100,
+                        ticks: { callback: (v) => v + '%' }
+                    },
+                    y: {
+                        stacked: true,
+                        display: false
+                    }
+                }
+            }
+        });
+        
+        const rateDisplay = chartFrame.closest('.chart-card')?.querySelector('.completion-rate-display');
+        if (!rateDisplay) {
+            const card = chartFrame.closest('.chart-card');
+            if (card) {
+                const rateEl = document.createElement('div');
+                rateEl.className = 'completion-rate-display';
+                rateEl.innerHTML = `
+                    <div style="text-align: center; margin-top: var(--space-3);">
+                        <span style="font-size: 1.5rem; font-weight: 700; color: var(--color-success);">${Math.round(completionRate)}%</span>
+                        <span style="font-size: 0.85rem; color: var(--color-text-tertiary);"> completion rate</span>
+                    </div>
+                `;
+                card.appendChild(rateEl);
+            }
+        }
     }
 
     updateMeetingActivityChart(trendData) {
