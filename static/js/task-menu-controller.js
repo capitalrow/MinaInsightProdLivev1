@@ -1255,8 +1255,10 @@ class TaskMenuController {
             return;
         }
 
-        const taskMeta = card.querySelector('.task-metadata');
-        let assigneeBadge = card.querySelector('.task-assignee');
+        // CRITICAL: Handle both server-rendered (.task-assignee) and JS-rendered (.task-assignees) structures
+        const taskMeta = card.querySelector('.task-metadata') || card.querySelector('.task-content');
+        let assigneeBadge = card.querySelector('.task-assignee') || card.querySelector('.task-assignees');
+        console.log('[TaskMenuController] Found assignee badge element:', assigneeBadge?.className);
         
         // Helper to escape HTML
         const escapeHtml = (str) => {
