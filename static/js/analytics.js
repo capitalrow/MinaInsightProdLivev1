@@ -1073,21 +1073,21 @@ class AnalyticsDashboard {
                     label: 'Completed',
                     data: [completionRate],
                     backgroundColor: completedGradient,
-                    borderRadius: 6,
-                    barThickness: 24
+                    borderRadius: 10,
+                    barThickness: 48
                 }, {
                     label: 'Remaining',
                     data: [remainingRate],
                     backgroundColor: remainingGradient,
-                    borderRadius: 6,
-                    barThickness: 24,
+                    borderRadius: 10,
+                    barThickness: 48,
                     hoverBackgroundColor: 'rgba(100, 116, 139, 0.35)'
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                aspectRatio: 3,
+                aspectRatio: 2,
                 indexAxis: 'y',
                 plugins: {
                     legend: { display: false },
