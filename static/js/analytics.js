@@ -1054,9 +1054,16 @@ class AnalyticsDashboard {
         const remainingRate = 100 - completionRate;
         
         const context2d = ctx.getContext('2d');
-        const completedGradient = context2d.createLinearGradient(0, 0, ctx.width || 300, 0);
+        if (!context2d) return;
+        
+        const chartWidth = ctx.width || 300;
+        const completedGradient = context2d.createLinearGradient(0, 0, chartWidth, 0);
         completedGradient.addColorStop(0, 'rgba(34, 197, 94, 0.9)');
         completedGradient.addColorStop(1, 'rgba(22, 163, 74, 1)');
+        
+        const remainingGradient = context2d.createLinearGradient(0, 0, chartWidth, 0);
+        remainingGradient.addColorStop(0, 'rgba(100, 116, 139, 0.15)');
+        remainingGradient.addColorStop(1, 'rgba(100, 116, 139, 0.25)');
 
         this.charts.taskCompletion = new Chart(ctx, {
             type: 'bar',
@@ -1071,9 +1078,10 @@ class AnalyticsDashboard {
                 }, {
                     label: 'Remaining',
                     data: [remainingRate],
-                    backgroundColor: 'rgba(100, 116, 139, 0.2)',
+                    backgroundColor: remainingGradient,
                     borderRadius: 6,
-                    barThickness: 24
+                    barThickness: 24,
+                    hoverBackgroundColor: 'rgba(100, 116, 139, 0.35)'
                 }]
             },
             options: {
@@ -1145,7 +1153,10 @@ class AnalyticsDashboard {
             this.charts.meetingActivity.destroy();
         }
 
-        const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, ctx.height || 200);
+        const context2d = ctx.getContext('2d');
+        if (!context2d) return;
+        
+        const gradient = context2d.createLinearGradient(0, 0, 0, ctx.height || 200);
         gradient.addColorStop(0, 'rgba(99, 102, 241, 0.25)');
         gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.08)');
         gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
@@ -1263,16 +1274,18 @@ class AnalyticsDashboard {
         }
 
         const context2d = ctx.getContext('2d');
+        if (!context2d) return;
         
-        const completedGradient = context2d.createLinearGradient(0, 0, 0, ctx.height || 200);
+        const chartHeight = ctx.height || 200;
+        const completedGradient = context2d.createLinearGradient(0, 0, 0, chartHeight);
         completedGradient.addColorStop(0, 'rgba(34, 197, 94, 1)');
         completedGradient.addColorStop(1, 'rgba(22, 163, 74, 1)');
         
-        const inProgressGradient = context2d.createLinearGradient(0, 0, 0, ctx.height || 200);
+        const inProgressGradient = context2d.createLinearGradient(0, 0, 0, chartHeight);
         inProgressGradient.addColorStop(0, 'rgba(249, 115, 22, 1)');
         inProgressGradient.addColorStop(1, 'rgba(234, 88, 12, 1)');
         
-        const pendingGradient = context2d.createLinearGradient(0, 0, 0, ctx.height || 200);
+        const pendingGradient = context2d.createLinearGradient(0, 0, 0, chartHeight);
         pendingGradient.addColorStop(0, 'rgba(148, 163, 184, 0.8)');
         pendingGradient.addColorStop(1, 'rgba(100, 116, 139, 0.8)');
 
