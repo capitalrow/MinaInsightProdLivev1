@@ -1462,12 +1462,21 @@
                 label.textContent = text;
                 hiddenSelect.value = value;
                 
+                // Dispatch change event for any external listeners
+                hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                
                 // Close dropdown
                 closeDropdown();
                 
                 // Trigger data reload
                 AnalyticsCache.set(null, null);
                 loadAnalyticsData();
+                
+                // Announce to screen readers
+                const liveRegion = document.getElementById('analytics-live-region');
+                if (liveRegion) {
+                    liveRegion.textContent = `Date range changed to ${text}`;
+                }
             });
         });
         
