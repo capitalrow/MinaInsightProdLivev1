@@ -965,8 +965,9 @@ class OptimisticUI {
         // Update assignee badge (CRITICAL FIX: Instant UI update for assignments)
         // Handles both existing badges and re-rendering when badge structure needs updating
         // INDUSTRY-STANDARD: Follows Linear/Notion/Asana pattern for instant optimistic updates
-        const taskMeta = card.querySelector('.task-meta');
-        let assigneeBadge = card.querySelector('.assignee-badge');
+        // CROWN⁴.7: Fixed CSS selectors to match _task_card_macro.html template
+        const taskMeta = card.querySelector('.task-metadata');
+        let assigneeBadge = card.querySelector('.task-assignee');
         
         // STEP 1: Resolve assigned_to from IDs if TaskCache stripped the user object
         // This is the key fix - look up user objects from the assignee selector's cache
@@ -986,34 +987,45 @@ class OptimisticUI {
         
         if (resolvedAssignedTo && resolvedAssignedTo.id) {
             // ASSIGN: Show assignee name with full badge structure
+            // CROWN⁴.7: Match template class (.task-assignee) and SVG icon structure
             const displayName = resolvedAssignedTo.display_name || resolvedAssignedTo.username || resolvedAssignedTo.email || 'Assigned';
-            const newBadgeHTML = `<span class="assignee-badge" data-user-id="${resolvedAssignedTo.id}">👤 ${this._escapeHtml(displayName)}</span>`;
+            const newBadgeHTML = `<span class="task-assignee" data-field="assignee" data-user-id="${resolvedAssignedTo.id}" title="Click to assign">
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                ${this._escapeHtml(displayName)}
+            </span>`;
             console.log('[_updateTaskInDOM] Rendering assignee badge:', displayName);
             
             if (assigneeBadge) {
                 assigneeBadge.outerHTML = newBadgeHTML;
             } else if (taskMeta) {
-                taskMeta.insertAdjacentHTML('beforeend', newBadgeHTML);
+                taskMeta.insertAdjacentHTML('afterbegin', newBadgeHTML);
             }
         } else if (isExplicitUnassign || hasEmptyAssigneeIds) {
-            // UNASSIGN: Explicitly unassigned - show placeholder
-            const unassignedHTML = `<span class="assignee-badge assignee-add">+ Assign</span>`;
+            // UNASSIGN: Explicitly unassigned - show Unassigned placeholder
+            // CROWN⁴.7: Match template structure for unassigned state
+            const unassignedHTML = `<span class="task-assignee" data-field="assignee" title="Click to assign">
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                Unassigned
+            </span>`;
             console.log('[_updateTaskInDOM] Clearing assignee (unassign)');
             
             if (assigneeBadge) {
                 assigneeBadge.outerHTML = unassignedHTML;
             } else if (taskMeta) {
-                taskMeta.insertAdjacentHTML('beforeend', unassignedHTML);
+                taskMeta.insertAdjacentHTML('afterbegin', unassignedHTML);
             }
         } else if (task.assignee_ids && task.assignee_ids.length > 0) {
             // Fallback: Has IDs but couldn't resolve user - show generic placeholder
-            const placeholderHTML = `<span class="assignee-badge">👤 Assigned</span>`;
+            const placeholderHTML = `<span class="task-assignee" data-field="assignee" title="Click to assign">
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                Assigned
+            </span>`;
             console.log('[_updateTaskInDOM] Fallback: showing generic Assigned badge');
             
             if (assigneeBadge) {
                 assigneeBadge.outerHTML = placeholderHTML;
             } else if (taskMeta) {
-                taskMeta.insertAdjacentHTML('beforeend', placeholderHTML);
+                taskMeta.insertAdjacentHTML('afterbegin', placeholderHTML);
             }
         }
 
