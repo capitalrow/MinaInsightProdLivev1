@@ -642,14 +642,14 @@ class TaskBootstrap {
         const isDueSoon = task.due_date && this.isDueDateWithin(task.due_date, 1); // 1 day
         const isOverdue = task.due_date && this.isDueDateOverdue(task.due_date) && !isCompleted;
 
-        // CROWN⁴.5: Multi-assignee display with overflow handling
-        const assigneeIds = task.assignee_ids || [];
-        const assignees = task.assignees || [];
+        // CROWN⁴.8: Multi-assignee display with overflow handling + ID sorting for consistency
+        const assigneeIds = (task.assignee_ids || []).slice().sort((a, b) => a - b);
+        const assignees = (task.assignees || []).slice().sort((a, b) => (a.id || 0) - (b.id || 0));
         const maxVisibleAssignees = 2;
         
         let assigneeHTML = '';
         if (assigneeIds.length > 0) {
-            // Multi-assignee mode
+            // Multi-assignee mode (sorted by ID for consistency with optimistic updates)
             const visibleAssignees = assignees.slice(0, maxVisibleAssignees);
             const overflowCount = assigneeIds.length - maxVisibleAssignees;
             
@@ -708,6 +708,7 @@ class TaskBootstrap {
                  data-task-id="${task.id}"
                  data-status="${status}"
                  data-priority="${priority}"
+                 data-assignee-ids="${assigneeIds.join(',')}"
                  style="animation-delay: ${index * 0.05}s;">
                 
                 <!-- Checkbox (36x36px click area with 22x22px visual) -->
