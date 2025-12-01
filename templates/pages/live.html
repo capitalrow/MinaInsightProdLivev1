@@ -609,6 +609,280 @@
     color: var(--color-text-tertiary);
 }
 
+.quick-actions-card.revealed {
+    display: block !important;
+    animation: quickActionsReveal 0.4s var(--calm-ease-out) forwards;
+}
+
+@keyframes quickActionsReveal {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.bookmark-marker {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: var(--radius-lg);
+    margin: var(--space-3) 0;
+    animation: bookmarkPulse 0.5s var(--calm-ease-out);
+}
+
+.bookmark-marker svg {
+    width: 16px;
+    height: 16px;
+    color: #f59e0b;
+    flex-shrink: 0;
+}
+
+.bookmark-marker-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.bookmark-marker-time {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: #f59e0b;
+}
+
+.bookmark-marker-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+@keyframes bookmarkPulse {
+    0% {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    50% {
+        transform: scale(1.02);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.quick-note-entry {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(37, 99, 235, 0.08) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-4);
+    margin: var(--space-3) 0;
+    animation: noteFadeIn 0.3s var(--calm-ease-out);
+}
+
+.quick-note-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.quick-note-header svg {
+    width: 14px;
+    height: 14px;
+    color: #3b82f6;
+}
+
+.quick-note-time {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: #3b82f6;
+}
+
+.quick-note-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    line-height: 1.5;
+}
+
+@keyframes noteFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.note-input-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: overlayFadeIn 0.2s ease-out;
+    padding: var(--space-4);
+}
+
+@keyframes overlayFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.note-input-modal {
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-6);
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+    animation: modalSlideUp 0.3s var(--calm-ease-out);
+}
+
+@keyframes modalSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.note-input-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+}
+
+.note-input-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.note-input-timestamp {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+}
+
+.note-input-field {
+    width: 100%;
+    min-height: 100px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+    resize: none;
+    font-family: inherit;
+    transition: border-color 0.2s ease;
+}
+
+.note-input-field:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.note-input-field::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+.note-input-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}
+
+.note-btn {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.note-btn-cancel {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--color-text-secondary);
+}
+
+.note-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.note-btn-save {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border: none;
+    color: white;
+}
+
+.note-btn-save:hover {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    transform: translateY(-1px);
+}
+
+.note-btn-save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.share-toast {
+    position: fixed;
+    bottom: var(--space-6);
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.95) 0%, rgba(5, 150, 105, 0.95) 100%);
+    color: white;
+    padding: var(--space-3) var(--space-5);
+    border-radius: 9999px;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+    z-index: 1001;
+    animation: toastSlideUp 0.3s var(--calm-ease-out);
+}
+
+@keyframes toastSlideUp {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+.action-button-success {
+    animation: actionSuccess 0.4s ease-out;
+}
+
+@keyframes actionSuccess {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.95); background: rgba(16, 185, 129, 0.2); }
+    100% { transform: scale(1); }
+}
+
 .export-btn {
     display: inline-flex;
     align-items: center;
@@ -1000,10 +1274,10 @@
             </div>
 
             <div class="sidebar">
-                <div class="quick-actions-card">
+                <div class="quick-actions-card" id="quick-actions-card" style="display: none;">
                     <h3 class="quick-actions-title">Quick Actions</h3>
                     <div class="quick-actions">
-                        <button class="action-button" id="add-marker-button" disabled>
+                        <button class="action-button" id="add-marker-button">
                             <div class="action-icon-wrapper">
                                 <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
@@ -1014,7 +1288,7 @@
                                 <span class="action-hint">Mark important moments</span>
                             </div>
                         </button>
-                        <button class="action-button" id="take-note-button" disabled>
+                        <button class="action-button" id="take-note-button">
                             <div class="action-icon-wrapper">
                                 <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -1025,7 +1299,7 @@
                                 <span class="action-hint">Capture thoughts instantly</span>
                             </div>
                         </button>
-                        <button class="action-button" id="share-button" disabled>
+                        <button class="action-button" id="share-button">
                             <div class="action-icon-wrapper">
                                 <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
@@ -1139,6 +1413,10 @@ const addMarkerButton = document.getElementById('add-marker-button');
 const takeNoteButton = document.getElementById('take-note-button');
 const shareButton = document.getElementById('share-button');
 const exportButton = document.getElementById('export-button');
+const quickActionsCard = document.getElementById('quick-actions-card');
+
+let bookmarks = [];
+let quickNotes = [];
 
 socket = io({
     path: '/socket.io',
@@ -1320,13 +1598,12 @@ recordButton.addEventListener('click', async () => {
             recordButtonWrapper.classList.add('recording');
             pauseButton.disabled = false;
             stopButton.disabled = false;
-            addMarkerButton.disabled = false;
-            takeNoteButton.disabled = false;
-            shareButton.disabled = false;
             exportButton.disabled = false;
             recorderStatus.classList.add('recording');
             recorderStatus.querySelector('span:last-child').textContent = 'Recording...';
             waveformContainer.classList.add('active');
+            
+            quickActionsCard.classList.add('revealed');
             
             transcriptContent.innerHTML = '';
             
@@ -1390,6 +1667,188 @@ stopButton.addEventListener('click', () => {
     
     console.log('Recording stopped');
 });
+
+function getCurrentTimestamp() {
+    if (!startTime) return '00:00:00';
+    const elapsed = Date.now() - startTime;
+    const hours = Math.floor(elapsed / 3600000);
+    const minutes = Math.floor((elapsed % 3600000) / 60000);
+    const seconds = Math.floor((elapsed % 60000) / 1000);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+addMarkerButton.addEventListener('click', () => {
+    if (!isRecording) return;
+    
+    const timestamp = getCurrentTimestamp();
+    const bookmarkId = Date.now();
+    
+    bookmarks.push({
+        id: bookmarkId,
+        timestamp: timestamp,
+        time: Date.now() - startTime
+    });
+    
+    const marker = document.createElement('div');
+    marker.className = 'bookmark-marker';
+    marker.dataset.bookmarkId = bookmarkId;
+    marker.innerHTML = `
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+        </svg>
+        <div class="bookmark-marker-content">
+            <span class="bookmark-marker-time">${timestamp}</span>
+            <span class="bookmark-marker-label">Bookmark added</span>
+        </div>
+    `;
+    
+    if (transcriptContent.querySelector('.transcript-empty')) {
+        transcriptContent.innerHTML = '';
+    }
+    transcriptContent.appendChild(marker);
+    transcriptContent.scrollTop = transcriptContent.scrollHeight;
+    
+    addMarkerButton.classList.add('action-button-success');
+    setTimeout(() => addMarkerButton.classList.remove('action-button-success'), 400);
+});
+
+takeNoteButton.addEventListener('click', () => {
+    if (!isRecording) return;
+    
+    const timestamp = getCurrentTimestamp();
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'note-input-overlay';
+    overlay.innerHTML = `
+        <div class="note-input-modal">
+            <div class="note-input-header">
+                <span class="note-input-title">Quick Note</span>
+                <span class="note-input-timestamp">${timestamp}</span>
+            </div>
+            <textarea class="note-input-field" placeholder="Capture your thought..." autofocus></textarea>
+            <div class="note-input-actions">
+                <button class="note-btn note-btn-cancel">Cancel</button>
+                <button class="note-btn note-btn-save" disabled>Save Note</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    const textarea = overlay.querySelector('.note-input-field');
+    const saveBtn = overlay.querySelector('.note-btn-save');
+    const cancelBtn = overlay.querySelector('.note-btn-cancel');
+    
+    textarea.focus();
+    
+    textarea.addEventListener('input', () => {
+        saveBtn.disabled = !textarea.value.trim();
+    });
+    
+    const closeModal = () => {
+        overlay.style.animation = 'overlayFadeIn 0.2s ease-out reverse';
+        setTimeout(() => overlay.remove(), 150);
+    };
+    
+    cancelBtn.addEventListener('click', closeModal);
+    
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+    
+    saveBtn.addEventListener('click', () => {
+        const noteText = textarea.value.trim();
+        if (!noteText) return;
+        
+        const noteId = Date.now();
+        quickNotes.push({
+            id: noteId,
+            timestamp: timestamp,
+            text: noteText,
+            time: Date.now() - startTime
+        });
+        
+        const noteEntry = document.createElement('div');
+        noteEntry.className = 'quick-note-entry';
+        noteEntry.dataset.noteId = noteId;
+        noteEntry.innerHTML = `
+            <div class="quick-note-header">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+                <span class="quick-note-time">${timestamp}</span>
+            </div>
+            <div class="quick-note-text">${noteText}</div>
+        `;
+        
+        if (transcriptContent.querySelector('.transcript-empty')) {
+            transcriptContent.innerHTML = '';
+        }
+        transcriptContent.appendChild(noteEntry);
+        transcriptContent.scrollTop = transcriptContent.scrollHeight;
+        
+        closeModal();
+        
+        takeNoteButton.classList.add('action-button-success');
+        setTimeout(() => takeNoteButton.classList.remove('action-button-success'), 400);
+    });
+    
+    document.addEventListener('keydown', function escHandler(e) {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    });
+});
+
+shareButton.addEventListener('click', async () => {
+    const shareUrl = window.location.href;
+    
+    try {
+        if (navigator.share) {
+            await navigator.share({
+                title: 'Live Recording Session',
+                text: 'Join my live recording session on Mina',
+                url: shareUrl
+            });
+        } else {
+            await navigator.clipboard.writeText(shareUrl);
+            showShareToast('Link copied to clipboard');
+        }
+        
+        shareButton.classList.add('action-button-success');
+        setTimeout(() => shareButton.classList.remove('action-button-success'), 400);
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                showShareToast('Link copied to clipboard');
+            } catch (clipErr) {
+                console.error('Failed to copy:', clipErr);
+            }
+        }
+    }
+});
+
+function showShareToast(message) {
+    const existingToast = document.querySelector('.share-toast');
+    if (existingToast) existingToast.remove();
+    
+    const toast = document.createElement('div');
+    toast.className = 'share-toast';
+    toast.innerHTML = `
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        ${message}
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'toastSlideUp 0.3s var(--calm-ease-out) reverse';
+        setTimeout(() => toast.remove(), 250);
+    }, 2500);
+}
 
 const CROWN_STAGES = {
     'transcript_finalized': { progress: 12.5, message: 'Consolidating transcript...' },
