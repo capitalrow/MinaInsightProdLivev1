@@ -134,3 +134,9 @@ The application utilizes a layered architecture with Flask as the web framework 
 - Fixed Jump to transcript navigation to use `/sessions/<id>/refined` route for full insights loading (summary, analytics, tasks)
 - Fixed task page counter flickering with WebSocket stabilization guard and 100ms debounced counter updates
 - Extended TaskStateStore stabilization timeout from 3s to 4s for slower networks
+
+**December 1, 2025 - CROWN⁴.7 Counter Stabilization Pipeline:**
+- Implemented guarded pipeline pattern across all dashboard pages to eliminate counter flickering
+- **Dashboard Index**: `DashboardStabilizer` with guard flag, queue for cache updates, 5-second failsafe timeout. Server sync releases guard and replays queued updates through 100ms debounce.
+- **Meetings Page**: `MeetingsStabilizer` with guard flag, queue for WebSocket events during initial load, 8-second failsafe timeout. Initial API load releases guard and replays events.
+- **Analytics Page**: `AnalyticsStabilizer` routes all DOM writes through shared debounced writer. Cache uses `immediateUpdate()` for TTI, server/WebSocket updates use `debounceUpdate()` (150ms) to prevent rapid visual changes.

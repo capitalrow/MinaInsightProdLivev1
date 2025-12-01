@@ -1168,6 +1168,35 @@
     const WORKSPACE_ID = {{ current_user.workspace_id }};
     const TOTAL_MEETINGS = {{ total_meetings|default(0) }};
     
+    // CROWN⁵+ KPI Stabilizer - prevents visual flickering during rapid updates
+    // Strategy: Cache renders immediately for instant TTI. All updates are debounced.
+    const AnalyticsStabilizer = {
+        _debounceTimers: new Map(),
+        
+        init() {
+            console.log('[AnalyticsStabilizer] Initialized with debounce-based stabilization');
+        },
+        
+        // Debounce updates to a specific element by 150ms
+        debounceUpdate(elementId, updateFn) {
+            if (this._debounceTimers.has(elementId)) {
+                clearTimeout(this._debounceTimers.get(elementId));
+            }
+            this._debounceTimers.set(elementId, setTimeout(() => {
+                updateFn();
+                this._debounceTimers.delete(elementId);
+            }, 150));
+        },
+        
+        // For immediate updates (e.g., initial cache render)
+        immediateUpdate(updateFn) {
+            updateFn();
+        }
+    };
+    
+    // Initialize stabilizer
+    AnalyticsStabilizer.init();
+    
     // CROWN⁵+ Cache-First Store
     const AnalyticsCache = {
         CACHE_KEY: 'crown5_analytics_v2',
@@ -1305,40 +1334,45 @@
 
     // Fetch and load analytics data
     async function loadAnalyticsData() {
-        // Use cache first
+        // Cache-first: render cached data immediately for instant TTI
         const cached = AnalyticsCache.get();
         if (cached) {
-            applyAnalyticsData(cached);
+            console.log('[Analytics] Applying cached data for instant TTI');
+            AnalyticsStabilizer.immediateUpdate(() => applyAnalyticsData(cached));
         }
 
+        const days = document.getElementById('date-range-select')?.value || 30;
+        
+        // Fetch fresh data from server (debounced to prevent rapid visual changes)
         try {
-            const days = document.getElementById('date-range-select')?.value || 30;
-            
-            const [kpiRes, healthRes] = await Promise.all([
-                fetch(`/api/analytics/kpi-comparison?days=${days}`),
-                fetch(`/api/analytics/health-score?days=${days}`)
-            ]);
-            
+            const kpiRes = await fetch(`/api/analytics/kpi-comparison?days=${days}`);
             const kpiData = await kpiRes.json();
-            const healthData = await healthRes.json();
-            
             if (kpiData.success) {
-                applyKPIData(kpiData);
-                AnalyticsCache.set({ kpi: kpiData, health: healthData }, Date.now());
+                // Use stabilizer to debounce server updates
+                AnalyticsStabilizer.debounceUpdate('kpi-data', () => applyKPIData(kpiData));
+                // Cache the successful response
+                AnalyticsCache.set({ kpi: kpiData }, Date.now());
             }
-            
-            if (healthData.success && healthData.health_score) {
-                applyHealthData(healthData.health_score);
-            }
-            
-            // Update insights count
-            const insightsCount = document.getElementById('insights-count');
-            if (insightsCount) {
-                insightsCount.textContent = `${TOTAL_MEETINGS} meetings analyzed`;
-            }
-            
         } catch (err) {
-            console.error('Failed to load analytics:', err);
+            console.error('Failed to load KPI data:', err);
+        }
+        
+        // Fetch health score data
+        try {
+            const healthRes = await fetch(`/api/analytics/health-score?days=${days}`);
+            const healthData = await healthRes.json();
+            if (healthData.success && healthData.health_score) {
+                // Use stabilizer to debounce server updates
+                AnalyticsStabilizer.debounceUpdate('health-data', () => applyHealthData(healthData.health_score));
+            }
+        } catch (err) {
+            console.error('Failed to load health score:', err);
+        }
+        
+        // Update insights count
+        const insightsCount = document.getElementById('insights-count');
+        if (insightsCount) {
+            insightsCount.textContent = `${TOTAL_MEETINGS} meetings analyzed`;
         }
     }
 
@@ -1411,13 +1445,17 @@
                 return;
             }
             
-            loadAnalyticsData();
-            AnalyticsCache.lastSequenceId = delta.sequence_id;
+            // Debounce WebSocket-triggered data refresh
+            AnalyticsStabilizer.debounceUpdate('ws-refresh', () => {
+                loadAnalyticsData();
+                AnalyticsCache.lastSequenceId = delta.sequence_id;
+            });
             showUpdateIndicator();
         });
         
         window.wsManager.on('analytics_update', () => {
-            loadAnalyticsData();
+            // Debounce WebSocket-triggered data refresh
+            AnalyticsStabilizer.debounceUpdate('ws-update', () => loadAnalyticsData());
         });
         
         window.wsManager.on('disconnect', () => {
