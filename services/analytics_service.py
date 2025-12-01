@@ -325,37 +325,98 @@ class AnalyticsService:
         analytics.idea_count = sum(1 for keyword in self.idea_keywords if keyword in full_text)
         analytics.disagreement_count = sum(1 for keyword in self.disagreement_keywords if keyword in full_text)
         
-        # Extract key topics and keywords
-        if self.client:
-            topics = await self._extract_key_topics(full_text)
-            analytics.key_topics = topics
-            
-            keywords = await self._extract_keywords(full_text)
-            analytics.topic_keywords = keywords
+        # Extract key topics and keywords (with fallback if AI unavailable)
+        topics = await self._extract_key_topics(full_text)
+        analytics.key_topics = topics
+        
+        keywords = await self._extract_keywords(full_text)
+        analytics.topic_keywords = keywords
 
     async def _extract_key_topics(self, text: str) -> List[str]:
-        """Extract main topics discussed in the meeting."""
-        if not self.client:
+        """Extract main topics discussed in the meeting with AI + fallback."""
+        if not text or len(text.strip()) < 50:
             return []
         
-        try:
-            response = await self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Extract the 5 main topics discussed in this meeting. Return as a JSON array of strings."
-                    },
-                    {"role": "user", "content": text[:2000]}
-                ],
-                temperature=0.2,
-                max_tokens=200
-            )
-            
-            topics = json.loads(response.choices[0].message.content)
-            return topics if isinstance(topics, list) else []
-        except Exception:
+        # Try AI extraction first
+        if self.client:
+            try:
+                response = await self.client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "Extract the 5 main topics discussed in this meeting. Return as a JSON array of strings."
+                        },
+                        {"role": "user", "content": text[:2000]}
+                    ],
+                    temperature=0.2,
+                    max_tokens=200
+                )
+                
+                topics = json.loads(response.choices[0].message.content)
+                if isinstance(topics, list) and len(topics) > 0:
+                    return topics[:5]
+            except Exception as e:
+                logging.debug(f"AI topic extraction failed, using fallback: {e}")
+        
+        # Fallback: Keyword-based topic extraction
+        return self._extract_topics_fallback(text)
+    
+    def _extract_topics_fallback(self, text: str) -> List[str]:
+        """Fallback topic extraction using keyword frequency and categorization."""
+        if not text:
             return []
+        
+        # Common business/meeting topic categories with their keywords
+        topic_patterns = {
+            "Project Updates": ["project", "milestone", "timeline", "deadline", "deliverable", "phase", "sprint"],
+            "Budget & Finance": ["budget", "cost", "revenue", "expense", "financial", "funding", "investment"],
+            "Team & Staffing": ["team", "hire", "hiring", "staffing", "resource", "capacity", "workload"],
+            "Technical Discussion": ["technical", "code", "system", "architecture", "implementation", "bug", "feature"],
+            "Product Development": ["product", "feature", "roadmap", "release", "launch", "development", "design"],
+            "Client & Customer": ["client", "customer", "user", "feedback", "support", "requirement", "stakeholder"],
+            "Strategy & Planning": ["strategy", "plan", "planning", "goal", "objective", "priority", "initiative"],
+            "Marketing & Sales": ["marketing", "sales", "campaign", "leads", "conversion", "promotion", "brand"],
+            "Process & Operations": ["process", "workflow", "operations", "efficiency", "procedure", "automation"],
+            "Meetings & Collaboration": ["meeting", "review", "sync", "discussion", "collaboration", "decision"]
+        }
+        
+        text_lower = text.lower()
+        topic_scores = {}
+        
+        # Score each topic category based on keyword matches
+        for topic, keywords in topic_patterns.items():
+            score = sum(text_lower.count(keyword) for keyword in keywords)
+            if score > 0:
+                topic_scores[topic] = score
+        
+        # Sort by score and return top 5
+        sorted_topics = sorted(topic_scores.items(), key=lambda x: x[1], reverse=True)
+        detected_topics = [topic for topic, score in sorted_topics[:5] if score >= 2]
+        
+        # If we have detected topics, return them
+        if detected_topics:
+            return detected_topics
+        
+        # Final fallback: extract most frequent meaningful n-grams
+        words = text_lower.split()
+        word_freq = defaultdict(int)
+        
+        # Filter stopwords and short words
+        stopwords = {"the", "and", "for", "that", "this", "with", "are", "was", "been", "have", "has", 
+                     "will", "would", "could", "should", "about", "from", "into", "over", "after",
+                     "just", "like", "also", "some", "what", "when", "where", "which", "there", "their"}
+        
+        for word in words:
+            word = word.strip('.,!?()[]{}":;\'')
+            if len(word) > 4 and word not in stopwords and word.isalpha():
+                word_freq[word] += 1
+        
+        # Get top 5 most frequent meaningful words as topics
+        sorted_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
+        fallback_topics = [word.capitalize() for word, freq in sorted_words[:5] if freq >= 2]
+        
+        return fallback_topics if fallback_topics else []
 
     async def _extract_keywords(self, text: str) -> List[str]:
         """Extract key terms and phrases from the meeting."""
