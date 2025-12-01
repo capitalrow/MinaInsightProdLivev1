@@ -182,8 +182,39 @@ def list_tasks():
         # Paginate
         tasks = db.paginate(stmt, page=page, per_page=per_page, error_out=False)
         
-        # CROWN⁴.5: Generate checksum for cache validation
+        # CROWN⁴.8: Linear pattern - return tasks + users map for efficient rehydration
+        # This prevents N+1 queries and ensures assignee names persist through background syncs
         task_dicts = [task.to_dict() for task in tasks.items]
+        
+        # Build users map from all unique assignees (eager-loaded above)
+        users_map = {}
+        for task in tasks.items:
+            # Add assigned_to user
+            if task.assigned_to:
+                user = task.assigned_to
+                if user.id not in users_map:
+                    users_map[user.id] = {
+                        'id': user.id,
+                        'username': user.username,
+                        'display_name': getattr(user, 'display_name', None),
+                        'full_name': getattr(user, 'full_name', None),
+                        'email': user.email,
+                        'avatar_url': getattr(user, 'avatar_url', None)
+                    }
+            # Add all assignees (multi-assignee support)
+            if task.assignees:
+                for user in task.assignees:
+                    if user.id not in users_map:
+                        users_map[user.id] = {
+                            'id': user.id,
+                            'username': user.username,
+                            'display_name': getattr(user, 'display_name', None),
+                            'full_name': getattr(user, 'full_name', None),
+                            'email': user.email,
+                            'avatar_url': getattr(user, 'avatar_url', None)
+                        }
+        
+        # CROWN⁴.5: Generate checksum for cache validation
         checksum = None
         if task_dicts:
             try:
@@ -200,6 +231,7 @@ def list_tasks():
         response = {
             'success': True,
             'tasks': task_dicts,
+            'users': users_map,  # CROWN⁴.8: Users map for client-side rehydration
             'pagination': {
                 'page': tasks.page,
                 'pages': tasks.pages,
