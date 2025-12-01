@@ -986,14 +986,14 @@
             </div>
         </div>
 
-        <!-- Participation Balance (Consolidated - was 5 separate widgets) -->
+        <!-- Your Talk Time (Redesigned from Participation Balance) -->
         <div id="deep-dive-participation" class="deep-dive-section">
             <div class="deep-dive-header" role="button" tabindex="0" aria-expanded="false">
                 <h3>
                     <svg class="icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
                     </svg>
-                    Participation Balance
+                    Your Talk Time
                 </h3>
                 <svg class="deep-dive-toggle" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -1001,24 +1001,72 @@
             </div>
             <div class="deep-dive-content">
                 <div class="deep-dive-body">
-                    <div class="consolidated-chart-grid">
-                        <div class="chart-card">
-                            <h4>Speaking Distribution</h4>
-                            <p class="chart-subtitle">Who contributed to discussions</p>
-                            <div class="chart-frame" style="aspect-ratio: 16/9;">
-                                <canvas id="speakerChart" aria-label="Speaker distribution"></canvas>
+                    <div id="talk-time-container" class="talk-time-card">
+                        <!-- Empty state - shown when no data -->
+                        <div id="talk-time-empty" class="talk-time-empty">
+                            <div class="talk-time-empty-ring">
+                                <svg viewBox="0 0 100 100">
+                                    <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(107, 114, 128, 0.15)" stroke-width="6"/>
+                                </svg>
+                                <span class="talk-time-empty-icon">
+                                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                                    </svg>
+                                </span>
+                            </div>
+                            <p class="talk-time-empty-title">No speaking data yet</p>
+                            <p class="talk-time-empty-hint">Record and analyze meetings to see your talk time metrics</p>
+                        </div>
+                        
+                        <!-- Data state - shown when we have data -->
+                        <div id="talk-time-data" class="talk-time-data" style="display: none;">
+                            <div class="talk-time-main">
+                                <!-- Radial progress ring -->
+                                <div class="talk-time-ring">
+                                    <svg viewBox="0 0 100 100">
+                                        <defs>
+                                            <linearGradient id="talkTimeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stop-color="#6366f1"/>
+                                                <stop offset="100%" stop-color="#8b5cf6"/>
+                                            </linearGradient>
+                                        </defs>
+                                        <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(107, 114, 128, 0.15)" stroke-width="6"/>
+                                        <circle id="talk-time-arc" cx="50" cy="50" r="42" fill="none" stroke="url(#talkTimeGradient)" stroke-width="6" stroke-linecap="round" stroke-dasharray="0, 264" transform="rotate(-90 50 50)"/>
+                                    </svg>
+                                    <div class="talk-time-center">
+                                        <span id="talk-time-duration" class="talk-time-value">0:00</span>
+                                        <span class="talk-time-label">total</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Stats -->
+                                <div class="talk-time-stats">
+                                    <div class="talk-time-stat-row">
+                                        <span id="talk-time-percent" class="talk-time-stat-value">0%</span>
+                                        <span class="talk-time-stat-label">of meeting</span>
+                                    </div>
+                                    <div class="talk-time-trend" id="talk-time-trend">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                                        </svg>
+                                        <span id="talk-time-trend-value">vs avg</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Secondary metrics -->
+                            <div class="talk-time-metrics">
+                                <div class="talk-time-metric">
+                                    <span id="talk-time-wpm" class="talk-time-metric-value">0</span>
+                                    <span class="talk-time-metric-label">words/min</span>
+                                </div>
+                                <div class="talk-time-metric-divider"></div>
+                                <div class="talk-time-metric">
+                                    <span id="talk-time-words" class="talk-time-metric-value">0</span>
+                                    <span class="talk-time-metric-label">total words</span>
+                                </div>
                             </div>
                         </div>
-                        <div class="chart-card">
-                            <h4>Engagement Balance</h4>
-                            <p class="chart-subtitle">Multi-dimensional participation metrics</p>
-                            <div class="chart-frame" style="aspect-ratio: 1; max-width: 300px; margin: 0 auto;">
-                                <canvas id="participationChart" aria-label="Participation radar"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="participant-outliers" class="mt-4" style="display: none;">
-                        <!-- Populated dynamically with outlier highlights -->
                     </div>
                 </div>
             </div>
