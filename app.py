@@ -880,6 +880,14 @@ def create_app() -> Flask:
         app.logger.info("Blueprint registered: comments_bp")
     except Exception as e:
         app.logger.warning(f"Failed to register comments_bp: {e}")
+    
+    # --- Admin Dashboard Routes (Cognitive Mission Control) ---
+    try:
+        from routes.admin import admin_bp
+        app.register_blueprint(admin_bp)
+        app.logger.info("✅ Admin Dashboard routes registered (/admin)")
+    except Exception as e:
+        app.logger.warning(f"Failed to register admin_bp: {e}")
         
     # Production Monitoring Dashboard
     try:
