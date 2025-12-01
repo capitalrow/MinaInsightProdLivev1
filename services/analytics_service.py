@@ -363,60 +363,80 @@ class AnalyticsService:
         return self._extract_topics_fallback(text)
     
     def _extract_topics_fallback(self, text: str) -> List[str]:
-        """Fallback topic extraction using keyword frequency and categorization."""
-        if not text:
-            return []
-        
-        # Common business/meeting topic categories with their keywords
-        topic_patterns = {
-            "Project Updates": ["project", "milestone", "timeline", "deadline", "deliverable", "phase", "sprint"],
-            "Budget & Finance": ["budget", "cost", "revenue", "expense", "financial", "funding", "investment"],
-            "Team & Staffing": ["team", "hire", "hiring", "staffing", "resource", "capacity", "workload"],
-            "Technical Discussion": ["technical", "code", "system", "architecture", "implementation", "bug", "feature"],
-            "Product Development": ["product", "feature", "roadmap", "release", "launch", "development", "design"],
-            "Client & Customer": ["client", "customer", "user", "feedback", "support", "requirement", "stakeholder"],
-            "Strategy & Planning": ["strategy", "plan", "planning", "goal", "objective", "priority", "initiative"],
-            "Marketing & Sales": ["marketing", "sales", "campaign", "leads", "conversion", "promotion", "brand"],
-            "Process & Operations": ["process", "workflow", "operations", "efficiency", "procedure", "automation"],
-            "Meetings & Collaboration": ["meeting", "review", "sync", "discussion", "collaboration", "decision"]
-        }
+        """
+        Intelligent fallback topic extraction using business category matching.
+        Returns meaningful themes or empty list - never garbage words.
+        """
+        if not text or len(text.strip()) < 50:
+            return []  # Not enough content for meaningful extraction
         
         text_lower = text.lower()
+        text_length = len(text_lower)
+        
+        # Adaptive threshold based on content length
+        # Shorter recordings need lower thresholds
+        threshold_multiplier = 1.0 if text_length > 500 else 0.5
+        
+        # Business-relevant topic categories with weighted keywords
+        topic_patterns = {
+            "Project Planning": {
+                "keywords": ["project", "milestone", "timeline", "deadline", "deliverable", "phase", "sprint", "scope", "requirements"],
+                "min_score": 2
+            },
+            "Budget & Resources": {
+                "keywords": ["budget", "cost", "revenue", "expense", "funding", "investment", "resources", "allocation"],
+                "min_score": 2
+            },
+            "Team Updates": {
+                "keywords": ["team", "hire", "hiring", "onboarding", "capacity", "workload", "performance", "training"],
+                "min_score": 2
+            },
+            "Technical Work": {
+                "keywords": ["technical", "architecture", "implementation", "integration", "api", "database", "infrastructure", "code", "build"],
+                "min_score": 2
+            },
+            "Product Development": {
+                "keywords": ["product", "feature", "roadmap", "release", "launch", "design", "prototype", "testing", "test"],
+                "min_score": 2
+            },
+            "Client & Stakeholders": {
+                "keywords": ["client", "customer", "stakeholder", "feedback", "requirements", "demo", "presentation"],
+                "min_score": 2
+            },
+            "Strategy Discussion": {
+                "keywords": ["strategy", "goal", "objective", "priority", "initiative", "vision", "quarter", "annual"],
+                "min_score": 2
+            },
+            "Process & Workflow": {
+                "keywords": ["process", "workflow", "efficiency", "automation", "documentation", "standards", "check"],
+                "min_score": 2
+            },
+            "Task Management": {
+                "keywords": ["task", "tasks", "action", "todo", "assign", "complete", "due", "follow-up", "board"],
+                "min_score": 2
+            },
+            "Review & Analysis": {
+                "keywords": ["review", "analysis", "summary", "insights", "metrics", "results", "recording", "transcription"],
+                "min_score": 2
+            }
+        }
+        
         topic_scores = {}
         
-        # Score each topic category based on keyword matches
-        for topic, keywords in topic_patterns.items():
-            score = sum(text_lower.count(keyword) for keyword in keywords)
-            if score > 0:
+        # Score each topic category - adaptive threshold
+        for topic, config in topic_patterns.items():
+            score = sum(text_lower.count(keyword) for keyword in config["keywords"])
+            adjusted_min = max(1, int(config["min_score"] * threshold_multiplier))
+            if score >= adjusted_min:
                 topic_scores[topic] = score
         
-        # Sort by score and return top 5
+        # Sort by score and return top topics that meet threshold
         sorted_topics = sorted(topic_scores.items(), key=lambda x: x[1], reverse=True)
-        detected_topics = [topic for topic, score in sorted_topics[:5] if score >= 2]
+        detected_topics = [topic for topic, score in sorted_topics[:5]]
         
-        # If we have detected topics, return them
-        if detected_topics:
-            return detected_topics
-        
-        # Final fallback: extract most frequent meaningful n-grams
-        words = text_lower.split()
-        word_freq = defaultdict(int)
-        
-        # Filter stopwords and short words
-        stopwords = {"the", "and", "for", "that", "this", "with", "are", "was", "been", "have", "has", 
-                     "will", "would", "could", "should", "about", "from", "into", "over", "after",
-                     "just", "like", "also", "some", "what", "when", "where", "which", "there", "their"}
-        
-        for word in words:
-            word = word.strip('.,!?()[]{}":;\'')
-            if len(word) > 4 and word not in stopwords and word.isalpha():
-                word_freq[word] += 1
-        
-        # Get top 5 most frequent meaningful words as topics
-        sorted_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
-        fallback_topics = [word.capitalize() for word, freq in sorted_words[:5] if freq >= 2]
-        
-        return fallback_topics if fallback_topics else []
+        # Only return if we found meaningful topics
+        # Return empty list instead of garbage - honest "no data" is better
+        return detected_topics if len(detected_topics) >= 1 else []
 
     async def _extract_keywords(self, text: str) -> List[str]:
         """Extract key terms and phrases from the meeting."""
