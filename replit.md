@@ -128,3 +128,9 @@ The application utilizes a layered architecture with Flask as the web framework 
 - Applied Crown+ gradient backgrounds to Task Status Distribution donut chart
 - Enhanced Completion Over Time bar chart with softer grid lines and premium tooltips
 - Fixed Meeting Frequency chart with gradient fill, smooth curves, and reduced x-axis label density
+
+**December 1, 2025 - UX Stability Fixes:**
+- Fixed perpetual loading states in session tabs with 8-second graceful timeout (replaces "Analyzing meeting...", "Analytics are being calculated...", "Finding action items..." with helpful empty states)
+- Fixed Jump to transcript navigation to use `/sessions/<id>/refined` route for full insights loading (summary, analytics, tasks)
+- Fixed task page counter flickering with WebSocket stabilization guard and 100ms debounced counter updates
+- Extended TaskStateStore stabilization timeout from 3s to 4s for slower networks
