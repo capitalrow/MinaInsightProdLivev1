@@ -874,6 +874,9 @@ class TaskEventHandler:
             
             db.session.commit()
             
+            # Refresh task to reload relationships that were expired after commit
+            db.session.refresh(task)
+            
             # Include relationships to send full assigned_to user object
             return {
                 'success': True,
