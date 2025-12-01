@@ -1,24 +1,14 @@
 class TaskProposalUI {
     constructor(taskUI) {
-        this.taskUI = taskUI;
+        this.taskUI = taskUI || window.optimisticUI;
         this.currentStream = null;
         this.currentAbortController = null;
-        this.modal = null;
-        this.isStreaming = false;
-        this.streamTimeout = null;
-        this.STREAM_TIMEOUT_MS = 30000;
-        
-        this.meetingId = null;
-        this.meetingTitle = null;
-        this.metadataReceived = false;
-        this.buttonMeetingId = null;
-        
-        this.proposalMap = new Map();
-        this.pendingProposals = [];
-        this.acceptedProposalIds = new Set();
-        this.processingProposalIds = new Set();
-        
+        this.proposalContainer = null;
+        this.acceptedProposals = new Map();
         this.init();
+        this._bindGenerateButtons();
+        this._registerReconciliationHandlers();
+        console.log('[TaskProposalUI] Initialized');
     }
 
     init() {
@@ -121,10 +111,39 @@ class TaskProposalUI {
         });
     }
 
-    openModal() {
-        if (!this.modal) this.createModal();
-        this.modal.classList.add('visible');
-        document.body.style.overflow = 'hidden';
+    _bindGenerateButtons() {
+        const buttons = document.querySelectorAll('.btn-generate-proposals');
+        buttons.forEach((btn) => {
+            if (btn.dataset.bound === 'ai-proposals-direct') return;
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.startProposalStream(btn);
+            });
+            btn.dataset.bound = 'ai-proposals-direct';
+        });
+    }
+
+    _registerReconciliationHandlers() {
+        window.addEventListener('reconcile:complete', (event) => {
+            const { type, taskId } = event.detail || {};
+            if (type !== 'create') return;
+
+            const entry = this.acceptedProposals.get(taskId);
+            if (!entry) return;
+
+            const { card } = entry;
+            card.classList.remove('proposal-optimistic');
+            card.classList.add('proposal-reconciled');
+
+            const statusEl = card.querySelector('.proposal-status');
+            if (statusEl) {
+                statusEl.textContent = 'Synced to workspace';
+            }
+        });
+    }
+
+    async startProposalStream(button) {
+        const meetingId = button.dataset.meetingId;
         
         const firstFocusable = this.modal.querySelector('button');
         if (firstFocusable) firstFocusable.focus();
@@ -334,48 +353,38 @@ class TaskProposalUI {
         this.renderProposal(task);
     }
 
-    showStreamingState() {
-        const content = this.modal.querySelector('.ai-proposals-content');
-        const footer = this.modal.querySelector('.ai-proposals-footer');
-        
-        content.innerHTML = `
-            <div class="ai-proposals-streaming">
-                <div class="streaming-animation">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-                <div class="streaming-text">Analyzing your meetings...</div>
-                <div class="streaming-subtext">Generating actionable task suggestions</div>
-            </div>
-        `;
-        
-        footer.style.display = 'none';
-    }
-
-    renderProposal(task) {
-        const content = this.modal.querySelector('.ai-proposals-content');
-        
-        const streamingEl = content.querySelector('.ai-proposals-streaming');
-        if (streamingEl) {
-            streamingEl.remove();
-        }
-
-        const card = document.createElement('div');
-        card.className = 'ai-proposal-card';
-        card.dataset.proposalId = task.proposal_id;
-        
-        const meetingSource = task.meeting_title 
-            ? `<span class="meeting-source"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${this.escapeHtml(task.meeting_title)}</span>`
+        const proposalCard = document.createElement('div');
+        const confidence = typeof task.confidence === 'number'
+            ? task.confidence
+            : (typeof task.confidence_score === 'number' ? task.confidence_score : null);
+        const confidencePercent = confidence !== null ? Math.round(confidence * 100) : null;
+        const glowClass = confidencePercent !== null
+            ? (confidencePercent >= 85 ? 'proposal-glow-strong' : confidencePercent >= 60 ? 'proposal-glow-medium' : 'proposal-glow-low')
             : '';
-        
-        card.innerHTML = `
-            <div class="ai-proposal-header">
-                <div class="ai-proposal-badge">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                    </svg>
-                    AI Suggestion
+
+        proposalCard.className = `task-card ai-proposal proposal-enter ${glowClass}`.trim();
+        if (confidencePercent !== null) {
+            proposalCard.dataset.confidence = confidencePercent;
+        }
+        proposalCard.innerHTML = `
+            <div class="ai-proposal-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                </svg>
+                AI
+            </div>
+            <div class="task-content">
+                <input type="text" 
+                       class="task-title-input proposal-title" 
+                       value="${this.escapeHtml(task.title)}" 
+                       readonly>
+                ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
+                <div class="task-meta">
+                    <span class="priority-badge priority-${task.priority || 'medium'}">
+                        ${task.priority || 'medium'}
+                    </span>
+                    ${task.category ? `<span class="category-badge">${this.escapeHtml(task.category)}</span>` : ''}
+                    ${confidencePercent !== null ? `<span class="confidence-pill">${confidencePercent}% confidence</span>` : ''}
                 </div>
                 ${meetingSource}
             </div>
@@ -544,17 +553,55 @@ class TaskProposalUI {
         if (rejectBtn) rejectBtn.disabled = true;
 
         try {
-            const taskData = {
-                title: proposal.title,
-                description: proposal.description || '',
-                priority: proposal.priority || 'medium',
-                status: 'todo',
-                source: 'ai_proposal',
-                proposal_id: proposalId
-            };
-            
-            if (proposal.meeting_id) {
-                taskData.meeting_id = proposal.meeting_id;
+            // Check if this is a new proposal (no taskId)
+            const proposalData = button.dataset.proposal;
+            let result;
+            let payload;
+
+            if (taskId) {
+                // Existing task - just accept
+                const response = await fetch(`/api/tasks/${taskId}/accept`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                result = await response.json();
+            } else if (proposalData) {
+                // New proposal - create task
+                const proposal = JSON.parse(proposalData);
+                payload = {
+                    title: proposal.title,
+                    description: proposal.description || '',
+                    priority: proposal.priority || 'medium',
+                    category: proposal.category || '',
+                    status: 'todo',
+                    meeting_id: this.getCurrentMeetingId(),
+                    source: 'task_nlp:proposed'
+                };
+
+                const dedupeResult = await this._checkDuplicate(payload);
+                payload.origin_hash = dedupeResult?.origin_hash || await this._generateOriginHash(payload);
+
+                if (dedupeResult?.is_duplicate && dedupeResult.existing_task) {
+                    this._highlightDuplicate(card, dedupeResult.existing_task, dedupeResult.confidence);
+                    button.textContent = originalText;
+                    button.disabled = false;
+                    return;
+                }
+
+                if (this.taskUI?.createTask) {
+                    const optimisticTask = await this.taskUI.createTask(payload);
+                    result = { success: true, task: optimisticTask };
+                    this._morphProposalToTask(card, optimisticTask, payload.origin_hash);
+                } else {
+                    const response = await fetch('/api/tasks', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    result = await response.json();
+                }
+            } else {
+                throw new Error('No task ID or proposal data');
             }
             
             const response = await fetch('/api/tasks/', {
@@ -579,8 +626,16 @@ class TaskProposalUI {
             
             this.markCardAsAccepted(card, proposal.title);
 
-            if (window.toast) {
-                window.toast.success('Task created successfully');
+                // Show toast notification
+                if (window.ToastNotifications) {
+                    window.ToastNotifications.show('Task added successfully', 'success');
+                }
+
+                if (result.task?.id) {
+                    this.acceptedProposals.set(result.task.id, { card, originHash: payload?.origin_hash });
+                }
+            } else {
+                throw new Error(result.message || 'Failed to accept proposal');
             }
 
             this.refreshTaskList();
@@ -704,6 +759,84 @@ class TaskProposalUI {
     capitalizeFirst(str) {
         if (!str) return '';
         return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    async _checkDuplicate(payload) {
+        try {
+            const response = await fetch('/api/tasks/check-duplicate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: payload.title,
+                    description: payload.description,
+                    meeting_id: payload.meeting_id
+                })
+            });
+
+            if (!response.ok) return null;
+            return await response.json();
+        } catch (error) {
+            console.warn('[TaskProposalUI] Duplicate check failed:', error);
+            return null;
+        }
+    }
+
+    async _generateOriginHash(payload) {
+        try {
+            const text = `${payload.title || ''}|${payload.description || ''}|${payload.meeting_id || ''}|${payload.category || ''}`;
+            const encoder = new TextEncoder();
+            const data = encoder.encode(text);
+            const buffer = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (error) {
+            console.warn('[TaskProposalUI] Failed to generate origin_hash:', error);
+            return null;
+        }
+    }
+
+    _highlightDuplicate(card, existingTask, confidence) {
+        card.classList.add('proposal-duplicate');
+        const status = card.querySelector('.proposal-status') || document.createElement('div');
+        status.className = 'proposal-status duplicate';
+        status.innerHTML = `Duplicate detected${confidence ? ` (${Math.round(confidence * 100)}% match)` : ''}. Opening existing task…`;
+        if (!card.contains(status)) {
+            card.querySelector('.ai-proposal-actions')?.before(status);
+        }
+
+        if (window.toastManager) {
+            window.toastManager.show('Similar task already exists. Jumping to it.', 'warning');
+        }
+
+        if (existingTask?.id) {
+            window.dispatchEvent(new CustomEvent('task:duplicate-detected', { detail: existingTask }));
+        }
+    }
+
+    _morphProposalToTask(card, optimisticTask, originHash) {
+        card.classList.add('proposal-optimistic');
+        card.dataset.taskId = optimisticTask.id;
+        card.dataset.originHash = originHash || '';
+
+        const status = document.createElement('div');
+        status.className = 'proposal-status syncing';
+        status.textContent = 'Syncing to workspace…';
+        card.querySelector('.ai-proposal-actions')?.before(status);
+
+        const badge = card.querySelector('.ai-proposal-badge');
+        if (badge) {
+            badge.textContent = 'Accepted';
+            badge.classList.add('accepted');
+        }
+
+        const acceptBtn = card.querySelector('.btn-accept-proposal');
+        const rejectBtn = card.querySelector('.btn-reject-proposal');
+        if (acceptBtn) acceptBtn.remove();
+        if (rejectBtn) rejectBtn.remove();
+
+        const content = card.querySelector('.task-content');
+        if (content) {
+            content.classList.add('proposal-to-task');
+        }
     }
 }
 
