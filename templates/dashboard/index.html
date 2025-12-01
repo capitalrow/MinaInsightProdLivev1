@@ -834,6 +834,129 @@ window.initMorphTransitions = function() {
     const bootstrapStart = performance.now();
     let cacheLoadTime = 0;
     let serverLoadTime = 0;
+    
+    // CROWN⁴.7: Stats stabilization with guarded pipeline
+    // Pattern: Server-rendered values preserved during guard, cache queued, replay after server sync
+    const DashboardStabilizer = {
+        _syncComplete: false,
+        _pendingUpdates: [], // Queue cache updates during guard period
+        _debounceTimer: null,
+        _lastValues: {},
+        _guardTimeout: null,
+        
+        init(statElementsRef) {
+            // Capture server-rendered values (authoritative)
+            this._lastValues = {
+                totalMeetings: statElementsRef.totalMeetings?.textContent || '0',
+                actionItems: statElementsRef.actionItems?.textContent || '0',
+                hoursSaved: statElementsRef.hoursSaved?.textContent || '0'
+            };
+            console.log('[DashboardStabilizer] Initialized with server-rendered values:', this._lastValues);
+            
+            // Failsafe: release guard after 5 seconds
+            this._guardTimeout = setTimeout(() => {
+                if (!this._syncComplete) {
+                    console.warn('[DashboardStabilizer] Guard timeout - releasing');
+                    this.releaseGuard();
+                }
+            }, 5000);
+        },
+        
+        _applyUpdatesDebounced(data, statElementsRef) {
+            if (this._debounceTimer) {
+                clearTimeout(this._debounceTimer);
+            }
+            
+            this._debounceTimer = setTimeout(() => {
+                if (data.total_meetings !== undefined && statElementsRef.totalMeetings) {
+                    const newVal = String(data.total_meetings);
+                    if (this._lastValues.totalMeetings !== newVal) {
+                        statElementsRef.totalMeetings.textContent = newVal;
+                        this._lastValues.totalMeetings = newVal;
+                    }
+                }
+                if (data.total_tasks !== undefined && statElementsRef.actionItems) {
+                    const newVal = String(data.total_tasks);
+                    if (this._lastValues.actionItems !== newVal) {
+                        statElementsRef.actionItems.textContent = newVal;
+                        this._lastValues.actionItems = newVal;
+                    }
+                }
+                if (data.minutes_saved !== undefined && statElementsRef.hoursSaved) {
+                    const newVal = String(data.minutes_saved);
+                    if (this._lastValues.hoursSaved !== newVal) {
+                        statElementsRef.hoursSaved.textContent = newVal;
+                        this._lastValues.hoursSaved = newVal;
+                    }
+                }
+            }, 100);
+        },
+        
+        updateStats(data, statElementsRef, isFromServer = false) {
+            // Server updates (drift correction) apply immediately and release guard
+            if (isFromServer) {
+                // Apply updates immediately
+                if (data.total_meetings !== undefined && statElementsRef.totalMeetings) {
+                    const newVal = String(data.total_meetings);
+                    if (this._lastValues.totalMeetings !== newVal) {
+                        statElementsRef.totalMeetings.textContent = newVal;
+                        this._lastValues.totalMeetings = newVal;
+                    }
+                }
+                if (data.total_tasks !== undefined && statElementsRef.actionItems) {
+                    const newVal = String(data.total_tasks);
+                    if (this._lastValues.actionItems !== newVal) {
+                        statElementsRef.actionItems.textContent = newVal;
+                        this._lastValues.actionItems = newVal;
+                    }
+                }
+                if (data.minutes_saved !== undefined && statElementsRef.hoursSaved) {
+                    const newVal = String(data.minutes_saved);
+                    if (this._lastValues.hoursSaved !== newVal) {
+                        statElementsRef.hoursSaved.textContent = newVal;
+                        this._lastValues.hoursSaved = newVal;
+                    }
+                }
+                console.log('[DashboardStabilizer] Applied server drift correction');
+                this.releaseGuard();
+                return;
+            }
+            
+            // During guard: queue cache updates for later
+            if (!this._syncComplete) {
+                console.log('[DashboardStabilizer] Queuing cache update during guard');
+                this._pendingUpdates.push({ data, statElementsRef });
+                return;
+            }
+            
+            // After guard released: debounce all updates
+            this._applyUpdatesDebounced(data, statElementsRef);
+        },
+        
+        releaseGuard() {
+            if (this._syncComplete) return;
+            
+            this._syncComplete = true;
+            if (this._guardTimeout) {
+                clearTimeout(this._guardTimeout);
+                this._guardTimeout = null;
+            }
+            
+            console.log(`[DashboardStabilizer] Guard released, ${this._pendingUpdates.length} queued updates`);
+            
+            // Replay final queued update through debounce (if any)
+            if (this._pendingUpdates.length > 0) {
+                const lastUpdate = this._pendingUpdates[this._pendingUpdates.length - 1];
+                this._applyUpdatesDebounced(lastUpdate.data, lastUpdate.statElementsRef);
+            }
+            this._pendingUpdates = [];
+        },
+        
+        // Called when server sync completes (verifies parity)
+        markServerSyncComplete() {
+            this.releaseGuard();
+        }
+    };
 
     /**
      * Initialize DOM references after DOM is ready
@@ -857,6 +980,9 @@ window.initMorphTransitions = function() {
             meetingsListEl: !!meetingsListEl,
             emptyStateEl: !!emptyStateEl
         });
+        
+        // Initialize stabilizer to capture server-rendered values
+        DashboardStabilizer.init(statElements);
 
         // CRITICAL: Initialize meeting card click handlers immediately
         // This ensures cards are clickable even if stats don't exist
@@ -891,7 +1017,7 @@ window.initMorphTransitions = function() {
 
             cacheLoadTime = Math.round(performance.now() - cacheStart);
 
-            // Render cached data immediately (even if stale)
+            // Render cached data (guarded pipeline queues updates during initial load)
             let cacheHit = false;
             if (cachedMeetings && cachedMeetings.length > 0) {
                 renderCachedMeetings(cachedMeetings.slice(0, 5));
@@ -899,6 +1025,7 @@ window.initMorphTransitions = function() {
             }
 
             if (cachedAnalytics && cachedAnalytics.data) {
+                // Cache update will be queued during guard period, replayed after server sync
                 updateStatsFromCache(cachedAnalytics.data);
                 cacheHit = true;
             }
@@ -1016,20 +1143,23 @@ window.initMorphTransitions = function() {
 
     /**
      * Update statistics from cached data
+     * Uses stabilizer to prevent flickering during cache->server transition
      * @param {Object} data - Cached analytics data
      */
     function updateStatsFromCache(data) {
         if (!data) return;
-
-        if (data.total_meetings !== undefined && statElements.totalMeetings) {
-            statElements.totalMeetings.textContent = data.total_meetings;
-        }
-        if (data.total_tasks !== undefined && statElements.actionItems) {
-            statElements.actionItems.textContent = data.total_tasks;
-        }
-        if (data.minutes_saved !== undefined && statElements.hoursSaved) {
-            statElements.hoursSaved.textContent = data.minutes_saved;
-        }
+        // Use stabilizer for debounced, stable updates (cache source)
+        DashboardStabilizer.updateStats(data, statElements, false);
+    }
+    
+    /**
+     * Update statistics from server data (authoritative)
+     * @param {Object} data - Server analytics data
+     */
+    function updateStatsFromServer(data) {
+        if (!data) return;
+        // Use stabilizer with server flag (allowed during initial load)
+        DashboardStabilizer.updateStats(data, statElements, true);
     }
 
     /**
@@ -1046,6 +1176,9 @@ window.initMorphTransitions = function() {
                 total_tasks: {{ stats.total_tasks|default(0) }},
                 minutes_saved: {{ stats.get('minutes_saved', 0) }}
             };
+            
+            // Mark stabilization complete - server data is authoritative
+            DashboardStabilizer.markServerSyncComplete();
 
             // Get cached data for validation
             const [cachedMeetings, cachedAnalytics] = await Promise.all([
@@ -1063,7 +1196,7 @@ window.initMorphTransitions = function() {
 
                 if (validation.drift) {
                     console.log('⚠️ Analytics drift detected, updating from server');
-                    updateStatsFromCache(serverStats);
+                    updateStatsFromServer(serverStats);
                     await window.cacheManager.cacheAnalyticsSnapshot(serverStats, WORKSPACE_ID);
                 }
             } else {
@@ -1076,6 +1209,8 @@ window.initMorphTransitions = function() {
 
         } catch (error) {
             console.error('❌ Server sync failed:', error);
+            // Still complete stabilization on error to unblock UI
+            DashboardStabilizer.markServerSyncComplete();
         }
     }
 
