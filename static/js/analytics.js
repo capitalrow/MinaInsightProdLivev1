@@ -1349,81 +1349,109 @@ class AnalyticsDashboard {
         });
     }
 
-    updateSpeakerChart(commData) {
-        const ctx = document.getElementById('speakerChart');
-        const chartFrame = ctx?.closest('.chart-frame');
-        if (!ctx) return;
-
-        const speakers = commData?.top_speakers?.slice(0, 5) || [];
+    /**
+     * Update "Your Talk Time" component with aggregated speaker data
+     * Redesigned from bar chart to radial progress with stats
+     */
+    updateTalkTime(commData) {
+        const emptyState = document.getElementById('talk-time-empty');
+        const dataState = document.getElementById('talk-time-data');
         
-        if (speakers.length === 0 || speakers.every(s => !s.talk_time_minutes)) {
-            this.renderCrown5EmptyChart(
-                chartFrame,
-                'bar',
-                'No speaker data yet',
-                'Record meetings to see who speaks most'
-            );
+        if (!emptyState || !dataState) return;
+
+        const speakers = commData?.top_speakers || [];
+        
+        // Calculate totals across all speakers
+        const totalTalkTime = speakers.reduce((sum, s) => sum + (s.talk_time_minutes || 0), 0);
+        const totalWords = speakers.reduce((sum, s) => sum + (s.word_count || 0), 0);
+        const avgMeetingDuration = commData?.avg_meeting_duration_minutes || totalTalkTime * 1.5 || 0;
+        
+        if (speakers.length === 0 || totalTalkTime === 0) {
+            emptyState.style.display = '';
+            dataState.style.display = 'none';
             return;
         }
 
-        this.hideCrown5EmptyChart(chartFrame);
-
-        const labels = speakers.map(s => s.name);
-        const values = speakers.map(s => s.talk_time_minutes);
-        const colors = [
-            'rgb(99, 102, 241)',
-            'rgb(139, 92, 246)',
-            'rgb(6, 182, 212)',
-            'rgb(34, 197, 94)',
-            'rgb(249, 115, 22)'
-        ];
-
-        if (this.charts.speaker) {
-            this.charts.speaker.destroy();
+        // Show data state
+        emptyState.style.display = 'none';
+        dataState.style.display = '';
+        
+        // Calculate metrics
+        const talkTimeSeconds = totalTalkTime * 60;
+        const minutes = Math.floor(totalTalkTime);
+        const seconds = Math.round((totalTalkTime - minutes) * 60);
+        const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        const talkPercent = avgMeetingDuration > 0 
+            ? Math.round((totalTalkTime / avgMeetingDuration) * 100) 
+            : 100;
+        
+        const wordsPerMinute = totalTalkTime > 0 
+            ? Math.round(totalWords / totalTalkTime) 
+            : 0;
+        
+        // Update DOM elements
+        const durationEl = document.getElementById('talk-time-duration');
+        const percentEl = document.getElementById('talk-time-percent');
+        const wpmEl = document.getElementById('talk-time-wpm');
+        const wordsEl = document.getElementById('talk-time-words');
+        const arcEl = document.getElementById('talk-time-arc');
+        const trendEl = document.getElementById('talk-time-trend');
+        const trendValueEl = document.getElementById('talk-time-trend-value');
+        
+        if (durationEl) durationEl.textContent = durationStr;
+        if (percentEl) percentEl.textContent = `${Math.min(talkPercent, 100)}%`;
+        if (wpmEl) wpmEl.textContent = wordsPerMinute.toLocaleString();
+        if (wordsEl) wordsEl.textContent = totalWords.toLocaleString();
+        
+        // Animate radial progress (circumference = 2 * π * 42 ≈ 264)
+        const circumference = 264;
+        const progress = Math.min(talkPercent / 100, 1);
+        const dashArray = `${circumference * progress}, ${circumference}`;
+        
+        if (arcEl) {
+            setTimeout(() => {
+                arcEl.setAttribute('stroke-dasharray', dashArray);
+            }, 100);
         }
-
-        this.charts.speaker = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Speaking Time (min)',
-                    data: values,
-                    backgroundColor: colors,
-                    borderRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                aspectRatio: 1.6,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: (item) => `${item.parsed.y.toFixed(1)} minutes`
-                        }
-                    }
-                },
-                scales: {
-                    y: { 
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Minutes'
-                        }
-                    }
-                }
+        
+        // Calculate trend (compare to historical average if available)
+        const avgTalkTime = commData?.avg_talk_time_minutes || totalTalkTime;
+        const trendPercent = avgTalkTime > 0 
+            ? Math.round(((totalTalkTime - avgTalkTime) / avgTalkTime) * 100) 
+            : 0;
+        
+        if (trendEl && trendValueEl) {
+            if (trendPercent > 0) {
+                trendEl.className = 'talk-time-trend up';
+                trendValueEl.textContent = `+${trendPercent}% vs avg`;
+            } else if (trendPercent < 0) {
+                trendEl.className = 'talk-time-trend down';
+                trendValueEl.textContent = `${trendPercent}% vs avg`;
+            } else {
+                trendEl.className = 'talk-time-trend';
+                trendValueEl.textContent = 'on par with avg';
             }
-        });
+        }
     }
 
     updateEngagementCharts(engagement) {
-        this.updateParticipationChart(engagement);
+        // Removed radar chart - now handled by updateTalkTime
         this.updateSentimentChart();
     }
 
+    // Keeping this as a no-op for backward compatibility
     updateParticipationChart(engagement) {
+        // Removed - Engagement Balance radar chart no longer used
+    }
+
+    // Legacy speaker chart - redirects to new Talk Time component
+    updateSpeakerChart(commData) {
+        this.updateTalkTime(commData);
+    }
+
+    // Placeholder for removed radar chart functionality
+    _legacyRadarChart(engagement) {
         const ctx = document.getElementById('participationChart');
         const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
