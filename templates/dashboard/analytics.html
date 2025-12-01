@@ -779,7 +779,47 @@
         // Listen for session_update events (new meetings affect analytics)
         window.wsManager.on('session_update:created', handleNewSession);
         
+        // Listen for real-time analytics_update events (CROWN⁵+ broadcast)
+        window.wsManager.on('analytics_update', handleAnalyticsUpdate);
+        
         console.log('📡 Analytics WebSocket listeners registered');
+    }
+    
+    /**
+     * Handle real-time analytics_update events (CROWN⁵+ broadcast)
+     * @param {Object} data - Event data with type and payload
+     */
+    function handleAnalyticsUpdate(data) {
+        console.log('📡 Real-time analytics update:', data);
+        
+        const updateType = data.type;
+        const updateData = data.data;
+        
+        switch (updateType) {
+            case 'kpi_update':
+                if (updateData.kpis) updateKPIs(updateData.kpis);
+                showRefreshIndicator();
+                break;
+            case 'health_score':
+                if (window.analyticsManager && updateData.health_score) {
+                    window.analyticsManager.updateHealthScore(updateData.health_score);
+                }
+                break;
+            case 'productivity':
+                if (window.analyticsManager && updateData.productivity) {
+                    window.analyticsManager.updateProductivityCharts(updateData.productivity);
+                }
+                break;
+            case 'insights':
+                if (window.analyticsManager && updateData.insights) {
+                    window.analyticsManager.updateActionableInsights(updateData);
+                }
+                break;
+            default:
+                console.log('Unknown analytics update type:', updateType);
+        }
+        
+        showAnalyticsNotification('Data Updated', `Analytics ${updateType} refreshed`);
     }
     
     /**

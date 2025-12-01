@@ -942,13 +942,30 @@ def get_meeting_health_score():
             if not analytics_list:
                 return 0, {}
             
-            # Effectiveness (0-100)
-            effectiveness_scores = [a.meeting_effectiveness_score or 0 for a in analytics_list]
-            avg_effectiveness = (sum(effectiveness_scores) / len(effectiveness_scores)) * 100 if effectiveness_scores else 0
+            # Track which components have real data for proper weighting
+            components = []
+            weights = []
+            breakdown = {}
             
-            # Engagement (0-100)
-            engagement_scores = [a.overall_engagement_score or 0 for a in analytics_list]
-            avg_engagement = (sum(engagement_scores) / len(engagement_scores)) * 100 if engagement_scores else 0
+            # Effectiveness (0-100) - only include if there's real data
+            effectiveness_values = [a.meeting_effectiveness_score for a in analytics_list if a.meeting_effectiveness_score is not None]
+            if effectiveness_values:
+                avg_effectiveness = (sum(effectiveness_values) / len(effectiveness_values)) * 100
+                components.append(avg_effectiveness)
+                weights.append(0.30)
+                breakdown['effectiveness'] = round(avg_effectiveness, 1)
+            else:
+                breakdown['effectiveness'] = None
+            
+            # Engagement (0-100) - only include if there's real data
+            engagement_values = [a.overall_engagement_score for a in analytics_list if a.overall_engagement_score is not None]
+            if engagement_values:
+                avg_engagement = (sum(engagement_values) / len(engagement_values)) * 100
+                components.append(avg_engagement)
+                weights.append(0.25)
+                breakdown['engagement'] = round(avg_engagement, 1)
+            else:
+                breakdown['engagement'] = None
             
             # Follow-through (task completion rate)
             meeting_ids = [a.meeting_id for a in analytics_list]
@@ -958,29 +975,36 @@ def get_meeting_health_score():
                     Task.meeting_id.in_(meeting_ids),
                     Task.status == 'completed'
                 ).count()
-                follow_through = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 50
+                if total_tasks > 0:
+                    follow_through = (completed_tasks / total_tasks * 100)
+                    components.append(follow_through)
+                    weights.append(0.30)
+                    breakdown['follow_through'] = round(follow_through, 1)
+                else:
+                    breakdown['follow_through'] = None
             else:
-                follow_through = 50
+                breakdown['follow_through'] = None
             
-            # Decision velocity (decisions per meeting)
-            decisions = [a.decisions_made_count or 0 for a in analytics_list]
-            avg_decisions = sum(decisions) / len(decisions) if decisions else 0
-            decision_score = min(100, avg_decisions * 25)  # 4+ decisions = 100
+            # Decision velocity (decisions per meeting) - only include if there's real data
+            decisions = [a.decisions_made_count for a in analytics_list if a.decisions_made_count is not None]
+            if decisions:
+                avg_decisions = sum(decisions) / len(decisions)
+                decision_score = min(100, avg_decisions * 25)  # 4+ decisions = 100
+                components.append(decision_score)
+                weights.append(0.15)
+                breakdown['decision_velocity'] = round(decision_score, 1)
+            else:
+                breakdown['decision_velocity'] = None
             
-            # Weighted composite score
-            composite = (
-                avg_effectiveness * 0.30 +
-                avg_engagement * 0.25 +
-                follow_through * 0.30 +
-                decision_score * 0.15
-            )
+            # Weighted composite score - normalize weights for available components
+            if components and weights:
+                total_weight = sum(weights)
+                normalized_weights = [w / total_weight for w in weights]
+                composite = sum(c * w for c, w in zip(components, normalized_weights))
+            else:
+                composite = 0
             
-            return round(composite, 1), {
-                'effectiveness': round(avg_effectiveness, 1),
-                'engagement': round(avg_engagement, 1),
-                'follow_through': round(follow_through, 1),
-                'decision_velocity': round(decision_score, 1)
-            }
+            return round(composite, 1), breakdown
         
         current_score, current_breakdown = calc_health_score(current_analytics)
         previous_score, _ = calc_health_score(previous_analytics)
