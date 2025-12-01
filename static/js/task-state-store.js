@@ -33,6 +33,10 @@
             this._viewTransitionActive = false; // True during mode switches
             this._stabilizationTimeout = null;
             
+            // CROWN⁴.7: Counter update debouncing to prevent rapid flickering
+            this._counterUpdateDebounceTimer = null;
+            this._pendingCounterUpdate = null;
+            
             // Capture server-rendered counter values as baseline
             this._serverRenderedCounters = this._captureServerRenderedCounters();
             
@@ -87,7 +91,7 @@
                 }
             });
             
-            // Failsafe: Complete initial load after 3 seconds
+            // Failsafe: Complete initial load after 4 seconds (increased from 3s for slower networks)
             // But only if we have data or server hydrate completed
             this._stabilizationTimeout = setTimeout(() => {
                 if (!this._initialLoadComplete) {
@@ -97,7 +101,7 @@
                         console.log('[TaskStateStore] Timeout but no data - preserving server-rendered values');
                     }
                 }
-            }, 3000);
+            }, 4000);
         }
         
         /**
@@ -447,24 +451,41 @@
         }
 
         /**
-         * Update counter badge elements
+         * Update counter badge elements with debouncing
+         * CROWN⁴.7: Debounce to prevent rapid flickering from consecutive updates
          * @param {Object} counters
          */
         _updateCounterBadges(counters) {
-            Object.entries(counters).forEach(([key, count]) => {
-                const badge = document.querySelector(`[data-counter="${key}"]`);
-                if (badge) {
-                    const currentValue = parseInt(badge.textContent) || 0;
-                    if (currentValue !== count) {
-                        badge.textContent = count;
-                        
-                        // Subtle animation on change (emotional UX)
-                        badge.classList.remove('counter-updated');
-                        void badge.offsetWidth; // Force reflow
-                        badge.classList.add('counter-updated');
+            // Store pending update
+            this._pendingCounterUpdate = counters;
+            
+            // Debounce: wait 100ms for rapid updates to settle
+            if (this._counterUpdateDebounceTimer) {
+                clearTimeout(this._counterUpdateDebounceTimer);
+            }
+            
+            this._counterUpdateDebounceTimer = setTimeout(() => {
+                const finalCounters = this._pendingCounterUpdate;
+                this._pendingCounterUpdate = null;
+                this._counterUpdateDebounceTimer = null;
+                
+                if (!finalCounters) return;
+                
+                Object.entries(finalCounters).forEach(([key, count]) => {
+                    const badge = document.querySelector(`[data-counter="${key}"]`);
+                    if (badge) {
+                        const currentValue = parseInt(badge.textContent) || 0;
+                        if (currentValue !== count) {
+                            badge.textContent = count;
+                            
+                            // Subtle animation on change (emotional UX)
+                            badge.classList.remove('counter-updated');
+                            void badge.offsetWidth; // Force reflow
+                            badge.classList.add('counter-updated');
+                        }
                     }
-                }
-            });
+                });
+            }, 100);
         }
 
         /**
