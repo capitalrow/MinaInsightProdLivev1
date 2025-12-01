@@ -800,11 +800,18 @@ class TaskEventHandler:
     ) -> Dict[str, Any]:
         """
         Event #10: task_update:assign
-        Assign task to participant.
+        Assign task to participant(s).
+        
+        Supports both:
+        - assigned_to_id: Single assignee (legacy, integer)
+        - assignee_ids: Multi-assignee (CROWN⁴.5, array of integers)
         """
         try:
+            from models import User
+            
             task_id = payload.get('task_id')
             assigned_to_id = payload.get('assigned_to_id')
+            assignee_ids = payload.get('assignee_ids')
             
             task = db.session.get(Task, task_id)
             if not task:
@@ -814,7 +821,47 @@ class TaskEventHandler:
             if not self.check_workspace_access(task, user_id):
                 return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
-            task.assigned_to_id = assigned_to_id
+            # Handle multi-assignee (CROWN⁴.5) with workspace isolation
+            task_workspace_id = task.workspace_id
+            
+            if assignee_ids is not None:
+                # Clear existing assignees and set new ones
+                if isinstance(assignee_ids, list):
+                    if assignee_ids:
+                        # SECURITY: Validate all users belong to the same workspace as the task
+                        all_users = db.session.query(User).filter(User.id.in_(assignee_ids)).all()
+                        
+                        if task_workspace_id:
+                            # Check for cross-workspace users
+                            invalid_users = [u for u in all_users if u.workspace_id != task_workspace_id]
+                            if invalid_users:
+                                invalid_ids = [u.id for u in invalid_users]
+                                logger.warning(f"Blocked cross-workspace assignment: users {invalid_ids} not in workspace {task_workspace_id}")
+                                return {'success': False, 'error': 'Cannot assign users from a different workspace'}
+                            users = all_users
+                        else:
+                            users = all_users
+                    else:
+                        users = []
+                    
+                    task.assignees = users
+                    # Also set the first assignee as assigned_to_id for backward compatibility
+                    task.assigned_to_id = users[0].id if users else None
+                    logger.info(f"Task {task_id} assigned to {len(users)} user(s): {[u.id for u in users]}")
+                else:
+                    logger.warning(f"assignee_ids should be a list, got: {type(assignee_ids)}")
+            # Handle legacy single assignee
+            elif assigned_to_id is not None:
+                # SECURITY: Validate user belongs to same workspace
+                user = db.session.get(User, assigned_to_id)
+                if user and task_workspace_id and user.workspace_id != task_workspace_id:
+                    logger.warning(f"Blocked cross-workspace assignment: user {assigned_to_id} not in workspace {task_workspace_id}")
+                    return {'success': False, 'error': 'Cannot assign user from a different workspace'}
+                
+                task.assigned_to_id = assigned_to_id
+                # Also update assignees relationship for consistency
+                task.assignees = [user] if user else []
+            
             task.updated_at = datetime.utcnow()
             
             db.session.commit()
