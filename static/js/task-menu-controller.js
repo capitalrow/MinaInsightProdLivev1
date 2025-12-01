@@ -497,31 +497,33 @@ class TaskMenuController {
                 return;
             }
 
-            // CRITICAL FIX: Look up the full user object(s) for instant UI update
+            // CRITICAL FIX: Build optimistic payload with full user object for instant UI update
             // This follows industry-standard optimistic UI patterns (Linear, Notion, Asana)
-            let assigned_to = null;
+            const updatePayload = { assignee_ids: result };
+            
             if (result.length > 0 && window.taskAssigneeSelector?.allUsers) {
-                // Get the primary assignee (first one) with full user object
+                // ASSIGN: Get the primary assignee (first one) with full user object
                 const selectedUser = window.taskAssigneeSelector.allUsers.find(u => u.id === result[0]);
                 if (selectedUser) {
                     // Preserve correct field names - username stays as username, display_name is separate
-                    assigned_to = {
+                    updatePayload.assigned_to = {
                         id: selectedUser.id,
                         username: selectedUser.username,
                         display_name: selectedUser.display_name,
                         email: selectedUser.email
                     };
-                    console.log('[TaskMenuController] Including full user object for optimistic UI:', assigned_to);
+                    updatePayload.assigned_to_id = selectedUser.id;
+                    console.log('[TaskMenuController] ASSIGN: Including full user object for optimistic UI:', updatePayload.assigned_to);
                 }
+            } else {
+                // UNASSIGN: Explicitly set assigned_to to null to override existing value
+                updatePayload.assigned_to = null;
+                updatePayload.assigned_to_id = null;
+                console.log('[TaskMenuController] UNASSIGN: Clearing assignee from task');
             }
 
             // Use OptimisticUI system with full user object for instant display
             if (window.optimisticUI?.updateTask) {
-                const updatePayload = { assignee_ids: result };
-                if (assigned_to) {
-                    updatePayload.assigned_to = assigned_to;
-                    updatePayload.assigned_to_id = assigned_to.id;
-                }
                 await window.optimisticUI.updateTask(taskId, updatePayload);
             } else {
                 const response = await fetch(`/api/tasks/${taskId}`, {
