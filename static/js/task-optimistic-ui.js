@@ -962,6 +962,43 @@ class OptimisticUI {
             }
         }
 
+        // Update assignee badge (CRITICAL FIX: Instant UI update for assignments)
+        // Handles both existing badges and re-rendering when badge structure needs updating
+        const taskMeta = card.querySelector('.task-meta');
+        let assigneeBadge = card.querySelector('.assignee-badge');
+        
+        if (task.assigned_to && task.assigned_to.id) {
+            // Show assignee name with full badge structure
+            const displayName = task.assigned_to.display_name || task.assigned_to.username || task.assigned_to.email || 'Assigned';
+            const newBadgeHTML = `<span class="assignee-badge" data-user-id="${task.assigned_to.id}">👤 ${this._escapeHtml(displayName)}</span>`;
+            
+            if (assigneeBadge) {
+                // Replace existing badge with proper structure
+                assigneeBadge.outerHTML = newBadgeHTML;
+            } else if (taskMeta) {
+                // Create badge if it doesn't exist (virtualized lists may not have it)
+                taskMeta.insertAdjacentHTML('beforeend', newBadgeHTML);
+            }
+        } else if (task.assignee_ids && task.assignee_ids.length === 0) {
+            // Explicitly unassigned - show placeholder
+            const unassignedHTML = `<span class="assignee-badge assignee-add">+ Assign</span>`;
+            
+            if (assigneeBadge) {
+                assigneeBadge.outerHTML = unassignedHTML;
+            } else if (taskMeta) {
+                taskMeta.insertAdjacentHTML('beforeend', unassignedHTML);
+            }
+        } else if (task.assignee_ids && task.assignee_ids.length > 0 && !task.assigned_to) {
+            // Has assignee IDs but no full object yet - show generic "Assigned" placeholder
+            const placeholderHTML = `<span class="assignee-badge">👤 Assigned</span>`;
+            
+            if (assigneeBadge) {
+                assigneeBadge.outerHTML = placeholderHTML;
+            } else if (taskMeta) {
+                taskMeta.insertAdjacentHTML('beforeend', placeholderHTML);
+            }
+        }
+
         // Add optimistic indicator (CROWN⁴.5 QuietStateManager)
         if (window.quietStateManager) {
             window.quietStateManager.queueAnimation((setCancelHandler) => {

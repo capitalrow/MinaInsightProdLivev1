@@ -497,9 +497,32 @@ class TaskMenuController {
                 return;
             }
 
-            // Use OptimisticUI system
+            // CRITICAL FIX: Look up the full user object(s) for instant UI update
+            // This follows industry-standard optimistic UI patterns (Linear, Notion, Asana)
+            let assigned_to = null;
+            if (result.length > 0 && window.taskAssigneeSelector?.allUsers) {
+                // Get the primary assignee (first one) with full user object
+                const selectedUser = window.taskAssigneeSelector.allUsers.find(u => u.id === result[0]);
+                if (selectedUser) {
+                    // Preserve correct field names - username stays as username, display_name is separate
+                    assigned_to = {
+                        id: selectedUser.id,
+                        username: selectedUser.username,
+                        display_name: selectedUser.display_name,
+                        email: selectedUser.email
+                    };
+                    console.log('[TaskMenuController] Including full user object for optimistic UI:', assigned_to);
+                }
+            }
+
+            // Use OptimisticUI system with full user object for instant display
             if (window.optimisticUI?.updateTask) {
-                await window.optimisticUI.updateTask(taskId, { assignee_ids: result });
+                const updatePayload = { assignee_ids: result };
+                if (assigned_to) {
+                    updatePayload.assigned_to = assigned_to;
+                    updatePayload.assigned_to_id = assigned_to.id;
+                }
+                await window.optimisticUI.updateTask(taskId, updatePayload);
             } else {
                 const response = await fetch(`/api/tasks/${taskId}`, {
                     method: 'PUT',
