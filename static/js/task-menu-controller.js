@@ -500,28 +500,36 @@ class TaskMenuController {
                 return;
             }
 
-            // CRITICAL FIX: Build optimistic payload with full user object for instant UI update
-            // This follows industry-standard optimistic UI patterns (Linear, Notion, Asana)
-            const updatePayload = { assignee_ids: result };
+            // CROWN⁴.8: Build optimistic payload with FULL assignees array for instant multi-user display
+            // Sort by ID to ensure consistent ordering between client and server
+            const sortedIds = [...result].sort((a, b) => a - b);
+            const updatePayload = { assignee_ids: sortedIds };
             
-            if (result.length > 0 && window.taskAssigneeSelector?.allUsers) {
-                // ASSIGN: Get the primary assignee (first one) with full user object
-                const selectedUser = window.taskAssigneeSelector.allUsers.find(u => u.id === result[0]);
-                if (selectedUser) {
-                    // Preserve correct field names - username stays as username, display_name is separate
-                    updatePayload.assigned_to = {
-                        id: selectedUser.id,
-                        username: selectedUser.username,
-                        display_name: selectedUser.display_name,
-                        email: selectedUser.email
-                    };
-                    updatePayload.assigned_to_id = selectedUser.id;
-                    console.log('[TaskMenuController] ASSIGN: Including full user object for optimistic UI:', updatePayload.assigned_to);
+            if (sortedIds.length > 0 && window.taskAssigneeSelector?.allUsers) {
+                // ASSIGN: Build full assignees array for immediate display (no waiting for server)
+                const allUsers = window.taskAssigneeSelector.allUsers;
+                const resolvedAssignees = sortedIds
+                    .map(id => allUsers.find(u => u.id === id))
+                    .filter(Boolean)
+                    .map(u => ({
+                        id: u.id,
+                        username: u.username,
+                        display_name: u.display_name,
+                        email: u.email
+                    }));
+                
+                // Include both full array AND primary assignee for compatibility
+                updatePayload.assignees = resolvedAssignees;
+                if (resolvedAssignees.length > 0) {
+                    updatePayload.assigned_to = resolvedAssignees[0];
+                    updatePayload.assigned_to_id = resolvedAssignees[0].id;
                 }
+                console.log('[TaskMenuController] ASSIGN: Including', resolvedAssignees.length, 'assignees for optimistic UI:', resolvedAssignees.map(u => u.username || u.display_name).join(', '));
             } else {
-                // UNASSIGN: Explicitly set assigned_to to null to override existing value
+                // UNASSIGN: Explicitly set to null/empty to override existing value
                 updatePayload.assigned_to = null;
                 updatePayload.assigned_to_id = null;
+                updatePayload.assignees = [];
                 console.log('[TaskMenuController] UNASSIGN: Clearing assignee from task');
             }
 
