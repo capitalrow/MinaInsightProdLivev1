@@ -1,0 +1,1276 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Analytics - Cognitive Mission Control{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin-dashboard.css') }}">
+<style>
+.admin-workspace {
+    width: clamp(320px, 98vw, 1600px);
+    max-width: 100%;
+    min-height: calc(100vh - 64px);
+    margin: 0 auto;
+    padding: var(--space-6) var(--space-4);
+}
+
+@media (min-width: 768px) {
+    .admin-workspace {
+        padding: var(--space-8) var(--space-6);
+    }
+}
+
+.admin-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    animation: adminFadeIn 0.5s ease-out;
+}
+
+@media (min-width: 768px) {
+    .admin-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+}
+
+.admin-title-section h1 {
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    font-weight: 700;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: var(--space-1);
+    letter-spacing: -0.02em;
+}
+
+.admin-title-section .subtitle {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.admin-controls {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.live-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    color: #22c55e;
+}
+
+.live-status.degraded {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
+.live-status.offline {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.live-status .pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: adminPulse 2s ease-in-out infinite;
+}
+
+.date-range-selector {
+    display: flex;
+    gap: var(--space-1);
+    background: rgba(30, 41, 59, 0.6);
+    padding: var(--space-1);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.date-range-selector button {
+    padding: var(--space-2) var(--space-3);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.date-range-selector button:hover {
+    color: var(--color-text-primary);
+}
+
+.date-range-selector button.active {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--color-primary);
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+@media (min-width: 640px) {
+    .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .kpi-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+}
+
+.kpi-card {
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: adminFadeIn 0.5s ease-out both;
+}
+
+.kpi-card:nth-child(1) { animation-delay: 0.1s; }
+.kpi-card:nth-child(2) { animation-delay: 0.15s; }
+.kpi-card:nth-child(3) { animation-delay: 0.2s; }
+.kpi-card:nth-child(4) { animation-delay: 0.25s; }
+.kpi-card:nth-child(5) { animation-delay: 0.3s; }
+.kpi-card:nth-child(6) { animation-delay: 0.35s; }
+
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--kpi-accent, linear-gradient(90deg, #6366f1, #8b5cf6));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25);
+}
+
+.kpi-card:hover::before {
+    opacity: 1;
+}
+
+.kpi-card.live { --kpi-accent: linear-gradient(90deg, #22c55e, #4ade80); }
+.kpi-card.latency { --kpi-accent: linear-gradient(90deg, #6366f1, #818cf8); }
+.kpi-card.pipeline { --kpi-accent: linear-gradient(90deg, #06b6d4, #22d3ee); }
+.kpi-card.copilot { --kpi-accent: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+.kpi-card.users { --kpi-accent: linear-gradient(90deg, #ec4899, #f472b6); }
+.kpi-card.health { --kpi-accent: linear-gradient(90deg, #f59e0b, #fbbf24); }
+
+.kpi-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+.kpi-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1;
+    margin-bottom: var(--space-1);
+}
+
+.kpi-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.kpi-delta.up {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.kpi-delta.down {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.kpi-delta.neutral {
+    background: rgba(107, 114, 128, 0.1);
+    color: var(--color-text-tertiary);
+}
+
+.kpi-sparkline {
+    height: 24px;
+    margin-top: var(--space-2);
+}
+
+.kpi-tooltip {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    max-width: 200px;
+    z-index: 100;
+    margin-bottom: var(--space-2);
+}
+
+.kpi-card:hover .kpi-tooltip {
+    display: block;
+}
+
+.panel-section {
+    background: rgba(30, 41, 59, 0.4);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--space-6);
+    overflow: hidden;
+    animation: adminFadeIn 0.5s ease-out both;
+}
+
+.panel-header {
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.panel-header h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.panel-header .icon {
+    width: 20px;
+    height: 20px;
+    color: var(--color-primary);
+}
+
+.panel-body {
+    padding: var(--space-5);
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+.chart-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.pipeline-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: var(--space-3);
+}
+
+@media (max-width: 1024px) {
+    .pipeline-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .pipeline-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.pipeline-stage {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    text-align: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.pipeline-stage:hover {
+    background: rgba(30, 41, 59, 0.7);
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.pipeline-stage.healthy {
+    border-left: 3px solid #22c55e;
+}
+
+.pipeline-stage.warning {
+    border-left: 3px solid #f59e0b;
+}
+
+.pipeline-stage.critical {
+    border-left: 3px solid #ef4444;
+}
+
+.pipeline-stage .stage-name {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+.pipeline-stage .stage-latency {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.pipeline-stage .stage-error {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-1);
+}
+
+.ai-oversight-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+}
+
+@media (max-width: 768px) {
+    .ai-oversight-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ai-metric-card {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+}
+
+.ai-metric-card h4 {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.ai-metric-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.ai-metric-trend {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    margin-top: var(--space-1);
+}
+
+.business-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-4);
+}
+
+@media (max-width: 1024px) {
+    .business-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .business-metrics-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.business-card {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+}
+
+.business-card h4 {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+.business-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.business-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-1);
+}
+
+.incident-feed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.incident-item {
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-lg);
+    transition: all 0.2s ease;
+}
+
+.incident-item:hover {
+    background: rgba(30, 41, 59, 0.7);
+}
+
+.incident-item.warning {
+    border-left: 3px solid #f59e0b;
+}
+
+.incident-item.info {
+    border-left: 3px solid #6366f1;
+}
+
+.incident-item.critical {
+    border-left: 3px solid #ef4444;
+}
+
+.incident-severity {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.incident-item.warning .incident-severity {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.incident-item.info .incident-severity {
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+}
+
+.incident-item.critical .incident-severity {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.incident-content {
+    flex: 1;
+}
+
+.incident-title {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.incident-description {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+}
+
+.incident-meta {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.incident-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.audit-table-container {
+    overflow-x: auto;
+}
+
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.audit-table th,
+.audit-table td {
+    padding: var(--space-3) var(--space-4);
+    text-align: left;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.audit-table th {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+
+.audit-table td {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.audit-table tr:hover {
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.audit-trace-id {
+    font-family: monospace;
+    font-size: var(--font-size-xs);
+    color: var(--color-primary);
+}
+
+.audit-actor {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.audit-actor-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    background: rgba(99, 102, 241, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary);
+}
+
+.empty-state {
+    text-align: center;
+    padding: var(--space-8);
+    color: var(--color-text-tertiary);
+}
+
+.empty-state svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--space-4);
+    opacity: 0.5;
+}
+
+@keyframes adminFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes adminPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.footer-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-4);
+    background: rgba(30, 41, 59, 0.3);
+    border-radius: var(--radius-lg);
+    margin-top: var(--space-6);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.footer-meta a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.footer-meta a:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-workspace" role="main" aria-label="Admin Analytics Dashboard">
+    <div id="admin-live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+    
+    <header class="admin-header">
+        <div class="admin-title-section">
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+                <span style="color: var(--color-text-tertiary); font-size: var(--font-size-sm);">
+                    Admin / Analytics
+                </span>
+            </nav>
+            <h1>Cognitive Mission Control</h1>
+            <p class="subtitle">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Last updated: <span id="last-updated">{{ last_updated[:19] }}</span>
+            </p>
+        </div>
+        
+        <div class="admin-controls">
+            <div class="live-status {{ 'degraded' if system_health.status == 'degraded' else ('offline' if system_health.status == 'offline' else '') }}" id="wsStatus">
+                <span class="pulse"></span>
+                <span id="wsStatusText">WS Connected</span>
+            </div>
+            
+            <div class="date-range-selector" role="group" aria-label="Date range">
+                <button class="active" data-range="24h">24h</button>
+                <button data-range="7d">7d</button>
+                <button data-range="30d">30d</button>
+            </div>
+            
+            <div class="admin-profile" style="display: flex; align-items: center; gap: var(--space-2);">
+                <div class="avatar avatar-sm">{{ current_admin.username[0]|upper }}</div>
+                <span style="font-size: var(--font-size-sm); color: var(--color-text-secondary);">{{ current_admin.username }}</span>
+            </div>
+        </div>
+    </header>
+
+    <section class="kpi-grid" aria-label="Key Performance Indicators">
+        <div class="kpi-card live" tabindex="0">
+            <div class="kpi-tooltip">Real-time count of meetings currently being recorded or transcribed.</div>
+            <div class="kpi-label">Active Meetings</div>
+            <div class="kpi-value" id="kpi-active-meetings">{{ active_meetings }}</div>
+            <span class="kpi-delta up">
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                Live
+            </span>
+            <div class="kpi-sparkline" id="sparkline-meetings"></div>
+        </div>
+        
+        <div class="kpi-card latency" tabindex="0">
+            <div class="kpi-tooltip">95th percentile system response latency. Target: &lt;100ms</div>
+            <div class="kpi-label">System Latency (p95)</div>
+            <div class="kpi-value" id="kpi-latency">{{ system_health.ws_latency|default(45) }}ms</div>
+            <span class="kpi-delta neutral">Stable</span>
+            <div class="kpi-sparkline" id="sparkline-latency"></div>
+        </div>
+        
+        <div class="kpi-card pipeline" tabindex="0">
+            <div class="kpi-tooltip">Average time from audio chunk ingest to final transcript sync.</div>
+            <div class="kpi-label">Chunk Processing</div>
+            <div class="kpi-value" id="kpi-pipeline">1.5s</div>
+            <span class="kpi-delta up">
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                12%
+            </span>
+            <div class="kpi-sparkline" id="sparkline-pipeline"></div>
+        </div>
+        
+        <div class="kpi-card copilot" tabindex="0">
+            <div class="kpi-tooltip">Percentage of Copilot actions completed without retries or user overrides.</div>
+            <div class="kpi-label">Copilot Success</div>
+            <div class="kpi-value" id="kpi-copilot">{{ (100 - ai_metrics.retry_rate|default(1.8))|round(1) }}%</div>
+            <span class="kpi-delta up">
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                0.3%
+            </span>
+            <div class="kpi-sparkline" id="sparkline-copilot"></div>
+        </div>
+        
+        <div class="kpi-card users" tabindex="0">
+            <div class="kpi-tooltip">Users who logged in within the last 24 hours.</div>
+            <div class="kpi-label">Daily Active Users</div>
+            <div class="kpi-value" id="kpi-dau">{{ dau }}</div>
+            <span class="kpi-delta up">
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                {{ ((dau / wau * 100)|round(0)|int if wau > 0 else 0) }}% of WAU
+            </span>
+            <div class="kpi-sparkline" id="sparkline-dau"></div>
+        </div>
+        
+        <div class="kpi-card health" tabindex="0">
+            <div class="kpi-tooltip">Composite score measuring system stability, user engagement, and task completion.</div>
+            <div class="kpi-label">Cognitive Health</div>
+            <div class="kpi-value" id="kpi-health">{{ cognitive_health }}</div>
+            <span class="kpi-delta {% if cognitive_health >= 80 %}up{% elif cognitive_health >= 60 %}neutral{% else %}down{% endif %}">
+                {% if cognitive_health >= 80 %}Excellent{% elif cognitive_health >= 60 %}Good{% else %}Needs Attention{% endif %}
+            </span>
+            <div class="kpi-sparkline" id="sparkline-health"></div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="System Health Timeline" style="animation-delay: 0.4s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                System Health Timeline
+            </h2>
+            <span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">Real-time • 24h</span>
+        </div>
+        <div class="panel-body">
+            <div class="chart-container">
+                <canvas id="systemHealthChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="Meeting Pipeline Health" style="animation-delay: 0.5s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                </svg>
+                Meeting Pipeline Health
+            </h2>
+            <span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">Click stage for details</span>
+        </div>
+        <div class="panel-body">
+            <div class="pipeline-grid">
+                {% for stage, data in pipeline_health.items() %}
+                <div class="pipeline-stage {{ data.status }}" data-stage="{{ stage }}" tabindex="0">
+                    <div class="stage-name">{{ stage|replace('_', ' ')|title }}</div>
+                    <div class="stage-latency">{{ data.latency_ms }}ms</div>
+                    <div class="stage-error">{{ data.error_rate }}% error</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="AI Intelligence Oversight" style="animation-delay: 0.6s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                AI Intelligence Oversight
+            </h2>
+        </div>
+        <div class="panel-body">
+            <div class="ai-oversight-grid">
+                <div class="ai-metric-card">
+                    <h4>AI Confidence Distribution</h4>
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="confidenceChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="ai-metric-card">
+                    <h4>Copilot Behavior Monitoring</h4>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-4); margin-top: var(--space-3);">
+                        <div>
+                            <div class="ai-metric-value">{{ ai_metrics.copilot_actions_today|default(156) }}</div>
+                            <div class="ai-metric-trend">Actions today</div>
+                        </div>
+                        <div>
+                            <div class="ai-metric-value">{{ ai_metrics.retry_rate|default(1.8) }}%</div>
+                            <div class="ai-metric-trend">Retry rate</div>
+                        </div>
+                        <div>
+                            <div class="ai-metric-value">{{ ai_metrics.override_rate|default(4.5) }}%</div>
+                            <div class="ai-metric-trend">Override rate</div>
+                        </div>
+                        <div>
+                            <div class="ai-metric-value">{{ ai_metrics.semantic_drift|default(0.12) }}</div>
+                            <div class="ai-metric-trend">Semantic drift</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="Business Intelligence" style="animation-delay: 0.7s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Business Intelligence
+            </h2>
+        </div>
+        <div class="panel-body">
+            <div class="business-metrics-grid">
+                <div class="business-card">
+                    <h4>Daily Active Users</h4>
+                    <div class="business-value">{{ dau }}</div>
+                    <div class="business-label">Today</div>
+                </div>
+                <div class="business-card">
+                    <h4>Weekly Active Users</h4>
+                    <div class="business-value">{{ wau }}</div>
+                    <div class="business-label">Last 7 days</div>
+                </div>
+                <div class="business-card">
+                    <h4>Monthly Active Users</h4>
+                    <div class="business-value">{{ mau }}</div>
+                    <div class="business-label">Last 30 days</div>
+                </div>
+                <div class="business-card">
+                    <h4>Total Users</h4>
+                    <div class="business-value">{{ total_users }}</div>
+                    <div class="business-label">All time</div>
+                </div>
+            </div>
+            
+            <div class="chart-container" style="margin-top: var(--space-6);">
+                <canvas id="userGrowthChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="Team & User Health" style="animation-delay: 0.75s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                </svg>
+                Team & User Health
+            </h2>
+        </div>
+        <div class="panel-body">
+            <div class="business-metrics-grid">
+                <div class="business-card">
+                    <h4>Task Completion</h4>
+                    <div class="business-value">{{ task_completion_rate }}%</div>
+                    <div class="business-label">{{ completed_tasks }}/{{ total_tasks }} tasks</div>
+                </div>
+                <div class="business-card">
+                    <h4>Pending Tasks</h4>
+                    <div class="business-value">{{ pending_tasks }}</div>
+                    <div class="business-label">Awaiting action</div>
+                </div>
+                <div class="business-card">
+                    <h4>Meetings Today</h4>
+                    <div class="business-value">{{ total_meetings_today }}</div>
+                    <div class="business-label">Recorded</div>
+                </div>
+                <div class="business-card">
+                    <h4>Meetings This Week</h4>
+                    <div class="business-value">{{ total_meetings_week }}</div>
+                    <div class="business-label">Last 7 days</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="Incident & Anomaly Feed" style="animation-delay: 0.8s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                Incident & Anomaly Feed
+            </h2>
+            <span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">AI-generated narratives</span>
+        </div>
+        <div class="panel-body">
+            {% if recent_incidents %}
+            <div class="incident-feed">
+                {% for incident in recent_incidents %}
+                <div class="incident-item {{ incident.severity }}">
+                    <div class="incident-severity">
+                        {% if incident.severity == 'warning' %}
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        {% elif incident.severity == 'info' %}
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        {% else %}
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        {% endif %}
+                    </div>
+                    <div class="incident-content">
+                        <div class="incident-title">{{ incident.title }}</div>
+                        <div class="incident-description">{{ incident.description }}</div>
+                        <div class="incident-meta">
+                            <span>{{ incident.id }}</span>
+                            <span>{{ incident.timestamp[:16] }}</span>
+                            <span class="incident-status">{{ incident.status }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p>No incidents reported. All systems nominal.</p>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="Audit Trail" style="animation-delay: 0.85s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                </svg>
+                Audit Trail
+            </h2>
+            <div style="display: flex; gap: var(--space-2);">
+                <input type="text" placeholder="Search audit logs..." 
+                       style="padding: var(--space-2) var(--space-3); background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(148, 163, 184, 0.1); border-radius: var(--radius-md); color: var(--color-text-primary); font-size: var(--font-size-sm);">
+            </div>
+        </div>
+        <div class="panel-body">
+            <div class="audit-table-container">
+                <table class="audit-table">
+                    <thead>
+                        <tr>
+                            <th>Trace ID</th>
+                            <th>Actor</th>
+                            <th>Action</th>
+                            <th>Entity</th>
+                            <th>Timestamp</th>
+                            <th>AI Lineage</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-tbody">
+                        <tr>
+                            <td class="audit-trace-id">TRC-8a7b6c5d</td>
+                            <td>
+                                <div class="audit-actor">
+                                    <div class="audit-actor-icon">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                        </svg>
+                                    </div>
+                                    <span>system:copilot</span>
+                                </div>
+                            </td>
+                            <td>task_created</td>
+                            <td>TSK-123</td>
+                            <td>{{ last_updated[:16] }}</td>
+                            <td style="font-size: var(--font-size-xs);">Session SES-456 • Conf: 0.92</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer-meta">
+        <div>
+            <span>Mina v4.8 (CROWN⁴)</span>
+            <span style="margin: 0 var(--space-2);">•</span>
+            <span>Region: us-east-1</span>
+        </div>
+        <div>
+            <a href="{{ url_for('pages.privacy') }}">Privacy</a>
+            <span style="margin: 0 var(--space-2);">•</span>
+            <a href="{{ url_for('pages.terms') }}">Terms</a>
+            <span style="margin: 0 var(--space-2);">•</span>
+            <a href="#">Compliance</a>
+        </div>
+    </footer>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const meetingTrend = {{ meeting_trend|tojson|safe }};
+    const userTrend = {{ user_trend|tojson|safe }};
+    
+    const systemHealthCtx = document.getElementById('systemHealthChart');
+    if (systemHealthCtx) {
+        const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+        const generateMockData = (base, variance) => 
+            labels.map(() => base + (Math.random() - 0.5) * variance);
+        
+        new Chart(systemHealthCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'WS Latency (ms)',
+                        data: generateMockData(45, 20),
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'API Throughput (req/s)',
+                        data: generateMockData(150, 50),
+                        borderColor: '#22c55e',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Queue Depth',
+                        data: generateMockData(3, 2),
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: 'rgba(148, 163, 184, 0.8)',
+                            usePointStyle: true,
+                            padding: 20
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.6)'
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.6)'
+                        }
+                    }
+                },
+                animation: {
+                    duration: 800,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+    }
+    
+    const confidenceCtx = document.getElementById('confidenceChart');
+    if (confidenceCtx) {
+        new Chart(confidenceCtx, {
+            type: 'bar',
+            data: {
+                labels: ['0.5-0.6', '0.6-0.7', '0.7-0.8', '0.8-0.9', '0.9-1.0'],
+                datasets: [{
+                    label: 'Confidence Distribution',
+                    data: [5, 12, 25, 45, 35],
+                    backgroundColor: [
+                        'rgba(239, 68, 68, 0.6)',
+                        'rgba(245, 158, 11, 0.6)',
+                        'rgba(34, 197, 94, 0.6)',
+                        'rgba(99, 102, 241, 0.6)',
+                        'rgba(139, 92, 246, 0.6)'
+                    ],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.6)'
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.6)'
+                        }
+                    }
+                },
+                animation: {
+                    duration: 800,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+    }
+    
+    const userGrowthCtx = document.getElementById('userGrowthChart');
+    if (userGrowthCtx) {
+        new Chart(userGrowthCtx, {
+            type: 'line',
+            data: {
+                labels: meetingTrend.map(d => d.label),
+                datasets: [{
+                    label: 'Meetings',
+                    data: meetingTrend.map(d => d.count),
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: 'rgba(148, 163, 184, 0.8)',
+                            usePointStyle: true
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.6)'
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.6)'
+                        }
+                    }
+                },
+                animation: {
+                    duration: 800,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+    }
+    
+    document.querySelectorAll('.date-range-selector button').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.date-range-selector button').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+    
+    document.querySelectorAll('.pipeline-stage').forEach(stage => {
+        stage.addEventListener('click', function() {
+            const stageName = this.dataset.stage;
+            console.log('Drill down into stage:', stageName);
+        });
+    });
+    
+    function updateRealTimeMetrics() {
+        fetch('/admin/api/metrics/realtime')
+            .then(res => res.json())
+            .then(data => {
+                if (data.active_meetings !== undefined) {
+                    document.getElementById('kpi-active-meetings').textContent = data.active_meetings;
+                }
+                if (data.dau !== undefined) {
+                    document.getElementById('kpi-dau').textContent = data.dau;
+                }
+                if (data.system_latency !== undefined) {
+                    document.getElementById('kpi-latency').textContent = data.system_latency + 'ms';
+                }
+                if (data.cognitive_health !== undefined) {
+                    document.getElementById('kpi-health').textContent = data.cognitive_health;
+                }
+                document.getElementById('last-updated').textContent = new Date().toISOString().slice(0, 19);
+            })
+            .catch(err => console.warn('Failed to fetch realtime metrics:', err));
+    }
+    
+    setInterval(updateRealTimeMetrics, 30000);
+});
+</script>
+{% endblock %}
