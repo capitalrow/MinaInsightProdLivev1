@@ -13,6 +13,18 @@ from datetime import datetime, timedelta, date
 from sqlalchemy import func, desc, and_
 from typing import Dict, List
 import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+def get_broadcast_functions():
+    """Lazy import broadcast functions to avoid circular imports."""
+    try:
+        from routes.analytics_websocket import broadcast_analytics_update, broadcast_meeting_analytics
+        return broadcast_analytics_update, broadcast_meeting_analytics
+    except ImportError:
+        logger.warning("Could not import analytics WebSocket broadcast functions")
+        return None, None
 
 
 api_analytics_bp = Blueprint('api_analytics', __name__, url_prefix='/api/analytics')
