@@ -293,9 +293,18 @@ class Task(Base):
             # CROWN⁴.6: embedding, embedding_model, embedding_updated_at intentionally excluded
         }
         
+        # CROWN⁴.7: Always include assigned_to user object for UI hydration
+        # This fixes the bug where assignee names disappear after page reload
+        # because cache bootstrap/idle sync needs user data to render badges correctly
+        if self.assigned_to:
+            data['assigned_to'] = {
+                'id': self.assigned_to.id,
+                'username': self.assigned_to.username,
+                'display_name': getattr(self.assigned_to, 'display_name', None),
+                'email': self.assigned_to.email
+            }
+        
         if include_relationships:
-            if self.assigned_to:
-                data['assigned_to'] = self.assigned_to.to_dict()
             
             # CROWN⁴.5: Multi-assignee support
             if self.assignees:
