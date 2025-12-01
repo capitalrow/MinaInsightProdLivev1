@@ -916,6 +916,20 @@ class OptimisticUI {
         const card = document.querySelector(`[data-task-id="${taskId}"]`);
         if (!card) return;
 
+        // CROWN⁴.8: Diff check for assignee_ids to prevent redundant re-renders (flicker prevention)
+        // Skip assignee badge update if IDs are unchanged (optimistic already applied)
+        const incomingIds = (task.assignee_ids || []).slice().sort((a, b) => a - b);
+        const currentIds = (card.dataset.assigneeIds || '').split(',').filter(Boolean).map(Number).sort((a, b) => a - b);
+        const assigneesUnchanged = incomingIds.length === currentIds.length && 
+            incomingIds.every((id, i) => id === currentIds[i]);
+        
+        if (assigneesUnchanged && incomingIds.length > 0) {
+            console.log('[_updateTaskInDOM] Skipping assignee render - IDs unchanged:', incomingIds.join(','));
+        }
+        
+        // Always update the stored IDs for next comparison
+        card.dataset.assigneeIds = incomingIds.join(',');
+
         // Update title
         const titleEl = card.querySelector('.task-title');
         if (titleEl && task.title) {
@@ -966,87 +980,95 @@ class OptimisticUI {
         // Handles both existing badges and re-rendering when badge structure needs updating
         // INDUSTRY-STANDARD: Follows Linear/Notion/Asana pattern for instant optimistic updates
         // CROWN⁴.7: Handle BOTH server-rendered (.task-assignee) and JS-rendered (.task-assignees) structures
-        const taskMeta = card.querySelector('.task-metadata') || card.querySelector('.task-content');
-        let assigneeBadge = card.querySelector('.task-assignee') || card.querySelector('.task-assignees');
-        
-        // CROWN⁴.8: Multi-assignee support - resolve ALL assignees from IDs
-        // Match task-bootstrap.js structure exactly for consistency
-        const allUsers = window.taskAssigneeSelector?.allUsers || [];
-        const assigneeIds = task.assignee_ids || [];
-        const maxVisibleAssignees = 2;
-        
-        // Resolve all assignees from IDs
-        let resolvedAssignees = [];
-        if (assigneeIds.length > 0) {
-            resolvedAssignees = assigneeIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
-            console.log('[_updateTaskInDOM] Resolved', resolvedAssignees.length, 'assignees from', assigneeIds.length, 'IDs');
-        }
-        
-        // Fallback to single assigned_to if no IDs resolved
-        if (resolvedAssignees.length === 0 && task.assigned_to && task.assigned_to.id) {
-            resolvedAssignees = [task.assigned_to];
-        }
-        
-        // Handle explicit unassign case
-        const isExplicitUnassign = task.hasOwnProperty('assigned_to') && task.assigned_to === null;
-        const hasEmptyAssigneeIds = task.assignee_ids && task.assignee_ids.length === 0;
-        
-        // SVG icon (matches task-bootstrap.js)
-        const svgIcon = `<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-        </svg>`;
-        const addUserSvg = `<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-        </svg>`;
-        
-        let newBadgeHTML;
-        
-        if (resolvedAssignees.length > 0) {
-            // ASSIGN: Show assignee names with overflow handling (Linear/Notion style)
-            const visibleAssignees = resolvedAssignees.slice(0, maxVisibleAssignees);
-            const overflowCount = resolvedAssignees.length - maxVisibleAssignees;
+        // CROWN⁴.8: Skip badge update if assignee_ids unchanged (flicker prevention)
+        if (!assigneesUnchanged) {
+            const taskMeta = card.querySelector('.task-metadata') || card.querySelector('.task-content');
+            let assigneeBadge = card.querySelector('.task-assignee') || card.querySelector('.task-assignees');
             
-            const assigneeNames = visibleAssignees
-                .map(a => a.display_name || a.username || a.email)
-                .filter(Boolean)
-                .join(', ');
+            // CROWN⁴.8: Multi-assignee support - first try using payload's assignees array (optimistic path)
+            // This ensures instant display without waiting for user resolution
+            const allUsers = window.taskAssigneeSelector?.allUsers || [];
+            const assigneeIds = (task.assignee_ids || []).slice().sort((a, b) => a - b);
+            const maxVisibleAssignees = 2;
             
-            const fullList = resolvedAssignees
-                .map(a => a.display_name || a.username || a.email)
-                .filter(Boolean)
-                .join(', ');
+            // Resolve assignees: prefer task.assignees (full objects), fallback to resolving from IDs
+            let resolvedAssignees = [];
+            if (task.assignees && task.assignees.length > 0) {
+                // Use optimistic payload's full assignees array (sorted by ID)
+                resolvedAssignees = task.assignees.slice().sort((a, b) => a.id - b.id);
+                console.log('[_updateTaskInDOM] Using payload assignees:', resolvedAssignees.length);
+            } else if (assigneeIds.length > 0) {
+                // Fallback: resolve from IDs
+                resolvedAssignees = assigneeIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
+                console.log('[_updateTaskInDOM] Resolved', resolvedAssignees.length, 'assignees from', assigneeIds.length, 'IDs');
+            }
             
-            const overflowSpan = overflowCount > 0 ? ` <span class="assignee-overflow">+${overflowCount}</span>` : '';
+            // Fallback to single assigned_to if no IDs resolved
+            if (resolvedAssignees.length === 0 && task.assigned_to && task.assigned_to.id) {
+                resolvedAssignees = [task.assigned_to];
+            }
             
-            newBadgeHTML = `<div class="task-assignees" data-task-id="${task.id}" title="${this._escapeHtml(fullList || 'Click to change assignees')}">
-                ${svgIcon}
-                <span class="assignee-names">${this._escapeHtml(assigneeNames || 'Assigned')}${overflowSpan}</span>
-            </div>`;
-            console.log('[_updateTaskInDOM] Rendering multi-assignee badge:', assigneeNames, overflowCount > 0 ? `+${overflowCount}` : '');
+            // Handle explicit unassign case
+            const isExplicitUnassign = task.hasOwnProperty('assigned_to') && task.assigned_to === null;
+            const hasEmptyAssigneeIds = task.assignee_ids && task.assignee_ids.length === 0;
             
-        } else if (isExplicitUnassign || hasEmptyAssigneeIds) {
-            // UNASSIGN: Show "Assign" placeholder with add-user icon
-            newBadgeHTML = `<div class="task-assignees task-assignees-empty" data-task-id="${task.id}" title="Click to assign">
-                ${addUserSvg}
-                <span class="assignee-names">Assign</span>
-            </div>`;
-            console.log('[_updateTaskInDOM] Clearing assignee (unassign)');
+            // SVG icon (matches task-bootstrap.js)
+            const svgIcon = `<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>`;
+            const addUserSvg = `<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+            </svg>`;
             
-        } else if (assigneeIds.length > 0) {
-            // Fallback: Has IDs but couldn't resolve users - show generic placeholder
-            newBadgeHTML = `<div class="task-assignees" data-task-id="${task.id}" title="Click to change assignees">
-                ${svgIcon}
-                <span class="assignee-names">Assigned</span>
-            </div>`;
-            console.log('[_updateTaskInDOM] Fallback: showing generic Assigned badge');
-        }
-        
-        // Apply the badge update
-        if (newBadgeHTML) {
-            if (assigneeBadge) {
-                assigneeBadge.outerHTML = newBadgeHTML;
-            } else if (taskMeta) {
-                taskMeta.insertAdjacentHTML('afterbegin', newBadgeHTML);
+            let newBadgeHTML;
+            
+            if (resolvedAssignees.length > 0) {
+                // ASSIGN: Show assignee names with overflow handling (Linear/Notion style)
+                const visibleAssignees = resolvedAssignees.slice(0, maxVisibleAssignees);
+                const overflowCount = resolvedAssignees.length - maxVisibleAssignees;
+                
+                const assigneeNames = visibleAssignees
+                    .map(a => a.display_name || a.username || a.email)
+                    .filter(Boolean)
+                    .join(', ');
+                
+                const fullList = resolvedAssignees
+                    .map(a => a.display_name || a.username || a.email)
+                    .filter(Boolean)
+                    .join(', ');
+                
+                const overflowSpan = overflowCount > 0 ? ` <span class="assignee-overflow">+${overflowCount}</span>` : '';
+                
+                newBadgeHTML = `<div class="task-assignees" data-task-id="${task.id}" title="${this._escapeHtml(fullList || 'Click to change assignees')}">
+                    ${svgIcon}
+                    <span class="assignee-names">${this._escapeHtml(assigneeNames || 'Assigned')}${overflowSpan}</span>
+                </div>`;
+                console.log('[_updateTaskInDOM] Rendering multi-assignee badge:', assigneeNames, overflowCount > 0 ? `+${overflowCount}` : '');
+                
+            } else if (isExplicitUnassign || hasEmptyAssigneeIds) {
+                // UNASSIGN: Show "Assign" placeholder with add-user icon
+                newBadgeHTML = `<div class="task-assignees task-assignees-empty" data-task-id="${task.id}" title="Click to assign">
+                    ${addUserSvg}
+                    <span class="assignee-names">Assign</span>
+                </div>`;
+                console.log('[_updateTaskInDOM] Clearing assignee (unassign)');
+                
+            } else if (assigneeIds.length > 0) {
+                // Fallback: Has IDs but couldn't resolve users - show generic placeholder
+                newBadgeHTML = `<div class="task-assignees" data-task-id="${task.id}" title="Click to change assignees">
+                    ${svgIcon}
+                    <span class="assignee-names">Assigned</span>
+                </div>`;
+                console.log('[_updateTaskInDOM] Fallback: showing generic Assigned badge');
+            }
+            
+            // Apply the badge update
+            if (newBadgeHTML) {
+                if (assigneeBadge) {
+                    assigneeBadge.outerHTML = newBadgeHTML;
+                } else if (taskMeta) {
+                    taskMeta.insertAdjacentHTML('afterbegin', newBadgeHTML);
+                }
             }
         }
 
