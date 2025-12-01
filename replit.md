@@ -109,19 +109,18 @@ The application utilizes a layered architecture with Flask as the web framework 
 
 ## Known Data Pipeline Gaps
 
-**Analytics Page Empty Sections (As of Dec 2025):**
+**Resolved (Dec 2025):** Participant data pipeline now working - MeetingLifecycleService extracts speaker metrics from transcript segments and persists to participants table.
 
-1. **Speaking Distribution & Participation Balance** - The `participants` table is empty (0 records). Speaker diarization during meeting processing isn't persisting participant records with `talk_time_seconds` and `word_count` data. The `/api/analytics/communication` endpoint queries this table for speaker statistics.
-
-2. **Key Themes & Topic Distribution** - The `analytics.key_topics` field is NULL for all records. Topic extraction from AI analysis isn't being saved to the database. The `AnalysisService` should populate this field during meeting analysis.
-
-**Root Cause:** The meeting processing pipeline (speaker diarization and AI topic extraction) runs but doesn't persist results to the `participants` and `analytics` tables.
-
-**Fix Required:** 
-- Ensure `SpeakerDiarization` service creates/updates `Participant` records with `talk_time_seconds`, `word_count`, `question_count`
-- Ensure `AnalysisService` saves extracted topics to `analytics.key_topics` field after meeting analysis
+**Remaining:** Key topics extraction returns empty arrays when OpenAI API is rate-limited. The infrastructure is in place; topics will populate when API access is stable.
 
 ## Recent Changes
+
+**December 1, 2025 - Data Pipeline Fix:**
+- Added `_extract_participant_metrics()` and `_persist_participants()` to MeetingLifecycleService
+- Created `backfill_participants_for_meeting()` for historical data population
+- Fixed AnalyticsService segment queries (`is_final=True` → `kind='final'`)
+- Backfilled 8 historical meetings with participant data (talk_time_seconds, word_count, participation_percentage)
+- Added key topics extraction prompt infrastructure to AnalyticsService
 
 **December 1, 2025 - Crown⁵+ Analytics Page Polish:**
 - Replaced native `<select>` date filter with custom Crown+ glassmorphic dropdown component (pill trigger + animated dropdown)
@@ -129,4 +128,3 @@ The application utilizes a layered architecture with Flask as the web framework 
 - Applied Crown+ gradient backgrounds to Task Status Distribution donut chart
 - Enhanced Completion Over Time bar chart with softer grid lines and premium tooltips
 - Fixed Meeting Frequency chart with gradient fill, smooth curves, and reduced x-axis label density
-- Documented data pipeline gaps for Participants and Key Topics population
