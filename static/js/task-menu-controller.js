@@ -471,7 +471,10 @@ class TaskMenuController {
         console.log(`[TaskMenuController] Opening assignee selector for task ${taskId}`);
         
         const task = await this.fetchTask(taskId);
-        if (!task) return;
+        if (!task) {
+            this.showToast('Task not found. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
             let result;
@@ -497,16 +500,58 @@ class TaskMenuController {
                 return;
             }
 
-            // Use OptimisticUI system
-            if (window.optimisticUI?.updateTask) {
-                await window.optimisticUI.updateTask(taskId, { assignee_ids: result });
+            // CROWN⁴.8: Build optimistic payload with FULL assignees array for instant multi-user display
+            // Sort by ID to ensure consistent ordering between client and server
+            const sortedIds = [...result].sort((a, b) => a - b);
+            const updatePayload = { assignee_ids: sortedIds };
+            
+            if (sortedIds.length > 0 && window.taskAssigneeSelector?.allUsers) {
+                // ASSIGN: Build full assignees array for immediate display (no waiting for server)
+                const allUsers = window.taskAssigneeSelector.allUsers;
+                const resolvedAssignees = sortedIds
+                    .map(id => allUsers.find(u => u.id === id))
+                    .filter(Boolean)
+                    .map(u => ({
+                        id: u.id,
+                        username: u.username,
+                        display_name: u.display_name,
+                        email: u.email
+                    }));
+                
+                // Include both full array AND primary assignee for compatibility
+                updatePayload.assignees = resolvedAssignees;
+                if (resolvedAssignees.length > 0) {
+                    updatePayload.assigned_to = resolvedAssignees[0];
+                    updatePayload.assigned_to_id = resolvedAssignees[0].id;
+                }
+                console.log('[TaskMenuController] ASSIGN: Including', resolvedAssignees.length, 'assignees for optimistic UI:', resolvedAssignees.map(u => u.username || u.display_name).join(', '));
             } else {
+                // UNASSIGN: Explicitly set to null/empty to override existing value
+                updatePayload.assigned_to = null;
+                updatePayload.assigned_to_id = null;
+                updatePayload.assignees = [];
+                console.log('[TaskMenuController] UNASSIGN: Clearing assignee from task');
+            }
+
+            // Use OptimisticUI system with full user object for instant display
+            if (window.optimisticUI?.updateTask) {
+                console.log('[TaskMenuController] Using OptimisticUI for instant update');
+                await window.optimisticUI.updateTask(taskId, updatePayload);
+            } else {
+                // FALLBACK: If OptimisticUI not ready, still update DOM directly
+                console.log('[TaskMenuController] FALLBACK: OptimisticUI not available, using direct DOM update');
+                
+                // 1. Update server
                 const response = await fetch(`/api/tasks/${taskId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ assignee_ids: result })
                 });
                 if (!response.ok) throw new Error('API call failed');
+                
+                // 2. CRITICAL: Update DOM directly for instant visual feedback
+                this._updateAssigneeBadgeInDOM(taskId, updatePayload);
+                
                 this.showToast('Assignees updated', 'success');
             }
         } catch (error) {
@@ -522,7 +567,10 @@ class TaskMenuController {
         console.log(`[TaskMenuController] Opening labels editor for task ${taskId}`);
         
         const task = await this.fetchTask(taskId);
-        if (!task) return;
+        if (!task) {
+            this.showToast('Task not found. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
             let result;
@@ -649,7 +697,10 @@ class TaskMenuController {
         console.log(`[TaskMenuController] Snoozing task ${taskId}`);
         
         const task = await this.fetchTask(taskId);
-        if (!task) return;
+        if (!task) {
+            this.showToast('Task not found. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
             let snoozeUntil;
@@ -728,7 +779,10 @@ class TaskMenuController {
         console.log(`[TaskMenuController] Merging task ${taskId}`);
         
         const sourceTask = await this.fetchTask(taskId);
-        if (!sourceTask) return;
+        if (!sourceTask) {
+            this.showToast('Task not found. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
             let targetTaskId;
@@ -886,7 +940,10 @@ class TaskMenuController {
         console.log(`[TaskMenuController] Archiving task ${taskId}`);
         
         const task = await this.fetchTask(taskId);
-        if (!task) return;
+        if (!task) {
+            this.showToast('Task not found. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
             let confirmed = false;
@@ -1189,6 +1246,100 @@ class TaskMenuController {
     closeMenu() {
         // Menu is already closed by TaskActionsMenu before actions execute
         // This method is kept for compatibility but does nothing
+    }
+
+    /**
+     * Helper: Directly update assignee badge in DOM (fallback when OptimisticUI not available)
+     * CROWN⁴.7: Ensures instant visual feedback even when optimistic system hasn't initialized
+     * @param {string|number} taskId - Task ID
+     * @param {Object} updatePayload - Contains assigned_to object or null for unassign
+     */
+    _updateAssigneeBadgeInDOM(taskId, updatePayload) {
+        console.log('[TaskMenuController] _updateAssigneeBadgeInDOM called for task:', taskId, updatePayload);
+        
+        const card = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (!card) {
+            console.warn('[TaskMenuController] Task card not found for DOM update:', taskId);
+            return;
+        }
+
+        // CRITICAL: Handle both server-rendered (.task-assignee) and JS-rendered (.task-assignees) structures
+        const taskMeta = card.querySelector('.task-metadata') || card.querySelector('.task-content');
+        let assigneeBadge = card.querySelector('.task-assignee') || card.querySelector('.task-assignees');
+        console.log('[TaskMenuController] Found assignee badge element:', assigneeBadge?.className);
+        
+        // Helper to escape HTML
+        const escapeHtml = (str) => {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+            })[char]);
+        };
+        
+        // SVG icons (match task-bootstrap.js exactly)
+        const svgIcon = `<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>`;
+        const addUserSvg = `<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+        </svg>`;
+
+        // CROWN⁴.8: Multi-assignee support
+        const allUsers = window.taskAssigneeSelector?.allUsers || [];
+        const assigneeIds = updatePayload.assignee_ids || [];
+        const maxVisibleAssignees = 2;
+        
+        // Resolve all assignees from IDs
+        let resolvedAssignees = [];
+        if (assigneeIds.length > 0) {
+            resolvedAssignees = assigneeIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
+            console.log('[TaskMenuController] Resolved', resolvedAssignees.length, 'assignees from', assigneeIds.length, 'IDs');
+        }
+        
+        // Fallback to single assigned_to
+        if (resolvedAssignees.length === 0 && updatePayload.assigned_to && updatePayload.assigned_to.id) {
+            resolvedAssignees = [updatePayload.assigned_to];
+        }
+        
+        let newBadgeHTML;
+        
+        if (resolvedAssignees.length > 0) {
+            // ASSIGN: Show assignee names with overflow handling
+            const visibleAssignees = resolvedAssignees.slice(0, maxVisibleAssignees);
+            const overflowCount = resolvedAssignees.length - maxVisibleAssignees;
+            
+            const assigneeNames = visibleAssignees
+                .map(a => a.display_name || a.username || a.email)
+                .filter(Boolean)
+                .join(', ');
+            
+            const fullList = resolvedAssignees
+                .map(a => a.display_name || a.username || a.email)
+                .filter(Boolean)
+                .join(', ');
+            
+            const overflowSpan = overflowCount > 0 ? ` <span class="assignee-overflow">+${overflowCount}</span>` : '';
+            
+            newBadgeHTML = `<div class="task-assignees" data-task-id="${taskId}" title="${escapeHtml(fullList || 'Click to change assignees')}">
+                ${svgIcon}
+                <span class="assignee-names">${escapeHtml(assigneeNames || 'Assigned')}${overflowSpan}</span>
+            </div>`;
+            console.log('[TaskMenuController] Rendering multi-assignee badge:', assigneeNames, overflowCount > 0 ? `+${overflowCount}` : '');
+            
+        } else {
+            // UNASSIGN: Show "Assign" placeholder
+            newBadgeHTML = `<div class="task-assignees task-assignees-empty" data-task-id="${taskId}" title="Click to assign">
+                ${addUserSvg}
+                <span class="assignee-names">Assign</span>
+            </div>`;
+            console.log('[TaskMenuController] Clearing assignee (unassign)');
+        }
+        
+        if (assigneeBadge) {
+            assigneeBadge.outerHTML = newBadgeHTML;
+        } else if (taskMeta) {
+            taskMeta.insertAdjacentHTML('afterbegin', newBadgeHTML);
+        }
     }
 }
 

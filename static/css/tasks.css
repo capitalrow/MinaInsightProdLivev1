@@ -869,6 +869,40 @@
 }
 
 /* ========================================
+ * SNOOZED STATE (CROWN⁴.7)
+ * ======================================== */
+
+.task-card.snoozed {
+  opacity: 0.7;
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.02);
+}
+
+.task-card.snoozed::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.4), rgba(245, 158, 11, 0.4));
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.snooze-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* ========================================
  * JUMP TO TRANSCRIPT BUTTON (CROWN⁴.6)
  * ======================================== */
 

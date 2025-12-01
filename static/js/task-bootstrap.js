@@ -642,14 +642,14 @@ class TaskBootstrap {
         const isDueSoon = task.due_date && this.isDueDateWithin(task.due_date, 1); // 1 day
         const isOverdue = task.due_date && this.isDueDateOverdue(task.due_date) && !isCompleted;
 
-        // CROWN⁴.5: Multi-assignee display with overflow handling
-        const assigneeIds = task.assignee_ids || [];
-        const assignees = task.assignees || [];
+        // CROWN⁴.8: Multi-assignee display with overflow handling + ID sorting for consistency
+        const assigneeIds = (task.assignee_ids || []).slice().sort((a, b) => a - b);
+        const assignees = (task.assignees || []).slice().sort((a, b) => (a.id || 0) - (b.id || 0));
         const maxVisibleAssignees = 2;
         
         let assigneeHTML = '';
         if (assigneeIds.length > 0) {
-            // Multi-assignee mode
+            // Multi-assignee mode (sorted by ID for consistency with optimistic updates)
             const visibleAssignees = assignees.slice(0, maxVisibleAssignees);
             const overflowCount = assigneeIds.length - maxVisibleAssignees;
             
@@ -708,6 +708,7 @@ class TaskBootstrap {
                  data-task-id="${task.id}"
                  data-status="${status}"
                  data-priority="${priority}"
+                 data-assignee-ids="${assigneeIds.join(',')}"
                  style="animation-delay: ${index * 0.05}s;">
                 
                 <!-- Checkbox (36x36px click area with 22x22px visual) -->
@@ -1043,8 +1044,22 @@ class TaskBootstrap {
             }
 
             const data = await response.json();
-            const serverTasks = data.tasks || [];
+            let serverTasks = data.tasks || [];
+            const usersMap = data.users || {};  // CROWN⁴.8: Users map for rehydration
             const serverChecksum = data.checksum; // CROWN⁴.5: Server sends checksum
+
+            // CROWN⁴.8: Rehydrate assigned_to from users map (Linear pattern)
+            // This ensures assignee names persist through background syncs
+            for (const task of serverTasks) {
+                if (task.assigned_to_id && usersMap[task.assigned_to_id]) {
+                    task.assigned_to = usersMap[task.assigned_to_id];
+                }
+                if (task.assignee_ids && task.assignee_ids.length > 0) {
+                    task.assignees = task.assignee_ids
+                        .map(id => usersMap[id])
+                        .filter(Boolean);
+                }
+            }
 
             this.perf.sync_end = performance.now();
             const syncTime = this.perf.sync_end - this.perf.sync_start;
@@ -1065,7 +1080,7 @@ class TaskBootstrap {
                 return;
             }
             
-            // Update cache with server data (only if we have data OR truly empty)
+            // Update cache with server data (now with rehydrated user objects)
             await this.cache.saveTasks(serverTasks);
             
             // CROWN⁴.5: Store server checksum for future validation
@@ -1204,7 +1219,20 @@ class TaskBootstrap {
             }
 
             const data = await response.json();
-            const tasks = data.tasks || [];
+            let tasks = data.tasks || [];
+            const usersMap = data.users || {};  // CROWN⁴.8: Users map for rehydration
+
+            // CROWN⁴.8: Rehydrate assigned_to from users map (Linear pattern)
+            for (const task of tasks) {
+                if (task.assigned_to_id && usersMap[task.assigned_to_id]) {
+                    task.assigned_to = usersMap[task.assigned_to_id];
+                }
+                if (task.assignee_ids && task.assignee_ids.length > 0) {
+                    task.assignees = task.assignee_ids
+                        .map(id => usersMap[id])
+                        .filter(Boolean);
+                }
+            }
 
             await this.renderTasks(tasks, { fromCache: false });
             

@@ -16,6 +16,34 @@ class TaskWebSocketHandlers {
     }
 
     /**
+     * CROWN⁴.8: Rehydrate tasks with user data from users map (Linear pattern)
+     * This ensures assignee names persist through background syncs and WebSocket updates
+     * @param {Array} tasks - Array of task objects
+     * @param {Object} usersMap - Map of user IDs to user objects
+     * @returns {Array} Tasks with rehydrated assigned_to and assignees
+     */
+    _rehydrateTasksWithUsers(tasks, usersMap) {
+        if (!usersMap || Object.keys(usersMap).length === 0) {
+            return tasks;
+        }
+        
+        for (const task of tasks) {
+            // Rehydrate primary assigned_to
+            if (task.assigned_to_id && usersMap[task.assigned_to_id]) {
+                task.assigned_to = usersMap[task.assigned_to_id];
+            }
+            // Rehydrate assignees array for multi-assignee support
+            if (task.assignee_ids && task.assignee_ids.length > 0) {
+                task.assignees = task.assignee_ids
+                    .map(id => usersMap[id])
+                    .filter(Boolean);
+            }
+        }
+        
+        return tasks;
+    }
+
+    /**
      * Initialize by registering handlers with WebSocketManager
      * Call this AFTER wsManager.init() completes
      * @returns {void}
@@ -245,7 +273,9 @@ class TaskWebSocketHandlers {
         }
         
         if (data.tasks) {
-            await window.taskCache.saveTasks(data.tasks);
+            // CROWN⁴.8: Rehydrate assignees from users map before caching
+            const rehydratedTasks = this._rehydrateTasksWithUsers(data.tasks, data.users || {});
+            await window.taskCache.saveTasks(rehydratedTasks);
         }
         
         if (data.view_state) {
@@ -701,10 +731,12 @@ class TaskWebSocketHandlers {
         console.log('🔄 Tasks refreshed');
         
         if (data.tasks) {
-            await window.taskCache.saveTasks(data.tasks);
+            // CROWN⁴.8: Rehydrate assignees from users map before caching
+            const rehydratedTasks = this._rehydrateTasksWithUsers(data.tasks, data.users || {});
+            await window.taskCache.saveTasks(rehydratedTasks);
             
             if (window.taskBootstrap) {
-                await window.taskBootstrap.renderTasks(data.tasks);
+                await window.taskBootstrap.renderTasks(rehydratedTasks);
             }
         }
     }
@@ -1189,9 +1221,11 @@ class TaskWebSocketHandlers {
         console.log('📦 Tasks bulk updated:', data.task_ids.length);
         
         if (data.tasks) {
-            await window.taskCache.saveTasks(data.tasks);
+            // CROWN⁴.8: Rehydrate assignees from users map before caching
+            const rehydratedTasks = this._rehydrateTasksWithUsers(data.tasks, data.users || {});
+            await window.taskCache.saveTasks(rehydratedTasks);
             
-            for (const task of data.tasks) {
+            for (const task of rehydratedTasks) {
                 if (window.optimisticUI) {
                     window.optimisticUI._updateTaskInDOM(task.id, task);
                 }

@@ -916,6 +916,20 @@ class OptimisticUI {
         const card = document.querySelector(`[data-task-id="${taskId}"]`);
         if (!card) return;
 
+        // CROWN⁴.8: Diff check for assignee_ids to prevent redundant re-renders (flicker prevention)
+        // Skip assignee badge update if IDs are unchanged (optimistic already applied)
+        const incomingIds = (task.assignee_ids || []).slice().sort((a, b) => a - b);
+        const currentIds = (card.dataset.assigneeIds || '').split(',').filter(Boolean).map(Number).sort((a, b) => a - b);
+        const assigneesUnchanged = incomingIds.length === currentIds.length && 
+            incomingIds.every((id, i) => id === currentIds[i]);
+        
+        if (assigneesUnchanged && incomingIds.length > 0) {
+            console.log('[_updateTaskInDOM] Skipping assignee render - IDs unchanged:', incomingIds.join(','));
+        }
+        
+        // Always update the stored IDs for next comparison
+        card.dataset.assigneeIds = incomingIds.join(',');
+
         // Update title
         const titleEl = card.querySelector('.task-title');
         if (titleEl && task.title) {
@@ -959,6 +973,249 @@ class OptimisticUI {
             if (priorityBadge) {
                 priorityBadge.className = `priority-badge priority-${task.priority.toLowerCase()}`;
                 priorityBadge.textContent = task.priority;
+            }
+        }
+
+        // Update assignee badge (CRITICAL FIX: Instant UI update for assignments)
+        // Handles both existing badges and re-rendering when badge structure needs updating
+        // INDUSTRY-STANDARD: Follows Linear/Notion/Asana pattern for instant optimistic updates
+        // CROWN⁴.7: Handle BOTH server-rendered (.task-assignee) and JS-rendered (.task-assignees) structures
+        // CROWN⁴.8: Skip badge update if assignee_ids unchanged (flicker prevention)
+        if (!assigneesUnchanged) {
+            const taskMeta = card.querySelector('.task-metadata') || card.querySelector('.task-content');
+            let assigneeBadge = card.querySelector('.task-assignee') || card.querySelector('.task-assignees');
+            
+            // CROWN⁴.8: Multi-assignee support - first try using payload's assignees array (optimistic path)
+            // This ensures instant display without waiting for user resolution
+            const allUsers = window.taskAssigneeSelector?.allUsers || [];
+            const assigneeIds = (task.assignee_ids || []).slice().sort((a, b) => a - b);
+            const maxVisibleAssignees = 2;
+            
+            // Resolve assignees: prefer task.assignees (full objects), fallback to resolving from IDs
+            let resolvedAssignees = [];
+            if (task.assignees && task.assignees.length > 0) {
+                // Use optimistic payload's full assignees array (sorted by ID)
+                resolvedAssignees = task.assignees.slice().sort((a, b) => a.id - b.id);
+                console.log('[_updateTaskInDOM] Using payload assignees:', resolvedAssignees.length);
+            } else if (assigneeIds.length > 0) {
+                // Fallback: resolve from IDs
+                resolvedAssignees = assigneeIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
+                console.log('[_updateTaskInDOM] Resolved', resolvedAssignees.length, 'assignees from', assigneeIds.length, 'IDs');
+            }
+            
+            // Fallback to single assigned_to if no IDs resolved
+            if (resolvedAssignees.length === 0 && task.assigned_to && task.assigned_to.id) {
+                resolvedAssignees = [task.assigned_to];
+            }
+            
+            // Handle explicit unassign case
+            const isExplicitUnassign = task.hasOwnProperty('assigned_to') && task.assigned_to === null;
+            const hasEmptyAssigneeIds = task.assignee_ids && task.assignee_ids.length === 0;
+            
+            // SVG icon (matches task-bootstrap.js)
+            const svgIcon = `<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>`;
+            const addUserSvg = `<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+            </svg>`;
+            
+            let newBadgeHTML;
+            
+            if (resolvedAssignees.length > 0) {
+                // ASSIGN: Show assignee names with overflow handling (Linear/Notion style)
+                const visibleAssignees = resolvedAssignees.slice(0, maxVisibleAssignees);
+                const overflowCount = resolvedAssignees.length - maxVisibleAssignees;
+                
+                const assigneeNames = visibleAssignees
+                    .map(a => a.display_name || a.username || a.email)
+                    .filter(Boolean)
+                    .join(', ');
+                
+                const fullList = resolvedAssignees
+                    .map(a => a.display_name || a.username || a.email)
+                    .filter(Boolean)
+                    .join(', ');
+                
+                const overflowSpan = overflowCount > 0 ? ` <span class="assignee-overflow">+${overflowCount}</span>` : '';
+                
+                newBadgeHTML = `<div class="task-assignees" data-task-id="${task.id}" title="${this._escapeHtml(fullList || 'Click to change assignees')}">
+                    ${svgIcon}
+                    <span class="assignee-names">${this._escapeHtml(assigneeNames || 'Assigned')}${overflowSpan}</span>
+                </div>`;
+                console.log('[_updateTaskInDOM] Rendering multi-assignee badge:', assigneeNames, overflowCount > 0 ? `+${overflowCount}` : '');
+                
+            } else if (isExplicitUnassign || hasEmptyAssigneeIds) {
+                // UNASSIGN: Show "Assign" placeholder with add-user icon
+                newBadgeHTML = `<div class="task-assignees task-assignees-empty" data-task-id="${task.id}" title="Click to assign">
+                    ${addUserSvg}
+                    <span class="assignee-names">Assign</span>
+                </div>`;
+                console.log('[_updateTaskInDOM] Clearing assignee (unassign)');
+                
+            } else if (assigneeIds.length > 0) {
+                // Fallback: Has IDs but couldn't resolve users - show generic placeholder
+                newBadgeHTML = `<div class="task-assignees" data-task-id="${task.id}" title="Click to change assignees">
+                    ${svgIcon}
+                    <span class="assignee-names">Assigned</span>
+                </div>`;
+                console.log('[_updateTaskInDOM] Fallback: showing generic Assigned badge');
+            }
+            
+            // Apply the badge update
+            if (newBadgeHTML) {
+                if (assigneeBadge) {
+                    assigneeBadge.outerHTML = newBadgeHTML;
+                } else if (taskMeta) {
+                    taskMeta.insertAdjacentHTML('afterbegin', newBadgeHTML);
+                }
+            }
+        }
+
+        // Update labels (CROWN⁴.7: Instant labels update with empty-state CTA)
+        if (task.hasOwnProperty('labels')) {
+            const labelsContainer = card.querySelector('.task-labels');
+            const labelsEmpty = card.querySelector('.task-labels-empty');
+            
+            if (task.labels && task.labels.length > 0) {
+                // Has labels: show container, hide empty CTA
+                if (labelsContainer) {
+                    labelsContainer.innerHTML = '';
+                    task.labels.forEach(label => {
+                        const labelSpan = document.createElement('span');
+                        labelSpan.className = 'task-label';
+                        labelSpan.textContent = label;
+                        labelsContainer.appendChild(labelSpan);
+                    });
+                    labelsContainer.style.display = '';
+                } else if (taskMeta) {
+                    const labelsHTML = `<div class="task-labels">${task.labels.map(l => `<span class="task-label">${this._escapeHtml(l)}</span>`).join('')}</div>`;
+                    taskMeta.insertAdjacentHTML('afterend', labelsHTML);
+                }
+                if (labelsEmpty) labelsEmpty.style.display = 'none';
+                console.log('[_updateTaskInDOM] Updated labels:', task.labels);
+            } else {
+                // No labels: hide container, show empty CTA
+                if (labelsContainer) {
+                    labelsContainer.innerHTML = '';
+                    labelsContainer.style.display = 'none';
+                }
+                if (labelsEmpty) {
+                    labelsEmpty.style.display = '';
+                } else if (taskMeta) {
+                    // Create empty CTA if missing
+                    const emptyCTA = document.createElement('span');
+                    emptyCTA.className = 'task-labels-empty';
+                    emptyCTA.textContent = '+ Add label';
+                    taskMeta.appendChild(emptyCTA);
+                }
+                console.log('[_updateTaskInDOM] Cleared labels, showing CTA');
+            }
+        }
+
+        // Update due date (CROWN⁴.7: Instant due date update with empty-state CTA)
+        // Architecture: Either badge (with date) OR empty CTA (no date) is visible, never both
+        if (task.hasOwnProperty('due_date')) {
+            let dueDateBadge = card.querySelector('.task-due-date, .due-date-badge:not(.due-date-badge--empty)');
+            let dueDateEmpty = card.querySelector('.due-date-badge--empty, [data-inline-action="add-due-date"]');
+            
+            if (task.due_date) {
+                // HAS DUE DATE: Show badge, hide empty CTA
+                const date = new Date(task.due_date);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const diff = Math.floor((date - today) / (1000 * 60 * 60 * 24));
+                
+                let displayText;
+                if (diff === 0) displayText = 'Today';
+                else if (diff === 1) displayText = 'Tomorrow';
+                else if (diff < 0) displayText = 'Overdue';
+                else if (diff <= 7) displayText = `In ${diff}d`;
+                else displayText = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                
+                // Step 1: Ensure badge exists (create if missing)
+                if (!dueDateBadge) {
+                    if (taskMeta) {
+                        dueDateBadge = document.createElement('span');
+                        dueDateBadge.className = 'due-date-badge';
+                        taskMeta.appendChild(dueDateBadge);
+                    }
+                }
+                
+                // Step 2: Update badge content and show it
+                if (dueDateBadge) {
+                    dueDateBadge.textContent = displayText;
+                    dueDateBadge.style.display = '';
+                    dueDateBadge.classList.remove('due-date-badge--empty');
+                    if (diff < 0) {
+                        dueDateBadge.classList.add('overdue');
+                    } else {
+                        dueDateBadge.classList.remove('overdue');
+                    }
+                }
+                
+                // Step 3: Hide empty CTA
+                if (dueDateEmpty) {
+                    dueDateEmpty.style.display = 'none';
+                }
+                
+                console.log('[_updateTaskInDOM] Set due date:', displayText);
+            } else {
+                // NO DUE DATE: Hide badge, show empty CTA
+                
+                // Step 1: Hide badge if it exists
+                if (dueDateBadge) {
+                    dueDateBadge.style.display = 'none';
+                }
+                
+                // Step 2: Ensure empty CTA exists (create if missing)
+                if (!dueDateEmpty) {
+                    if (taskMeta) {
+                        dueDateEmpty = document.createElement('span');
+                        dueDateEmpty.className = 'due-date-badge--empty';
+                        dueDateEmpty.setAttribute('data-inline-action', 'add-due-date');
+                        dueDateEmpty.textContent = '+ Add due date';
+                        taskMeta.appendChild(dueDateEmpty);
+                    }
+                }
+                
+                // Step 3: Show empty CTA
+                if (dueDateEmpty) {
+                    dueDateEmpty.style.display = '';
+                }
+                
+                console.log('[_updateTaskInDOM] Cleared due date, showing CTA');
+            }
+        }
+
+        // Update snoozed state (CROWN⁴.7: Visual feedback for snooze)
+        if (task.hasOwnProperty('snoozed_until')) {
+            let snoozeIndicator = card.querySelector('.snooze-indicator');
+            
+            if (task.snoozed_until) {
+                card.classList.add('snoozed');
+                card.dataset.snoozedUntil = task.snoozed_until;
+                
+                // Add or update snooze indicator
+                if (!snoozeIndicator && taskMeta) {
+                    snoozeIndicator = document.createElement('span');
+                    snoozeIndicator.className = 'snooze-indicator';
+                    taskMeta.appendChild(snoozeIndicator);
+                }
+                if (snoozeIndicator) {
+                    const snoozeDate = new Date(task.snoozed_until);
+                    snoozeIndicator.textContent = `💤 Until ${snoozeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+                    snoozeIndicator.style.display = '';
+                }
+                console.log('[_updateTaskInDOM] Task snoozed until:', task.snoozed_until);
+            } else {
+                // Unsnooze: fully remove indicator and class
+                card.classList.remove('snoozed');
+                delete card.dataset.snoozedUntil;
+                if (snoozeIndicator) {
+                    snoozeIndicator.remove();
+                }
+                console.log('[_updateTaskInDOM] Cleared snooze, removed indicator');
             }
         }
 
@@ -1136,7 +1393,7 @@ class OptimisticUI {
                     updateType = 'priority';
                 } else if (data.due_date !== undefined || data.due !== undefined) {
                     updateType = 'due';
-                } else if (data.assignee !== undefined || data.assigned_to !== undefined) {
+                } else if (data.assignee !== undefined || data.assigned_to !== undefined || data.assignee_ids !== undefined) {
                     updateType = 'assign';
                 } else if (data.labels !== undefined) {
                     updateType = 'labels';

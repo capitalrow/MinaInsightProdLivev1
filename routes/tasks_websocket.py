@@ -174,13 +174,25 @@ def register_tasks_namespace(socketio):
                 emit('error', error_result)
                 return error_response
             
-            # Get user ID (from authenticated session)
-            user_id = payload.get('user_id') or (current_user.is_authenticated and current_user.id)
+            # CROWN⁴.7: Identify read-only vs mutation events
+            # Read-only events don't require user_id (bootstrap, sync, filter, refresh)
+            READ_ONLY_EVENTS = {
+                'tasks_bootstrap', 'tasks_ws_subscribe', 'tasks_refresh',
+                'tasks_idle_sync', 'filter_apply', 'task_link:jump_to_span'
+            }
+            is_read_only = event_type in READ_ONLY_EVENTS
+            
+            # Get user ID (from payload first, then authenticated session)
+            user_id = payload.get('user_id')
+            if not user_id and hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+                user_id = current_user.id
+            
             session_id = payload.get('session_id')
             workspace_id = payload.get('workspace_id', 1)  # Default to workspace 1 if not specified
             
-            if not user_id:
-                error_result = {'success': False, 'message': 'user_id required'}
+            # Only require user_id for mutation events (not read-only)
+            if not user_id and not is_read_only:
+                error_result = {'success': False, 'message': 'user_id required for mutation events'}
                 error_response = {
                     'event_type': event_type or 'error',
                     'result': error_result,
@@ -189,6 +201,12 @@ def register_tasks_namespace(socketio):
                 }
                 emit('error', error_result)
                 return error_response
+            
+            # For read-only events without user_id, use a placeholder value
+            # Handlers for read-only events don't use user_id for mutations
+            if not user_id and is_read_only:
+                logger.debug(f"Read-only event {event_type} proceeding without authenticated user")
+                user_id = 0  # Placeholder for read-only operations (not used for mutations)
             
             # Add vector clock to payload if provided
             if 'vector_clock' in data:

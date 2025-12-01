@@ -262,7 +262,8 @@ class Task(Base):
             'meeting_id': self.meeting_id,
             'session_id': self.session_id,
             'assigned_to_id': self.assigned_to_id,
-            'assignee_ids': [user.id for user in self.assignees] if self.assignees else [],
+            # CROWN⁴.8: Sort assignee_ids by ID for consistent ordering between client and server
+            'assignee_ids': sorted([user.id for user in self.assignees]) if self.assignees else [],
             'created_by_id': self.created_by_id,
             'extracted_by_ai': self.extracted_by_ai,
             'confidence_score': self.confidence_score,
@@ -293,19 +294,29 @@ class Task(Base):
             # CROWN⁴.6: embedding, embedding_model, embedding_updated_at intentionally excluded
         }
         
+        # CROWN⁴.7: Always include assigned_to user object for UI hydration
+        # This fixes the bug where assignee names disappear after page reload
+        # because cache bootstrap/idle sync needs user data to render badges correctly
+        if self.assigned_to:
+            data['assigned_to'] = {
+                'id': self.assigned_to.id,
+                'username': self.assigned_to.username,
+                'display_name': getattr(self.assigned_to, 'display_name', None),
+                'email': self.assigned_to.email
+            }
+        
         if include_relationships:
-            if self.assigned_to:
-                data['assigned_to'] = self.assigned_to.to_dict()
             
-            # CROWN⁴.5: Multi-assignee support
+            # CROWN⁴.8: Multi-assignee support with sorted order for consistency
             if self.assignees:
+                sorted_assignees = sorted(self.assignees, key=lambda u: u.id)
                 data['assignees'] = [{
                     'id': user.id,
                     'username': user.username,
                     'display_name': user.display_name,
                     'full_name': user.full_name,
                     'avatar_url': user.avatar_url
-                } for user in self.assignees]
+                } for user in sorted_assignees]
             
             if self.created_by:
                 data['created_by'] = self.created_by.to_dict()

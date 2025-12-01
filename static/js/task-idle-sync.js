@@ -184,8 +184,23 @@ class IdleSyncService {
 
             const data = await response.json();
             const serverTasks = data.tasks || [];
+            const usersMap = data.users || {};  // CROWN⁴.8: Users map for rehydration
 
-            // Step 2: Update cache with server data
+            // CROWN⁴.8: Rehydrate assigned_to from users map (Linear pattern)
+            // This ensures assignee names persist through background syncs
+            for (const task of serverTasks) {
+                if (task.assigned_to_id && usersMap[task.assigned_to_id]) {
+                    task.assigned_to = usersMap[task.assigned_to_id];
+                }
+                // Also rehydrate assignees array for multi-assignee support
+                if (task.assignee_ids && task.assignee_ids.length > 0) {
+                    task.assignees = task.assignee_ids
+                        .map(id => usersMap[id])
+                        .filter(Boolean);
+                }
+            }
+
+            // Step 2: Update cache with server data (now with rehydrated user objects)
             if (window.taskCache) {
                 await window.taskCache.saveTasks(serverTasks);
             }
