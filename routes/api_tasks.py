@@ -228,6 +228,8 @@ def get_task(task_id):
         detail (str): Response detail level ('mini' for prefetching, default: full)
     """
     try:
+        from models.session import Session
+        
         # Use outerjoin to support tasks without meetings
         # Filter by workspace_id from task OR meeting (for tasks without meeting_id)
         workspace_id_str = str(current_user.workspace_id)
@@ -241,6 +243,14 @@ def get_task(task_id):
         
         if not task:
             return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # CROWN⁴.7: Get session external_id for transcript navigation
+        # This allows direct navigation without meeting lookup
+        session_external_id = None
+        if task.session_id:
+            session = db.session.query(Session).filter_by(id=task.session_id).first()
+            if session:
+                session_external_id = session.external_id
         
         # CROWN⁴.5 Phase 1.7: Support mini detail for prefetching
         detail_level = request.args.get('detail', 'full')
@@ -271,13 +281,16 @@ def get_task(task_id):
                     'title': task.meeting.title,
                     'date': task.meeting.created_at.isoformat() if task.meeting.created_at else None
                 } if task.meeting else None,
-                'assignees': assignees_data
+                'assignees': assignees_data,
+                'session_external_id': session_external_id  # For transcript navigation
             }
         else:
             # Full detail (default) - include meeting info for CROWN⁴.6
+            task_dict = task.to_dict(include_relationships=True)
+            task_dict['session_external_id'] = session_external_id  # For transcript navigation
             response = {
                 'success': True,
-                'task': task.to_dict(include_relationships=True)
+                'task': task_dict
             }
         
         return jsonify(response)

@@ -36,13 +36,14 @@ class TaskTranscriptNavigation {
 
     /**
      * Jump to the transcript moment where this task was mentioned
+     * CROWN⁴.7: Uses session_external_id from task API for reliable navigation
      * @param {string|number} taskId - Task ID
      */
     async jumpToTranscript(taskId) {
         try {
             console.log(`[TaskTranscriptNavigation] Jumping to transcript for task: ${taskId}`);
             
-            // Fetch full task details including transcript_span
+            // Fetch full task details including transcript_span and session_external_id
             const response = await fetch(`/api/tasks/${taskId}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch task details');
@@ -61,18 +62,25 @@ class TaskTranscriptNavigation {
                 return;
             }
             
-            // Check if meeting_id exists
-            if (!task.meeting_id) {
+            // Check if we have session or meeting for navigation
+            if (!task.session_external_id && !task.meeting_id) {
                 this.showToast('❌ No meeting associated with this task', 'error');
                 return;
             }
             
             // Navigate to session/meeting page with timestamp anchor
             const transcriptSpan = task.transcript_span;
-            const meetingId = task.meeting_id;
             
-            // Build URL with timestamp parameter for auto-scroll
-            const targetUrl = `/meetings/${meetingId}?highlight_time=${transcriptSpan.start_ms}`;
+            // CROWN⁴.7: Use session_external_id directly for /sessions/refined route
+            let targetUrl;
+            if (task.session_external_id) {
+                targetUrl = `/sessions/${task.session_external_id}/refined?highlight_time=${transcriptSpan.start_ms}#transcript`;
+                console.log(`[TaskTranscriptNavigation] Using session_external_id: ${task.session_external_id}`);
+            } else {
+                // Fallback to meeting route
+                targetUrl = `/meetings/${task.meeting_id}?highlight_time=${transcriptSpan.start_ms}`;
+                console.log(`[TaskTranscriptNavigation] Falling back to meeting route: ${task.meeting_id}`);
+            }
             
             console.log(`[TaskTranscriptNavigation] Navigating to: ${targetUrl}`);
             
@@ -88,7 +96,8 @@ class TaskTranscriptNavigation {
             if (window.CROWNTelemetry) {
                 window.CROWNTelemetry.recordMetric('task_jump_to_transcript', 1, {
                     taskId,
-                    meetingId,
+                    sessionId: task.session_external_id,
+                    meetingId: task.meeting_id,
                     hasTranscriptSpan: true
                 });
             }
