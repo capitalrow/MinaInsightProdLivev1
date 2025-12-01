@@ -1268,36 +1268,69 @@ class TaskMenuController {
             })[char]);
         };
         
-        const svgIcon = `<svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
+        // SVG icons (match task-bootstrap.js exactly)
+        const svgIcon = `<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>`;
+        const addUserSvg = `<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+        </svg>`;
 
-        if (updatePayload.assigned_to && updatePayload.assigned_to.id) {
-            // ASSIGN: Show assignee name
-            const user = updatePayload.assigned_to;
-            const displayName = user.display_name || user.username || user.email || 'Assigned';
-            const newBadgeHTML = `<span class="task-assignee" data-field="assignee" data-user-id="${user.id}" title="Click to assign">
-                ${svgIcon}
-                ${escapeHtml(displayName)}
-            </span>`;
-            console.log('[TaskMenuController] Rendering assignee badge:', displayName);
+        // CROWN⁴.8: Multi-assignee support
+        const allUsers = window.taskAssigneeSelector?.allUsers || [];
+        const assigneeIds = updatePayload.assignee_ids || [];
+        const maxVisibleAssignees = 2;
+        
+        // Resolve all assignees from IDs
+        let resolvedAssignees = [];
+        if (assigneeIds.length > 0) {
+            resolvedAssignees = assigneeIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
+            console.log('[TaskMenuController] Resolved', resolvedAssignees.length, 'assignees from', assigneeIds.length, 'IDs');
+        }
+        
+        // Fallback to single assigned_to
+        if (resolvedAssignees.length === 0 && updatePayload.assigned_to && updatePayload.assigned_to.id) {
+            resolvedAssignees = [updatePayload.assigned_to];
+        }
+        
+        let newBadgeHTML;
+        
+        if (resolvedAssignees.length > 0) {
+            // ASSIGN: Show assignee names with overflow handling
+            const visibleAssignees = resolvedAssignees.slice(0, maxVisibleAssignees);
+            const overflowCount = resolvedAssignees.length - maxVisibleAssignees;
             
-            if (assigneeBadge) {
-                assigneeBadge.outerHTML = newBadgeHTML;
-            } else if (taskMeta) {
-                taskMeta.insertAdjacentHTML('afterbegin', newBadgeHTML);
-            }
+            const assigneeNames = visibleAssignees
+                .map(a => a.display_name || a.username || a.email)
+                .filter(Boolean)
+                .join(', ');
+            
+            const fullList = resolvedAssignees
+                .map(a => a.display_name || a.username || a.email)
+                .filter(Boolean)
+                .join(', ');
+            
+            const overflowSpan = overflowCount > 0 ? ` <span class="assignee-overflow">+${overflowCount}</span>` : '';
+            
+            newBadgeHTML = `<div class="task-assignees" data-task-id="${taskId}" title="${escapeHtml(fullList || 'Click to change assignees')}">
+                ${svgIcon}
+                <span class="assignee-names">${escapeHtml(assigneeNames || 'Assigned')}${overflowSpan}</span>
+            </div>`;
+            console.log('[TaskMenuController] Rendering multi-assignee badge:', assigneeNames, overflowCount > 0 ? `+${overflowCount}` : '');
+            
         } else {
-            // UNASSIGN: Show "Unassigned" placeholder
-            const unassignedHTML = `<span class="task-assignee" data-field="assignee" title="Click to assign">
-                ${svgIcon}
-                Unassigned
-            </span>`;
+            // UNASSIGN: Show "Assign" placeholder
+            newBadgeHTML = `<div class="task-assignees task-assignees-empty" data-task-id="${taskId}" title="Click to assign">
+                ${addUserSvg}
+                <span class="assignee-names">Assign</span>
+            </div>`;
             console.log('[TaskMenuController] Clearing assignee (unassign)');
-            
-            if (assigneeBadge) {
-                assigneeBadge.outerHTML = unassignedHTML;
-            } else if (taskMeta) {
-                taskMeta.insertAdjacentHTML('afterbegin', unassignedHTML);
-            }
+        }
+        
+        if (assigneeBadge) {
+            assigneeBadge.outerHTML = newBadgeHTML;
+        } else if (taskMeta) {
+            taskMeta.insertAdjacentHTML('afterbegin', newBadgeHTML);
         }
     }
 }
