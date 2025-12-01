@@ -12,14 +12,21 @@ class TaskTranscriptNavigation {
     init() {
         console.log('[TaskTranscriptNavigation] Initializing...');
         
-        // Listen for "jump-to-transcript" actions from task menus
+        // Listen for "jump-to-transcript" actions from task cards and menus
         document.addEventListener('click', (e) => {
             const jumpBtn = e.target.closest('[data-action="jump-to-transcript"]');
             if (jumpBtn) {
                 e.preventDefault();
-                const taskId = jumpBtn.closest('.task-menu')?.dataset.taskId;
+                // FIX: Check button's own data-task-id first (for inline task card buttons),
+                // then fall back to parent .task-menu (for dropdown menu items),
+                // then fall back to parent .task-card (for nested elements)
+                const taskId = jumpBtn.dataset.taskId 
+                    || jumpBtn.closest('.task-menu')?.dataset.taskId
+                    || jumpBtn.closest('.task-card')?.dataset.taskId;
                 if (taskId) {
                     this.jumpToTranscript(taskId);
+                } else {
+                    console.error('[TaskTranscriptNavigation] No taskId found for jump button');
                 }
             }
         });
