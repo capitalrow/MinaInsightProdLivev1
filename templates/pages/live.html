@@ -909,19 +909,34 @@
     cursor: not-allowed;
 }
 
+/* Body scroll lock when processing */
+body.processing-active {
+    overflow: hidden !important;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+
+body.processing-active footer,
+body.processing-active .footer,
+body.processing-active .global-footer {
+    display: none !important;
+}
+
 .processing-shimmer {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.95);
+    background: rgba(0, 0, 0, 0.98);
     backdrop-filter: blur(20px);
     z-index: 9999;
     display: flex;
     align-items: center;
     justify-content: center;
     animation: shimmerFadeIn 0.4s ease-out;
+    overflow: hidden;
 }
 
 @keyframes shimmerFadeIn {
@@ -1131,6 +1146,61 @@
     
     .action-hint {
         display: none;
+    }
+    
+    /* Mobile shimmer fixes */
+    .processing-shimmer {
+        padding: var(--space-4);
+    }
+    
+    .shimmer-content {
+        max-width: 100%;
+        padding: var(--space-6);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        box-sizing: border-box;
+    }
+    
+    .shimmer-animation {
+        width: 100px;
+        height: 100px;
+        margin-bottom: var(--space-6);
+    }
+    
+    .shimmer-circle {
+        width: 90px;
+        height: 90px;
+    }
+    
+    .shimmer-circle-2 {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .shimmer-title {
+        font-size: var(--font-size-xl);
+    }
+    
+    .shimmer-message {
+        font-size: var(--font-size-sm);
+        margin-bottom: var(--space-6);
+    }
+    
+    .shimmer-progress {
+        margin-bottom: var(--space-6);
+    }
+    
+    .shimmer-stage-list {
+        gap: var(--space-2);
+    }
+    
+    .shimmer-stage {
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--font-size-sm);
+        gap: var(--space-3);
     }
 }
 
@@ -1863,12 +1933,24 @@ const CROWN_STAGES = {
 
 function showProcessingShimmer() {
     const shimmer = document.getElementById('processing-shimmer');
+    const scrollY = window.scrollY;
+    
+    document.body.classList.add('processing-active');
+    document.body.style.top = `-${scrollY}px`;
+    document.body.dataset.scrollY = scrollY;
+    
     shimmer.style.display = 'flex';
     updateProcessingState('transcript_finalized', 'Consolidating transcript...', 0);
 }
 
 function hideProcessingShimmer() {
     const shimmer = document.getElementById('processing-shimmer');
+    const scrollY = document.body.dataset.scrollY || 0;
+    
+    document.body.classList.remove('processing-active');
+    document.body.style.top = '';
+    window.scrollTo(0, parseInt(scrollY));
+    
     shimmer.style.display = 'none';
 }
 
