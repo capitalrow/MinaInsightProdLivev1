@@ -471,7 +471,10 @@ class TaskMenuController {
         console.log(`[TaskMenuController] Opening assignee selector for task ${taskId}`);
         
         const task = await this.fetchTask(taskId);
-        if (!task) return;
+        if (!task) {
+            this.showToast('Task not found. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
             let result;
@@ -547,7 +550,10 @@ class TaskMenuController {
         console.log(`[TaskMenuController] Opening labels editor for task ${taskId}`);
         
         const task = await this.fetchTask(taskId);
-        if (!task) return;
+        if (!task) {
+            this.showToast('Task not found. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
             let result;
@@ -674,7 +680,10 @@ class TaskMenuController {
         console.log(`[TaskMenuController] Snoozing task ${taskId}`);
         
         const task = await this.fetchTask(taskId);
-        if (!task) return;
+        if (!task) {
+            this.showToast('Task not found. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
             let snoozeUntil;
@@ -753,7 +762,10 @@ class TaskMenuController {
         console.log(`[TaskMenuController] Merging task ${taskId}`);
         
         const sourceTask = await this.fetchTask(taskId);
-        if (!sourceTask) return;
+        if (!sourceTask) {
+            this.showToast('Task not found. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
             let targetTaskId;
@@ -911,7 +923,10 @@ class TaskMenuController {
         console.log(`[TaskMenuController] Archiving task ${taskId}`);
         
         const task = await this.fetchTask(taskId);
-        if (!task) return;
+        if (!task) {
+            this.showToast('Task not found. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
             let confirmed = false;
