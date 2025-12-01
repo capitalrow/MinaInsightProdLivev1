@@ -6,102 +6,143 @@
 
 class TaskTranscriptNavigation {
     constructor() {
+        this.returnStateKey = 'task:return-state';
+        this.pendingNavigation = null;
         this.init();
     }
 
     init() {
         console.log('[TaskTranscriptNavigation] Initializing...');
-        
-        // Listen for "jump-to-transcript" actions from task cards and menus
+
+        // Listen for "jump-to-transcript" actions from task menus
         document.addEventListener('click', (e) => {
             const jumpBtn = e.target.closest('[data-action="jump-to-transcript"]');
-            if (jumpBtn) {
-                e.preventDefault();
-                // FIX: Check button's own data-task-id first (for inline task card buttons),
-                // then fall back to parent .task-menu (for dropdown menu items),
-                // then fall back to parent .task-card (for nested elements)
-                const taskId = jumpBtn.dataset.taskId 
-                    || jumpBtn.closest('.task-menu')?.dataset.taskId
-                    || jumpBtn.closest('.task-card')?.dataset.taskId;
-                if (taskId) {
-                    this.jumpToTranscript(taskId);
-                } else {
-                    console.error('[TaskTranscriptNavigation] No taskId found for jump button');
-                }
-            }
+            if (!jumpBtn) return;
+
+            e.preventDefault();
+            this.handleJumpClick(jumpBtn);
+            const jumpBtn = e.target.closest('[data-action="jump-to-transcript"], .jump-to-transcript-btn');
+            if (!jumpBtn) return;
+
+            e.preventDefault();
+
+            const taskId = jumpBtn.dataset.taskId
+                || jumpBtn.closest('[data-task-id]')?.dataset.taskId
+                || jumpBtn.closest('.task-menu')?.dataset.taskId;
+
+            if (!taskId) return;
+
+            this.emitJumpEvent(taskId);
+            this.jumpToTranscript(taskId);
         });
-        
+
         console.log('[TaskTranscriptNavigation] Initialized successfully');
+    }
+
+    handleJumpClick(jumpBtn) {
+        const taskId = jumpBtn.dataset.taskId
+            || jumpBtn.closest('[data-task-id]')?.dataset.taskId
+            || jumpBtn.closest('.task-menu')?.dataset.taskId;
+
+        if (!taskId) {
+            console.warn('[TaskTranscriptNavigation] Missing taskId on jump action');
+            this.showToast('❌ Unable to jump to transcript (missing task id)', 'error');
+            return;
+        }
+
+        const optimisticMeetingId = jumpBtn.dataset.meetingId
+            || jumpBtn.closest('[data-meeting-id]')?.dataset.meetingId;
+
+        const optimisticSpan = this.parseSpanFromDataset(jumpBtn.dataset, jumpBtn.closest('[data-transcript-start-ms]'));
+
+        this.saveReturnState(taskId);
+        this.jumpToTranscript(taskId, {
+            meetingId: optimisticMeetingId,
+            transcriptSpan: optimisticSpan
+        });
+    }
+
+    parseSpanFromDataset(dataset = {}, fallbackElement = null) {
+        const startMs = dataset.transcriptStartMs
+            || dataset.transcriptSpanStart
+            || fallbackElement?.dataset?.transcriptStartMs;
+        const endMs = dataset.transcriptEndMs
+            || dataset.transcriptSpanEnd
+            || fallbackElement?.dataset?.transcriptEndMs;
+
+        if (startMs === undefined || startMs === null) return null;
+
+        return {
+            start_ms: Number(startMs),
+            end_ms: endMs !== undefined && endMs !== null ? Number(endMs) : undefined
+        };
+    }
+
+    saveReturnState(taskId) {
+        const state = {
+            taskId,
+            path: window.location.pathname + window.location.search + window.location.hash,
+            scrollY: window.scrollY,
+            captured_at: Date.now()
+        };
+
+        try {
+            sessionStorage.setItem(this.returnStateKey, JSON.stringify(state));
+            if (history?.replaceState) {
+                history.replaceState({ ...history.state, taskReturnState: state }, document.title);
+            }
+        } catch (err) {
+            console.warn('[TaskTranscriptNavigation] Unable to persist return state', err);
+    emitJumpEvent(taskId) {
+        document.dispatchEvent(new CustomEvent('task:jump-to-transcript', {
+            detail: { taskId }
+        }));
+
+        if (window.eventSequencerBridge?.recordEvent) {
+            try {
+                window.eventSequencerBridge.recordEvent('task:jump-to-transcript', { taskId });
+            } catch (err) {
+                console.warn('[TaskTranscriptNavigation] Unable to forward jump event to sequencer bridge', err);
+            }
+        }
     }
 
     /**
      * Jump to the transcript moment where this task was mentioned
      * CROWN⁴.7: Uses session_external_id from task API for reliable navigation
      * @param {string|number} taskId - Task ID
+     * @param {Object} optimisticContext - initial meeting/span hint from DOM
      */
-    async jumpToTranscript(taskId) {
+    async jumpToTranscript(taskId, optimisticContext = {}) {
         try {
             console.log(`[TaskTranscriptNavigation] Jumping to transcript for task: ${taskId}`);
-            
-            // Fetch full task details including transcript_span and session_external_id
-            const response = await fetch(`/api/tasks/${taskId}`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch task details');
-            }
-            
-            const data = await response.json();
-            if (!data.success || !data.task) {
-                throw new Error('Task not found');
-            }
-            
-            const task = data.task;
-            
-            // Check if transcript_span exists (explicit null/undefined check, not falsy)
-            if (!task.transcript_span || task.transcript_span.start_ms === null || task.transcript_span.start_ms === undefined) {
-                this.showNoTranscriptToast(task);
-                return;
-            }
-            
-            // Check if we have session or meeting for navigation
-            if (!task.session_external_id && !task.meeting_id) {
-                this.showToast('❌ No meeting associated with this task', 'error');
-                return;
-            }
-            
-            // Navigate to session/meeting page with timestamp anchor
-            const transcriptSpan = task.transcript_span;
-            
-            // CROWN⁴.7: Use session_external_id directly for /sessions/refined route
-            let targetUrl;
-            if (task.session_external_id) {
-                targetUrl = `/sessions/${task.session_external_id}/refined?highlight_time=${transcriptSpan.start_ms}#transcript`;
-                console.log(`[TaskTranscriptNavigation] Using session_external_id: ${task.session_external_id}`);
-            } else {
-                // Fallback to meeting route
-                targetUrl = `/meetings/${task.meeting_id}?highlight_time=${transcriptSpan.start_ms}`;
-                console.log(`[TaskTranscriptNavigation] Falling back to meeting route: ${task.meeting_id}`);
-            }
-            
+
+            this.showToast('📍 Preparing transcript jump...', 'info', 1200);
+
+            const resolved = await this.resolveNavigationTarget(taskId, optimisticContext);
+            if (!resolved) return;
+
+            const { meetingId, transcriptSpan, source } = resolved;
+            const targetUrl = this.buildTranscriptUrl(meetingId, transcriptSpan);
+
             console.log(`[TaskTranscriptNavigation] Navigating to: ${targetUrl}`);
-            
-            // Show loading toast
-            this.showToast('📍 Jumping to transcript moment...', 'info', 1500);
-            
-            // Navigate after brief delay
+
+            this.pendingNavigation = { targetUrl, reconciledWith: source };
+            this.showToast('⚡ Jumping to transcript...', 'success', 1800);
+
             setTimeout(() => {
                 window.location.href = targetUrl;
-            }, 300);
-            
-            // Record telemetry
+            }, 200);
+
             if (window.CROWNTelemetry) {
                 window.CROWNTelemetry.recordMetric('task_jump_to_transcript', 1, {
                     taskId,
-                    sessionId: task.session_external_id,
-                    meetingId: task.meeting_id,
-                    hasTranscriptSpan: true
+                    meetingId,
+                    hasTranscriptSpan: Boolean(transcriptSpan?.start_ms),
+                    reconciledWith: source
                 });
             }
-            
+
         } catch (error) {
             console.error('[TaskTranscriptNavigation] Error:', error);
             this.showToast('❌ Failed to jump to transcript', 'error');
@@ -113,6 +154,73 @@ class TaskTranscriptNavigation {
                 });
             }
         }
+    }
+
+    async resolveNavigationTarget(taskId, optimisticContext = {}) {
+        const optimisticMeetingId = optimisticContext.meetingId;
+        const optimisticSpan = optimisticContext.transcriptSpan;
+
+        if (optimisticMeetingId && optimisticSpan?.start_ms !== undefined) {
+            return {
+                meetingId: optimisticMeetingId,
+                transcriptSpan: optimisticSpan,
+                source: 'dom-optimistic'
+            };
+        }
+
+        // Fetch full task details including transcript_span
+        const response = await fetch(`/api/tasks/${taskId}`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch task details');
+        }
+
+        const data = await response.json();
+        if (!data.success || !data.task) {
+            throw new Error('Task not found');
+        }
+
+        const task = data.task;
+
+        // Check if transcript_span exists (explicit null/undefined check, not falsy)
+        if (!task.transcript_span || task.transcript_span.start_ms === null || task.transcript_span.start_ms === undefined) {
+            this.showNoTranscriptToast(task);
+            return null;
+        }
+
+        // Check if meeting_id exists
+        if (!task.meeting_id) {
+            this.showToast('❌ No meeting associated with this task', 'error');
+            return null;
+        }
+
+        if (optimisticMeetingId && optimisticSpan?.start_ms !== undefined) {
+            if (optimisticMeetingId !== task.meeting_id || optimisticSpan.start_ms !== task.transcript_span.start_ms) {
+                this.showToast('ℹ️ Transcript location updated from server', 'info', 2000);
+            }
+        }
+
+        return {
+            meetingId: task.meeting_id,
+            transcriptSpan: task.transcript_span,
+            source: 'server'
+        };
+    }
+
+    buildTranscriptUrl(meetingId, transcriptSpan = {}) {
+        const url = new URL(`/meetings/${meetingId}`, window.location.origin);
+        if (transcriptSpan.start_ms !== undefined) {
+            url.searchParams.set('highlight_time', transcriptSpan.start_ms);
+        }
+        if (transcriptSpan.end_ms !== undefined) {
+            url.searchParams.set('highlight_end', transcriptSpan.end_ms);
+        }
+
+        const returnState = sessionStorage.getItem(this.returnStateKey);
+        if (returnState) {
+            url.searchParams.set('return_state', btoa(encodeURIComponent(returnState)));
+        }
+
+        return url.pathname + url.search;
     }
 
     /**

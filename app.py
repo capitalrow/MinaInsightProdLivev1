@@ -21,12 +21,16 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from server.routes.metrics import metrics_bp
 from server.utils.logger import get_logger
 from server.routes.memory_api import memory_bp
-from server.models.memory_store import MemoryStore
+#from routes.export import export_bp
+#from routes.summary import summary_bp
+#from routes.flags import flags_bp
+#from routes.billing import billing_bp
+#from routes.integrations import integrations_bp
+#from routes.teams import teams_bp
+#from routes.comments import comments_bp
 import openai
-import numpy as np
-import psycopg2
 from flask_migrate import Migrate
-from models import db, Segment, Comment 
+from models import db
 from datetime import datetime
 from services import memory_persistence as mem
 
@@ -221,7 +225,7 @@ def _validate_socketio_origin(origin):
 
 socketio = SocketIO(
     cors_allowed_origins=_validate_socketio_origin,  # Custom validator for pattern matching
-    async_mode="eventlet",  # Changed from threading to eventlet for proper WebSocket support
+    async_mode=os.getenv("SOCKETIO_ASYNC_MODE", "eventlet"),  # Default to eventlet, overridable for tests
     ping_timeout=60,
     ping_interval=25,
     path="/socket.io",
