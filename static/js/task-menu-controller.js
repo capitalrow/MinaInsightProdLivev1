@@ -806,18 +806,58 @@ class TaskMenuController {
 
     /**
      * 11. JUMP TO TRANSCRIPT - Navigate to transcript section
+     * CROWN⁴.6: Navigate to session using external_session_id (ULID format)
      */
     async handleJumpToTranscript(taskId) {
         console.log(`[TaskMenuController] Jumping to transcript for task ${taskId}`);
         
         const task = await this.fetchTask(taskId);
         if (!task || !task.meeting_id) {
-            window.toast?.error('No transcript available for this task');
+            this.showToast('No transcript available for this task', 'error');
             return;
         }
 
-        // Navigate to session transcript (sessions route uses meeting_id)
-        window.location.href = `/sessions/${task.meeting_id}#transcript`;
+        try {
+            // Show loading toast
+            this.showToast('Loading transcript...', 'info');
+            
+            // Fetch meeting details to get the session's external_session_id
+            const meetingResponse = await fetch(`/api/meetings/${task.meeting_id}`);
+            if (!meetingResponse.ok) {
+                throw new Error('Failed to load meeting details');
+            }
+            
+            const meetingData = await meetingResponse.json();
+            if (!meetingData.success || !meetingData.meeting) {
+                throw new Error('Meeting not found');
+            }
+            
+            const meeting = meetingData.meeting;
+            
+            // Get external_session_id from meeting data
+            const sessionId = meeting.session_id || meeting.external_session_id;
+            if (!sessionId) {
+                throw new Error('No session associated with this meeting');
+            }
+            
+            // Build URL with optional transcript span highlighting
+            let targetUrl = `/sessions/${sessionId}`;
+            
+            // If task has transcript_span, add highlight parameter
+            if (task.transcript_span && task.transcript_span.start_ms !== null) {
+                targetUrl += `?highlight_time=${task.transcript_span.start_ms}`;
+            }
+            targetUrl += '#transcript';
+            
+            console.log(`[TaskMenuController] Navigating to: ${targetUrl}`);
+            
+            // Navigate
+            window.location.href = targetUrl;
+            
+        } catch (error) {
+            console.error('[TaskMenuController] Jump to transcript failed:', error);
+            this.showToast('Failed to load transcript', 'error');
+        }
     }
 
     /**
