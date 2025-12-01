@@ -1086,6 +1086,14 @@ def create_app() -> Flask:
     # hook Socket.IO to app
     socketio.init_app(app)
     app.extensions["socketio"] = socketio
+    
+    # Initialize analytics broadcaster for CROWN⁵+ real-time updates
+    try:
+        from services.analytics_broadcaster import analytics_broadcaster
+        analytics_broadcaster.init_app(socketio)
+        app.logger.info("✅ Analytics broadcaster initialized for real-time updates")
+    except Exception as e:
+        app.logger.warning(f"⚠️ Failed to initialize analytics broadcaster: {e}")
 
     # Socket.IO origin guard (optional tighten)
     allowed = [o.strip() for o in str(getattr(Config, "CORS_ALLOWLIST", "*")).split(",") if o.strip()]

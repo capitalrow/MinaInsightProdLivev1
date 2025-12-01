@@ -759,7 +759,92 @@
     const chartInstances = {};
     
     /**
+     * CROWN⁵+ Cache-First Analytics Store
+     * Implements stale-while-revalidate pattern for sub-200ms warm paint
+     */
+    const AnalyticsCache = {
+        CACHE_KEY: 'crown5_analytics_cache',
+        CACHE_TTL: 30000, // 30 seconds
+        lastSequenceId: null,
+        
+        async get() {
+            try {
+                const cached = localStorage.getItem(this.CACHE_KEY);
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    if (Date.now() - data.timestamp < this.CACHE_TTL) {
+                        console.log('📦 Using cached analytics data (warm paint)');
+                        return data.payload;
+                    }
+                }
+            } catch (e) { console.warn('Cache read error:', e); }
+            return null;
+        },
+        
+        set(payload, sequenceId) {
+            try {
+                this.lastSequenceId = sequenceId;
+                localStorage.setItem(this.CACHE_KEY, JSON.stringify({
+                    timestamp: Date.now(),
+                    sequenceId: sequenceId,
+                    payload: payload
+                }));
+            } catch (e) { console.warn('Cache write error:', e); }
+        },
+        
+        invalidate() {
+            localStorage.removeItem(this.CACHE_KEY);
+        }
+    };
+    
+    /**
+     * CROWN⁵+ WebSocket Reconnection Manager
+     * Implements exponential backoff for robust connections
+     */
+    const ReconnectionManager = {
+        retryCount: 0,
+        maxRetries: 10,
+        baseDelay: 1000,
+        maxDelay: 30000,
+        reconnecting: false,
+        
+        getDelay() {
+            const delay = Math.min(
+                this.baseDelay * Math.pow(2, this.retryCount),
+                this.maxDelay
+            );
+            return delay + (Math.random() * 1000); // Add jitter
+        },
+        
+        reset() {
+            this.retryCount = 0;
+            this.reconnecting = false;
+        },
+        
+        async reconnect(connectFn) {
+            if (this.reconnecting || this.retryCount >= this.maxRetries) return;
+            
+            this.reconnecting = true;
+            const delay = this.getDelay();
+            console.log(`🔄 Reconnecting in ${Math.round(delay/1000)}s (attempt ${this.retryCount + 1}/${this.maxRetries})`);
+            
+            await new Promise(r => setTimeout(r, delay));
+            this.retryCount++;
+            
+            try {
+                await connectFn();
+                this.reset();
+                console.log('✅ Reconnection successful');
+            } catch (e) {
+                this.reconnecting = false;
+                this.reconnect(connectFn);
+            }
+        }
+    };
+    
+    /**
      * Initialize WebSocket connection for analytics page
+     * CROWN⁵+ Enhanced with cache-first and reconnection
      */
     function initAnalyticsWebSocket() {
         console.log('🚀 Initializing analytics WebSocket...');
@@ -773,6 +858,9 @@
         // Connect to analytics namespace
         window.wsManager.connect('analytics');
         
+        // Join workspace room
+        window.wsManager.emit('join', { room: `workspace_${WORKSPACE_ID}` });
+        
         // Listen for analytics_refresh events
         window.wsManager.on('analytics_refresh', handleAnalyticsRefresh);
         
@@ -782,7 +870,110 @@
         // Listen for real-time analytics_update events (CROWN⁵+ broadcast)
         window.wsManager.on('analytics_update', handleAnalyticsUpdate);
         
-        console.log('📡 Analytics WebSocket listeners registered');
+        // CROWN⁵+ Delta events for incremental updates
+        window.wsManager.on('analytics_delta', handleAnalyticsDelta);
+        
+        // CROWN⁵+ Connection state handlers
+        window.wsManager.on('disconnect', () => {
+            console.log('⚠️ WebSocket disconnected, starting reconnection...');
+            ReconnectionManager.reconnect(() => initAnalyticsWebSocket());
+        });
+        
+        window.wsManager.on('connect', () => {
+            console.log('✅ WebSocket connected');
+            ReconnectionManager.reset();
+            // Re-sync after reconnection
+            if (window.analyticsManager) {
+                window.analyticsManager.loadDashboardData();
+            }
+        });
+        
+        console.log('📡 Analytics WebSocket listeners registered with CROWN⁵+ enhancements');
+    }
+    
+    /**
+     * Handle CROWN⁵+ analytics_delta events for incremental updates
+     * @param {Object} delta - Structured delta with sequence ID and affected KPIs
+     */
+    function handleAnalyticsDelta(delta) {
+        console.log('📡 Analytics delta received:', delta);
+        
+        // Verify sequence ordering
+        if (AnalyticsCache.lastSequenceId && 
+            delta.sequence_id <= AnalyticsCache.lastSequenceId) {
+            console.log('⏭️ Skipping duplicate/old delta:', delta.sequence_id);
+            return;
+        }
+        
+        // Apply delta based on affected KPIs
+        const affectedKpis = delta.affected_kpis || [];
+        
+        if (affectedKpis.includes('action_items') || affectedKpis.includes('completion_rate')) {
+            // Task-related update - refresh task charts and KPIs
+            refreshTaskKpis();
+        }
+        
+        if (affectedKpis.includes('hours_saved')) {
+            refreshHoursSaved();
+        }
+        
+        if (affectedKpis.includes('health_score') || affectedKpis.includes('follow_through')) {
+            refreshHealthScore();
+        }
+        
+        // Update cache sequence
+        AnalyticsCache.lastSequenceId = delta.sequence_id;
+        
+        // Show subtle indicator
+        showRefreshIndicator();
+    }
+    
+    /**
+     * Refresh task-related KPIs after delta
+     */
+    async function refreshTaskKpis() {
+        try {
+            const response = await fetch(`/api/analytics/kpi-comparison?days=30`);
+            const data = await response.json();
+            if (data.success && data.kpis) {
+                updateKPIs({
+                    action_items: data.kpis.action_items?.value,
+                    completion_rate: data.kpis.action_items?.completion_rate
+                });
+            }
+        } catch (e) { console.error('Failed to refresh task KPIs:', e); }
+    }
+    
+    /**
+     * Refresh Hours Saved KPI after delta
+     */
+    async function refreshHoursSaved() {
+        try {
+            const response = await fetch(`/api/analytics/kpi-comparison?days=30`);
+            const data = await response.json();
+            if (data.success && data.kpis?.hours_saved) {
+                const hoursSavedEl = document.querySelector('[data-kpi="hours-saved"] h3, .kpi-card:nth-child(2) h3');
+                if (hoursSavedEl) {
+                    animateCounter(hoursSavedEl, 
+                        parseFloat(hoursSavedEl.textContent) || 0, 
+                        data.kpis.hours_saved.value, 
+                        500, true);
+                }
+            }
+        } catch (e) { console.error('Failed to refresh hours saved:', e); }
+    }
+    
+    /**
+     * Refresh Health Score after delta
+     */
+    async function refreshHealthScore() {
+        try {
+            const response = await fetch(`/api/analytics/health-score?days=30`);
+            const data = await response.json();
+            if (data.success && data.health_score && window.analyticsManager) {
+                window.analyticsManager.updateMeetingHealthScore(data.health_score);
+            }
+        } catch (e) { console.error('Failed to refresh health score:', e); }
     }
     
     /**
