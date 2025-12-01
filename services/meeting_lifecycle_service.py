@@ -5,8 +5,10 @@ This is the critical bridge that fixes the broken data pipeline.
 """
 
 import logging
-from typing import Optional, Dict, Any
+import re
+from typing import Optional, Dict, Any, List, Sequence
 from datetime import datetime
+from dataclasses import dataclass
 from sqlalchemy import select, update
 from models import db
 from models.session import Session
@@ -17,6 +19,18 @@ from models.segment import Segment
 from models.participant import Participant
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ParticipantMetrics:
+    """DTO for speaker participation metrics extracted from transcripts."""
+    speaker_id: str
+    display_name: str
+    talk_time_seconds: float
+    word_count: int
+    question_count: int
+    segment_count: int
+    confidence_score: float = 0.85
 
 
 class MeetingLifecycleService:
@@ -107,11 +121,20 @@ class MeetingLifecycleService:
             if task_update_count > 0:
                 logger.info(f"✅ Updated {task_update_count} tasks with meeting_id={meeting.id}")
             
-            # Create basic Analytics record
+            # Extract and persist participant data from segments
+            participant_metrics = MeetingLifecycleService._extract_participant_metrics(segments, duration_minutes)
+            participant_count = len(participant_metrics) if participant_metrics else 1
+            
+            if participant_metrics:
+                MeetingLifecycleService._persist_participants(meeting.id, participant_metrics, duration_minutes)
+                logger.info(f"✅ Created {len(participant_metrics)} participant records for meeting {meeting.id}")
+            
+            # Create Analytics record with accurate participant count
             analytics = Analytics(
                 meeting_id=meeting.id,
                 total_duration_minutes=duration_minutes,
-                participant_count=len(segments) if segments else 1,  # Rough estimate
+                participant_count=participant_count,
+                unique_speakers=participant_count,
                 word_count=sum(len(s.text.split()) if s.text else 0 for s in segments),
                 analysis_status="pending",  # Will be processed later
                 created_at=datetime.utcnow()
@@ -119,7 +142,7 @@ class MeetingLifecycleService:
             
             db.session.add(analytics)
             
-            # Commit atomically - meeting + analytics + session link
+            # Commit atomically - meeting + analytics + session link + participants
             db.session.commit()
             
             logger.info(f"✅ Created Meeting {meeting.id} from Session {session_id}")
@@ -356,3 +379,213 @@ class MeetingLifecycleService:
                 'task_completion_rate': 0,
                 'total_duration_minutes': 0
             }
+    
+    @staticmethod
+    def _extract_participant_metrics(segments: Sequence[Segment], duration_minutes: Optional[float]) -> List[ParticipantMetrics]:
+        """
+        Extract participant metrics from transcript segments.
+        Analyzes text patterns to identify speakers and calculate their participation.
+        
+        Args:
+            segments: List of transcript segments
+            duration_minutes: Total meeting duration in minutes
+            
+        Returns:
+            List of ParticipantMetrics DTOs
+        """
+        if not segments:
+            return []
+        
+        speaker_data: Dict[str, Dict[str, Any]] = {}
+        
+        # Common speaker label patterns in transcripts
+        speaker_patterns = [
+            r'^(Speaker\s*\d+)\s*[:\-]',  # "Speaker 1:", "Speaker 2:"
+            r'^\[(Speaker\s*\d+)\]',       # "[Speaker 1]"
+            r'^(Participant\s*\d+)\s*[:\-]',  # "Participant 1:"
+            r'^\[([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\]',  # "[John]", "[Jane Doe]"
+        ]
+        
+        for segment in segments:
+            if not segment.text or segment.kind != 'final':
+                continue
+            
+            text = segment.text.strip()
+            speaker_id = None
+            
+            # Try to extract speaker from text patterns
+            for pattern in speaker_patterns:
+                match = re.match(pattern, text)
+                if match:
+                    speaker_id = match.group(1).strip()
+                    break
+            
+            # Default speaker if no pattern matched
+            if not speaker_id:
+                speaker_id = "Primary Speaker"
+            
+            # Normalize speaker ID
+            speaker_id = speaker_id.lower().replace(' ', '_')
+            
+            # Initialize speaker data if new
+            if speaker_id not in speaker_data:
+                speaker_data[speaker_id] = {
+                    'display_name': speaker_id.replace('_', ' ').title(),
+                    'word_count': 0,
+                    'segment_count': 0,
+                    'talk_time_ms': 0,
+                    'question_count': 0
+                }
+            
+            # Update metrics
+            words = len(text.split())
+            speaker_data[speaker_id]['word_count'] += words
+            speaker_data[speaker_id]['segment_count'] += 1
+            
+            # Count questions
+            if '?' in text:
+                speaker_data[speaker_id]['question_count'] += text.count('?')
+            
+            # Calculate talk time from segment duration if available
+            if segment.start_ms is not None and segment.end_ms is not None:
+                speaker_data[speaker_id]['talk_time_ms'] += (segment.end_ms - segment.start_ms)
+        
+        # Convert to ParticipantMetrics DTOs
+        metrics = []
+        total_words = sum(s['word_count'] for s in speaker_data.values())
+        
+        for speaker_id, data in speaker_data.items():
+            # Estimate talk time from word count if not available from timestamps
+            if data['talk_time_ms'] > 0:
+                talk_time_seconds = data['talk_time_ms'] / 1000
+            elif duration_minutes and total_words > 0:
+                # Estimate based on word proportion of meeting duration
+                word_proportion = data['word_count'] / total_words
+                talk_time_seconds = word_proportion * duration_minutes * 60
+            else:
+                # Rough estimate: 150 words per minute speaking rate
+                talk_time_seconds = (data['word_count'] / 150) * 60
+            
+            metrics.append(ParticipantMetrics(
+                speaker_id=speaker_id,
+                display_name=data['display_name'],
+                talk_time_seconds=talk_time_seconds,
+                word_count=data['word_count'],
+                question_count=data['question_count'],
+                segment_count=data['segment_count'],
+                confidence_score=0.85
+            ))
+        
+        logger.info(f"📊 Extracted metrics for {len(metrics)} participants from {len(segments)} segments")
+        return metrics
+    
+    @staticmethod
+    def _persist_participants(meeting_id: int, metrics: List[ParticipantMetrics], duration_minutes: Optional[float]) -> List[Participant]:
+        """
+        Persist participant metrics to the database.
+        
+        Args:
+            meeting_id: The meeting to associate participants with
+            metrics: List of ParticipantMetrics DTOs
+            duration_minutes: Total meeting duration for calculating percentages
+            
+        Returns:
+            List of created Participant records
+        """
+        participants = []
+        total_talk_time = sum(m.talk_time_seconds for m in metrics)
+        
+        for i, metric in enumerate(metrics):
+            # Calculate participation percentage
+            if total_talk_time > 0:
+                participation_pct = (metric.talk_time_seconds / total_talk_time) * 100
+            elif duration_minutes and duration_minutes > 0:
+                participation_pct = (metric.talk_time_seconds / (duration_minutes * 60)) * 100
+            else:
+                participation_pct = 100 / len(metrics) if metrics else 0
+            
+            participant = Participant(
+                meeting_id=meeting_id,
+                name=metric.display_name,
+                speaker_id=metric.speaker_id,
+                role='organizer' if i == 0 else 'participant',
+                talk_time_seconds=metric.talk_time_seconds,
+                word_count=metric.word_count,
+                question_count=metric.question_count,
+                confidence_score=metric.confidence_score,
+                participation_percentage=min(100.0, participation_pct),
+                is_present=True,
+                joined_at=datetime.utcnow()
+            )
+            
+            db.session.add(participant)
+            participants.append(participant)
+        
+        logger.info(f"💾 Persisted {len(participants)} participants for meeting {meeting_id}")
+        return participants
+    
+    @staticmethod
+    def backfill_participants_for_meeting(meeting_id: int) -> Dict[str, Any]:
+        """
+        Backfill participant data for an existing meeting that has no participants.
+        Used to populate historical meetings with participation data.
+        
+        Args:
+            meeting_id: The meeting to backfill
+            
+        Returns:
+            Result dictionary with status and count
+        """
+        try:
+            meeting = db.session.get(Meeting, meeting_id)
+            if not meeting:
+                return {'success': False, 'error': 'Meeting not found'}
+            
+            # Check if participants already exist
+            existing_count = db.session.scalar(
+                select(db.func.count()).select_from(Participant).where(
+                    Participant.meeting_id == meeting_id
+                )
+            )
+            
+            if existing_count and existing_count > 0:
+                return {'success': True, 'message': f'Meeting already has {existing_count} participants', 'count': existing_count}
+            
+            # Find linked session
+            session = db.session.scalar(
+                select(Session).where(Session.meeting_id == meeting_id)
+            )
+            
+            if not session:
+                return {'success': False, 'error': 'No linked session found for meeting'}
+            
+            # Get segments
+            segments = db.session.scalars(
+                select(Segment).where(Segment.session_id == session.id)
+            ).all()
+            
+            if not segments:
+                return {'success': False, 'error': 'No segments found for session'}
+            
+            # Calculate duration
+            duration_minutes = None
+            segments_with_time = [s for s in segments if s.start_ms is not None and s.end_ms is not None]
+            if segments_with_time:
+                first = min(segments_with_time, key=lambda s: s.start_ms or 0)
+                last = max(segments_with_time, key=lambda s: s.end_ms or 0)
+                if first.start_ms and last.end_ms:
+                    duration_minutes = (last.end_ms - first.start_ms) / (1000 * 60)
+            
+            # Extract and persist
+            metrics = MeetingLifecycleService._extract_participant_metrics(list(segments), duration_minutes)
+            if metrics:
+                MeetingLifecycleService._persist_participants(meeting_id, metrics, duration_minutes)
+                db.session.commit()
+                return {'success': True, 'message': f'Created {len(metrics)} participants', 'count': len(metrics)}
+            else:
+                return {'success': False, 'error': 'No participant data could be extracted'}
+                
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error backfilling participants for meeting {meeting_id}: {e}")
+            return {'success': False, 'error': str(e)}

@@ -314,8 +314,11 @@ class AnalyticsService:
         if not meeting.session:
             return
         
-        segments = db.session.query(Segment).filter_by(session_id=meeting.session.id, is_final=True).all()
-        full_text = " ".join(segment.text.lower() for segment in segments)
+        segments = db.session.query(Segment).filter(
+            Segment.session_id == meeting.session.id,
+            Segment.kind == 'final'
+        ).all()
+        full_text = " ".join(segment.text.lower() for segment in segments if segment.text)
         
         # Count different types of content
         analytics.question_count = full_text.count('?')
@@ -374,7 +377,10 @@ class AnalyticsService:
         if not meeting.session:
             return
         
-        segments = db.session.query(Segment).filter_by(session_id=meeting.session.id, is_final=True).all()
+        segments = db.session.query(Segment).filter(
+            Segment.session_id == meeting.session.id,
+            Segment.kind == 'final'
+        ).all()
         
         # Analyze consensus moments (simplified)
         consensus_indicators = ["everyone agrees", "we all think", "consensus", "unanimous"]
