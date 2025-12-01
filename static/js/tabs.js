@@ -25,9 +25,9 @@
       return;
     }
     
-    // Tab switching function
-    function switchTab(tabId) {
-      console.log(`[Tabs] Switching to tab: ${tabId}`);
+    // Tab switching function with optional scroll behavior
+    function switchTab(tabId, shouldScroll = false) {
+      console.log(`[Tabs] Switching to tab: ${tabId}, scroll: ${shouldScroll}`);
       
       // Remove active from all buttons
       tabButtons.forEach(btn => {
@@ -53,6 +53,13 @@
       if (activeContent) {
         activeContent.classList.add('active');
         console.log(`[Tabs] Activated content: ${tabId}-tab`);
+        
+        // Scroll to content if requested (e.g., from hash navigation)
+        if (shouldScroll) {
+          requestAnimationFrame(() => {
+            activeContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        }
       } else {
         console.error(`[Tabs] Content panel not found: ${tabId}-tab`);
       }
@@ -64,11 +71,45 @@
         const tabId = this.getAttribute('data-tab');
         if (tabId) {
           switchTab(tabId);
+          // Update URL hash without triggering scroll
+          history.replaceState(null, '', `#${tabId}`);
         } else {
           console.error('[Tabs] Button missing data-tab attribute:', this);
         }
       });
     });
+    
+    // CROWN⁴.6: Hash-aware initialization for "Jump to transcript" navigation
+    // Run immediately and also after a short delay to catch late-arriving hashes
+    handleHashNavigation();
+    setTimeout(handleHashNavigation, 150);
+    
+    // Listen for hash changes (e.g., user clicks browser back/forward)
+    window.addEventListener('hashchange', handleHashNavigation);
+    
+    function handleHashNavigation() {
+      const hash = window.location.hash.replace('#', '');
+      console.log(`[Tabs] Checking hash navigation, hash="${hash}", URL="${window.location.href}"`);
+      
+      if (hash) {
+        // Map common hash values to tab IDs
+        const tabMap = {
+          'transcript': 'transcript',
+          'highlights': 'highlights',
+          'analytics': 'analytics',
+          'tasks': 'tasks'
+        };
+        
+        const tabId = tabMap[hash];
+        if (tabId) {
+          console.log(`[Tabs] Hash navigation detected: #${hash} -> switching to ${tabId} tab`);
+          // Switch tab and scroll to it
+          switchTab(tabId, true);
+        } else {
+          console.log(`[Tabs] Unknown hash: ${hash}`);
+        }
+      }
+    }
     
     console.log('[Tabs] Tab switching initialized successfully!');
     
