@@ -1017,6 +1017,153 @@ class OptimisticUI {
             }
         }
 
+        // Update labels (CROWN⁴.7: Instant labels update with empty-state CTA)
+        if (task.hasOwnProperty('labels')) {
+            const labelsContainer = card.querySelector('.task-labels');
+            const labelsEmpty = card.querySelector('.task-labels-empty');
+            
+            if (task.labels && task.labels.length > 0) {
+                // Has labels: show container, hide empty CTA
+                if (labelsContainer) {
+                    labelsContainer.innerHTML = '';
+                    task.labels.forEach(label => {
+                        const labelSpan = document.createElement('span');
+                        labelSpan.className = 'task-label';
+                        labelSpan.textContent = label;
+                        labelsContainer.appendChild(labelSpan);
+                    });
+                    labelsContainer.style.display = '';
+                } else if (taskMeta) {
+                    const labelsHTML = `<div class="task-labels">${task.labels.map(l => `<span class="task-label">${this._escapeHtml(l)}</span>`).join('')}</div>`;
+                    taskMeta.insertAdjacentHTML('afterend', labelsHTML);
+                }
+                if (labelsEmpty) labelsEmpty.style.display = 'none';
+                console.log('[_updateTaskInDOM] Updated labels:', task.labels);
+            } else {
+                // No labels: hide container, show empty CTA
+                if (labelsContainer) {
+                    labelsContainer.innerHTML = '';
+                    labelsContainer.style.display = 'none';
+                }
+                if (labelsEmpty) {
+                    labelsEmpty.style.display = '';
+                } else if (taskMeta) {
+                    // Create empty CTA if missing
+                    const emptyCTA = document.createElement('span');
+                    emptyCTA.className = 'task-labels-empty';
+                    emptyCTA.textContent = '+ Add label';
+                    taskMeta.appendChild(emptyCTA);
+                }
+                console.log('[_updateTaskInDOM] Cleared labels, showing CTA');
+            }
+        }
+
+        // Update due date (CROWN⁴.7: Instant due date update with empty-state CTA)
+        // Architecture: Either badge (with date) OR empty CTA (no date) is visible, never both
+        if (task.hasOwnProperty('due_date')) {
+            let dueDateBadge = card.querySelector('.task-due-date, .due-date-badge:not(.due-date-badge--empty)');
+            let dueDateEmpty = card.querySelector('.due-date-badge--empty, [data-inline-action="add-due-date"]');
+            
+            if (task.due_date) {
+                // HAS DUE DATE: Show badge, hide empty CTA
+                const date = new Date(task.due_date);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const diff = Math.floor((date - today) / (1000 * 60 * 60 * 24));
+                
+                let displayText;
+                if (diff === 0) displayText = 'Today';
+                else if (diff === 1) displayText = 'Tomorrow';
+                else if (diff < 0) displayText = 'Overdue';
+                else if (diff <= 7) displayText = `In ${diff}d`;
+                else displayText = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                
+                // Step 1: Ensure badge exists (create if missing)
+                if (!dueDateBadge) {
+                    if (taskMeta) {
+                        dueDateBadge = document.createElement('span');
+                        dueDateBadge.className = 'due-date-badge';
+                        taskMeta.appendChild(dueDateBadge);
+                    }
+                }
+                
+                // Step 2: Update badge content and show it
+                if (dueDateBadge) {
+                    dueDateBadge.textContent = displayText;
+                    dueDateBadge.style.display = '';
+                    dueDateBadge.classList.remove('due-date-badge--empty');
+                    if (diff < 0) {
+                        dueDateBadge.classList.add('overdue');
+                    } else {
+                        dueDateBadge.classList.remove('overdue');
+                    }
+                }
+                
+                // Step 3: Hide empty CTA
+                if (dueDateEmpty) {
+                    dueDateEmpty.style.display = 'none';
+                }
+                
+                console.log('[_updateTaskInDOM] Set due date:', displayText);
+            } else {
+                // NO DUE DATE: Hide badge, show empty CTA
+                
+                // Step 1: Hide badge if it exists
+                if (dueDateBadge) {
+                    dueDateBadge.style.display = 'none';
+                }
+                
+                // Step 2: Ensure empty CTA exists (create if missing)
+                if (!dueDateEmpty) {
+                    if (taskMeta) {
+                        dueDateEmpty = document.createElement('span');
+                        dueDateEmpty.className = 'due-date-badge--empty';
+                        dueDateEmpty.setAttribute('data-inline-action', 'add-due-date');
+                        dueDateEmpty.textContent = '+ Add due date';
+                        taskMeta.appendChild(dueDateEmpty);
+                    }
+                }
+                
+                // Step 3: Show empty CTA
+                if (dueDateEmpty) {
+                    dueDateEmpty.style.display = '';
+                }
+                
+                console.log('[_updateTaskInDOM] Cleared due date, showing CTA');
+            }
+        }
+
+        // Update snoozed state (CROWN⁴.7: Visual feedback for snooze)
+        if (task.hasOwnProperty('snoozed_until')) {
+            let snoozeIndicator = card.querySelector('.snooze-indicator');
+            
+            if (task.snoozed_until) {
+                card.classList.add('snoozed');
+                card.dataset.snoozedUntil = task.snoozed_until;
+                
+                // Add or update snooze indicator
+                if (!snoozeIndicator && taskMeta) {
+                    snoozeIndicator = document.createElement('span');
+                    snoozeIndicator.className = 'snooze-indicator';
+                    taskMeta.appendChild(snoozeIndicator);
+                }
+                if (snoozeIndicator) {
+                    const snoozeDate = new Date(task.snoozed_until);
+                    snoozeIndicator.textContent = `💤 Until ${snoozeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+                    snoozeIndicator.style.display = '';
+                }
+                console.log('[_updateTaskInDOM] Task snoozed until:', task.snoozed_until);
+            } else {
+                // Unsnooze: fully remove indicator and class
+                card.classList.remove('snoozed');
+                delete card.dataset.snoozedUntil;
+                if (snoozeIndicator) {
+                    snoozeIndicator.remove();
+                }
+                console.log('[_updateTaskInDOM] Cleared snooze, removed indicator');
+            }
+        }
+
         // Add optimistic indicator (CROWN⁴.5 QuietStateManager)
         if (window.quietStateManager) {
             window.quietStateManager.queueAnimation((setCancelHandler) => {
