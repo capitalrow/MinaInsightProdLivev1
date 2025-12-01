@@ -273,7 +273,9 @@ class TaskWebSocketHandlers {
         }
         
         if (data.tasks) {
-            await window.taskCache.saveTasks(data.tasks);
+            // CROWN⁴.8: Rehydrate assignees from users map before caching
+            const rehydratedTasks = this._rehydrateTasksWithUsers(data.tasks, data.users || {});
+            await window.taskCache.saveTasks(rehydratedTasks);
         }
         
         if (data.view_state) {
@@ -729,10 +731,12 @@ class TaskWebSocketHandlers {
         console.log('🔄 Tasks refreshed');
         
         if (data.tasks) {
-            await window.taskCache.saveTasks(data.tasks);
+            // CROWN⁴.8: Rehydrate assignees from users map before caching
+            const rehydratedTasks = this._rehydrateTasksWithUsers(data.tasks, data.users || {});
+            await window.taskCache.saveTasks(rehydratedTasks);
             
             if (window.taskBootstrap) {
-                await window.taskBootstrap.renderTasks(data.tasks);
+                await window.taskBootstrap.renderTasks(rehydratedTasks);
             }
         }
     }
@@ -1217,9 +1221,11 @@ class TaskWebSocketHandlers {
         console.log('📦 Tasks bulk updated:', data.task_ids.length);
         
         if (data.tasks) {
-            await window.taskCache.saveTasks(data.tasks);
+            // CROWN⁴.8: Rehydrate assignees from users map before caching
+            const rehydratedTasks = this._rehydrateTasksWithUsers(data.tasks, data.users || {});
+            await window.taskCache.saveTasks(rehydratedTasks);
             
-            for (const task of data.tasks) {
+            for (const task of rehydratedTasks) {
                 if (window.optimisticUI) {
                     window.optimisticUI._updateTaskInDOM(task.id, task);
                 }

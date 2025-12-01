@@ -1043,8 +1043,22 @@ class TaskBootstrap {
             }
 
             const data = await response.json();
-            const serverTasks = data.tasks || [];
+            let serverTasks = data.tasks || [];
+            const usersMap = data.users || {};  // CROWN⁴.8: Users map for rehydration
             const serverChecksum = data.checksum; // CROWN⁴.5: Server sends checksum
+
+            // CROWN⁴.8: Rehydrate assigned_to from users map (Linear pattern)
+            // This ensures assignee names persist through background syncs
+            for (const task of serverTasks) {
+                if (task.assigned_to_id && usersMap[task.assigned_to_id]) {
+                    task.assigned_to = usersMap[task.assigned_to_id];
+                }
+                if (task.assignee_ids && task.assignee_ids.length > 0) {
+                    task.assignees = task.assignee_ids
+                        .map(id => usersMap[id])
+                        .filter(Boolean);
+                }
+            }
 
             this.perf.sync_end = performance.now();
             const syncTime = this.perf.sync_end - this.perf.sync_start;
@@ -1065,7 +1079,7 @@ class TaskBootstrap {
                 return;
             }
             
-            // Update cache with server data (only if we have data OR truly empty)
+            // Update cache with server data (now with rehydrated user objects)
             await this.cache.saveTasks(serverTasks);
             
             // CROWN⁴.5: Store server checksum for future validation
@@ -1204,7 +1218,20 @@ class TaskBootstrap {
             }
 
             const data = await response.json();
-            const tasks = data.tasks || [];
+            let tasks = data.tasks || [];
+            const usersMap = data.users || {};  // CROWN⁴.8: Users map for rehydration
+
+            // CROWN⁴.8: Rehydrate assigned_to from users map (Linear pattern)
+            for (const task of tasks) {
+                if (task.assigned_to_id && usersMap[task.assigned_to_id]) {
+                    task.assigned_to = usersMap[task.assigned_to_id];
+                }
+                if (task.assignee_ids && task.assignee_ids.length > 0) {
+                    task.assignees = task.assignee_ids
+                        .map(id => usersMap[id])
+                        .filter(Boolean);
+                }
+            }
 
             await this.renderTasks(tasks, { fromCache: false });
             
