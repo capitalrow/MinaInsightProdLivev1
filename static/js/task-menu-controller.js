@@ -841,7 +841,8 @@ class TaskMenuController {
             }
             
             // Build URL with optional transcript span highlighting
-            let targetUrl = `/sessions/${sessionId}`;
+            // Use /refined route to load all insights data (summary, analytics, tasks)
+            let targetUrl = `/sessions/${sessionId}/refined`;
             
             // If task has transcript_span, add highlight parameter
             if (task.transcript_span && task.transcript_span.start_ms !== null) {

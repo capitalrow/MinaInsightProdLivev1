@@ -1213,13 +1213,29 @@ class TaskWebSocketHandlers {
 
     /**
      * Update counters from server
+     * CROWN⁴.6 FIX: Respect TaskStateStore's initial load state to prevent flickering
      * @param {Object} counters
      */
     _updateCountersFromServer(counters) {
+        // CRITICAL: Delegate to TaskStateStore if available - single source of truth pattern
+        // This respects the _initialLoadComplete guard to prevent counter flickering
+        if (window.taskStateStore && !window.taskStateStore._initialLoadComplete) {
+            console.log('[WebSocket] Skipping counter update during initial load stabilization');
+            return;
+        }
+        
         Object.entries(counters).forEach(([key, value]) => {
             const badge = document.querySelector(`[data-counter="${key}"]`);
             if (badge) {
-                badge.textContent = value;
+                const currentValue = parseInt(badge.textContent) || 0;
+                if (currentValue !== value) {
+                    badge.textContent = value;
+                    
+                    // Subtle animation on change (emotional UX)
+                    badge.classList.remove('counter-updated');
+                    void badge.offsetWidth; // Force reflow
+                    badge.classList.add('counter-updated');
+                }
             }
         });
     }
