@@ -138,5 +138,5 @@ The application utilizes a layered architecture with Flask as the web framework 
 **December 1, 2025 - CROWN⁴.7 Counter Stabilization Pipeline:**
 - Implemented guarded pipeline pattern across all dashboard pages to eliminate counter flickering
 - **Dashboard Index**: `DashboardStabilizer` with guard flag, queue for cache updates, 5-second failsafe timeout. Server sync releases guard and replays queued updates through 100ms debounce.
-- **Meetings Page**: `MeetingsStabilizer` with guard flag, queue for WebSocket events during initial load, 8-second failsafe timeout. Initial API load releases guard and replays events.
-- **Analytics Page**: `AnalyticsStabilizer` routes all DOM writes through shared debounced writer. Cache uses `immediateUpdate()` for TTI, server/WebSocket updates use `debounceUpdate()` (150ms) to prevent rapid visual changes.
+- **Meetings Page**: `MeetingsStabilizer` with guard flag, queue for WebSocket events during initial load, 8-second failsafe timeout. Initial API load releases guard and replays events. Server-rendered counts via `Meeting.archived` boolean matching API filtering.
+- **Analytics Page**: `AnalyticsStabilizer` with `_isInitialLoad` guard that only releases after both KPI and health fetches succeed. Cache skipped on initial load (server-rendered Jinja values are authoritative). Subsequent loads use cache-first with debounced server validation.
