@@ -930,6 +930,28 @@ class TaskCache {
             throw new Error('Task missing required "id" field for IndexedDB storage. This prevents cache persistence.');
         }
         
+        // CRITICAL FIX: Preserve assigned_to user object when server response lacks it
+        // Problem: Server returns assigned_to_id and assignee_ids, but NOT the full user object
+        // This caused optimistic UI updates (with full user data) to be overwritten by server responses
+        // Industry standard (Linear/Notion/Asana): Always show username, never generic "Assigned"
+        try {
+            const existingTask = await this.getTask(task.id);
+            if (existingTask) {
+                // If new task has assignee_ids but no assigned_to object, preserve the cached one
+                if (task.assignee_ids && task.assignee_ids.length > 0 && !task.assigned_to) {
+                    if (existingTask.assigned_to && existingTask.assigned_to.id) {
+                        // Verify the cached user matches the assigned ID
+                        if (task.assignee_ids.includes(existingTask.assigned_to.id)) {
+                            task.assigned_to = existingTask.assigned_to;
+                            console.log(`[TaskCache] Preserved assigned_to user object for task ${task.id}:`, task.assigned_to.username || task.assigned_to.display_name);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            // Ignore errors from getTask - proceed with save
+        }
+        
         // Ensure timestamps
         const now = new Date().toISOString();
         if (!task.created_at) task.created_at = now;

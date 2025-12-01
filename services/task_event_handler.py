@@ -872,16 +872,45 @@ class TaskEventHandler:
             
             task.updated_at = datetime.utcnow()
             
+            # CRITICAL FIX: Capture user data BEFORE commit to avoid lazy-loading issues
+            # After commit, relationships may be expired and refresh doesn't always reload them
+            # This ensures the client receives the full user object for instant UI updates
+            assigned_user_data = None
+            if task.assigned_to:
+                assigned_user_data = {
+                    'id': task.assigned_to.id,
+                    'username': task.assigned_to.username,
+                    'display_name': getattr(task.assigned_to, 'display_name', None),
+                    'full_name': getattr(task.assigned_to, 'full_name', None),
+                    'email': task.assigned_to.email,
+                    'avatar_url': getattr(task.assigned_to, 'avatar_url', None)
+                }
+            
+            assignees_data = []
+            if task.assignees:
+                for user in task.assignees:
+                    assignees_data.append({
+                        'id': user.id,
+                        'username': user.username,
+                        'display_name': getattr(user, 'display_name', None),
+                        'full_name': getattr(user, 'full_name', None),
+                        'avatar_url': getattr(user, 'avatar_url', None)
+                    })
+            
             db.session.commit()
             
-            # Refresh task to reload relationships that were expired after commit
-            # Must explicitly specify relationship attributes to refresh them
-            db.session.refresh(task, attribute_names=['assigned_to', 'assignees'])
+            # Build response with captured user data (avoids lazy-loading issues)
+            task_dict = task.to_dict(include_relationships=False)
+            if assigned_user_data:
+                task_dict['assigned_to'] = assigned_user_data
+            if assignees_data:
+                task_dict['assignees'] = assignees_data
             
-            # Include relationships to send full assigned_to user object
+            logger.info(f"Assign response includes assigned_to: {assigned_user_data.get('username') if assigned_user_data else 'None'}")
+            
             return {
                 'success': True,
-                'task': task.to_dict(include_relationships=True)
+                'task': task_dict
             }
             
         except Exception as e:
