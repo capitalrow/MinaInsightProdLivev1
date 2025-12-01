@@ -139,10 +139,10 @@ def get_dashboard_analytics():
                 func.sum(db.case((Task.status.in_(['pending', 'todo']), 1), else_=0)).label('pending')
             ).filter(Task.meeting_id.in_(all_meeting_ids)).first()
             
-            total_tasks_created = task_counts.total or 0
-            completed_tasks = task_counts.completed or 0
-            in_progress_tasks = task_counts.in_progress or 0
-            pending_tasks = task_counts.pending or 0
+            total_tasks_created = getattr(task_counts, 'total', 0) or 0
+            completed_tasks = getattr(task_counts, 'completed', 0) or 0
+            in_progress_tasks = getattr(task_counts, 'in_progress', 0) or 0
+            pending_tasks = getattr(task_counts, 'pending', 0) or 0
         else:
             # Fallback to workspace-level task count if no meetings in period
             task_counts = db.session.query(
@@ -152,10 +152,10 @@ def get_dashboard_analytics():
                 func.sum(db.case((Task.status.in_(['pending', 'todo']), 1), else_=0)).label('pending')
             ).filter(Task.workspace_id == workspace_id).first()
             
-            total_tasks_created = task_counts.total or 0
-            completed_tasks = task_counts.completed or 0
-            in_progress_tasks = task_counts.in_progress or 0
-            pending_tasks = task_counts.pending or 0
+            total_tasks_created = getattr(task_counts, 'total', 0) or 0
+            completed_tasks = getattr(task_counts, 'completed', 0) or 0
+            in_progress_tasks = getattr(task_counts, 'in_progress', 0) or 0
+            pending_tasks = getattr(task_counts, 'pending', 0) or 0
         
         total_decisions_made = sum(a.decisions_made_count or 0 for a in recent_analytics)
         
