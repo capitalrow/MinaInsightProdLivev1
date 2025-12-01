@@ -875,7 +875,8 @@ class TaskEventHandler:
             db.session.commit()
             
             # Refresh task to reload relationships that were expired after commit
-            db.session.refresh(task)
+            # Must explicitly specify relationship attributes to refresh them
+            db.session.refresh(task, attribute_names=['assigned_to', 'assignees'])
             
             # Include relationships to send full assigned_to user object
             return {
