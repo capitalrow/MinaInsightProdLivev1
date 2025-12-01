@@ -15,22 +15,17 @@ class TaskEmbeddingService:
     """Service for generating and managing task embeddings for semantic search."""
     
     def __init__(self):
-        """Initialize embedding service with OpenAI."""
+        """Initialize embedding service with OpenAI (direct connection)."""
         self.api_key = os.environ.get('OPENAI_API_KEY')
         self.client = None
         self.model = "text-embedding-3-small"  # 1536 dimensions
         
-        # Check if using Replit AI proxy (doesn't support embeddings)
-        base_url = os.environ.get('OPENAI_BASE_URL', '')
-        if 'modelfarm' in base_url or 'replit' in base_url.lower():
-            logger.info("⚠️ Embeddings disabled: Replit AI Integrations does not support embeddings API")
-            return
-        
         if self.api_key:
             try:
                 from openai import OpenAI
+                # Connect directly to OpenAI (no base_url override)
                 self.client = OpenAI(api_key=self.api_key)
-                logger.info(f"✅ TaskEmbeddingService initialized with {self.model}")
+                logger.info(f"✅ TaskEmbeddingService initialized with {self.model} (direct OpenAI)")
             except Exception as e:
                 logger.error(f"❌ Failed to initialize OpenAI: {e}")
         else:

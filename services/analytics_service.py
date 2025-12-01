@@ -314,45 +314,129 @@ class AnalyticsService:
         if not meeting.session:
             return
         
-        segments = db.session.query(Segment).filter_by(session_id=meeting.session.id, is_final=True).all()
-        full_text = " ".join(segment.text.lower() for segment in segments)
+        segments = db.session.query(Segment).filter(
+            Segment.session_id == meeting.session.id,
+            Segment.kind == 'final'
+        ).all()
+        full_text = " ".join(segment.text.lower() for segment in segments if segment.text)
         
         # Count different types of content
         analytics.question_count = full_text.count('?')
         analytics.idea_count = sum(1 for keyword in self.idea_keywords if keyword in full_text)
         analytics.disagreement_count = sum(1 for keyword in self.disagreement_keywords if keyword in full_text)
         
-        # Extract key topics and keywords
-        if self.client:
-            topics = await self._extract_key_topics(full_text)
-            analytics.key_topics = topics
-            
-            keywords = await self._extract_keywords(full_text)
-            analytics.topic_keywords = keywords
+        # Extract key topics and keywords (with fallback if AI unavailable)
+        topics = await self._extract_key_topics(full_text)
+        analytics.key_topics = topics
+        
+        keywords = await self._extract_keywords(full_text)
+        analytics.topic_keywords = keywords
 
     async def _extract_key_topics(self, text: str) -> List[str]:
-        """Extract main topics discussed in the meeting."""
-        if not self.client:
+        """Extract main topics discussed in the meeting with AI + fallback."""
+        if not text or len(text.strip()) < 50:
             return []
         
-        try:
-            response = await self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Extract the 5 main topics discussed in this meeting. Return as a JSON array of strings."
-                    },
-                    {"role": "user", "content": text[:2000]}
-                ],
-                temperature=0.2,
-                max_tokens=200
-            )
-            
-            topics = json.loads(response.choices[0].message.content)
-            return topics if isinstance(topics, list) else []
-        except Exception:
-            return []
+        # Try AI extraction first
+        if self.client:
+            try:
+                response = await self.client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "Extract the 5 main topics discussed in this meeting. Return as a JSON array of strings."
+                        },
+                        {"role": "user", "content": text[:2000]}
+                    ],
+                    temperature=0.2,
+                    max_tokens=200
+                )
+                
+                topics = json.loads(response.choices[0].message.content)
+                if isinstance(topics, list) and len(topics) > 0:
+                    return topics[:5]
+            except Exception as e:
+                logging.debug(f"AI topic extraction failed, using fallback: {e}")
+        
+        # Fallback: Keyword-based topic extraction
+        return self._extract_topics_fallback(text)
+    
+    def _extract_topics_fallback(self, text: str) -> List[str]:
+        """
+        Intelligent fallback topic extraction using business category matching.
+        Returns meaningful themes or empty list - never garbage words.
+        """
+        if not text or len(text.strip()) < 50:
+            return []  # Not enough content for meaningful extraction
+        
+        text_lower = text.lower()
+        text_length = len(text_lower)
+        
+        # Adaptive threshold based on content length
+        # Shorter recordings need lower thresholds
+        threshold_multiplier = 1.0 if text_length > 500 else 0.5
+        
+        # Business-relevant topic categories with weighted keywords
+        topic_patterns = {
+            "Project Planning": {
+                "keywords": ["project", "milestone", "timeline", "deadline", "deliverable", "phase", "sprint", "scope", "requirements"],
+                "min_score": 2
+            },
+            "Budget & Resources": {
+                "keywords": ["budget", "cost", "revenue", "expense", "funding", "investment", "resources", "allocation"],
+                "min_score": 2
+            },
+            "Team Updates": {
+                "keywords": ["team", "hire", "hiring", "onboarding", "capacity", "workload", "performance", "training"],
+                "min_score": 2
+            },
+            "Technical Work": {
+                "keywords": ["technical", "architecture", "implementation", "integration", "api", "database", "infrastructure", "code", "build"],
+                "min_score": 2
+            },
+            "Product Development": {
+                "keywords": ["product", "feature", "roadmap", "release", "launch", "design", "prototype", "testing", "test"],
+                "min_score": 2
+            },
+            "Client & Stakeholders": {
+                "keywords": ["client", "customer", "stakeholder", "feedback", "requirements", "demo", "presentation"],
+                "min_score": 2
+            },
+            "Strategy Discussion": {
+                "keywords": ["strategy", "goal", "objective", "priority", "initiative", "vision", "quarter", "annual"],
+                "min_score": 2
+            },
+            "Process & Workflow": {
+                "keywords": ["process", "workflow", "efficiency", "automation", "documentation", "standards", "check"],
+                "min_score": 2
+            },
+            "Task Management": {
+                "keywords": ["task", "tasks", "action", "todo", "assign", "complete", "due", "follow-up", "board"],
+                "min_score": 2
+            },
+            "Review & Analysis": {
+                "keywords": ["review", "analysis", "summary", "insights", "metrics", "results", "recording", "transcription"],
+                "min_score": 2
+            }
+        }
+        
+        topic_scores = {}
+        
+        # Score each topic category - adaptive threshold
+        for topic, config in topic_patterns.items():
+            score = sum(text_lower.count(keyword) for keyword in config["keywords"])
+            adjusted_min = max(1, int(config["min_score"] * threshold_multiplier))
+            if score >= adjusted_min:
+                topic_scores[topic] = score
+        
+        # Sort by score and return top topics that meet threshold
+        sorted_topics = sorted(topic_scores.items(), key=lambda x: x[1], reverse=True)
+        detected_topics = [topic for topic, score in sorted_topics[:5]]
+        
+        # Only return if we found meaningful topics
+        # Return empty list instead of garbage - honest "no data" is better
+        return detected_topics if len(detected_topics) >= 1 else []
 
     async def _extract_keywords(self, text: str) -> List[str]:
         """Extract key terms and phrases from the meeting."""
@@ -374,7 +458,10 @@ class AnalyticsService:
         if not meeting.session:
             return
         
-        segments = db.session.query(Segment).filter_by(session_id=meeting.session.id, is_final=True).all()
+        segments = db.session.query(Segment).filter(
+            Segment.session_id == meeting.session.id,
+            Segment.kind == 'final'
+        ).all()
         
         # Analyze consensus moments (simplified)
         consensus_indicators = ["everyone agrees", "we all think", "consensus", "unanimous"]

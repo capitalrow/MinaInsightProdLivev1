@@ -20,6 +20,7 @@ from services.event_sequencer import event_sequencer
 from services.deduper import deduper
 from services.task_embedding_service import get_embedding_service
 from services.cache_validator import CacheValidator
+from services.analytics_broadcaster import analytics_broadcaster
 
 logger = logging.getLogger(__name__)
 event_broadcaster = EventBroadcaster()
@@ -658,6 +659,18 @@ def create_task():
             workspace_id=current_user.workspace_id,
             user_id=current_user.id
         )
+        
+        # CROWN⁵+ Analytics: Broadcast analytics delta for real-time dashboard updates
+        try:
+            analytics_broadcaster.broadcast_task_event(
+                workspace_id=current_user.workspace_id,
+                task_id=task.id,
+                event_type='task_created',
+                changes={'status': task.status, 'priority': task.priority},
+                meeting_id=meeting.id if meeting else None
+            )
+        except Exception as e:
+            logger.warning(f"Failed to broadcast analytics delta for task creation: {e}")
         
         return jsonify({
             'success': True,
@@ -1799,6 +1812,19 @@ def update_task_status(task_id):
             meeting_id=meeting.id if meeting else None,
             workspace_id=current_user.workspace_id
         )
+        
+        # CROWN⁵+ Analytics: Broadcast analytics delta for real-time dashboard updates
+        try:
+            event_type = 'task_completed' if new_status == 'completed' else 'task_updated'
+            analytics_broadcaster.broadcast_task_event(
+                workspace_id=current_user.workspace_id,
+                task_id=task.id,
+                event_type=event_type,
+                changes={'old_status': old_status, 'new_status': new_status},
+                meeting_id=meeting.id if meeting else None
+            )
+        except Exception as e:
+            logger.warning(f"Failed to broadcast analytics delta for task status: {e}")
         
         return jsonify({
             'success': True,

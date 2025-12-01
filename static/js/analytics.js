@@ -8,7 +8,199 @@ class AnalyticsDashboard {
         this.selectedDateRange = 30; // Default: 30 days
         this.charts = {};
         this.widgetPreferences = this.loadWidgetPreferences();
+        this.previouslyFocusedElement = null;
+        this.firstFocusableElement = null;
+        this.lastFocusableElement = null;
+        this.modalKeydownHandler = this.handleModalKeydown.bind(this);
+        this.modalMutationObserver = null;
         this.init();
+    }
+
+    /**
+     * CROWN⁵+ Empty State Templates
+     * "Every empty state feels like a gentle invitation, not a void."
+     */
+    static CROWN5_EMPTY_STATES = {
+        chart: (type, title, description) => `
+            <div class="crown5-chart-empty" role="status" aria-label="${title}">
+                <div class="crown5-chart-empty-placeholder">
+                    ${type === 'bar' ? `
+                        <div class="crown5-chart-empty-placeholder-bars">
+                            <div class="crown5-chart-empty-placeholder-bar"></div>
+                            <div class="crown5-chart-empty-placeholder-bar"></div>
+                            <div class="crown5-chart-empty-placeholder-bar"></div>
+                            <div class="crown5-chart-empty-placeholder-bar"></div>
+                            <div class="crown5-chart-empty-placeholder-bar"></div>
+                        </div>
+                    ` : type === 'donut' ? `
+                        <div class="crown5-chart-empty-placeholder-donut"></div>
+                    ` : `
+                        <div class="crown5-chart-empty-placeholder-line"></div>
+                    `}
+                </div>
+                <div class="crown5-empty-illustration">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </div>
+                <p class="crown5-empty-title">${title}</p>
+                <p class="crown5-empty-description">${description}</p>
+            </div>
+        `,
+        balance: (title, hint) => `
+            <div class="crown5-balance-card">
+                <div class="crown5-balance-header">
+                    <span class="crown5-balance-title">${title}</span>
+                    <span class="crown5-balance-score crown5-no-data-value">—</span>
+                </div>
+                <div class="crown5-balance-empty-indicator"></div>
+                <p class="crown5-balance-hint">${hint}</p>
+                <span class="crown5-balance-status crown5-no-data-status">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    No Data
+                </span>
+            </div>
+        `,
+        productivity: (icon, title, description) => `
+            <div class="crown5-empty-state">
+                <div class="crown5-empty-illustration">
+                    ${icon}
+                </div>
+                <p class="crown5-empty-title">${title}</p>
+                <p class="crown5-empty-description">${description}</p>
+                <div class="crown5-empty-hint">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Record or select a meeting to populate this section
+                </div>
+            </div>
+        `
+    };
+
+    /**
+     * Render CROWN⁵+ styled empty state for charts
+     */
+    renderCrown5EmptyChart(container, type, title, description) {
+        if (!container) return;
+        
+        const canvas = container.querySelector('canvas');
+        if (canvas) canvas.style.display = 'none';
+        
+        const existingEmpty = container.querySelector('.crown5-chart-empty');
+        if (existingEmpty) existingEmpty.remove();
+        
+        const emptyDiv = document.createElement('div');
+        emptyDiv.innerHTML = AnalyticsDashboard.CROWN5_EMPTY_STATES.chart(type, title, description);
+        container.appendChild(emptyDiv.firstElementChild);
+    }
+
+    /**
+     * Hide CROWN⁵+ empty state and show chart canvas
+     */
+    hideCrown5EmptyChart(container) {
+        if (!container) return;
+        
+        const canvas = container.querySelector('canvas');
+        if (canvas) canvas.style.display = '';
+        
+        const existingEmpty = container.querySelector('.crown5-chart-empty');
+        if (existingEmpty) existingEmpty.remove();
+    }
+
+    /**
+     * CROWN⁵+ KPI Animation Helpers (Section 7 Emotional Design)
+     * "Numbers that breathe, not flash. Transitions that feel intentional."
+     */
+    animateKpiValue(element, newValue, duration = 300) {
+        if (!element) return;
+        
+        const currentValue = parseFloat(element.textContent.replace(/[^0-9.-]/g, '')) || 0;
+        const targetValue = parseFloat(newValue);
+        
+        if (isNaN(targetValue)) {
+            element.textContent = '—';
+            element.removeAttribute('data-animating');
+            element.classList.remove('crown5-kpi-value');
+            return;
+        }
+        
+        element.classList.add('crown5-kpi-value');
+        element.setAttribute('data-animating', 'true');
+        
+        const startTime = performance.now();
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            
+            const current = currentValue + (targetValue - currentValue) * eased;
+            element.textContent = this.formatKpiValue(current, element.dataset.format);
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                element.removeAttribute('data-animating');
+            }
+        };
+        
+        requestAnimationFrame(animate);
+    }
+
+    formatKpiValue(value, format) {
+        switch (format) {
+            case 'hours':
+                return value.toFixed(1) + 'h';
+            case 'minutes':
+                return Math.round(value) + 'm';
+            case 'percent':
+                return Math.round(value) + '%';
+            case 'integer':
+                return Math.round(value).toLocaleString();
+            default:
+                return Math.round(value).toLocaleString();
+        }
+    }
+
+    triggerKpiUpdate(card) {
+        if (!card) return;
+        card.classList.add('crown5-kpi-updated');
+        setTimeout(() => card.classList.remove('crown5-kpi-updated'), 400);
+    }
+
+    triggerKpiShimmer(card) {
+        if (!card) return;
+        card.classList.add('crown5-kpi-shimmer');
+        setTimeout(() => card.classList.remove('crown5-kpi-shimmer'), 1500);
+    }
+
+    /**
+     * Apply staggered tile fade-in animation to a container
+     */
+    applyTileGridAnimation(container) {
+        if (!container) return;
+        container.classList.add('crown5-tile-grid');
+    }
+
+    /**
+     * Apply crossfade transition for filter/tab changes
+     */
+    crossfadeTransition(container, updateFn) {
+        if (!container) return;
+        
+        container.classList.add('crown5-filter-crossfade-exit');
+        
+        setTimeout(() => {
+            updateFn();
+            container.classList.remove('crown5-filter-crossfade-exit');
+            container.classList.add('crown5-filter-crossfade-enter');
+            
+            setTimeout(() => {
+                container.classList.remove('crown5-filter-crossfade-enter');
+            }, 250);
+        }, 150);
     }
 
     async init() {
@@ -21,6 +213,9 @@ class AnalyticsDashboard {
         // Set up widget customization
         this.setupWidgetCustomization();
         
+        // Set up deep dive accordions
+        this.setupAccordions();
+        
         // Load initial data
         await this.loadDashboardData();
         
@@ -30,29 +225,76 @@ class AnalyticsDashboard {
         // Apply widget preferences
         this.applyWidgetPreferences();
     }
+    
+    setupAccordions() {
+        const accordionSections = document.querySelectorAll('.deep-dive-section');
+        
+        accordionSections.forEach(section => {
+            const header = section.querySelector('.deep-dive-header');
+            const content = section.querySelector('.deep-dive-content');
+            if (!header || !content) return;
+            
+            header.removeAttribute('onclick');
+            
+            const isOpen = section.classList.contains('open');
+            header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            
+            if (isOpen) {
+                content.style.maxHeight = '2000px';
+            } else {
+                content.style.maxHeight = '0';
+            }
+            
+            header.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const currentlyOpen = section.classList.contains('open');
+                
+                if (currentlyOpen) {
+                    section.classList.remove('open');
+                    header.setAttribute('aria-expanded', 'false');
+                    content.style.maxHeight = '0';
+                } else {
+                    section.classList.add('open');
+                    header.setAttribute('aria-expanded', 'true');
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                    setTimeout(() => {
+                        if (section.classList.contains('open')) {
+                            content.style.maxHeight = '2000px';
+                        }
+                    }, 400);
+                }
+            });
+            
+            header.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    header.click();
+                }
+            });
+        });
+    }
 
     loadWidgetPreferences() {
-        const saved = localStorage.getItem('mina_analytics_widgets');
+        const saved = localStorage.getItem('mina_analytics_widgets_v2');
         return saved ? JSON.parse(saved) : {
+            'tier1-summary': true,
             'kpi-meetings': true,
             'kpi-tasks': true,
             'kpi-hours': true,
             'kpi-duration': true,
-            'chart-activity': true,
-            'chart-task-status': true,
-            'chart-speaker': true,
-            'chart-topics': true,
-            'chart-speaking-time': true,
-            'chart-participation': true,
-            'chart-sentiment': true,
-            'topic-trends': true,
-            'qa-tracking': true,
-            'action-items': true
+            'actionable-insights': true,
+            'deep-dive-tasks': true,
+            'deep-dive-activity': true,
+            'deep-dive-participation': true,
+            'deep-dive-themes': true,
+            'deep-dive-insights': true
         };
     }
 
     saveWidgetPreferences() {
-        localStorage.setItem('mina_analytics_widgets', JSON.stringify(this.widgetPreferences));
+        localStorage.setItem('mina_analytics_widgets_v2', JSON.stringify(this.widgetPreferences));
     }
 
     setupWidgetCustomization() {
@@ -94,24 +336,22 @@ class AnalyticsDashboard {
         
         if (!modal || !togglesContainer) return;
 
+        this.previouslyFocusedElement = document.activeElement;
+
         const widgets = [
-            { id: 'kpi-meetings', name: 'Total Meetings KPI', category: 'KPIs' },
-            { id: 'kpi-tasks', name: 'Action Items KPI', category: 'KPIs' },
-            { id: 'kpi-hours', name: 'Hours Saved KPI', category: 'KPIs' },
-            { id: 'kpi-duration', name: 'Avg Meeting Length KPI', category: 'KPIs' },
-            { id: 'chart-activity', name: 'Meeting Activity Chart', category: 'Charts' },
-            { id: 'chart-task-status', name: 'Task Status Chart', category: 'Charts' },
-            { id: 'chart-speaker', name: 'Speaker Distribution', category: 'Charts' },
-            { id: 'chart-topics', name: 'Top Topics', category: 'Charts' },
-            { id: 'chart-speaking-time', name: 'Speaking Time Analysis', category: 'Engagement' },
-            { id: 'chart-participation', name: 'Participation Balance', category: 'Engagement' },
-            { id: 'chart-sentiment', name: 'Sentiment Analysis', category: 'Engagement' },
-            { id: 'topic-trends', name: 'Topic Evolution Timeline', category: 'Productivity' },
-            { id: 'qa-tracking', name: 'Q&A Tracking', category: 'Productivity' },
-            { id: 'action-items', name: 'Action Items Completion', category: 'Productivity' }
+            { id: 'tier1-summary', name: 'Executive Summary & Health Score', category: 'Summary' },
+            { id: 'kpi-meetings', name: 'Total Meetings', category: 'KPIs' },
+            { id: 'kpi-tasks', name: 'Action Items', category: 'KPIs' },
+            { id: 'kpi-hours', name: 'Hours Saved', category: 'KPIs' },
+            { id: 'kpi-duration', name: 'Avg Duration', category: 'KPIs' },
+            { id: 'actionable-insights', name: 'Actionable Insights', category: 'Insights' },
+            { id: 'deep-dive-tasks', name: 'Task Follow-Through', category: 'Deep Dive' },
+            { id: 'deep-dive-activity', name: 'Meeting Activity', category: 'Deep Dive' },
+            { id: 'deep-dive-participation', name: 'Participation Balance', category: 'Deep Dive' },
+            { id: 'deep-dive-themes', name: 'Key Themes', category: 'Deep Dive' },
+            { id: 'deep-dive-insights', name: 'AI Insights', category: 'Deep Dive' }
         ];
 
-        // Group widgets by category
         const grouped = widgets.reduce((acc, widget) => {
             if (!acc[widget.category]) acc[widget.category] = [];
             acc[widget.category].push(widget);
@@ -129,6 +369,7 @@ class AnalyticsDashboard {
                                 data-widget-id="${widget.id}"
                                 ${this.widgetPreferences[widget.id] !== false ? 'checked' : ''}
                                 class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary focus:ring-2"
+                                aria-label="Toggle ${widget.name} visibility"
                             >
                             <div class="flex-1">
                                 <div class="font-medium text-sm">${widget.name}</div>
@@ -140,12 +381,76 @@ class AnalyticsDashboard {
         `).join('');
 
         modal.classList.remove('hidden');
+        
+        const closeBtn = document.getElementById('closeCustomizeModal');
+        if (closeBtn) {
+            closeBtn.focus();
+        }
+        
+        this.setupModalFocusTrap(modal);
+        
+        modal.addEventListener('keydown', this.modalKeydownHandler);
+    }
+    
+    setupModalFocusTrap(modal) {
+        this.updateFocusableElements(modal);
+        
+        if (!this.modalMutationObserver) {
+            this.modalMutationObserver = new MutationObserver(() => {
+                this.updateFocusableElements(modal);
+            });
+        }
+        
+        this.modalMutationObserver.observe(modal, { 
+            childList: true, 
+            subtree: true 
+        });
+    }
+    
+    updateFocusableElements(modal) {
+        const focusableElements = modal.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusableElements.length > 0) {
+            this.firstFocusableElement = focusableElements[0];
+            this.lastFocusableElement = focusableElements[focusableElements.length - 1];
+        }
+    }
+    
+    handleModalKeydown(e) {
+        if (e.key === 'Escape') {
+            this.hideCustomizeModal();
+            return;
+        }
+        
+        if (e.key === 'Tab') {
+            if (e.shiftKey) {
+                if (document.activeElement === this.firstFocusableElement) {
+                    e.preventDefault();
+                    this.lastFocusableElement.focus();
+                }
+            } else {
+                if (document.activeElement === this.lastFocusableElement) {
+                    e.preventDefault();
+                    this.firstFocusableElement.focus();
+                }
+            }
+        }
     }
 
     hideCustomizeModal() {
         const modal = document.getElementById('widgetCustomizationModal');
         if (modal) {
             modal.classList.add('hidden');
+            modal.removeEventListener('keydown', this.modalKeydownHandler);
+        }
+        
+        if (this.modalMutationObserver) {
+            this.modalMutationObserver.disconnect();
+        }
+        
+        if (this.previouslyFocusedElement && this.previouslyFocusedElement.focus) {
+            this.previouslyFocusedElement.focus();
         }
     }
 
@@ -175,13 +480,16 @@ class AnalyticsDashboard {
     }
 
     applyWidgetPreferences() {
-        // This would require adding data-widget-id to each widget in the HTML
-        // For now, just console log (in production, you'd hide/show widgets)
         console.log('Widget preferences applied:', this.widgetPreferences);
         
-        // Example: Show/hide widgets based on preferences
         Object.keys(this.widgetPreferences).forEach(widgetId => {
-            const elements = document.querySelectorAll(`[data-widget="${widgetId}"]`);
+            let elements = document.querySelectorAll(`[data-widget="${widgetId}"]`);
+            if (elements.length === 0) {
+                elements = document.querySelectorAll(`#${widgetId}`);
+            }
+            if (elements.length === 0 && widgetId.startsWith('kpi-')) {
+                elements = document.querySelectorAll(`[data-kpi="${widgetId.replace('kpi-', '')}"]`);
+            }
             elements.forEach(el => {
                 if (this.widgetPreferences[widgetId]) {
                     el.style.display = '';
@@ -193,7 +501,7 @@ class AnalyticsDashboard {
     }
 
     setupDateRangeFilter() {
-        const dateSelect = document.querySelector('.date-range-select');
+        const dateSelect = document.querySelector('#date-range-select') || document.querySelector('.date-range-select');
         if (dateSelect) {
             dateSelect.addEventListener('change', async (e) => {
                 this.selectedDateRange = parseInt(e.target.value);
@@ -210,34 +518,400 @@ class AnalyticsDashboard {
     }
 
     setupTabs() {
-        document.querySelectorAll('.analytics-tab').forEach(tab => {
+        const tabs = Array.from(document.querySelectorAll('.analytics-tab'));
+        
+        tabs.forEach((tab, index) => {
             tab.addEventListener('click', async () => {
-                const targetTab = tab.dataset.tab;
-                
-                // Update active states
-                document.querySelectorAll('.analytics-tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.analytics-tab-content').forEach(c => c.classList.remove('active'));
-                
-                tab.classList.add('active');
-                document.getElementById('tab-' + targetTab).classList.add('active');
-                
-                // Load tab-specific data
-                await this.loadTabData(targetTab);
+                await this.activateTab(tab);
             });
         });
+    }
+    
+    async activateTab(tab) {
+        const targetTab = tab.dataset.tab;
+        const tabs = document.querySelectorAll('.analytics-tab');
+        const tabContents = document.querySelectorAll('.analytics-tab-content');
+        
+        tabs.forEach(t => {
+            t.classList.remove('active');
+            t.setAttribute('aria-selected', 'false');
+            t.setAttribute('tabindex', '-1');
+        });
+        
+        tabContents.forEach(c => c.classList.remove('active'));
+        
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+        tab.setAttribute('tabindex', '0');
+        
+        const targetPanel = document.getElementById('tab-' + targetTab);
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+        }
+        
+        this.announceTabChange(targetTab);
+        
+        await this.loadTabData(targetTab);
+    }
+    
+    announceTabChange(tabName) {
+        const liveRegion = document.getElementById('analytics-live-region');
+        if (liveRegion) {
+            const formattedName = tabName.charAt(0).toUpperCase() + tabName.slice(1);
+            liveRegion.textContent = `${formattedName} tab selected. Loading ${formattedName.toLowerCase()} data.`;
+            setTimeout(() => { liveRegion.textContent = ''; }, 2000);
+        }
     }
 
     async loadDashboardData() {
         try {
-            const response = await fetch(`/api/analytics/dashboard?days=${this.selectedDateRange}`);
-            const data = await response.json();
+            const [dashboardRes, kpiComparisonRes, topicsRes, healthRes, insightsRes] = await Promise.all([
+                fetch(`/api/analytics/dashboard?days=${this.selectedDateRange}`),
+                fetch(`/api/analytics/kpi-comparison?days=${this.selectedDateRange}`),
+                fetch(`/api/analytics/topic-distribution?days=${this.selectedDateRange}`),
+                fetch(`/api/analytics/health-score?days=${this.selectedDateRange}`),
+                fetch(`/api/analytics/actionable-insights?days=${this.selectedDateRange}`)
+            ]);
             
-            if (data.success) {
-                this.updateOverviewCharts(data.dashboard);
+            const [dashboardData, kpiComparisonData, topicsData, healthData, insightsData] = await Promise.all([
+                dashboardRes.json(),
+                kpiComparisonRes.json(),
+                topicsRes.json(),
+                healthRes.json(),
+                insightsRes.json()
+            ]);
+            
+            if (dashboardData.success) {
+                this.updateOverviewCharts(dashboardData.dashboard);
+            }
+            
+            if (kpiComparisonData.success) {
+                this.updateKPIComparisons(kpiComparisonData.kpis);
+            }
+            
+            if (topicsData.success) {
+                this.updateTopicsDistribution(topicsData);
+            }
+            
+            if (healthData.success) {
+                this.updateMeetingHealthScore(healthData.health_score);
+            }
+            
+            if (insightsData.success) {
+                this.updateActionableInsights(insightsData.insights);
             }
         } catch (error) {
             console.error('Failed to load dashboard data:', error);
         }
+    }
+
+    updateKPIComparisons(kpis) {
+        const kpiConfig = {
+            'total_meetings': { 
+                badgeId: 'kpi-meetings-badge', 
+                comparisonId: 'kpi-meetings-comparison',
+                valueId: 'kpi-meetings-value',
+                format: 'integer'
+            },
+            'action_items': { 
+                badgeId: 'kpi-tasks-badge', 
+                comparisonId: 'kpi-tasks-comparison',
+                valueId: 'kpi-tasks-value',
+                format: 'integer'
+            },
+            'hours_saved': { 
+                badgeId: 'kpi-hours-badge', 
+                comparisonId: 'kpi-hours-comparison',
+                valueId: 'kpi-hours-value',
+                format: 'hours'
+            },
+            'avg_duration': { 
+                badgeId: 'kpi-duration-badge', 
+                comparisonId: 'kpi-duration-comparison',
+                valueId: 'kpi-duration-value',
+                format: 'minutes'
+            }
+        };
+
+        for (const [key, config] of Object.entries(kpiConfig)) {
+            const kpiData = kpis[key];
+            if (!kpiData) continue;
+
+            const badge = document.getElementById(config.badgeId);
+            const comparison = document.getElementById(config.comparisonId);
+            const valueEl = document.getElementById(config.valueId);
+            const card = badge?.closest('.kpi-card');
+
+            if (badge) {
+                const change = kpiData.change;
+                const trend = kpiData.trend;
+                
+                if (change === 0 || change === null || change === undefined) {
+                    badge.textContent = '→';
+                    badge.style.background = 'rgba(107, 114, 128, 0.1)';
+                    badge.style.color = 'var(--color-tertiary)';
+                    badge.setAttribute('aria-label', 'No change');
+                } else if (trend === 'up') {
+                    const displayChange = key === 'hours_saved' ? `+${kpiData.value - kpiData.previous}h` : `+${Math.abs(change)}%`;
+                    badge.textContent = displayChange;
+                    badge.style.background = 'rgba(34, 197, 94, 0.1)';
+                    badge.style.color = 'var(--color-success)';
+                    badge.setAttribute('aria-label', `${Math.abs(change)} percent increase`);
+                } else {
+                    const displayChange = key === 'hours_saved' ? `-${kpiData.previous - kpiData.value}h` : `-${Math.abs(change)}%`;
+                    badge.textContent = displayChange;
+                    badge.style.background = 'rgba(239, 68, 68, 0.1)';
+                    badge.style.color = 'var(--color-error)';
+                    badge.setAttribute('aria-label', `${Math.abs(change)} percent decrease`);
+                }
+                
+                if (card) {
+                    this.triggerKpiUpdate(card);
+                }
+            }
+
+            if (comparison) {
+                const prev = kpiData.previous || 0;
+                const curr = kpiData.value || 0;
+                const diff = curr - prev;
+                
+                if (diff === 0) {
+                    comparison.textContent = 'Same as previous period';
+                } else if (diff > 0) {
+                    comparison.innerHTML = `<span style="color: var(--color-success)">↑</span> ${Math.abs(diff)} more than last period`;
+                } else {
+                    comparison.innerHTML = `<span style="color: var(--color-error)">↓</span> ${Math.abs(diff)} fewer than last period`;
+                }
+            }
+
+            if (valueEl) {
+                this.animateKpiValue(valueEl, kpiData.value, 400);
+            }
+        }
+
+        if (kpis.completion_rate !== undefined) {
+            const badge = document.getElementById('kpi-tasks-badge');
+            const comparison = document.getElementById('kpi-tasks-comparison');
+            if (badge) {
+                badge.textContent = `${Math.round(kpis.completion_rate.value)}%`;
+                badge.setAttribute('aria-label', `${Math.round(kpis.completion_rate.value)} percent complete`);
+            }
+            if (comparison) {
+                comparison.textContent = `${Math.round(kpis.completion_rate.value)}% completion rate`;
+            }
+        }
+    }
+
+    updateTopicsDistribution(data) {
+        const container = document.getElementById('topics-distribution');
+        if (!container) return;
+
+        const topicColors = [
+            'var(--color-primary, #6366f1)',
+            '#8b5cf6',
+            '#06b6d4',
+            '#10b981',
+            '#f59e0b',
+            '#ef4444'
+        ];
+
+        if (!data.has_data || !data.topics || data.topics.length === 0) {
+            container.innerHTML = `
+                <div class="crown5-empty-state" role="status">
+                    <div class="crown5-empty-illustration">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z"/>
+                        </svg>
+                    </div>
+                    <p class="crown5-empty-title">Not enough meeting data</p>
+                    <p class="crown5-empty-description">Themes appear after recording longer meetings with more discussion content</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = data.topics.map((topic, idx) => {
+            const color = topicColors[idx % topicColors.length];
+            return `
+                <div role="listitem" aria-label="${topic.name}: ${topic.percentage} percent" class="crown5-fade-in" style="animation-delay: ${idx * 50}ms">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="font-medium">${topic.name}</span>
+                        <span class="text-tertiary" aria-hidden="true">${topic.percentage}%</span>
+                    </div>
+                    <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${topic.percentage}" aria-valuemin="0" aria-valuemax="100" aria-label="${topic.name} ${topic.percentage} percent">
+                        <div class="h-full transition-all duration-500" style="width: ${topic.percentage}%; background: ${color}"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    updateMeetingHealthScore(healthScore) {
+        const scoreValue = document.getElementById('health-score-value');
+        const scoreMessage = document.getElementById('health-score-message');
+        const scoreTrend = document.getElementById('health-score-trend');
+        const scoreArc = document.getElementById('health-score-arc');
+        
+        const effectivenessEl = document.getElementById('health-effectiveness');
+        const engagementEl = document.getElementById('health-engagement');
+        const followthroughEl = document.getElementById('health-followthrough');
+        const decisionsEl = document.getElementById('health-decisions');
+
+        if (!healthScore || healthScore.meetings_analyzed === 0) {
+            if (scoreValue) scoreValue.textContent = '—';
+            if (scoreMessage) scoreMessage.textContent = 'Record meetings to see your health score';
+            if (scoreTrend) scoreTrend.innerHTML = '';
+            if (scoreArc) scoreArc.style.strokeDasharray = '0, 100';
+            return;
+        }
+
+        const score = healthScore.score;
+        const breakdown = healthScore.breakdown || {};
+
+        if (scoreValue) {
+            this.animateHealthScore(scoreValue, scoreArc, score);
+        }
+
+        if (scoreMessage) {
+            scoreMessage.textContent = healthScore.status_message;
+        }
+
+        const statusColors = {
+            'excellent': '#22c55e',
+            'good': '#3b82f6',
+            'fair': '#f59e0b',
+            'needs_attention': '#ef4444'
+        };
+        
+        if (scoreArc) {
+            scoreArc.style.stroke = statusColors[healthScore.status] || 'var(--color-primary)';
+        }
+
+        if (scoreTrend) {
+            const change = healthScore.change;
+            const trend = healthScore.trend;
+            
+            if (trend === 'improving') {
+                scoreTrend.innerHTML = `
+                    <span class="flex items-center gap-1 text-sm" style="color: var(--color-success);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M7 17l5-5 5 5M7 7h10"/>
+                        </svg>
+                        +${Math.abs(change)} from last period
+                    </span>
+                `;
+            } else if (trend === 'declining') {
+                scoreTrend.innerHTML = `
+                    <span class="flex items-center gap-1 text-sm" style="color: var(--color-error);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M7 7l5 5 5-5M7 17h10"/>
+                        </svg>
+                        ${change} from last period
+                    </span>
+                `;
+            } else {
+                scoreTrend.innerHTML = `
+                    <span class="flex items-center gap-1 text-sm text-tertiary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"/>
+                        </svg>
+                        Stable
+                    </span>
+                `;
+            }
+        }
+
+        if (effectivenessEl) effectivenessEl.textContent = `${breakdown.effectiveness || 0}%`;
+        if (engagementEl) engagementEl.textContent = `${breakdown.engagement || 0}%`;
+        if (followthroughEl) followthroughEl.textContent = `${breakdown.follow_through || 0}%`;
+        if (decisionsEl) decisionsEl.textContent = `${breakdown.decision_velocity || 0}%`;
+    }
+
+    animateHealthScore(valueEl, arcEl, targetScore) {
+        const startTime = performance.now();
+        const duration = 1000;
+        
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            
+            const currentScore = Math.round(targetScore * eased);
+            valueEl.textContent = currentScore;
+            
+            if (arcEl) {
+                arcEl.style.strokeDasharray = `${currentScore}, 100`;
+            }
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+        
+        requestAnimationFrame(animate);
+    }
+
+    updateActionableInsights(insights) {
+        const insightsContainer = document.getElementById('actionable-insights-container');
+        const insightsCount = document.getElementById('insights-count');
+        if (!insightsContainer) return;
+
+        if (insightsCount) {
+            if (insights && insights.length > 0) {
+                insightsCount.textContent = `${insights.length} recommendation${insights.length > 1 ? 's' : ''}`;
+            } else {
+                insightsCount.textContent = '';
+            }
+        }
+
+        if (!insights || insights.length === 0) {
+            insightsContainer.innerHTML = `
+                <div class="crown5-empty-state" role="status">
+                    <div class="crown5-empty-illustration">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                        </svg>
+                    </div>
+                    <p class="crown5-empty-title">No insights available yet</p>
+                    <p class="crown5-empty-description">Record more meetings to get personalized recommendations</p>
+                </div>
+            `;
+            return;
+        }
+
+        const typeIcons = {
+            'warning': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`,
+            'info': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
+            'success': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`
+        };
+
+        const typeColors = {
+            'warning': { bg: 'rgba(245, 158, 11, 0.1)', text: '#f59e0b', border: 'rgba(245, 158, 11, 0.2)' },
+            'info': { bg: 'rgba(59, 130, 246, 0.1)', text: '#3b82f6', border: 'rgba(59, 130, 246, 0.2)' },
+            'success': { bg: 'rgba(34, 197, 94, 0.1)', text: '#22c55e', border: 'rgba(34, 197, 94, 0.2)' }
+        };
+
+        insightsContainer.innerHTML = insights.slice(0, 4).map((insight, idx) => {
+            const colors = typeColors[insight.type] || typeColors.info;
+            const icon = typeIcons[insight.type] || typeIcons.info;
+            
+            return `
+                <div class="insight-card crown5-fade-in" role="article" style="animation-delay: ${idx * 100}ms; background: ${colors.bg}; border: 1px solid ${colors.border}; border-radius: var(--radius-md); padding: var(--space-4);">
+                    <div class="flex items-start gap-3">
+                        <div style="color: ${colors.text}; flex-shrink: 0;">
+                            ${icon}
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="font-semibold text-sm mb-1">${insight.title}</h4>
+                            <p class="text-sm text-secondary">${insight.description}</p>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs font-medium" style="background: ${colors.bg}; color: ${colors.text};">
+                            ${insight.priority}
+                        </span>
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
 
     async loadTabData(tab) {
@@ -321,21 +995,156 @@ class AnalyticsDashboard {
         // Update Meeting Activity Chart
         if (dashboard.trends && dashboard.trends.meeting_frequency) {
             this.updateMeetingActivityChart(dashboard.trends.meeting_frequency);
+        } else {
+            const activityCtx = document.getElementById('meetingActivityChart');
+            const activityFrame = activityCtx?.closest('.chart-frame');
+            if (activityFrame) {
+                this.renderCrown5EmptyChart(
+                    activityFrame,
+                    'line',
+                    'No meeting activity yet',
+                    'Record meetings to see activity trends'
+                );
+            }
         }
         
         // Update Task Status Chart
         this.updateTaskStatusChart(dashboard);
         
+        // Update Task Completion Trend Chart
+        this.updateTaskCompletionChart(dashboard);
+        
         // Load and update Speaker Distribution
         this.loadCommunicationData().then(commData => {
-            if (commData) {
-                this.updateSpeakerChart(commData);
+            this.updateSpeakerChart(commData || {});
+        });
+    }
+    
+    updateTaskCompletionChart(dashboard) {
+        const ctx = document.getElementById('taskCompletionChart');
+        const chartFrame = ctx?.closest('.chart-frame');
+        if (!ctx || !chartFrame) return;
+        
+        if (this.charts.taskCompletion) {
+            this.charts.taskCompletion.destroy();
+            this.charts.taskCompletion = null;
+        }
+        
+        const taskStatus = dashboard?.productivity?.task_status || {};
+        const completed = taskStatus.completed || 0;
+        const inProgress = taskStatus.in_progress || 0;
+        const pending = taskStatus.pending || 0;
+        const totalTasks = completed + inProgress + pending;
+        
+        if (totalTasks === 0) {
+            ctx.style.display = 'none';
+            this.renderCrown5EmptyChart(
+                chartFrame,
+                'bar',
+                'No tasks yet',
+                'Create tasks to track completion'
+            );
+            return;
+        }
+        
+        ctx.style.display = '';
+        this.hideCrown5EmptyChart(chartFrame);
+        
+        const completionRate = dashboard?.productivity?.completion_rate || 0;
+        const remainingRate = 100 - completionRate;
+        
+        const context2d = ctx.getContext('2d');
+        if (!context2d) return;
+        
+        const chartWidth = ctx.width || 300;
+        const completedGradient = context2d.createLinearGradient(0, 0, chartWidth, 0);
+        completedGradient.addColorStop(0, 'rgba(34, 197, 94, 0.9)');
+        completedGradient.addColorStop(1, 'rgba(22, 163, 74, 1)');
+        
+        const remainingGradient = context2d.createLinearGradient(0, 0, chartWidth, 0);
+        remainingGradient.addColorStop(0, 'rgba(100, 116, 139, 0.15)');
+        remainingGradient.addColorStop(1, 'rgba(100, 116, 139, 0.25)');
+
+        this.charts.taskCompletion = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Progress'],
+                datasets: [{
+                    label: 'Completed',
+                    data: [completionRate],
+                    backgroundColor: completedGradient,
+                    borderRadius: 10,
+                    barThickness: 48
+                }, {
+                    label: 'Remaining',
+                    data: [remainingRate],
+                    backgroundColor: remainingGradient,
+                    borderRadius: 10,
+                    barThickness: 48,
+                    hoverBackgroundColor: 'rgba(100, 116, 139, 0.35)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                        titleColor: '#f1f5f9',
+                        bodyColor: '#cbd5e1',
+                        borderColor: 'rgba(99, 102, 241, 0.3)',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        padding: 12,
+                        displayColors: false,
+                        callbacks: {
+                            title: () => 'Task Completion',
+                            label: (item) => {
+                                if (item.datasetIndex === 0) {
+                                    return `Completed: ${Math.round(completionRate)}% (${completed} tasks)`;
+                                }
+                                return `Remaining: ${Math.round(remainingRate)}% (${inProgress + pending} tasks)`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        min: 0,
+                        max: 100,
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.08)',
+                            drawBorder: false
+                        },
+                        ticks: { 
+                            callback: (v) => v + '%',
+                            color: 'rgba(148, 163, 184, 0.7)',
+                            font: { size: 11 },
+                            stepSize: 25,
+                            padding: 8
+                        },
+                        border: { display: false }
+                    },
+                    y: {
+                        stacked: true,
+                        display: false
+                    }
+                },
+                layout: {
+                    padding: { left: 4, right: 4 }
+                }
             }
         });
+        
     }
 
     updateMeetingActivityChart(trendData) {
         const ctx = document.getElementById('meetingActivityChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
 
         const labels = trendData.map(d => {
@@ -344,10 +1153,19 @@ class AnalyticsDashboard {
         });
         const values = trendData.map(d => d.meetings);
 
-        // Destroy existing chart if it exists
+        this.hideCrown5EmptyChart(chartFrame);
+
         if (this.charts.meetingActivity) {
             this.charts.meetingActivity.destroy();
         }
+
+        const context2d = ctx.getContext('2d');
+        if (!context2d) return;
+        
+        const gradient = context2d.createLinearGradient(0, 0, 0, ctx.height || 200);
+        gradient.addColorStop(0, 'rgba(99, 102, 241, 0.25)');
+        gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.08)');
+        gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
 
         this.charts.meetingActivity = new Chart(ctx, {
             type: 'line',
@@ -357,29 +1175,73 @@ class AnalyticsDashboard {
                     label: 'Meetings',
                     data: values,
                     borderColor: 'rgb(99, 102, 241)',
-                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    backgroundColor: gradient,
                     fill: true,
-                    tension: 0.4
+                    tension: 0.45,
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: 'rgb(99, 102, 241)',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                aspectRatio: 1.8,
+                aspectRatio: 2,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                        titleColor: '#f1f5f9',
+                        bodyColor: '#cbd5e1',
+                        borderColor: 'rgba(99, 102, 241, 0.3)',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        padding: 12,
+                        displayColors: false,
                         callbacks: {
                             title: (items) => items[0].label,
-                            label: (item) => `${item.parsed.y} meetings`
+                            label: (item) => `${item.parsed.y} meeting${item.parsed.y !== 1 ? 's' : ''}`
                         }
                     }
                 },
                 scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.7)',
+                            font: { size: 11 },
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 8
+                        },
+                        border: {
+                            display: false
+                        }
+                    },
                     y: { 
                         beginAtZero: true,
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.08)',
+                            drawBorder: false
+                        },
                         ticks: {
-                            precision: 0
+                            color: 'rgba(148, 163, 184, 0.7)',
+                            font: { size: 11 },
+                            precision: 0,
+                            padding: 8
+                        },
+                        border: {
+                            display: false
                         }
                     }
                 }
@@ -389,16 +1251,49 @@ class AnalyticsDashboard {
 
     updateTaskStatusChart(dashboard) {
         const ctx = document.getElementById('taskStatusChart');
-        if (!ctx || !dashboard.productivity) return;
+        const chartFrame = ctx?.closest('.chart-frame');
+        if (!ctx) return;
 
-        const tasks = dashboard.productivity;
-        const completed = tasks.total_tasks_created || 0;
-        const inProgress = Math.floor(completed * 0.3); // Estimate
-        const pending = Math.floor(completed * 0.1); // Estimate
+        const productivity = dashboard?.productivity;
+        const taskStatus = productivity?.task_status || {};
+        
+        // Use real task status counts from backend
+        const completed = taskStatus.completed || 0;
+        const inProgress = taskStatus.in_progress || 0;
+        const pending = taskStatus.pending || 0;
+        const total = completed + inProgress + pending;
+
+        if (total === 0) {
+            this.renderCrown5EmptyChart(
+                chartFrame,
+                'donut',
+                'No task data yet',
+                'Complete meetings to see task distribution'
+            );
+            return;
+        }
+
+        this.hideCrown5EmptyChart(chartFrame);
 
         if (this.charts.taskStatus) {
             this.charts.taskStatus.destroy();
         }
+
+        const context2d = ctx.getContext('2d');
+        if (!context2d) return;
+        
+        const chartHeight = ctx.height || 200;
+        const completedGradient = context2d.createLinearGradient(0, 0, 0, chartHeight);
+        completedGradient.addColorStop(0, 'rgba(34, 197, 94, 1)');
+        completedGradient.addColorStop(1, 'rgba(22, 163, 74, 1)');
+        
+        const inProgressGradient = context2d.createLinearGradient(0, 0, 0, chartHeight);
+        inProgressGradient.addColorStop(0, 'rgba(249, 115, 22, 1)');
+        inProgressGradient.addColorStop(1, 'rgba(234, 88, 12, 1)');
+        
+        const pendingGradient = context2d.createLinearGradient(0, 0, 0, chartHeight);
+        pendingGradient.addColorStop(0, 'rgba(148, 163, 184, 0.8)');
+        pendingGradient.addColorStop(1, 'rgba(100, 116, 139, 0.8)');
 
         this.charts.taskStatus = new Chart(ctx, {
             type: 'doughnut',
@@ -406,27 +1301,46 @@ class AnalyticsDashboard {
                 labels: ['Completed', 'In Progress', 'Pending'],
                 datasets: [{
                     data: [completed, inProgress, pending],
-                    backgroundColor: [
-                        'rgb(34, 197, 94)',
-                        'rgb(249, 115, 22)',
-                        'rgb(156, 163, 175)'
-                    ],
-                    borderWidth: 0
+                    backgroundColor: [completedGradient, inProgressGradient, pendingGradient],
+                    borderWidth: 0,
+                    hoverOffset: 8,
+                    hoverBorderWidth: 2,
+                    hoverBorderColor: 'rgba(255, 255, 255, 0.2)'
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
                 aspectRatio: 1,
+                cutout: '65%',
                 plugins: {
-                    legend: { position: 'bottom' },
+                    legend: { 
+                        position: 'bottom',
+                        labels: {
+                            color: 'rgba(226, 232, 240, 0.9)',
+                            font: { size: 12, weight: '500' },
+                            padding: 16,
+                            usePointStyle: true,
+                            pointStyle: 'rectRounded'
+                        }
+                    },
                     tooltip: {
+                        backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                        titleColor: '#f1f5f9',
+                        bodyColor: '#cbd5e1',
+                        borderColor: 'rgba(99, 102, 241, 0.3)',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        padding: 12,
+                        displayColors: true,
+                        boxWidth: 12,
+                        boxHeight: 12,
                         callbacks: {
                             label: (item) => {
                                 const value = item.parsed;
                                 const total = item.dataset.data.reduce((a, b) => a + b, 0);
                                 const percent = ((value / total) * 100).toFixed(1);
-                                return `${item.label}: ${value} (${percent}%)`;
+                                return ` ${item.label}: ${value} (${percent}%)`;
                             }
                         }
                     }
@@ -435,69 +1349,114 @@ class AnalyticsDashboard {
         });
     }
 
-    updateSpeakerChart(commData) {
-        const ctx = document.getElementById('speakerChart');
-        if (!ctx || !commData.top_speakers) return;
+    /**
+     * Update "Your Talk Time" component with aggregated speaker data
+     * Redesigned from bar chart to radial progress with stats
+     */
+    updateTalkTime(commData) {
+        const emptyState = document.getElementById('talk-time-empty');
+        const dataState = document.getElementById('talk-time-data');
+        
+        if (!emptyState || !dataState) return;
 
-        const speakers = commData.top_speakers.slice(0, 5);
-        const labels = speakers.map(s => s.name);
-        const values = speakers.map(s => s.talk_time_minutes);
-        const colors = [
-            'rgb(99, 102, 241)',
-            'rgb(139, 92, 246)',
-            'rgb(6, 182, 212)',
-            'rgb(34, 197, 94)',
-            'rgb(249, 115, 22)'
-        ];
-
-        if (this.charts.speaker) {
-            this.charts.speaker.destroy();
+        const speakers = commData?.top_speakers || [];
+        
+        // Calculate totals across all speakers
+        const totalTalkTime = speakers.reduce((sum, s) => sum + (s.talk_time_minutes || 0), 0);
+        const totalWords = speakers.reduce((sum, s) => sum + (s.word_count || 0), 0);
+        const avgMeetingDuration = commData?.avg_meeting_duration_minutes || totalTalkTime * 1.5 || 0;
+        
+        if (speakers.length === 0 || totalTalkTime === 0) {
+            emptyState.style.display = '';
+            dataState.style.display = 'none';
+            return;
         }
 
-        this.charts.speaker = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Speaking Time (min)',
-                    data: values,
-                    backgroundColor: colors,
-                    borderRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                aspectRatio: 1.6,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: (item) => `${item.parsed.y.toFixed(1)} minutes`
-                        }
-                    }
-                },
-                scales: {
-                    y: { 
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Minutes'
-                        }
-                    }
-                }
+        // Show data state
+        emptyState.style.display = 'none';
+        dataState.style.display = '';
+        
+        // Calculate metrics
+        const talkTimeSeconds = totalTalkTime * 60;
+        const minutes = Math.floor(totalTalkTime);
+        const seconds = Math.round((totalTalkTime - minutes) * 60);
+        const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        const talkPercent = avgMeetingDuration > 0 
+            ? Math.round((totalTalkTime / avgMeetingDuration) * 100) 
+            : 100;
+        
+        const wordsPerMinute = totalTalkTime > 0 
+            ? Math.round(totalWords / totalTalkTime) 
+            : 0;
+        
+        // Update DOM elements
+        const durationEl = document.getElementById('talk-time-duration');
+        const percentEl = document.getElementById('talk-time-percent');
+        const wpmEl = document.getElementById('talk-time-wpm');
+        const wordsEl = document.getElementById('talk-time-words');
+        const arcEl = document.getElementById('talk-time-arc');
+        const trendEl = document.getElementById('talk-time-trend');
+        const trendValueEl = document.getElementById('talk-time-trend-value');
+        
+        if (durationEl) durationEl.textContent = durationStr;
+        if (percentEl) percentEl.textContent = `${Math.min(talkPercent, 100)}%`;
+        if (wpmEl) wpmEl.textContent = wordsPerMinute.toLocaleString();
+        if (wordsEl) wordsEl.textContent = totalWords.toLocaleString();
+        
+        // Animate radial progress (circumference = 2 * π * 42 ≈ 264)
+        const circumference = 264;
+        const progress = Math.min(talkPercent / 100, 1);
+        const dashArray = `${circumference * progress}, ${circumference}`;
+        
+        if (arcEl) {
+            setTimeout(() => {
+                arcEl.setAttribute('stroke-dasharray', dashArray);
+            }, 100);
+        }
+        
+        // Calculate trend (compare to historical average if available)
+        const avgTalkTime = commData?.avg_talk_time_minutes || totalTalkTime;
+        const trendPercent = avgTalkTime > 0 
+            ? Math.round(((totalTalkTime - avgTalkTime) / avgTalkTime) * 100) 
+            : 0;
+        
+        if (trendEl && trendValueEl) {
+            if (trendPercent > 0) {
+                trendEl.className = 'talk-time-trend up';
+                trendValueEl.textContent = `+${trendPercent}% vs avg`;
+            } else if (trendPercent < 0) {
+                trendEl.className = 'talk-time-trend down';
+                trendValueEl.textContent = `${trendPercent}% vs avg`;
+            } else {
+                trendEl.className = 'talk-time-trend';
+                trendValueEl.textContent = 'on par with avg';
             }
-        });
+        }
     }
 
     updateEngagementCharts(engagement) {
-        this.updateParticipationChart(engagement);
+        // Removed radar chart - now handled by updateTalkTime
         this.updateSentimentChart();
     }
 
+    // Keeping this as a no-op for backward compatibility
     updateParticipationChart(engagement) {
+        // Removed - Engagement Balance radar chart no longer used
+    }
+
+    // Legacy speaker chart - redirects to new Talk Time component
+    updateSpeakerChart(commData) {
+        this.updateTalkTime(commData);
+    }
+
+    // Placeholder for removed radar chart functionality
+    _legacyRadarChart(engagement) {
         const ctx = document.getElementById('participationChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
+
+        this.hideCrown5EmptyChart(chartFrame);
 
         if (this.charts.participation) {
             this.charts.participation.destroy();
@@ -546,14 +1505,24 @@ class AnalyticsDashboard {
 
     async updateSentimentChart() {
         const ctx = document.getElementById('sentimentChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
 
         try {
             const response = await fetch(`/api/analytics/sentiment?days=${this.selectedDateRange}`);
             const data = await response.json();
             
-            if (!data.success || !data.sentiment.trend) return;
+            if (!data.success || !data.sentiment.trend || data.sentiment.trend.length === 0) {
+                this.renderCrown5EmptyChart(
+                    chartFrame,
+                    'line',
+                    'No sentiment data yet',
+                    'Record meetings to see emotional trends'
+                );
+                return;
+            }
 
+            this.hideCrown5EmptyChart(chartFrame);
             const trend = data.sentiment.trend;
             const labels = trend.map(t => {
                 const date = new Date(t.date);
@@ -614,25 +1583,45 @@ class AnalyticsDashboard {
 
     updateProductivityCharts(productivity) {
         const ctx = document.getElementById('productivityChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
 
         if (this.charts.productivity) {
             this.charts.productivity.destroy();
         }
 
-        // Generate trend visualization around the actual completion rate from API
-        const completionRate = productivity.tasks.completion_rate || 0;
-        const weeks = 4;
-        const trendData = Array(weeks).fill(0).map((_, i) => {
-            // Add slight variance for visual trend effect, centered on real completion rate
-            const variance = (Math.random() - 0.5) * 20;
-            return Math.max(0, Math.min(100, completionRate + variance));
-        });
+        const completionTrend = productivity.completion_trend || [];
+        
+        // Check for meaningful data - filter out all-zero weeks
+        const hasAnyData = completionTrend.some(w => w.total_tasks > 0);
+        
+        if (completionTrend.length === 0 || !hasAnyData) {
+            if (chartFrame) {
+                this.renderCrown5EmptyChart(
+                    chartFrame,
+                    'line',
+                    'No task data yet',
+                    'Complete meetings with action items to see productivity trends'
+                );
+            }
+            return;
+        }
+        
+        if (chartFrame) {
+            this.hideCrown5EmptyChart(chartFrame);
+        }
+
+        // Only include weeks with actual data for meaningful visualization
+        const weeksWithData = completionTrend.filter(w => w.total_tasks > 0);
+        // Use backend-provided week_label (e.g., "Nov 18") or fallback to week_start date
+        const labels = weeksWithData.map(w => w.week_label || w.week_start || `Week ${w.week || '?'}`);
+        const trendData = weeksWithData.map(w => w.completion_rate);
+        const taskCounts = weeksWithData.map(w => ({ total: w.total_tasks, completed: w.completed_tasks }));
 
         this.charts.productivity = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                labels: labels,
                 datasets: [{
                     label: 'Completion Rate (%)',
                     data: trendData,
@@ -650,7 +1639,14 @@ class AnalyticsDashboard {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: (item) => `${item.parsed.y.toFixed(1)}%`
+                            label: (item) => {
+                                const idx = item.dataIndex;
+                                const counts = taskCounts[idx];
+                                return [
+                                    `Completion: ${item.parsed.y.toFixed(1)}%`,
+                                    `Tasks: ${counts.completed}/${counts.total}`
+                                ];
+                            }
                         }
                     }
                 },
@@ -715,7 +1711,10 @@ class AnalyticsDashboard {
 
     createSpeakingTimeBarChart(labels, values, colors) {
         const ctx = document.getElementById('speakingTimeBarChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
+
+        this.hideCrown5EmptyChart(chartFrame);
 
         if (this.charts.speakingTimeBar) {
             this.charts.speakingTimeBar.destroy();
@@ -766,7 +1765,10 @@ class AnalyticsDashboard {
 
     createSpeakingTimePieChart(labels, values, percentages, colors) {
         const ctx = document.getElementById('speakingTimePieChart');
+        const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
+
+        this.hideCrown5EmptyChart(chartFrame);
 
         if (this.charts.speakingTimePie) {
             this.charts.speakingTimePie.destroy();
@@ -883,19 +1885,41 @@ class AnalyticsDashboard {
     }
 
     showEmptySpeakingTimeState() {
-        const container = document.getElementById('speakingTimeDetails');
-        if (!container) return;
-
-        container.innerHTML = `
-            <div class="text-center text-secondary py-12">
-                <svg class="w-16 h-16 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+        const barCtx = document.getElementById('speakingTimeBarChart');
+        const pieCtx = document.getElementById('speakingTimePieChart');
+        const detailsContainer = document.getElementById('speakingTimeDetails');
+        
+        const barFrame = barCtx?.closest('.chart-frame');
+        const pieFrame = pieCtx?.closest('.chart-frame');
+        
+        if (barFrame) {
+            this.renderCrown5EmptyChart(
+                barFrame,
+                'bar',
+                'No speaking data yet',
+                'Record meetings to see time distribution'
+            );
+        }
+        
+        if (pieFrame) {
+            this.renderCrown5EmptyChart(
+                pieFrame,
+                'donut',
+                'No balance data yet',
+                'Record meetings to see participation balance'
+            );
+        }
+        
+        if (detailsContainer) {
+            detailsContainer.innerHTML = AnalyticsDashboard.CROWN5_EMPTY_STATES.productivity(
+                `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
                           d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                </svg>
-                <p class="font-medium">No speaking time data available</p>
-                <p class="text-sm mt-1">Record meetings to see participant speaking analytics</p>
-            </div>
-        `;
+                </svg>`,
+                'No speaking data yet',
+                'Record meetings to see who contributes and how time is distributed across participants.'
+            );
+        }
     }
 
     /**
@@ -904,7 +1928,15 @@ class AnalyticsDashboard {
      */
     updateParticipationBalanceMetrics(communication) {
         const container = document.getElementById('participationBalanceMetrics');
-        if (!container || !communication || !communication.top_speakers) {
+        if (!container) return;
+        
+        if (!communication || !communication.top_speakers || communication.top_speakers.length === 0) {
+            container.innerHTML = `
+                ${this.createBalanceMetricCard('Speaking Time Balance', NaN, 'No Data', 'Record meetings to see metrics', 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z')}
+                ${this.createBalanceMetricCard('Contribution Equity', NaN, 'No Data', 'Record meetings to see metrics', 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z')}
+                ${this.createBalanceMetricCard('Engagement Dispersion', NaN, 'No Data', 'Record meetings to see metrics', 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z')}
+                ${this.createBalanceMetricCard('Participation Health', NaN, 'No Data', 'Record meetings to see metrics', 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z')}
+            `;
             return;
         }
 
@@ -949,6 +1981,15 @@ class AnalyticsDashboard {
     }
 
     calculateBalanceMetrics(speakers, totalTime, numSpeakers) {
+        if (!numSpeakers || numSpeakers === 0 || !totalTime || totalTime === 0) {
+            return {
+                timeBalance: { score: NaN, status: 'No Data', description: 'Record meetings to see metrics' },
+                contributionEquity: { score: NaN, status: 'No Data', description: 'Record meetings to see metrics' },
+                dispersion: { score: NaN, status: 'No Data', description: 'Record meetings to see metrics' },
+                overall: { score: NaN, status: 'No Data', description: 'Record meetings to see metrics' }
+            };
+        }
+        
         const idealPercentage = 100 / numSpeakers;
         const percentages = speakers.map(s => (s.talk_time_minutes / totalTime) * 100);
         
@@ -1015,7 +2056,15 @@ class AnalyticsDashboard {
     }
 
     createBalanceMetricCard(title, score, status, description, iconPath) {
-        // Determine color based on score
+        const isValidScore = !isNaN(score) && isFinite(score);
+        const displayScore = isValidScore ? score : '—';
+        const safeStatus = isValidScore ? status : 'No Data';
+        const safeDescription = isValidScore ? description : 'Record meetings to see metrics';
+        
+        if (!isValidScore) {
+            return AnalyticsDashboard.CROWN5_EMPTY_STATES.balance(title, safeDescription);
+        }
+        
         let colorClass, bgGradient;
         if (score >= 80) {
             colorClass = 'text-green-500';
@@ -1032,7 +2081,7 @@ class AnalyticsDashboard {
         }
 
         return `
-            <div class="p-5 rounded-xl" style="background: ${bgGradient}; border: 1px solid rgba(255, 255, 255, 0.1);">
+            <div class="crown5-balance-card p-5 rounded-xl crown5-staggered-entry" style="background: ${bgGradient}; border: 1px solid rgba(255, 255, 255, 0.1);">
                 <div class="flex items-start justify-between mb-3">
                     <div class="w-10 h-10 rounded-lg flex items-center justify-center ${colorClass}" style="background: rgba(255, 255, 255, 0.1);">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1040,17 +2089,17 @@ class AnalyticsDashboard {
                         </svg>
                     </div>
                     <div class="text-right">
-                        <div class="text-3xl font-bold ${colorClass}">${score}</div>
+                        <div class="text-3xl font-bold ${colorClass}">${displayScore}</div>
                         <div class="text-xs text-secondary">/ 100</div>
                     </div>
                 </div>
                 <h3 class="font-semibold text-sm mb-1">${title}</h3>
-                <p class="text-xs text-tertiary mb-2">${description}</p>
+                <p class="text-xs text-tertiary mb-2">${safeDescription}</p>
                 <div class="flex items-center gap-2">
                     <div class="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div class="h-full ${colorClass} transition-all duration-500" style="width: ${score}%; opacity: 0.8;"></div>
                     </div>
-                    <span class="text-xs font-medium ${colorClass}">${status}</span>
+                    <span class="text-xs font-medium ${colorClass}">${safeStatus}</span>
                 </div>
             </div>
         `;

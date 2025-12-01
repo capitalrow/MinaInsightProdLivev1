@@ -106,3 +106,25 @@ The application utilizes a layered architecture with Flask as the web framework 
 - Sentry
 - BetterStack
 - Google Calendar (ACTIVE)
+
+## Known Data Pipeline Gaps
+
+**Resolved (Dec 2025):** Participant data pipeline now working - MeetingLifecycleService extracts speaker metrics from transcript segments and persists to participants table.
+
+**Remaining:** Key topics extraction returns empty arrays when OpenAI API is rate-limited. The infrastructure is in place; topics will populate when API access is stable.
+
+## Recent Changes
+
+**December 1, 2025 - Data Pipeline Fix:**
+- Added `_extract_participant_metrics()` and `_persist_participants()` to MeetingLifecycleService
+- Created `backfill_participants_for_meeting()` for historical data population
+- Fixed AnalyticsService segment queries (`is_final=True` → `kind='final'`)
+- Backfilled 8 historical meetings with participant data (talk_time_seconds, word_count, participation_percentage)
+- Added key topics extraction prompt infrastructure to AnalyticsService
+
+**December 1, 2025 - Crown⁵+ Analytics Page Polish:**
+- Replaced native `<select>` date filter with custom Crown+ glassmorphic dropdown component (pill trigger + animated dropdown)
+- Added mobile bottom-sheet pattern for date selector on small screens
+- Applied Crown+ gradient backgrounds to Task Status Distribution donut chart
+- Enhanced Completion Over Time bar chart with softer grid lines and premium tooltips
+- Fixed Meeting Frequency chart with gradient fill, smooth curves, and reduced x-axis label density

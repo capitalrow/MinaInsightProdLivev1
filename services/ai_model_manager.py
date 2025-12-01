@@ -56,13 +56,13 @@ class AIModelManager:
     - Zero tolerance for mock data
     """
     
-    # Model priority order (Replit AI Integrations compatible)
-    # Uses models supported by Replit's modelfarm proxy
+    # Model priority order (Direct OpenAI API)
+    # Uses standard OpenAI model names via api.openai.com
     MODEL_FALLBACK_CHAIN = [
-        "gpt-4.1",           # Latest, smartest non-reasoning model (Replit AI supported)
-        "gpt-4.1-mini",      # Same family, 83% cheaper, 50% faster (Replit AI supported)
-        "gpt-4o-mini",       # Fast, cost-effective fallback (Replit AI supported)
-        "gpt-4o"             # Proven reliable fallback (Replit AI supported)
+        "gpt-4o",            # Latest, high capability model
+        "gpt-4o-mini",       # Fast, cost-effective
+        "gpt-4-turbo",       # Proven stable fallback
+        "gpt-3.5-turbo"      # Reliable last resort
     ]
     
     # Retry configuration

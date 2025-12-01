@@ -1,0 +1,1528 @@
+/**
+ * CROWN⁵+ Analytics Event Sequencing Visual System
+ * "Clarity over clutter — intelligence that reflects, not overwhelms."
+ * 
+ * Implements emotional calm through:
+ * - Glassmorphism depth
+ * - Calm motion (200-400ms)
+ * - Subtle empty states
+ * - Sequential fade-in
+ * - Micro-pulse updates
+ */
+
+/* ============================================================================
+   GLASSMORPHISM ENHANCEMENT FOR ANALYTICS CARDS
+   ========================================================================= */
+
+.analytics-workspace .kpi-card,
+.analytics-workspace .chart-card {
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: all var(--calm-duration-normal) var(--calm-ease-out);
+}
+
+.analytics-workspace .kpi-card:hover,
+.analytics-workspace .chart-card:hover {
+    background: rgba(30, 41, 59, 0.75);
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 
+        0 10px 15px -3px rgba(0, 0, 0, 0.15),
+        0 4px 6px -2px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(99, 102, 241, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+/* ============================================================================
+   CROWN⁵+ CALM EMPTY STATES
+   "Every empty state feels like a gentle invitation, not a void."
+   ========================================================================= */
+
+.crown5-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    text-align: center;
+    min-height: 200px;
+    position: relative;
+    overflow: hidden;
+}
+
+.crown5-empty-state::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: crown5-breathe 4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes crown5-breathe {
+    0%, 100% {
+        opacity: 0.5;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+}
+
+.crown5-empty-illustration {
+    width: 80px;
+    height: 80px;
+    margin-bottom: var(--space-4);
+    opacity: 0.4;
+    transition: opacity var(--calm-duration-normal) var(--calm-ease-out);
+    position: relative;
+    z-index: 1;
+}
+
+.crown5-empty-state:hover .crown5-empty-illustration {
+    opacity: 0.6;
+}
+
+.crown5-empty-illustration svg {
+    width: 100%;
+    height: 100%;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    fill: none;
+}
+
+.crown5-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-2);
+    position: relative;
+    z-index: 1;
+}
+
+.crown5-empty-description {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    max-width: 280px;
+    line-height: 1.5;
+    position: relative;
+    z-index: 1;
+}
+
+.crown5-empty-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(99, 102, 241, 0.08);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-xs);
+    color: var(--color-primary);
+    position: relative;
+    z-index: 1;
+    transition: background var(--calm-duration-fast) var(--calm-ease-out);
+}
+
+.crown5-empty-hint:hover {
+    background: rgba(99, 102, 241, 0.12);
+}
+
+.crown5-empty-hint svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+}
+
+/* ============================================================================
+   CHART-SPECIFIC EMPTY STATES (No bare axes)
+   ========================================================================= */
+
+.crown5-chart-empty {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.crown5-chart-empty-placeholder {
+    position: absolute;
+    inset: 0;
+    opacity: 0.08;
+    pointer-events: none;
+}
+
+.crown5-chart-empty-placeholder-line {
+    position: absolute;
+    bottom: 20%;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg, 
+        transparent 0%,
+        rgba(99, 102, 241, 0.5) 20%,
+        rgba(99, 102, 241, 0.5) 40%,
+        rgba(139, 92, 246, 0.5) 60%,
+        rgba(139, 92, 246, 0.5) 80%,
+        transparent 100%
+    );
+    border-radius: 1px;
+}
+
+.crown5-chart-empty-placeholder-bars {
+    position: absolute;
+    bottom: 20%;
+    left: 10%;
+    right: 10%;
+    height: 60%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    gap: 8%;
+}
+
+.crown5-chart-empty-placeholder-bar {
+    flex: 1;
+    background: linear-gradient(180deg, 
+        rgba(99, 102, 241, 0.15) 0%,
+        rgba(99, 102, 241, 0.05) 100%
+    );
+    border-radius: 4px 4px 0 0;
+    animation: crown5-bar-pulse 3s ease-in-out infinite;
+}
+
+.crown5-chart-empty-placeholder-bar:nth-child(1) { height: 30%; animation-delay: 0s; }
+.crown5-chart-empty-placeholder-bar:nth-child(2) { height: 50%; animation-delay: 0.2s; }
+.crown5-chart-empty-placeholder-bar:nth-child(3) { height: 40%; animation-delay: 0.4s; }
+.crown5-chart-empty-placeholder-bar:nth-child(4) { height: 70%; animation-delay: 0.6s; }
+.crown5-chart-empty-placeholder-bar:nth-child(5) { height: 55%; animation-delay: 0.8s; }
+
+@keyframes crown5-bar-pulse {
+    0%, 100% { opacity: 0.15; }
+    50% { opacity: 0.25; }
+}
+
+.crown5-chart-empty-placeholder-donut {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    height: 60%;
+    border: 3px dashed rgba(99, 102, 241, 0.15);
+    border-radius: 50%;
+    animation: crown5-donut-spin 20s linear infinite;
+}
+
+@keyframes crown5-donut-spin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ============================================================================
+   PARTICIPATION BALANCE EMPTY CARDS
+   ========================================================================= */
+
+.crown5-balance-card {
+    background: rgba(30, 41, 59, 0.4);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    transition: all var(--calm-duration-normal) var(--calm-ease-out);
+}
+
+.crown5-balance-card:hover {
+    background: rgba(30, 41, 59, 0.5);
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.crown5-balance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-2);
+}
+
+.crown5-balance-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-primary);
+}
+
+.crown5-balance-score {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-tertiary);
+}
+
+.crown5-balance-empty-indicator {
+    height: 4px;
+    background: rgba(148, 163, 184, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: var(--space-2);
+}
+
+.crown5-balance-empty-indicator::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(99, 102, 241, 0.2) 50%,
+        transparent 100%
+    );
+    animation: crown5-shimmer-slide 2s ease-in-out infinite;
+}
+
+@keyframes crown5-shimmer-slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.crown5-balance-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.crown5-balance-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    padding: var(--space-1) 0;
+}
+
+.crown5-balance-status svg {
+    width: 12px;
+    height: 12px;
+    opacity: 0.6;
+}
+
+/* ============================================================================
+   KPI MICRO-PULSE ANIMATION (Section 7)
+   ========================================================================= */
+
+@keyframes crown5-kpi-pulse {
+    0% {
+        box-shadow: 
+            0 0 0 0 rgba(99, 102, 241, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    50% {
+        box-shadow: 
+            0 0 0 8px rgba(99, 102, 241, 0),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+    100% {
+        box-shadow: 
+            0 0 0 0 rgba(99, 102, 241, 0),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+}
+
+.kpi-card.crown5-updating {
+    animation: crown5-kpi-pulse 600ms var(--calm-ease-out) 1;
+}
+
+.kpi-card .crown5-value-updating {
+    position: relative;
+}
+
+.kpi-card .crown5-value-updating::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 8px;
+    animation: crown5-value-highlight 500ms ease-out forwards;
+}
+
+@keyframes crown5-value-highlight {
+    0% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.2); }
+}
+
+/* ============================================================================
+   SEQUENTIAL TILE FADE-IN (Stage 3)
+   ========================================================================= */
+
+.crown5-staggered-entry {
+    opacity: 0;
+    transform: translateY(16px);
+    animation: crown5-stagger-in var(--calm-duration-normal) var(--calm-ease-out) forwards;
+}
+
+.crown5-staggered-entry:nth-child(1) { animation-delay: 0ms; }
+.crown5-staggered-entry:nth-child(2) { animation-delay: 50ms; }
+.crown5-staggered-entry:nth-child(3) { animation-delay: 100ms; }
+.crown5-staggered-entry:nth-child(4) { animation-delay: 150ms; }
+.crown5-staggered-entry:nth-child(5) { animation-delay: 200ms; }
+.crown5-staggered-entry:nth-child(6) { animation-delay: 250ms; }
+
+@keyframes crown5-stagger-in {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================================
+   CROSSFADE FOR FILTER CHANGES (Section 3 - Event 7)
+   ========================================================================= */
+
+.crown5-crossfade-out {
+    animation: crown5-fade-out 200ms var(--calm-ease-in) forwards;
+}
+
+.crown5-crossfade-in {
+    animation: crown5-fade-in 300ms var(--calm-ease-out) forwards;
+}
+
+@keyframes crown5-fade-out {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-8px); }
+}
+
+@keyframes crown5-fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================================
+   SHIMMER RECONCILIATION EFFECT (Stage 2)
+   ========================================================================= */
+
+.crown5-reconciling {
+    position: relative;
+    overflow: hidden;
+}
+
+.crown5-reconciling::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(99, 102, 241, 0.08) 50%,
+        transparent 100%
+    );
+    animation: crown5-reconcile-shimmer 1.5s ease-in-out;
+}
+
+@keyframes crown5-reconcile-shimmer {
+    from { left: -100%; }
+    to { left: 100%; }
+}
+
+/* ============================================================================
+   TIMESTAMP REFRESH (Stage 5 - Continuity)
+   ========================================================================= */
+
+.crown5-timestamp {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    transition: color var(--calm-duration-fast) var(--calm-ease-out);
+}
+
+.crown5-timestamp.crown5-just-updated {
+    color: var(--color-primary);
+}
+
+.crown5-timestamp svg {
+    width: 12px;
+    height: 12px;
+    opacity: 0.6;
+}
+
+.crown5-timestamp.crown5-syncing svg {
+    animation: crown5-spin 1s linear infinite;
+}
+
+@keyframes crown5-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   INSIGHT BANNER SLIDE-IN (Section 7 - insight_generate)
+   ========================================================================= */
+
+.crown5-insight-banner {
+    background: linear-gradient(135deg, 
+        rgba(99, 102, 241, 0.1) 0%, 
+        rgba(139, 92, 246, 0.1) 100%
+    );
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+    animation: crown5-insight-slide-in 400ms var(--calm-ease-out) forwards;
+}
+
+@keyframes crown5-insight-slide-in {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.crown5-insight-banner-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.crown5-insight-banner-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.crown5-insight-banner-icon svg {
+    width: 20px;
+    height: 20px;
+    stroke: white;
+}
+
+.crown5-insight-banner-text {
+    flex: 1;
+}
+
+.crown5-insight-banner-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.crown5-insight-banner-description {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+/* ============================================================================
+   NO DATA PLACEHOLDER VALUE (NaN Protection)
+   ========================================================================= */
+
+.crown5-no-data-value {
+    color: var(--color-text-tertiary);
+    font-weight: var(--font-weight-normal);
+}
+
+.crown5-no-data-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    background: rgba(148, 163, 184, 0.08);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-md);
+}
+
+/* ============================================================================
+   KPI MICRO-PULSE ANIMATIONS (Section 7 Emotional Design)
+   "Numbers that breathe, not flash. Transitions that feel intentional."
+   ========================================================================= */
+
+/* Count-up animation for KPI values on data load */
+.crown5-kpi-value {
+    position: relative;
+    overflow: hidden;
+}
+
+.crown5-kpi-value[data-animating="true"] {
+    animation: crown5-value-pulse 300ms var(--calm-ease-out);
+}
+
+@keyframes crown5-value-pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+        color: var(--color-primary);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Shimmer effect for data reconciliation (Stage 2) */
+.crown5-kpi-shimmer {
+    position: relative;
+    overflow: hidden;
+}
+
+.crown5-kpi-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(99, 102, 241, 0.08) 50%,
+        transparent 100%
+    );
+    animation: crown5-shimmer 1.5s ease-in-out;
+    pointer-events: none;
+}
+
+@keyframes crown5-shimmer {
+    0% {
+        left: -100%;
+    }
+    100% {
+        left: 100%;
+    }
+}
+
+/* Soft pulse on KPI card update */
+.crown5-kpi-updated {
+    animation: crown5-kpi-update-pulse 400ms var(--calm-ease-out);
+}
+
+@keyframes crown5-kpi-update-pulse {
+    0% {
+        box-shadow: 
+            0 4px 6px -1px rgba(0, 0, 0, 0.1),
+            0 0 0 0 rgba(99, 102, 241, 0);
+    }
+    50% {
+        box-shadow: 
+            0 4px 6px -1px rgba(0, 0, 0, 0.1),
+            0 0 0 4px rgba(99, 102, 241, 0.15);
+    }
+    100% {
+        box-shadow: 
+            0 4px 6px -1px rgba(0, 0, 0, 0.1),
+            0 0 0 0 rgba(99, 102, 241, 0);
+    }
+}
+
+/* Trend indicator animations */
+.crown5-trend-up,
+.crown5-trend-down {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    transition: all var(--calm-duration-fast) var(--calm-ease-out);
+}
+
+.crown5-trend-up {
+    color: var(--color-success);
+}
+
+.crown5-trend-down {
+    color: var(--color-warning);
+}
+
+.crown5-trend-up svg,
+.crown5-trend-down svg {
+    width: 12px;
+    height: 12px;
+    transition: transform var(--calm-duration-normal) var(--calm-ease-spring);
+}
+
+.crown5-trend-up:hover svg {
+    transform: translateY(-2px);
+}
+
+.crown5-trend-down:hover svg {
+    transform: translateY(2px);
+}
+
+/* Value change delta indicator */
+.crown5-delta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-full);
+    opacity: 0;
+    transform: translateX(8px);
+    transition: all var(--calm-duration-normal) var(--calm-ease-out);
+}
+
+.crown5-delta-badge.visible {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.crown5-delta-badge.positive {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--color-success);
+}
+
+.crown5-delta-badge.negative {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-error);
+}
+
+/* ============================================================================
+   STAGGERED TILE FADE-IN (Stage 3: Warm Render)
+   Compositional delay 0-150ms for sequential reveal
+   ========================================================================= */
+
+.crown5-tile-grid {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.crown5-tile-grid > * {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: crown5-tile-appear 300ms var(--calm-ease-out) forwards;
+}
+
+.crown5-tile-grid > *:nth-child(1) { animation-delay: 0ms; }
+.crown5-tile-grid > *:nth-child(2) { animation-delay: 50ms; }
+.crown5-tile-grid > *:nth-child(3) { animation-delay: 100ms; }
+.crown5-tile-grid > *:nth-child(4) { animation-delay: 150ms; }
+.crown5-tile-grid > *:nth-child(5) { animation-delay: 200ms; }
+.crown5-tile-grid > *:nth-child(6) { animation-delay: 250ms; }
+
+@keyframes crown5-tile-appear {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================================
+   CROSSFADE FOR FILTER/TAB CHANGES
+   "No jarring redraws — smooth blending between states"
+   ========================================================================= */
+
+.crown5-filter-crossfade-enter {
+    animation: crown5-crossfade-enter 250ms var(--calm-ease-out) forwards;
+}
+
+.crown5-filter-crossfade-exit {
+    animation: crown5-crossfade-exit 150ms var(--calm-ease-in) forwards;
+}
+
+@keyframes crown5-crossfade-enter {
+    from {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes crown5-crossfade-exit {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+}
+
+/* ============================================================================
+   RESPONSIVE ADJUSTMENTS
+   ========================================================================= */
+
+@media (max-width: 768px) {
+    .crown5-empty-state {
+        padding: var(--space-6);
+        min-height: 160px;
+    }
+    
+    .crown5-empty-illustration {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .crown5-empty-description {
+        max-width: 240px;
+    }
+    
+    .crown5-insight-banner-content {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+
+/* ============================================================================
+   REDUCED MOTION SUPPORT
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    .crown5-staggered-entry,
+    .crown5-crossfade-out,
+    .crown5-crossfade-in,
+    .crown5-reconciling::after,
+    .crown5-insight-banner,
+    .kpi-card.crown5-updating,
+    .crown5-chart-empty-placeholder-bar,
+    .crown5-chart-empty-placeholder-donut,
+    .crown5-balance-empty-indicator::after,
+    .crown5-empty-state::before,
+    .crown5-kpi-value[data-animating="true"],
+    .crown5-kpi-shimmer::after,
+    .crown5-kpi-updated,
+    .crown5-tile-grid > *,
+    .crown5-filter-crossfade-enter,
+    .crown5-filter-crossfade-exit {
+        animation: none !important;
+    }
+    
+    .crown5-staggered-entry,
+    .crown5-tile-grid > * {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* ============================================================================
+   CROWN⁵+ POLISH FIXES - Analytics Page Refinements
+   ============================================================================ */
+
+/* Key Insights Cards - Proper spacing and visual hierarchy */
+.analytics-workspace #key-insights-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4) !important;
+    margin-top: var(--space-4) !important;
+}
+
+.analytics-workspace #key-insights-list > div {
+    padding: var(--space-4) var(--space-4) !important;
+    border-radius: var(--radius-lg) !important;
+    margin-bottom: 0 !important;
+}
+
+.analytics-workspace #key-insights-list > div:first-child {
+    background: rgba(34, 197, 94, 0.08) !important;
+    border-left: 4px solid #22c55e !important;
+}
+
+.analytics-workspace #key-insights-list > div:nth-child(2) {
+    background: rgba(99, 102, 241, 0.08) !important;
+    border-left: 4px solid #6366f1 !important;
+}
+
+.analytics-workspace #key-insights-list .font-medium {
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    color: var(--color-text-primary) !important;
+    margin-bottom: var(--space-2) !important;
+}
+
+.analytics-workspace #key-insights-list .text-secondary {
+    font-size: 0.85rem !important;
+    color: var(--color-text-secondary) !important;
+    line-height: 1.5 !important;
+}
+
+/* Recommendations List - Better alignment */
+.analytics-workspace #recommendations-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4) !important;
+    margin-top: var(--space-4) !important;
+}
+
+.analytics-workspace #recommendations-list > .flex {
+    display: flex;
+    gap: var(--space-3);
+    align-items: flex-start;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+}
+
+.analytics-workspace #recommendations-list > .flex:last-child {
+    border-bottom: none;
+}
+
+/* Health Score Ring - Premium Radial Glow */
+.health-score-ring {
+    position: relative;
+}
+
+.health-score-ring::before {
+    content: '';
+    position: absolute;
+    inset: -15px;
+    background: radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: healthGlow 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes healthGlow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+/* Accordion Smooth Transitions */
+.deep-dive-section {
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.deep-dive-section.open {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.deep-dive-content {
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.3s ease,
+                padding 0.3s ease;
+    opacity: 0;
+}
+
+.deep-dive-section.open .deep-dive-content {
+    opacity: 1;
+}
+
+.deep-dive-body {
+    animation: accordionSlideIn 0.3s ease-out;
+}
+
+@keyframes accordionSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Chart Card Grid - Better mobile spacing */
+.consolidated-chart-grid {
+    display: grid;
+    gap: var(--space-5);
+}
+
+@media (min-width: 768px) {
+    .consolidated-chart-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--space-5);
+    }
+}
+
+/* Chart Cards - Enhanced styling */
+.analytics-workspace .deep-dive-body .chart-card {
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+    min-height: 200px;
+}
+
+.analytics-workspace .deep-dive-body .chart-card h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-2);
+}
+
+/* Empty State Enhancements */
+.analytics-workspace .crown5-empty-state {
+    min-height: 180px;
+    padding: var(--space-6);
+}
+
+.analytics-workspace .crown5-empty-illustration {
+    color: var(--color-text-tertiary);
+}
+
+/* Tier 2 Actionable Insights - Prevent header overlap */
+.tier2-actionable-insights {
+    position: relative;
+    z-index: 1;
+    margin-top: var(--space-2);
+}
+
+.tier2-actionable-insights .insight-card-content {
+    padding: var(--space-4);
+}
+
+/* Chart Color Palette - Crown+ Theme */
+.analytics-workspace canvas {
+    --chart-primary: #6366f1;
+    --chart-success: #22c55e;
+    --chart-warning: #f59e0b;
+    --chart-info: #06b6d4;
+}
+
+/* Engagement Balance Empty State */
+#engagement-balance-chart {
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* KPI Cards Grid - Responsive improvements */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+}
+
+@media (min-width: 1024px) {
+    .kpi-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.kpi-card {
+    min-height: 120px;
+}
+
+/* Donut Chart Legend Spacing */
+.chart-frame + .chart-legend,
+.chart-card .chart-legend {
+    margin-top: var(--space-4);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    justify-content: center;
+}
+
+/* Meeting Frequency Chart Line */
+#meetingActivityChart {
+    max-height: 280px;
+}
+
+/* ============================================================================
+   CROWN+ DATE RANGE SELECTOR - Premium Glassmorphic Component
+   ============================================================================ */
+
+.crown-date-selector {
+    position: relative;
+    display: inline-block;
+}
+
+.crown-date-trigger {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 150px;
+}
+
+.crown-date-trigger:hover {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-1px);
+}
+
+.crown-date-trigger:focus {
+    outline: none;
+    border-color: rgba(99, 102, 241, 0.6);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.crown-date-trigger[aria-expanded="true"] {
+    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(30, 41, 59, 0.9);
+}
+
+.crown-date-trigger[aria-expanded="true"] .crown-date-chevron {
+    transform: rotate(180deg);
+}
+
+.crown-date-icon {
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.crown-date-chevron {
+    margin-left: auto;
+    color: var(--color-text-tertiary);
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+}
+
+/* Dropdown Panel */
+.crown-date-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    min-width: 180px;
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: var(--radius-lg);
+    box-shadow: 
+        0 10px 40px rgba(0, 0, 0, 0.4),
+        0 4px 12px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px) scale(0.96);
+    transform-origin: top center;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+    padding: 0.375rem;
+    overflow: hidden;
+}
+
+.crown-date-dropdown.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+
+/* Options */
+.crown-date-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: left;
+}
+
+.crown-date-option:hover {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-text-primary);
+}
+
+.crown-date-option:focus {
+    outline: none;
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-text-primary);
+}
+
+.crown-date-option.active {
+    color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.crown-date-option-label {
+    flex: 1;
+}
+
+.crown-date-option-check {
+    opacity: 0;
+    color: var(--color-primary);
+    transform: scale(0.8);
+    transition: all 0.2s ease;
+}
+
+.crown-date-option.active .crown-date-option-check {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Mobile Bottom Sheet (for touch devices) */
+@media (max-width: 640px) {
+    .crown-date-dropdown {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: auto;
+        min-width: 100%;
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        transform: translateY(100%);
+        max-height: 50vh;
+        padding: 0.5rem 0.5rem 2rem;
+    }
+    
+    .crown-date-dropdown::before {
+        content: '';
+        display: block;
+        width: 40px;
+        height: 4px;
+        background: rgba(148, 163, 184, 0.3);
+        border-radius: 2px;
+        margin: 0.5rem auto 1rem;
+    }
+    
+    .crown-date-dropdown.open {
+        transform: translateY(0);
+    }
+    
+    .crown-date-option {
+        padding: 1rem 1.25rem;
+        font-size: 1rem;
+    }
+    
+    /* Overlay for mobile */
+    .crown-date-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        z-index: 99;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .crown-date-overlay.open {
+        opacity: 1;
+        visibility: visible;
+    }
+}
+
+/* ============================================================================
+   HEALTH SCORE GLOW - Enhanced Visibility
+   ============================================================================ */
+
+.health-score-ring::before {
+    content: '';
+    position: absolute;
+    inset: -20px;
+    background: radial-gradient(circle, rgba(34, 197, 94, 0.35) 0%, rgba(99, 102, 241, 0.15) 50%, transparent 70%);
+    border-radius: 50%;
+    animation: healthGlow 3s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.health-score-ring::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    background: radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, transparent 60%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: -1;
+}
+
+@keyframes healthGlow {
+    0%, 100% { 
+        opacity: 0.6; 
+        transform: scale(1);
+        filter: blur(8px);
+    }
+    50% { 
+        opacity: 1; 
+        transform: scale(1.08);
+        filter: blur(12px);
+    }
+}
+
+/* ============================================================================
+   COMPLETION RATE DISPLAY - Proper Positioning
+   ============================================================================ */
+
+.completion-rate-display {
+    position: relative !important;
+    margin-top: var(--space-4) !important;
+    padding-top: var(--space-3) !important;
+    border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+/* Prevent floating completion rate text outside containers */
+.analytics-workspace .completion-rate-display {
+    position: static !important;
+    float: none !important;
+    clear: both !important;
+}
+
+/* ============================================================================
+   CHART CONTAINER BACKGROUNDS - Crown+ Depth
+   ============================================================================ */
+
+.analytics-workspace .chart-frame {
+    background: transparent;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.analytics-workspace canvas {
+    background: transparent !important;
+}
+
+/* Chart grid and axis styling via CSS custom properties */
+.analytics-workspace .chart-card canvas {
+    border-radius: var(--radius-md);
+}
+
+/* ============================================================================
+   YOUR TALK TIME - Premium Radial Component
+   "Numbers that breathe, not flash. Transitions that feel intentional."
+   ============================================================================ */
+
+.talk-time-card {
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    max-width: 400px;
+}
+
+/* Empty State */
+.talk-time-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: var(--space-4) 0;
+}
+
+.talk-time-empty-ring {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    margin-bottom: var(--space-4);
+}
+
+.talk-time-empty-ring svg {
+    width: 100%;
+    height: 100%;
+}
+
+.talk-time-empty-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--color-text-tertiary);
+    opacity: 0.5;
+}
+
+.talk-time-empty-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-1);
+}
+
+.talk-time-empty-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-tertiary);
+    max-width: 220px;
+}
+
+/* Data State */
+.talk-time-data {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.talk-time-main {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+}
+
+/* Radial Progress Ring */
+.talk-time-ring {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    flex-shrink: 0;
+}
+
+.talk-time-ring svg {
+    width: 100%;
+    height: 100%;
+}
+
+#talk-time-arc {
+    transition: stroke-dasharray 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.talk-time-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.talk-time-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+}
+
+.talk-time-label {
+    font-size: 0.7rem;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Stats Section */
+.talk-time-stats {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.talk-time-stat-row {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+}
+
+.talk-time-stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1;
+}
+
+.talk-time-stat-label {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+/* Trend Indicator */
+.talk-time-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: rgba(107, 114, 128, 0.1);
+    color: var(--color-text-secondary);
+    width: fit-content;
+}
+
+.talk-time-trend.up {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.talk-time-trend.down {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.talk-time-trend svg {
+    width: 12px;
+    height: 12px;
+}
+
+.talk-time-trend.down svg {
+    transform: rotate(180deg);
+}
+
+/* Secondary Metrics */
+.talk-time-metrics {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-6);
+    padding-top: var(--space-4);
+    border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.talk-time-metric {
+    text-align: center;
+}
+
+.talk-time-metric-value {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.2;
+}
+
+.talk-time-metric-label {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+}
+
+.talk-time-metric-divider {
+    width: 1px;
+    height: 32px;
+    background: rgba(148, 163, 184, 0.15);
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+    .talk-time-main {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .talk-time-stats {
+        align-items: center;
+    }
+    
+    .talk-time-ring {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .talk-time-value {
+        font-size: 1.25rem;
+    }
+}

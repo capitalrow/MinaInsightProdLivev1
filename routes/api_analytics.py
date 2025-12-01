@@ -13,6 +13,18 @@ from datetime import datetime, timedelta, date
 from sqlalchemy import func, desc, and_
 from typing import Dict, List
 import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+def get_broadcast_functions():
+    """Lazy import broadcast functions to avoid circular imports."""
+    try:
+        from routes.analytics_websocket import broadcast_analytics_update, broadcast_meeting_analytics
+        return broadcast_analytics_update, broadcast_meeting_analytics
+    except ImportError:
+        logger.warning("Could not import analytics WebSocket broadcast functions")
+        return None, None
 
 
 api_analytics_bp = Blueprint('api_analytics', __name__, url_prefix='/api/analytics')
@@ -108,8 +120,43 @@ def get_dashboard_analytics():
         else:
             avg_effectiveness = avg_engagement = avg_sentiment = avg_duration = 0
         
-        # Get productivity metrics
-        total_tasks_created = sum(a.action_items_created or 0 for a in recent_analytics)
+        # Get productivity metrics - Query actual Task table for accurate counts
+        meeting_ids = [a.meeting_id for a in recent_analytics] if recent_analytics else []
+        
+        # Get meetings from period even without analytics
+        all_meetings = db.session.query(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).all()
+        all_meeting_ids = [m.id for m in all_meetings]
+        
+        # Query real task counts from Task table
+        if all_meeting_ids:
+            task_counts = db.session.query(
+                func.count(Task.id).label('total'),
+                func.sum(db.case((Task.status == 'completed', 1), else_=0)).label('completed'),
+                func.sum(db.case((Task.status == 'in_progress', 1), else_=0)).label('in_progress'),
+                func.sum(db.case((Task.status.in_(['pending', 'todo']), 1), else_=0)).label('pending')
+            ).filter(Task.meeting_id.in_(all_meeting_ids)).first()
+            
+            total_tasks_created = getattr(task_counts, 'total', 0) or 0
+            completed_tasks = getattr(task_counts, 'completed', 0) or 0
+            in_progress_tasks = getattr(task_counts, 'in_progress', 0) or 0
+            pending_tasks = getattr(task_counts, 'pending', 0) or 0
+        else:
+            # Fallback to workspace-level task count if no meetings in period
+            task_counts = db.session.query(
+                func.count(Task.id).label('total'),
+                func.sum(db.case((Task.status == 'completed', 1), else_=0)).label('completed'),
+                func.sum(db.case((Task.status == 'in_progress', 1), else_=0)).label('in_progress'),
+                func.sum(db.case((Task.status.in_(['pending', 'todo']), 1), else_=0)).label('pending')
+            ).filter(Task.workspace_id == workspace_id).first()
+            
+            total_tasks_created = getattr(task_counts, 'total', 0) or 0
+            completed_tasks = getattr(task_counts, 'completed', 0) or 0
+            in_progress_tasks = getattr(task_counts, 'in_progress', 0) or 0
+            pending_tasks = getattr(task_counts, 'pending', 0) or 0
+        
         total_decisions_made = sum(a.decisions_made_count or 0 for a in recent_analytics)
         
         # Meeting trends - Single query with GROUP BY to prevent N+1 (was 7-30 queries, now 1)
@@ -153,8 +200,14 @@ def get_dashboard_analytics():
                 'productivity': {
                     'total_tasks_created': total_tasks_created,
                     'total_decisions_made': total_decisions_made,
-                    'avg_tasks_per_meeting': round(total_tasks_created / len(recent_analytics), 1) if recent_analytics else 0,
-                    'avg_decisions_per_meeting': round(total_decisions_made / len(recent_analytics), 1) if recent_analytics else 0
+                    'avg_tasks_per_meeting': round(total_tasks_created / len(all_meetings), 1) if all_meetings else 0,
+                    'avg_decisions_per_meeting': round(total_decisions_made / len(recent_analytics), 1) if recent_analytics else 0,
+                    'task_status': {
+                        'completed': int(completed_tasks),
+                        'in_progress': int(in_progress_tasks),
+                        'pending': int(pending_tasks)
+                    },
+                    'completion_rate': round((completed_tasks / total_tasks_created * 100), 1) if total_tasks_created > 0 else 0
                 },
                 'trends': {
                     'meeting_frequency': meeting_trend
@@ -304,6 +357,44 @@ def get_productivity_analytics():
         
         avg_efficiency = sum(a.meeting_efficiency_score for a in efficiency_scores if a.meeting_efficiency_score is not None) / len(efficiency_scores) if efficiency_scores else 0
         
+        # Weekly completion trend using SQL date_trunc for accurate calendar week grouping
+        completion_trend = []
+        
+        if meeting_ids:
+            from sqlalchemy import literal_column, case
+            from sqlalchemy.sql import text
+            
+            # Use date_trunc to group by ISO calendar weeks
+            week_data = db.session.query(
+                func.date_trunc('week', Task.created_at).label('week_start'),
+                func.count(Task.id).label('total_tasks'),
+                func.sum(case((Task.status == 'completed', 1), else_=0)).label('completed_tasks')
+            ).filter(
+                Task.meeting_id.in_(meeting_ids),
+                Task.created_at >= cutoff_date
+            ).group_by(
+                func.date_trunc('week', Task.created_at)
+            ).order_by(
+                func.date_trunc('week', Task.created_at)
+            ).all()
+            
+            for row in week_data:
+                week_start_date = row.week_start
+                total = int(row.total_tasks or 0)
+                completed = int(row.completed_tasks or 0)
+                rate = round((completed / total * 100), 1) if total > 0 else 0
+                
+                # Format week label as "Nov 18" style for clarity
+                week_label = week_start_date.strftime('%b %d') if week_start_date else 'Unknown'
+                
+                completion_trend.append({
+                    'week_label': week_label,
+                    'week_start': week_start_date.strftime('%Y-%m-%d') if week_start_date else None,
+                    'total_tasks': total,
+                    'completed_tasks': completed,
+                    'completion_rate': rate
+                })
+        
         return jsonify({
             'success': True,
             'productivity': {
@@ -322,6 +413,7 @@ def get_productivity_analytics():
                     'average_score': round(avg_efficiency * 100, 1),
                     'meetings_analyzed': len(efficiency_scores)
                 },
+                'completion_trend': completion_trend,
                 'period_days': days,
                 'total_meetings': len(meetings)
             }
@@ -721,6 +813,644 @@ def export_analytics():
             'success': False,
             'message': 'CSV export not yet implemented. Use format=json for now.'
         }), 501
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_analytics_bp.route('/kpi-comparison', methods=['GET'])
+@login_required
+def get_kpi_comparison():
+    """
+    Get KPI metrics with period-over-period comparison.
+    Returns current period values and percentage change from previous period.
+    """
+    try:
+        workspace_id = current_user.workspace_id
+        days = request.args.get('days', 30, type=int)
+        
+        # Current period
+        current_start = datetime.now() - timedelta(days=days)
+        current_end = datetime.now()
+        
+        # Previous period (same length, immediately before)
+        previous_start = current_start - timedelta(days=days)
+        previous_end = current_start
+        
+        # Current period metrics
+        current_meetings = db.session.query(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= current_start,
+            Meeting.created_at < current_end
+        ).all()
+        
+        current_meeting_count = len(current_meetings)
+        current_meeting_ids = [m.id for m in current_meetings]
+        
+        # Helper to calculate meeting duration from timestamps
+        def get_meeting_duration(m):
+            if m.actual_start and m.actual_end:
+                return (m.actual_end - m.actual_start).total_seconds() / 60
+            elif m.scheduled_start and m.scheduled_end:
+                return (m.scheduled_end - m.scheduled_start).total_seconds() / 60
+            return 0
+        
+        # Current tasks
+        if current_meeting_ids:
+            current_tasks = db.session.query(Task).filter(
+                Task.meeting_id.in_(current_meeting_ids)
+            ).count()
+            current_completed = db.session.query(Task).filter(
+                Task.meeting_id.in_(current_meeting_ids),
+                Task.status == 'completed'
+            ).count()
+        else:
+            current_tasks = 0
+            current_completed = 0
+        
+        # Current duration
+        current_duration_sum = sum(get_meeting_duration(m) for m in current_meetings)
+        current_avg_duration = current_duration_sum / current_meeting_count if current_meeting_count else 0
+        
+        # Previous period metrics
+        previous_meetings = db.session.query(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= previous_start,
+            Meeting.created_at < previous_end
+        ).all()
+        
+        previous_meeting_count = len(previous_meetings)
+        previous_meeting_ids = [m.id for m in previous_meetings]
+        
+        if previous_meeting_ids:
+            previous_tasks = db.session.query(Task).filter(
+                Task.meeting_id.in_(previous_meeting_ids)
+            ).count()
+            previous_completed = db.session.query(Task).filter(
+                Task.meeting_id.in_(previous_meeting_ids),
+                Task.status == 'completed'
+            ).count()
+        else:
+            previous_tasks = 0
+            previous_completed = 0
+        
+        previous_duration_sum = sum(get_meeting_duration(m) for m in previous_meetings)
+        previous_avg_duration = previous_duration_sum / previous_meeting_count if previous_meeting_count else 0
+        
+        # Calculate percentage changes
+        def calc_change(current, previous):
+            if previous == 0:
+                return 100 if current > 0 else 0
+            return round(((current - previous) / previous) * 100, 1)
+        
+        def calc_completion_rate(completed, total):
+            return round((completed / total * 100), 1) if total > 0 else 0
+        
+        # Hours saved estimate - consistent with dashboard calculation
+        # Formula: (total_duration * 0.3) + (tasks * 2 minutes) converted to hours
+        # This represents: 30% efficiency gain from AI + 2 min saved per task via automation
+        current_minutes_saved = (current_duration_sum * 0.3) + (current_tasks * 2)
+        hours_saved = current_minutes_saved / 60
+        
+        previous_minutes_saved = (previous_duration_sum * 0.3) + (previous_tasks * 2)
+        previous_hours_saved = previous_minutes_saved / 60
+        
+        return jsonify({
+            'success': True,
+            'kpis': {
+                'total_meetings': {
+                    'value': current_meeting_count,
+                    'previous': previous_meeting_count,
+                    'change': calc_change(current_meeting_count, previous_meeting_count),
+                    'trend': 'up' if current_meeting_count > previous_meeting_count else ('down' if current_meeting_count < previous_meeting_count else 'stable')
+                },
+                'action_items': {
+                    'value': current_tasks,
+                    'previous': previous_tasks,
+                    'change': calc_change(current_tasks, previous_tasks),
+                    'completion_rate': calc_completion_rate(current_completed, current_tasks),
+                    'trend': 'up' if current_tasks > previous_tasks else ('down' if current_tasks < previous_tasks else 'stable')
+                },
+                'hours_saved': {
+                    'value': round(hours_saved, 1),
+                    'previous': round(previous_hours_saved, 1),
+                    'change': calc_change(hours_saved, previous_hours_saved),
+                    'trend': 'up' if hours_saved > previous_hours_saved else ('down' if hours_saved < previous_hours_saved else 'stable')
+                },
+                'avg_duration': {
+                    'value': round(current_avg_duration, 0),
+                    'previous': round(previous_avg_duration, 0),
+                    'change': calc_change(current_avg_duration, previous_avg_duration),
+                    'trend': 'down' if current_avg_duration < previous_avg_duration else ('up' if current_avg_duration > previous_avg_duration else 'stable')
+                }
+            },
+            'period': {
+                'current': {'start': current_start.isoformat(), 'end': current_end.isoformat()},
+                'previous': {'start': previous_start.isoformat(), 'end': previous_end.isoformat()},
+                'days': days
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_analytics_bp.route('/health-score', methods=['GET'])
+@login_required
+def get_meeting_health_score():
+    """
+    Get composite Meeting Health Score (0-100).
+    Combines: effectiveness, engagement, follow-through, decision velocity.
+    Works even when AI analysis isn't complete - falls back to task-based metrics.
+    """
+    try:
+        workspace_id = current_user.workspace_id
+        days = request.args.get('days', 30, type=int)
+        cutoff_date = datetime.now() - timedelta(days=days)
+        previous_cutoff = cutoff_date - timedelta(days=days)
+        
+        # Get current period analytics (completed ones for AI metrics)
+        current_analytics = db.session.query(Analytics).join(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date,
+            Analytics.analysis_status == 'completed'
+        ).all()
+        
+        # Get all current period meetings (for task-based metrics even without AI analysis)
+        current_meetings = db.session.query(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).all()
+        current_meeting_ids = [m.id for m in current_meetings]
+        
+        # Get previous period for trend
+        previous_analytics = db.session.query(Analytics).join(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= previous_cutoff,
+            Meeting.created_at < cutoff_date,
+            Analytics.analysis_status == 'completed'
+        ).all()
+        
+        previous_meetings = db.session.query(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= previous_cutoff,
+            Meeting.created_at < previous_cutoff
+        ).all()
+        previous_meeting_ids = [m.id for m in previous_meetings]
+        
+        def calc_health_score(analytics_list, meeting_ids):
+            """Calculate health score using available data - falls back to task metrics if no AI analysis."""
+            
+            # Track which components have real data for proper weighting
+            components = []
+            weights = []
+            breakdown = {}
+            
+            # Effectiveness (0-100) - only include if there's real data from AI analysis
+            effectiveness_values = [a.meeting_effectiveness_score for a in analytics_list if a.meeting_effectiveness_score is not None]
+            if effectiveness_values:
+                avg_effectiveness = (sum(effectiveness_values) / len(effectiveness_values)) * 100
+                components.append(avg_effectiveness)
+                weights.append(0.30)
+                breakdown['effectiveness'] = round(avg_effectiveness, 1)
+            else:
+                breakdown['effectiveness'] = None
+            
+            # Engagement (0-100) - only include if there's real data from AI analysis
+            engagement_values = [a.overall_engagement_score for a in analytics_list if a.overall_engagement_score is not None]
+            if engagement_values:
+                avg_engagement = (sum(engagement_values) / len(engagement_values)) * 100
+                components.append(avg_engagement)
+                weights.append(0.25)
+                breakdown['engagement'] = round(avg_engagement, 1)
+            else:
+                breakdown['engagement'] = None
+            
+            # Follow-through (task completion rate) - works even without AI analysis
+            if meeting_ids:
+                total_tasks = db.session.query(Task).filter(Task.meeting_id.in_(meeting_ids)).count()
+                completed_tasks = db.session.query(Task).filter(
+                    Task.meeting_id.in_(meeting_ids),
+                    Task.status == 'completed'
+                ).count()
+                if total_tasks > 0:
+                    follow_through = (completed_tasks / total_tasks * 100)
+                    components.append(follow_through)
+                    weights.append(0.30)
+                    breakdown['follow_through'] = round(follow_through, 1)
+                else:
+                    breakdown['follow_through'] = None
+            else:
+                breakdown['follow_through'] = None
+            
+            # Decision velocity (decisions per meeting) - only include if there's real data
+            decisions = [a.decisions_made_count for a in analytics_list if a.decisions_made_count is not None and a.decisions_made_count > 0]
+            if decisions:
+                avg_decisions = sum(decisions) / len(decisions)
+                decision_score = min(100, avg_decisions * 25)  # 4+ decisions = 100
+                components.append(decision_score)
+                weights.append(0.15)
+                breakdown['decision_velocity'] = round(decision_score, 1)
+            else:
+                breakdown['decision_velocity'] = None
+            
+            # Weighted composite score - normalize weights for available components
+            if components and weights:
+                total_weight = sum(weights)
+                normalized_weights = [w / total_weight for w in weights]
+                composite = sum(c * w for c, w in zip(components, normalized_weights))
+            else:
+                composite = 0
+            
+            return round(composite, 1), breakdown, len(meeting_ids)
+        
+        current_score, current_breakdown, meetings_analyzed = calc_health_score(current_analytics, current_meeting_ids)
+        previous_score, _, _ = calc_health_score(previous_analytics, previous_meeting_ids)
+        
+        # Determine trend
+        if current_score > previous_score + 5:
+            trend = 'improving'
+        elif current_score < previous_score - 5:
+            trend = 'declining'
+        else:
+            trend = 'stable'
+        
+        # Health status
+        if current_score >= 80:
+            status = 'excellent'
+            status_message = 'Your meetings are highly effective'
+        elif current_score >= 60:
+            status = 'good'
+            status_message = 'Your meetings are productive with room for improvement'
+        elif current_score >= 40:
+            status = 'fair'
+            status_message = 'Consider focusing on engagement and follow-through'
+        else:
+            status = 'needs_attention'
+            status_message = 'Your meetings could benefit from more structure'
+        
+        return jsonify({
+            'success': True,
+            'health_score': {
+                'score': current_score,
+                'previous_score': previous_score,
+                'change': round(current_score - previous_score, 1),
+                'trend': trend,
+                'status': status,
+                'status_message': status_message,
+                'breakdown': current_breakdown,
+                'meetings_analyzed': meetings_analyzed,
+                'ai_analysis_complete': len(current_analytics)
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_analytics_bp.route('/actionable-insights', methods=['GET'])
+@login_required
+def get_actionable_insights():
+    """
+    Get smart, actionable insights based on meeting patterns.
+    Detects: meetings without outcomes, overtime, participation drops, recurring topics.
+    """
+    try:
+        workspace_id = current_user.workspace_id
+        days = request.args.get('days', 30, type=int)
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        insights = []
+        
+        # Get meetings and analytics
+        meetings = db.session.query(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).all()
+        
+        analytics = db.session.query(Analytics).join(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date,
+            Analytics.analysis_status == 'completed'
+        ).all()
+        
+        meeting_ids = [m.id for m in meetings]
+        
+        # 1. Meetings without outcomes (no tasks or decisions)
+        if analytics:
+            no_outcome_meetings = [
+                a for a in analytics 
+                if (a.action_items_created or 0) == 0 and (a.decisions_made_count or 0) == 0
+            ]
+            if no_outcome_meetings:
+                insights.append({
+                    'type': 'warning',
+                    'category': 'outcomes',
+                    'title': f'{len(no_outcome_meetings)} meetings had no clear outcomes',
+                    'description': 'Consider defining clear objectives before meetings to ensure actionable results.',
+                    'metric': len(no_outcome_meetings),
+                    'priority': 'high' if len(no_outcome_meetings) > 3 else 'medium'
+                })
+        
+        # 2. Overtime meetings (exceeded scheduled duration)
+        def get_duration_info(m):
+            actual = 0
+            scheduled = 0
+            if m.actual_start and m.actual_end:
+                actual = (m.actual_end - m.actual_start).total_seconds() / 60
+            if m.scheduled_start and m.scheduled_end:
+                scheduled = (m.scheduled_end - m.scheduled_start).total_seconds() / 60
+            return actual, scheduled
+        
+        overtime_meetings = []
+        for m in meetings:
+            actual, scheduled = get_duration_info(m)
+            if actual > 0 and scheduled > 0 and actual > scheduled * 1.2:  # 20% over
+                overtime_meetings.append((m, actual - scheduled))
+        
+        if overtime_meetings:
+            avg_overtime = sum(ot[1] for ot in overtime_meetings) / len(overtime_meetings)
+            insights.append({
+                'type': 'info',
+                'category': 'time_management',
+                'title': f'{len(overtime_meetings)} meetings ran overtime',
+                'description': f'These meetings averaged {round(avg_overtime)} minutes over their scheduled time.',
+                'metric': len(overtime_meetings),
+                'priority': 'medium'
+            })
+        
+        # 3. Low participation meetings
+        low_engagement = [
+            a for a in analytics 
+            if a.overall_engagement_score and a.overall_engagement_score < 0.4
+        ]
+        if low_engagement:
+            insights.append({
+                'type': 'warning',
+                'category': 'engagement',
+                'title': f'{len(low_engagement)} meetings had low participation',
+                'description': 'Consider smaller meeting sizes or async updates for better engagement.',
+                'metric': len(low_engagement),
+                'priority': 'high' if len(low_engagement) > 2 else 'medium'
+            })
+        
+        # 4. Task completion rate trend
+        if meeting_ids:
+            total_tasks = db.session.query(Task).filter(Task.meeting_id.in_(meeting_ids)).count()
+            completed_tasks = db.session.query(Task).filter(
+                Task.meeting_id.in_(meeting_ids),
+                Task.status == 'completed'
+            ).count()
+            
+            if total_tasks > 0:
+                completion_rate = (completed_tasks / total_tasks) * 100
+                if completion_rate < 50:
+                    insights.append({
+                        'type': 'warning',
+                        'category': 'follow_through',
+                        'title': f'Task completion rate is {round(completion_rate)}%',
+                        'description': 'Review task assignments and deadlines to improve follow-through.',
+                        'metric': round(completion_rate),
+                        'priority': 'high'
+                    })
+                elif completion_rate >= 80:
+                    insights.append({
+                        'type': 'success',
+                        'category': 'follow_through',
+                        'title': f'Excellent task completion at {round(completion_rate)}%',
+                        'description': 'Your team is following through on action items effectively.',
+                        'metric': round(completion_rate),
+                        'priority': 'low'
+                    })
+        
+        # 5. High-performing meeting pattern
+        high_effectiveness = [
+            a for a in analytics 
+            if a.meeting_effectiveness_score and a.meeting_effectiveness_score >= 0.8
+        ]
+        if high_effectiveness and len(high_effectiveness) >= 3:
+            insights.append({
+                'type': 'success',
+                'category': 'effectiveness',
+                'title': f'{len(high_effectiveness)} highly effective meetings',
+                'description': 'Your effective meetings share clear agendas and active participation.',
+                'metric': len(high_effectiveness),
+                'priority': 'low'
+            })
+        
+        # Sort by priority
+        priority_order = {'high': 0, 'medium': 1, 'low': 2}
+        insights.sort(key=lambda x: priority_order.get(x['priority'], 1))
+        
+        # Generate weekly highlight
+        weekly_highlight = None
+        if insights:
+            top_insight = insights[0]
+            weekly_highlight = {
+                'title': top_insight['title'],
+                'type': top_insight['type'],
+                'action': top_insight['description']
+            }
+        elif len(meetings) > 0:
+            weekly_highlight = {
+                'title': f'{len(meetings)} meetings this period',
+                'type': 'info',
+                'action': 'Your meetings are running smoothly. Keep up the good work!'
+            }
+        
+        return jsonify({
+            'success': True,
+            'insights': insights[:5],  # Top 5 insights
+            'weekly_highlight': weekly_highlight,
+            'total_insights': len(insights),
+            'meetings_analyzed': len(analytics)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_analytics_bp.route('/topic-distribution', methods=['GET'])
+@login_required
+def get_topic_distribution():
+    """
+    Get actual meeting topic distribution from AI analysis.
+    Replaces hardcoded category placeholders.
+    """
+    try:
+        workspace_id = current_user.workspace_id
+        days = request.args.get('days', 30, type=int)
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        # Get analytics with topic data
+        analytics = db.session.query(Analytics).join(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date,
+            Analytics.analysis_status == 'completed'
+        ).all()
+        
+        # Aggregate topics from all meetings
+        topic_counts = {}
+        total_topics = 0
+        
+        for a in analytics:
+            if a.key_topics:
+                topics = a.key_topics if isinstance(a.key_topics, list) else []
+                for topic in topics:
+                    topic_name = topic.get('name', topic) if isinstance(topic, dict) else str(topic)
+                    topic_counts[topic_name] = topic_counts.get(topic_name, 0) + 1
+                    total_topics += 1
+        
+        # Calculate percentages and sort by frequency
+        topic_distribution = []
+        for topic, count in sorted(topic_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
+            percentage = (count / total_topics * 100) if total_topics > 0 else 0
+            topic_distribution.append({
+                'name': topic,
+                'count': count,
+                'percentage': round(percentage, 1)
+            })
+        
+        # If no topics found, provide empty state
+        if not topic_distribution:
+            return jsonify({
+                'success': True,
+                'topics': [],
+                'has_data': False,
+                'message': 'Record and analyze meetings to see topic distribution'
+            })
+        
+        return jsonify({
+            'success': True,
+            'topics': topic_distribution,
+            'has_data': True,
+            'total_topics': total_topics,
+            'meetings_analyzed': len(analytics)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_analytics_bp.route('/header', methods=['GET'])
+@login_required
+def get_analytics_header():
+    """
+    CROWN⁵+ ETag reconciliation endpoint.
+    Returns lightweight header with ETag for cache validation.
+    Supports If-None-Match for 304 Not Modified responses.
+    """
+    try:
+        import hashlib
+        
+        workspace_id = current_user.workspace_id
+        
+        # Get latest analytics metadata for ETag computation
+        latest_analytics = db.session.query(
+            func.max(Analytics.updated_at),
+            func.count(Analytics.id)
+        ).join(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Analytics.analysis_status == 'completed'
+        ).first()
+        
+        # Use deterministic fallback for empty data (fixed epoch, not now())
+        last_updated = latest_analytics[0] if latest_analytics else None
+        count = (latest_analytics[1] if latest_analytics else 0) or 0
+        
+        # Use fixed epoch for empty workspaces to ensure stable ETag
+        if last_updated is None:
+            last_updated_str = '1970-01-01T00:00:00'
+        else:
+            last_updated_str = last_updated.isoformat()
+        
+        etag_source = f"{workspace_id}:{last_updated_str}:{count}"
+        etag = hashlib.md5(etag_source.encode()).hexdigest()
+        
+        # Check If-None-Match header
+        if_none_match = request.headers.get('If-None-Match', '').strip('"')
+        if if_none_match == etag:
+            return '', 304  # Not Modified
+        
+        response = jsonify({
+            'success': True,
+            'last_updated': last_updated_str,
+            'analytics_count': count,
+            'workspace_id': workspace_id
+        })
+        
+        response.headers['ETag'] = f'"{etag}"'
+        response.headers['Cache-Control'] = 'private, must-revalidate'
+        
+        return response
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_analytics_bp.route('/checksum', methods=['GET'])
+@login_required
+def get_analytics_checksum():
+    """
+    CROWN⁵+ Checksum validation endpoint.
+    Returns lightweight checksum for idle sync drift detection.
+    """
+    try:
+        import hashlib
+        
+        workspace_id = current_user.workspace_id
+        days = request.args.get('days', 30, type=int)
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        # Get distinct meeting count (separate query to avoid join duplication)
+        meeting_count = db.session.query(
+            func.count(Meeting.id)
+        ).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).scalar() or 0
+        
+        # Get task count for workspace meetings
+        task_count = db.session.query(
+            func.count(Task.id)
+        ).join(Meeting, Task.meeting_id == Meeting.id).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).scalar() or 0
+        
+        # Get latest update timestamps
+        last_meeting_update = db.session.query(
+            func.max(Meeting.updated_at)
+        ).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).scalar()
+        
+        last_task_update = db.session.query(
+            func.max(Task.updated_at)
+        ).join(Meeting, Task.meeting_id == Meeting.id).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).scalar()
+        
+        # Build checksum from key metrics (use empty string for None values)
+        checksum_parts = [
+            str(workspace_id),
+            str(meeting_count),
+            str(task_count),
+            last_meeting_update.isoformat() if last_meeting_update else '',
+            last_task_update.isoformat() if last_task_update else ''
+        ]
+        
+        checksum_source = ':'.join(checksum_parts)
+        checksum = hashlib.sha256(checksum_source.encode()).hexdigest()[:16]
+        
+        return jsonify({
+            'success': True,
+            'checksum': checksum,
+            'timestamp': datetime.now().isoformat(),
+            'period_days': days
+        })
         
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
