@@ -128,3 +128,15 @@ The application utilizes a layered architecture with Flask as the web framework 
 - Applied Crown+ gradient backgrounds to Task Status Distribution donut chart
 - Enhanced Completion Over Time bar chart with softer grid lines and premium tooltips
 - Fixed Meeting Frequency chart with gradient fill, smooth curves, and reduced x-axis label density
+
+**December 1, 2025 - UX Stability Fixes:**
+- Fixed perpetual loading states in session tabs with 8-second graceful timeout (replaces "Analyzing meeting...", "Analytics are being calculated...", "Finding action items..." with helpful empty states)
+- Fixed Jump to transcript navigation to use `/sessions/<id>/refined` route for full insights loading (summary, analytics, tasks)
+- Fixed task page counter flickering with WebSocket stabilization guard and 100ms debounced counter updates
+- Extended TaskStateStore stabilization timeout from 3s to 4s for slower networks
+
+**December 1, 2025 - CROWN⁴.7 Counter Stabilization Pipeline:**
+- Implemented guarded pipeline pattern across all dashboard pages to eliminate counter flickering
+- **Dashboard Index**: `DashboardStabilizer` with guard flag, queue for cache updates, 5-second failsafe timeout. Server sync releases guard and replays queued updates through 100ms debounce.
+- **Meetings Page**: `MeetingsStabilizer` with guard flag, queue for WebSocket events during initial load, 8-second failsafe timeout. Initial API load releases guard and replays events. Server-rendered counts via `Meeting.archived` boolean matching API filtering.
+- **Analytics Page**: `AnalyticsStabilizer` with `_isInitialLoad` guard that only releases after both KPI and health fetches succeed. Cache skipped on initial load (server-rendered Jinja values are authoritative). Subsequent loads use cache-first with debounced server validation.

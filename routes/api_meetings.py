@@ -46,7 +46,9 @@ def list_meetings():
         
         # Eager load relationships to prevent N+1 queries
         # Use selectinload for *-to-many, joinedload for *-to-one
+        # IMPORTANT: Must include joinedload(Meeting.session) for to_dict() to access session.external_id
         stmt = stmt.options(
+            joinedload(Meeting.session),  # Required for session_id in to_dict()
             selectinload(Meeting.tasks).selectinload(Task.assigned_to),
             selectinload(Meeting.participants),
             joinedload(Meeting.analytics),
@@ -81,10 +83,12 @@ def get_meeting(meeting_id):
         from sqlalchemy.orm import selectinload, joinedload
         
         # Single query with eager loading to prevent N+1 queries (was 4 queries, now 1)
+        # IMPORTANT: Must include joinedload(Meeting.session) for to_dict() to access session.external_id
         meeting = db.session.query(Meeting).filter_by(
             id=meeting_id,
             workspace_id=current_user.workspace_id
         ).options(
+            joinedload(Meeting.session),  # Required for session_id in to_dict()
             selectinload(Meeting.tasks).joinedload(Task.assigned_to),
             selectinload(Meeting.participants).joinedload(Participant.user),
             joinedload(Meeting.analytics),

@@ -136,10 +136,10 @@
 
   <div class="meetings-tabs">
     <button class="tab-btn active" data-tab="active" onclick="switchTab('active')">
-      Active <span class="tab-count" id="active-count">0</span>
+      Active <span class="tab-count" id="active-count">{{ active_count|default(0) }}</span>
     </button>
     <button class="tab-btn" data-tab="archive" onclick="switchTab('archive')">
-      Archive <span class="tab-count" id="archive-count">0</span>
+      Archive <span class="tab-count" id="archive-count">{{ archive_count|default(0) }}</span>
     </button>
   </div>
 
@@ -179,10 +179,120 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/toast-notifications.js') }}"></script>
 <script nonce="{{ g.csp_nonce }}">
-console.log("🎬 Meetings Page v2.1 (Prefetch-integrated)");
+console.log("🎬 Meetings Page v2.1 (Prefetch-integrated, stabilized)");
 
 const WORKSPACE_ID = {{ workspace_id | tojson }};
 let allMeetings=[], activeMeetings=[], archivedMeetings=[], currentTab='active', socket=null, undoTimers=new Map();
+
+// CROWN⁴.7: Counter stabilization with guarded pipeline
+// Pattern: Initial load guard + queue for WebSocket events + debounced replay
+const MeetingsStabilizer = {
+  _loadComplete: false,
+  _eventQueue: [], // Queue all WebSocket events during initial load
+  _debounceTimer: null,
+  _lastValues: { active: null, archive: null },
+  _guardTimeout: null,
+  
+  init() {
+    // Capture initial values from DOM (server-rendered)
+    const activeEl = document.getElementById('active-count');
+    const archiveEl = document.getElementById('archive-count');
+    this._lastValues = {
+      active: parseInt(activeEl?.textContent) || 0,
+      archive: parseInt(archiveEl?.textContent) || 0
+    };
+    console.log('[MeetingsStabilizer] Initialized with server-rendered values:', this._lastValues);
+    
+    // Failsafe: release guard after 8 seconds if load never completes
+    this._guardTimeout = setTimeout(() => {
+      if (!this._loadComplete) {
+        console.warn('[MeetingsStabilizer] Guard timeout - releasing');
+        this.releaseGuard();
+      }
+    }, 8000);
+  },
+  
+  _applyCountersDebounced(activeCount, archiveCount) {
+    if (this._debounceTimer) {
+      clearTimeout(this._debounceTimer);
+    }
+    
+    this._debounceTimer = setTimeout(() => {
+      const activeEl = document.getElementById('active-count');
+      const archiveEl = document.getElementById('archive-count');
+      
+      if (activeEl && this._lastValues.active !== activeCount) {
+        activeEl.textContent = activeCount;
+        activeEl.classList.add('counter-updated');
+        setTimeout(() => activeEl.classList.remove('counter-updated'), 300);
+        this._lastValues.active = activeCount;
+      }
+      if (archiveEl && this._lastValues.archive !== archiveCount) {
+        archiveEl.textContent = archiveCount;
+        archiveEl.classList.add('counter-updated');
+        setTimeout(() => archiveEl.classList.remove('counter-updated'), 300);
+        this._lastValues.archive = archiveCount;
+      }
+    }, 100);
+  },
+  
+  _applyCountersImmediate(activeCount, archiveCount) {
+    const activeEl = document.getElementById('active-count');
+    const archiveEl = document.getElementById('archive-count');
+    
+    if (activeEl) {
+      activeEl.textContent = activeCount;
+      this._lastValues.active = activeCount;
+    }
+    if (archiveEl) {
+      archiveEl.textContent = archiveCount;
+      this._lastValues.archive = archiveCount;
+    }
+  },
+  
+  updateCounters(activeCount, archiveCount, isInitialLoad = false) {
+    // Initial API load: apply immediately and release guard
+    if (isInitialLoad) {
+      this._applyCountersImmediate(activeCount, archiveCount);
+      console.log('[MeetingsStabilizer] Initial counter update:', activeCount, archiveCount);
+      this.releaseGuard();
+      return;
+    }
+    
+    // During guard: queue WebSocket events for replay
+    if (!this._loadComplete) {
+      console.log('[MeetingsStabilizer] Queuing event during guard:', activeCount, archiveCount);
+      this._eventQueue.push({ active: activeCount, archive: archiveCount });
+      return;
+    }
+    
+    // After guard released: debounce all updates
+    this._applyCountersDebounced(activeCount, archiveCount);
+  },
+  
+  releaseGuard() {
+    if (this._loadComplete) return;
+    
+    this._loadComplete = true;
+    if (this._guardTimeout) {
+      clearTimeout(this._guardTimeout);
+      this._guardTimeout = null;
+    }
+    
+    console.log(`[MeetingsStabilizer] Guard released, replaying ${this._eventQueue.length} queued events`);
+    
+    // Replay all queued events through debounce
+    if (this._eventQueue.length > 0) {
+      // Apply final state from queue through debounce
+      const finalEvent = this._eventQueue[this._eventQueue.length - 1];
+      this._applyCountersDebounced(finalEvent.active, finalEvent.archive);
+    }
+    this._eventQueue = [];
+  }
+};
+
+// Initialize stabilizer
+MeetingsStabilizer.init();
 
 // 🔗 Hook into Dashboard globals (GSAP + Prefetch)
 window.handleMeetingHover = window.handleCardHover || function(){};
@@ -203,7 +313,7 @@ async function loadMeetings(){
     if(!res.ok)throw new Error(res.statusText);
     const data=await res.json();
     allMeetings=data.upserts||[];
-    separateMeetings(); renderMeetings();
+    separateMeetings(true); renderMeetings(); // true = initial load, counters update immediately
   }catch(e){
     console.error('❌ Load failed',e); showError('Failed to load meetings');
   }finally{
@@ -211,11 +321,11 @@ async function loadMeetings(){
   }
 }
 
-function separateMeetings(){
+function separateMeetings(isFromInitialLoad = false){
   activeMeetings=allMeetings.filter(m=>m.status!=='archived');
   archivedMeetings=allMeetings.filter(m=>m.status==='archived');
-  document.getElementById('active-count').textContent=activeMeetings.length;
-  document.getElementById('archive-count').textContent=archivedMeetings.length;
+  // Use stabilizer for debounced counter updates
+  MeetingsStabilizer.updateCounters(activeMeetings.length, archivedMeetings.length, isFromInitialLoad);
 }
 
 function groupMeetings(list){

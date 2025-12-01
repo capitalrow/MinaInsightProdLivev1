@@ -660,13 +660,6 @@
       <span class="tab-badge">{{ tasks|length }}</span>
       {% endif %}
     </button>
-    <button class="tab-button" data-tab="replay" role="tab" aria-selected="false" aria-controls="replay-tab">
-      <div class="tab-button-content">
-        <span class="tab-button-icon">🎵</span>
-        <span class="tab-button-label">Replay</span>
-      </div>
-      <span class="tab-badge tab-badge-secondary">Soon</span>
-    </button>
   </nav>
   
   <!-- Transcript Tab -->
@@ -1068,19 +1061,6 @@
     </div>
   </div>
   
-  <!-- Replay Tab (Future) -->
-  <div id="replay-tab" class="tab-content" role="tabpanel" aria-labelledby="replay-button">
-    <div class="tab-panel">
-      <div class="empty-state">
-        <div class="empty-state-icon">🎵</div>
-        <div class="empty-state-text">Audio replay with transcript sync coming soon</div>
-        <p style="margin-top: var(--space-2); color: var(--color-text-secondary); max-width: 500px; margin-left: auto; margin-right: auto;">
-          This feature will allow you to replay your meeting audio with synchronized transcript highlighting.
-        </p>
-      </div>
-    </div>
-  </div>
-  
 </div>
 {% endblock %}
 
@@ -1186,6 +1166,68 @@
       setTimeout(() => toast.remove(), 250);
     }, 2500);
   }
+  
+  // CROWN+ Graceful Loading State Timeout Handler
+  // Converts perpetual spinners to helpful empty states after 8 seconds
+  (function() {
+    const LOADING_TIMEOUT_MS = 8000;
+    
+    // Map of loading indicators (text match) to their graceful empty states
+    const loadingStateReplacements = {
+      'Analyzing meeting...': {
+        icon: '📋',
+        title: 'Meeting analysis not available',
+        description: 'Insights for this meeting haven\'t been generated. You can still view the full transcript in the Transcript tab.'
+      },
+      'Analytics are being calculated...': {
+        icon: '📊',
+        title: 'Analytics not available',
+        description: 'Analytics data for this meeting hasn\'t been calculated. Check the Transcript tab for meeting details.'
+      },
+      'Finding action items...': {
+        icon: '✓',
+        title: 'No action items available',
+        description: 'Action items for this meeting haven\'t been extracted. Try reviewing the transcript for any mentioned tasks.'
+      }
+    };
+    
+    // Find and replace loading states after timeout
+    setTimeout(function() {
+      const emptyStates = document.querySelectorAll('.empty-state');
+      
+      emptyStates.forEach(function(emptyState) {
+        const textEl = emptyState.querySelector('.empty-state-text');
+        if (!textEl) return;
+        
+        const currentText = textEl.textContent.trim();
+        const replacement = loadingStateReplacements[currentText];
+        
+        if (replacement) {
+          console.log('[Session Refined] Graceful timeout: replacing "' + currentText + '" with empty state');
+          
+          // Animate transition
+          emptyState.style.transition = 'opacity 0.3s ease-out';
+          emptyState.style.opacity = '0';
+          
+          setTimeout(function() {
+            // Update content
+            const iconEl = emptyState.querySelector('.empty-state-icon');
+            if (iconEl) iconEl.textContent = replacement.icon;
+            textEl.textContent = replacement.title;
+            
+            // Update description if exists
+            const descEl = emptyState.querySelector('p');
+            if (descEl) {
+              descEl.textContent = replacement.description;
+            }
+            
+            // Fade back in
+            emptyState.style.opacity = '1';
+          }, 300);
+        }
+      });
+    }, LOADING_TIMEOUT_MS);
+  })();
 </script>
 <script src="{{ url_for('static', filename='js/tabs.js') }}"></script>
 {% endblock %}

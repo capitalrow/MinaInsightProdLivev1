@@ -1168,6 +1168,35 @@
     const WORKSPACE_ID = {{ current_user.workspace_id }};
     const TOTAL_MEETINGS = {{ total_meetings|default(0) }};
     
+    // CROWN⁵+ KPI Stabilizer - prevents visual flickering during rapid updates
+    // Strategy: Cache renders immediately for instant TTI. All updates are debounced.
+    const AnalyticsStabilizer = {
+        _debounceTimers: new Map(),
+        
+        init() {
+            console.log('[AnalyticsStabilizer] Initialized with debounce-based stabilization');
+        },
+        
+        // Debounce updates to a specific element by 150ms
+        debounceUpdate(elementId, updateFn) {
+            if (this._debounceTimers.has(elementId)) {
+                clearTimeout(this._debounceTimers.get(elementId));
+            }
+            this._debounceTimers.set(elementId, setTimeout(() => {
+                updateFn();
+                this._debounceTimers.delete(elementId);
+            }, 150));
+        },
+        
+        // For immediate updates (e.g., initial cache render)
+        immediateUpdate(updateFn) {
+            updateFn();
+        }
+    };
+    
+    // Initialize stabilizer
+    AnalyticsStabilizer.init();
+    
     // CROWN⁵+ Cache-First Store
     const AnalyticsCache = {
         CACHE_KEY: 'crown5_analytics_v2',
@@ -1303,42 +1332,81 @@
         requestAnimationFrame(update);
     }
 
+    // Track if this is the initial page load (server-rendered values are authoritative)
+    let _isInitialLoad = true;
+    
     // Fetch and load analytics data
     async function loadAnalyticsData() {
-        // Use cache first
-        const cached = AnalyticsCache.get();
-        if (cached) {
-            applyAnalyticsData(cached);
+        // On initial load, skip cache - server-rendered Jinja values are already correct and instant
+        // Only use cache for subsequent calls (e.g., date range changes, WebSocket triggers)
+        const wasInitialLoad = _isInitialLoad;
+        
+        if (!wasInitialLoad) {
+            const cached = AnalyticsCache.get();
+            if (cached) {
+                console.log('[Analytics] Applying cached data for subsequent load');
+                AnalyticsStabilizer.immediateUpdate(() => applyAnalyticsData(cached));
+            }
+        } else {
+            console.log('[Analytics] Initial load - using server-rendered values (skipping cache)');
         }
 
+        const days = document.getElementById('date-range-select')?.value || 30;
+        
+        // Track success of both fetches before releasing initial load guard
+        let kpiFetchSuccess = false;
+        let healthFetchSuccess = false;
+        
+        // Fetch fresh data from server
         try {
-            const days = document.getElementById('date-range-select')?.value || 30;
-            
-            const [kpiRes, healthRes] = await Promise.all([
-                fetch(`/api/analytics/kpi-comparison?days=${days}`),
-                fetch(`/api/analytics/health-score?days=${days}`)
-            ]);
-            
+            const kpiRes = await fetch(`/api/analytics/kpi-comparison?days=${days}`);
             const kpiData = await kpiRes.json();
-            const healthData = await healthRes.json();
-            
             if (kpiData.success) {
-                applyKPIData(kpiData);
-                AnalyticsCache.set({ kpi: kpiData, health: healthData }, Date.now());
+                // On initial load, apply immediately (validates server-rendered values)
+                // On subsequent loads, debounce to prevent rapid visual changes
+                if (wasInitialLoad) {
+                    applyKPIData(kpiData);
+                } else {
+                    AnalyticsStabilizer.debounceUpdate('kpi-data', () => applyKPIData(kpiData));
+                }
+                // Cache the successful response for next time
+                AnalyticsCache.set({ kpi: kpiData }, Date.now());
+                kpiFetchSuccess = true;
             }
-            
-            if (healthData.success && healthData.health_score) {
-                applyHealthData(healthData.health_score);
-            }
-            
-            // Update insights count
-            const insightsCount = document.getElementById('insights-count');
-            if (insightsCount) {
-                insightsCount.textContent = `${TOTAL_MEETINGS} meetings analyzed`;
-            }
-            
         } catch (err) {
-            console.error('Failed to load analytics:', err);
+            console.error('Failed to load KPI data:', err);
+        }
+        
+        // Fetch health score data
+        try {
+            const healthRes = await fetch(`/api/analytics/health-score?days=${days}`);
+            const healthData = await healthRes.json();
+            if (healthData.success && healthData.health_score) {
+                // Same pattern: immediate on initial, debounced on subsequent
+                if (wasInitialLoad) {
+                    applyHealthData(healthData.health_score);
+                } else {
+                    AnalyticsStabilizer.debounceUpdate('health-data', () => applyHealthData(healthData.health_score));
+                }
+                healthFetchSuccess = true;
+            }
+        } catch (err) {
+            console.error('Failed to load health score:', err);
+        }
+        
+        // Only release initial load guard after BOTH fetches succeed
+        // This prevents stale cache from being applied on retry if first attempt partially fails
+        if (wasInitialLoad && kpiFetchSuccess && healthFetchSuccess) {
+            _isInitialLoad = false;
+            console.log('[Analytics] Initial load complete - cache enabled for future updates');
+        } else if (wasInitialLoad) {
+            console.warn('[Analytics] Initial load incomplete - keeping cache disabled for next attempt');
+        }
+        
+        // Update insights count
+        const insightsCount = document.getElementById('insights-count');
+        if (insightsCount) {
+            insightsCount.textContent = `${TOTAL_MEETINGS} meetings analyzed`;
         }
     }
 
@@ -1411,13 +1479,17 @@
                 return;
             }
             
-            loadAnalyticsData();
-            AnalyticsCache.lastSequenceId = delta.sequence_id;
+            // Debounce WebSocket-triggered data refresh
+            AnalyticsStabilizer.debounceUpdate('ws-refresh', () => {
+                loadAnalyticsData();
+                AnalyticsCache.lastSequenceId = delta.sequence_id;
+            });
             showUpdateIndicator();
         });
         
         window.wsManager.on('analytics_update', () => {
-            loadAnalyticsData();
+            // Debounce WebSocket-triggered data refresh
+            AnalyticsStabilizer.debounceUpdate('ws-update', () => loadAnalyticsData());
         });
         
         window.wsManager.on('disconnect', () => {

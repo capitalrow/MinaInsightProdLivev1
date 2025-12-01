@@ -109,6 +109,7 @@ class TaskTranscriptNavigation {
 
     /**
      * Jump to the transcript moment where this task was mentioned
+     * CROWN⁴.7: Uses session_external_id from task API for reliable navigation
      * @param {string|number} taskId - Task ID
      * @param {Object} optimisticContext - initial meeting/span hint from DOM
      */

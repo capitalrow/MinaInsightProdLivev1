@@ -260,9 +260,27 @@ def api_meetings():
 @login_required
 def meetings():
     """✨ CROWN⁴ Phase 4.6: Meetings overview page with real-time updates."""
-    # Just render the template - data will be loaded via API
+    # Query counts for server-side rendering (prevents initial 0→actual flicker)
+    # Use Meeting.archived boolean (not status) to match API filtering behavior
+    active_count = 0
+    archive_count = 0
+    try:
+        active_count = db.session.query(Meeting).filter(
+            Meeting.workspace_id == current_user.workspace_id,
+            Meeting.archived == False
+        ).count()
+        archive_count = db.session.query(Meeting).filter(
+            Meeting.workspace_id == current_user.workspace_id,
+            Meeting.archived == True
+        ).count()
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to get meeting counts: {e}")
+    
     response = make_response(render_template('dashboard/meetings_crown.html',
-                         workspace_id=current_user.workspace_id))
+                         workspace_id=current_user.workspace_id,
+                         active_count=active_count,
+                         archive_count=archive_count))
     
     # Prevent browser caching to ensure fresh template loads
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'

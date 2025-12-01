@@ -193,7 +193,8 @@ class Meeting(Base):
             'is_recurring': self.is_recurring,
             'organizer_id': self.organizer_id,
             'workspace_id': self.workspace_id,
-            'session_id': self.session.id if self.session else None,
+            'session_id': self.session.external_id if self.session else None,  # ULID for navigation
+            'session_internal_id': self.session.id if self.session else None,  # Internal FK
             'duration_minutes': self.duration_minutes,
             'participant_count': self.participant_count,
             'task_count': self.task_count,
