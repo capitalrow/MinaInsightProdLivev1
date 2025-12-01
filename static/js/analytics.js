@@ -1101,21 +1101,6 @@ class AnalyticsDashboard {
             }
         });
         
-        const rateDisplay = chartFrame.closest('.chart-card')?.querySelector('.completion-rate-display');
-        if (!rateDisplay) {
-            const card = chartFrame.closest('.chart-card');
-            if (card) {
-                const rateEl = document.createElement('div');
-                rateEl.className = 'completion-rate-display';
-                rateEl.innerHTML = `
-                    <div style="text-align: center; margin-top: var(--space-3);">
-                        <span style="font-size: 1.5rem; font-weight: 700; color: var(--color-success);">${Math.round(completionRate)}%</span>
-                        <span style="font-size: 0.85rem; color: var(--color-text-tertiary);"> completion rate</span>
-                    </div>
-                `;
-                card.appendChild(rateEl);
-            }
-        }
     }
 
     updateMeetingActivityChart(trendData) {
@@ -1129,13 +1114,16 @@ class AnalyticsDashboard {
         });
         const values = trendData.map(d => d.meetings);
 
-        // Hide any existing empty state before rendering chart
         this.hideCrown5EmptyChart(chartFrame);
 
-        // Destroy existing chart if it exists
         if (this.charts.meetingActivity) {
             this.charts.meetingActivity.destroy();
         }
+
+        const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, ctx.height || 200);
+        gradient.addColorStop(0, 'rgba(99, 102, 241, 0.25)');
+        gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.08)');
+        gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
 
         this.charts.meetingActivity = new Chart(ctx, {
             type: 'line',
@@ -1145,29 +1133,73 @@ class AnalyticsDashboard {
                     label: 'Meetings',
                     data: values,
                     borderColor: 'rgb(99, 102, 241)',
-                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    backgroundColor: gradient,
                     fill: true,
-                    tension: 0.4
+                    tension: 0.45,
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: 'rgb(99, 102, 241)',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                aspectRatio: 1.8,
+                aspectRatio: 2,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                        titleColor: '#f1f5f9',
+                        bodyColor: '#cbd5e1',
+                        borderColor: 'rgba(99, 102, 241, 0.3)',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        padding: 12,
+                        displayColors: false,
                         callbacks: {
                             title: (items) => items[0].label,
-                            label: (item) => `${item.parsed.y} meetings`
+                            label: (item) => `${item.parsed.y} meeting${item.parsed.y !== 1 ? 's' : ''}`
                         }
                     }
                 },
                 scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.7)',
+                            font: { size: 11 },
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 8
+                        },
+                        border: {
+                            display: false
+                        }
+                    },
                     y: { 
                         beginAtZero: true,
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.08)',
+                            drawBorder: false
+                        },
                         ticks: {
-                            precision: 0
+                            color: 'rgba(148, 163, 184, 0.7)',
+                            font: { size: 11 },
+                            precision: 0,
+                            padding: 8
+                        },
+                        border: {
+                            display: false
                         }
                     }
                 }
