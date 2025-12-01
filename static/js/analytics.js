@@ -224,27 +224,24 @@ class AnalyticsDashboard {
     }
 
     loadWidgetPreferences() {
-        const saved = localStorage.getItem('mina_analytics_widgets');
+        const saved = localStorage.getItem('mina_analytics_widgets_v2');
         return saved ? JSON.parse(saved) : {
+            'tier1-summary': true,
             'kpi-meetings': true,
             'kpi-tasks': true,
             'kpi-hours': true,
             'kpi-duration': true,
-            'chart-activity': true,
-            'chart-task-status': true,
-            'chart-speaker': true,
-            'chart-topics': true,
-            'chart-speaking-time': true,
-            'chart-participation': true,
-            'chart-sentiment': true,
-            'topic-trends': true,
-            'qa-tracking': true,
-            'action-items': true
+            'actionable-insights': true,
+            'deep-dive-tasks': true,
+            'deep-dive-activity': true,
+            'deep-dive-participation': true,
+            'deep-dive-themes': true,
+            'deep-dive-insights': true
         };
     }
 
     saveWidgetPreferences() {
-        localStorage.setItem('mina_analytics_widgets', JSON.stringify(this.widgetPreferences));
+        localStorage.setItem('mina_analytics_widgets_v2', JSON.stringify(this.widgetPreferences));
     }
 
     setupWidgetCustomization() {
@@ -289,20 +286,17 @@ class AnalyticsDashboard {
         this.previouslyFocusedElement = document.activeElement;
 
         const widgets = [
-            { id: 'kpi-meetings', name: 'Total Meetings KPI', category: 'KPIs' },
-            { id: 'kpi-tasks', name: 'Action Items KPI', category: 'KPIs' },
-            { id: 'kpi-hours', name: 'Hours Saved KPI', category: 'KPIs' },
-            { id: 'kpi-duration', name: 'Avg Meeting Length KPI', category: 'KPIs' },
-            { id: 'chart-activity', name: 'Meeting Activity Chart', category: 'Charts' },
-            { id: 'chart-task-status', name: 'Task Status Chart', category: 'Charts' },
-            { id: 'chart-speaker', name: 'Speaker Distribution', category: 'Charts' },
-            { id: 'chart-topics', name: 'Top Topics', category: 'Charts' },
-            { id: 'chart-speaking-time', name: 'Speaking Time Analysis', category: 'Engagement' },
-            { id: 'chart-participation', name: 'Participation Balance', category: 'Engagement' },
-            { id: 'chart-sentiment', name: 'Sentiment Analysis', category: 'Engagement' },
-            { id: 'topic-trends', name: 'Topic Evolution Timeline', category: 'Productivity' },
-            { id: 'qa-tracking', name: 'Q&A Tracking', category: 'Productivity' },
-            { id: 'action-items', name: 'Action Items Completion', category: 'Productivity' }
+            { id: 'tier1-summary', name: 'Executive Summary & Health Score', category: 'Summary' },
+            { id: 'kpi-meetings', name: 'Total Meetings', category: 'KPIs' },
+            { id: 'kpi-tasks', name: 'Action Items', category: 'KPIs' },
+            { id: 'kpi-hours', name: 'Hours Saved', category: 'KPIs' },
+            { id: 'kpi-duration', name: 'Avg Duration', category: 'KPIs' },
+            { id: 'actionable-insights', name: 'Actionable Insights', category: 'Insights' },
+            { id: 'deep-dive-tasks', name: 'Task Follow-Through', category: 'Deep Dive' },
+            { id: 'deep-dive-activity', name: 'Meeting Activity', category: 'Deep Dive' },
+            { id: 'deep-dive-participation', name: 'Participation Balance', category: 'Deep Dive' },
+            { id: 'deep-dive-themes', name: 'Key Themes', category: 'Deep Dive' },
+            { id: 'deep-dive-insights', name: 'AI Insights', category: 'Deep Dive' }
         ];
 
         const grouped = widgets.reduce((acc, widget) => {
@@ -433,13 +427,16 @@ class AnalyticsDashboard {
     }
 
     applyWidgetPreferences() {
-        // This would require adding data-widget-id to each widget in the HTML
-        // For now, just console log (in production, you'd hide/show widgets)
         console.log('Widget preferences applied:', this.widgetPreferences);
         
-        // Example: Show/hide widgets based on preferences
         Object.keys(this.widgetPreferences).forEach(widgetId => {
-            const elements = document.querySelectorAll(`[data-widget="${widgetId}"]`);
+            let elements = document.querySelectorAll(`[data-widget="${widgetId}"]`);
+            if (elements.length === 0) {
+                elements = document.querySelectorAll(`#${widgetId}`);
+            }
+            if (elements.length === 0 && widgetId.startsWith('kpi-')) {
+                elements = document.querySelectorAll(`[data-kpi="${widgetId.replace('kpi-', '')}"]`);
+            }
             elements.forEach(el => {
                 if (this.widgetPreferences[widgetId]) {
                     el.style.display = '';
@@ -451,7 +448,7 @@ class AnalyticsDashboard {
     }
 
     setupDateRangeFilter() {
-        const dateSelect = document.querySelector('.date-range-select');
+        const dateSelect = document.querySelector('#date-range-select') || document.querySelector('.date-range-select');
         if (dateSelect) {
             dateSelect.addEventListener('change', async (e) => {
                 this.selectedDateRange = parseInt(e.target.value);

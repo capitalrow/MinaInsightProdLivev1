@@ -5,7 +5,6 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/crown5-analytics.css') }}">
 <style>
-/* Screen Reader Only - Accessibility */
 .sr-only {
     position: absolute;
     width: 1px;
@@ -18,7 +17,6 @@
     border: 0;
 }
 
-/* Focus styles for accessibility */
 .analytics-tab:focus-visible,
 .kpi-card:focus-visible,
 .chart-card:focus-visible,
@@ -27,115 +25,549 @@
     outline-offset: 2px;
 }
 
-/* Analytics Workspace - Properly Constrained */
 .analytics-workspace {
-    width: clamp(960px, 90vw, 1440px);
+    width: clamp(320px, 95vw, 1400px);
     max-width: 100%;
     min-height: calc(100vh - 64px);
     margin: 0 auto;
-    padding: var(--space-8) var(--space-6);
+    padding: var(--space-6) var(--space-4);
+}
+
+@media (min-width: 768px) {
+    .analytics-workspace {
+        padding: var(--space-8) var(--space-6);
+    }
 }
 
 .analytics-header {
     margin-bottom: var(--space-6);
-    animation: fadeInUp 0.6s ease-out;
+    animation: crownFadeIn 0.5s ease-out;
 }
 
 .analytics-title {
-    font-size: var(--font-size-4xl);
-    font-weight: var(--font-weight-bold);
-    background: var(--gradient-primary);
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    font-weight: 700;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     margin-bottom: var(--space-2);
+    letter-spacing: -0.02em;
 }
 
 .analytics-subtitle {
     color: var(--color-text-secondary);
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-base);
 }
 
-/* KPI Cards Grid */
-.kpi-grid {
+/* ============================================================================
+   TIER 1: EXECUTIVE SUMMARY - Premium Hero Section
+   ============================================================================ */
+.tier1-executive-summary {
+    background: linear-gradient(135deg, 
+        rgba(99, 102, 241, 0.08) 0%, 
+        rgba(139, 92, 246, 0.06) 50%, 
+        rgba(6, 182, 212, 0.04) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-6);
+    margin-bottom: var(--space-6);
+    position: relative;
+    overflow: hidden;
+    animation: crownFadeIn 0.6s ease-out 0.1s both;
+}
+
+.tier1-executive-summary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.health-score-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+@media (min-width: 768px) {
+    .health-score-container {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+}
+
+.health-score-main {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+}
+
+.health-score-ring {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    flex-shrink: 0;
+}
+
+.health-score-ring svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.health-score-ring-bg {
+    fill: none;
+    stroke: rgba(107, 114, 128, 0.15);
+    stroke-width: 4;
+}
+
+.health-score-ring-arc {
+    fill: none;
+    stroke: url(#healthGradient);
+    stroke-width: 4;
+    stroke-dasharray: 0, 100;
+    stroke-linecap: round;
+    transition: stroke-dasharray 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.health-score-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.health-score-value {
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+}
+
+.health-score-label {
+    font-size: 0.7rem;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 2px;
+}
+
+.health-score-info h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.health-score-message {
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: var(--space-2);
+}
+
+.health-score-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-full);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.health-score-trend.up {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--color-success);
+}
+
+.health-score-trend.down {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-error);
+}
+
+.health-score-trend.stable {
+    background: rgba(107, 114, 128, 0.1);
+    color: var(--color-text-secondary);
+}
+
+.health-breakdown {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+}
+
+@media (min-width: 768px) {
+    .health-breakdown {
+        grid-template-columns: repeat(4, 1fr);
+        gap: var(--space-4);
+    }
+}
+
+.health-breakdown-item {
+    text-align: center;
+    padding: var(--space-3);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+}
+
+.health-breakdown-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.health-breakdown-label {
+    font-size: 0.7rem;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-1);
+}
+
+.health-breakdown-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+/* ============================================================================
+   TIER 2: KPI CARDS - Streamlined Grid
+   ============================================================================ */
+.tier2-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--space-4);
     margin-bottom: var(--space-6);
 }
 
-.kpi-card {
-    background: var(--glass-bg);
-    backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-xl);
-    padding: var(--space-6);
-    transition: all var(--transition-base);
-    animation: fadeInUp 0.6s ease-out;
-    animation-fill-mode: both;
-    position: relative;
-    overflow: hidden;
+@media (min-width: 768px) {
+    .tier2-kpi-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
 }
 
-.kpi-card:nth-child(1) { animation-delay: 0.1s; }
+.kpi-card {
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: crownFadeIn 0.5s ease-out both;
+}
+
+.kpi-card:nth-child(1) { animation-delay: 0.15s; }
 .kpi-card:nth-child(2) { animation-delay: 0.2s; }
-.kpi-card:nth-child(3) { animation-delay: 0.3s; }
-.kpi-card:nth-child(4) { animation-delay: 0.4s; }
+.kpi-card:nth-child(3) { animation-delay: 0.25s; }
+.kpi-card:nth-child(4) { animation-delay: 0.3s; }
+
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--kpi-accent, linear-gradient(90deg, #6366f1, #8b5cf6));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
 
 .kpi-card:hover {
     transform: translateY(-4px);
-    border-color: var(--color-primary);
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 
+        0 20px 40px -12px rgba(0, 0, 0, 0.25),
+        0 0 0 1px rgba(99, 102, 241, 0.1);
 }
 
-/* Chart Layout Grids */
-.charts-primary-grid {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: var(--space-6);
+.kpi-card:hover::before {
+    opacity: 1;
+}
+
+.kpi-card[data-kpi="meetings"] { --kpi-accent: linear-gradient(90deg, #6366f1, #818cf8); }
+.kpi-card[data-kpi="tasks"] { --kpi-accent: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+.kpi-card[data-kpi="hours"] { --kpi-accent: linear-gradient(90deg, #06b6d4, #22d3ee); }
+.kpi-card[data-kpi="duration"] { --kpi-accent: linear-gradient(90deg, #ec4899, #f472b6); }
+
+.kpi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-3);
+}
+
+.kpi-label {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+}
+
+.kpi-badge {
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.kpi-badge.up {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.kpi-badge.down {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.kpi-badge.neutral {
+    background: rgba(107, 114, 128, 0.15);
+    color: var(--color-text-secondary);
+}
+
+.kpi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1.1;
+    margin-bottom: var(--space-1);
+}
+
+.kpi-comparison {
+    font-size: 0.8rem;
+    color: var(--color-text-tertiary);
+}
+
+/* ============================================================================
+   TIER 2: ACTIONABLE INSIGHTS - Consolidated Cards
+   ============================================================================ */
+.tier2-actionable-insights {
     margin-bottom: var(--space-6);
+    animation: crownFadeIn 0.5s ease-out 0.35s both;
 }
 
-.charts-equal-grid {
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-4);
+}
+
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.section-badge {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+    padding: var(--space-1) var(--space-2);
+    background: rgba(107, 114, 128, 0.1);
+    border-radius: var(--radius-full);
+}
+
+.insights-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-6);
+    gap: var(--space-4);
 }
 
-.charts-single {
-    margin-bottom: var(--space-6);
+@media (min-width: 768px) {
+    .insights-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .insights-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.insight-card {
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+    transition: all 0.3s ease;
+}
+
+.insight-card:hover {
+    background: rgba(30, 41, 59, 0.7);
+    border-color: rgba(99, 102, 241, 0.2);
+    transform: translateY(-2px);
+}
+
+.insight-card.success { border-left: 3px solid #22c55e; }
+.insight-card.warning { border-left: 3px solid #f59e0b; }
+.insight-card.info { border-left: 3px solid #6366f1; }
+.insight-card.action { border-left: 3px solid #8b5cf6; }
+
+.insight-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-3);
+}
+
+.insight-card.success .insight-icon { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.insight-card.warning .insight-icon { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.insight-card.info .insight-icon { background: rgba(99, 102, 241, 0.15); color: #6366f1; }
+.insight-card.action .insight-icon { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+
+.insight-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.insight-description {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+}
+
+.insight-action {
+    margin-top: var(--space-3);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: 0.8rem;
+    color: var(--color-primary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: gap 0.2s ease;
+}
+
+.insight-action:hover {
+    gap: var(--space-2);
+}
+
+/* ============================================================================
+   TIER 3: DEEP DIVE ACCORDION - Consolidated Analytics
+   ============================================================================ */
+.tier3-deep-dive {
+    animation: crownFadeIn 0.5s ease-out 0.4s both;
+}
+
+.deep-dive-section {
+    background: rgba(30, 41, 59, 0.4);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--space-4);
+    overflow: hidden;
+}
+
+.deep-dive-header {
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.deep-dive-header:hover {
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.deep-dive-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.deep-dive-header .icon {
+    width: 20px;
+    height: 20px;
+    color: var(--color-primary);
+}
+
+.deep-dive-toggle {
+    width: 24px;
+    height: 24px;
+    color: var(--color-text-tertiary);
+    transition: transform 0.3s ease;
+}
+
+.deep-dive-section.open .deep-dive-toggle {
+    transform: rotate(180deg);
+}
+
+.deep-dive-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.deep-dive-section.open .deep-dive-content {
+    max-height: 2000px;
+}
+
+.deep-dive-body {
+    padding: 0 var(--space-5) var(--space-5);
+}
+
+/* Consolidated Chart Cards */
+.consolidated-chart-grid {
+    display: grid;
+    gap: var(--space-4);
+}
+
+@media (min-width: 768px) {
+    .consolidated-chart-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 .chart-card {
-    background: var(--glass-bg);
-    backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-xl);
-    padding: var(--space-6);
-    animation: fadeInUp 0.6s ease-out;
-    animation-fill-mode: both;
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
 }
 
-/* Chart Frame Container for Controlled Sizing */
+.chart-card h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.chart-card .chart-subtitle {
+    font-size: 0.8rem;
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-4);
+}
+
 .chart-frame {
     position: relative;
     width: 100%;
-    aspect-ratio: 16 / 9;
-}
-
-.chart-frame.chart-doughnut,
-.chart-frame.chart-radar {
-    aspect-ratio: 1 / 1;
-    max-width: 420px;
-    min-width: 280px;
-    margin: 0 auto;
-}
-
-.chart-frame.chart-radar {
-    transition: all var(--transition-base);
-}
-
-.chart-frame.chart-radar:hover {
-    transform: scale(1.02);
+    min-height: 200px;
 }
 
 .chart-frame canvas {
@@ -143,71 +575,77 @@
     height: 100% !important;
 }
 
-.analytics-tab {
-    padding: var(--space-3) var(--space-4);
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--color-text-secondary);
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-base);
+/* ============================================================================
+   ONBOARDING BANNER - Progressive Disclosure
+   ============================================================================ */
+.onboarding-banner {
+    background: linear-gradient(135deg, 
+        rgba(99, 102, 241, 0.1) 0%, 
+        rgba(139, 92, 246, 0.08) 100%);
+    border: 1px dashed rgba(99, 102, 241, 0.3);
+    border-radius: var(--radius-xl);
+    padding: var(--space-8);
+    text-align: center;
+    margin-bottom: var(--space-6);
 }
 
-.analytics-tab:hover {
-    color: var(--color-text-primary);
-    background: var(--color-surface-hover);
-}
-
-.analytics-tab.active {
-    color: var(--color-primary);
-    border-bottom-color: var(--color-primary);
-}
-
-.analytics-tab-content {
+.onboarding-banner.hidden {
     display: none;
 }
 
-.analytics-tab-content.active {
-    display: block;
+.onboarding-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto var(--space-4);
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: var(--radius-xl);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary);
 }
 
-/* Date Range Select Styling */
-.date-range-select {
-    background: var(--glass-bg);
-    backdrop-filter: var(--backdrop-blur);
-    border: 1px solid var(--glass-border);
+.onboarding-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.onboarding-description {
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+    max-width: 400px;
+    margin: 0 auto var(--space-4);
+    line-height: 1.6;
+}
+
+.onboarding-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-5);
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
     border-radius: var(--radius-lg);
-    padding: var(--space-2) var(--space-3);
-    color: var(--color-text-primary);
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-base);
-    min-width: 140px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: all 0.2s ease;
 }
 
-.date-range-select:hover {
-    border-color: var(--color-primary);
-    background: rgba(99, 102, 241, 0.05);
+.onboarding-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
 }
 
-.date-range-select:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.date-range-select option {
-    background: var(--color-surface);
-    color: var(--color-text-primary);
-    padding: var(--space-2);
-}
-
-@keyframes fadeInUp {
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+@keyframes crownFadeIn {
     from {
         opacity: 0;
-        transform: translateY(20px);
+        transform: translateY(12px);
     }
     to {
         opacity: 1;
@@ -215,82 +653,46 @@
     }
 }
 
-/* Responsive Breakpoints */
+@keyframes crownPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(99, 102, 241, 0);
+    }
+}
 
-/* Tablets and smaller desktops (≤1280px) */
-@media (max-width: 1280px) {
+.crown5-updating {
+    animation: crownPulse 0.6s ease-out;
+}
+
+/* ============================================================================
+   RESPONSIVE REFINEMENTS
+   ============================================================================ */
+@media (max-width: 640px) {
     .analytics-workspace {
-        width: 100%;
+        padding: var(--space-4) var(--space-3);
     }
     
-    .kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-/* Tablets (≤1024px) */
-@media (max-width: 1024px) {
-    .charts-primary-grid,
-    .charts-equal-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* Mobile (≤768px) */
-@media (max-width: 768px) {
-    .analytics-workspace {
+    .tier1-executive-summary {
         padding: var(--space-4);
     }
     
-    .analytics-title {
-        font-size: var(--font-size-2xl);
+    .health-score-ring {
+        width: 90px;
+        height: 90px;
     }
     
-    .kpi-grid {
-        grid-template-columns: 1fr;
-        gap: var(--space-3);
+    .health-score-value {
+        font-size: 1.5rem;
     }
     
-    .analytics-header .flex {
-        flex-direction: column;
-        gap: var(--space-3);
+    .kpi-value {
+        font-size: 1.5rem;
     }
     
-    .analytics-header .flex:last-child {
-        width: 100%;
-        flex-direction: row;
-    }
-    
-    .date-range-select {
-        flex: 1;
-        min-width: 120px;
-    }
-    
-    /* Constrain chart sizes on mobile */
-    .chart-card {
+    .kpi-card {
         padding: var(--space-4);
-    }
-    
-    /* Responsive circular charts on mobile */
-    .chart-frame.chart-radar,
-    .chart-frame.chart-doughnut {
-        max-width: 340px;
-        min-width: 260px;
-    }
-}
-
-/* Small mobile (≤480px) */
-@media (max-width: 480px) {
-    .analytics-tab {
-        padding: var(--space-2) var(--space-3);
-        font-size: 0.875rem;
-    }
-    
-    /* Optimize circular charts for small screens */
-    .chart-frame.chart-radar,
-    .chart-frame.chart-doughnut {
-        max-width: 280px;
-        min-width: 240px;
     }
 }
 </style>
@@ -298,486 +700,409 @@
 
 {% block content %}
 <div class="analytics-workspace" role="main" aria-label="Analytics Dashboard">
-    <!-- Screen reader live region for KPI updates -->
     <div id="analytics-live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     
-    <!-- Header with Filters -->
-    <header class="analytics-header" role="banner">
-        <div class="flex justify-between items-start mb-4">
+    <!-- Header -->
+    <header class="analytics-header">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <h1 class="analytics-title" id="analytics-page-title">Analytics</h1>
-                <p class="analytics-subtitle" id="analytics-page-desc">Insights from your meetings and productivity</p>
+                <h1 class="analytics-title">Analytics</h1>
+                <p class="analytics-subtitle">Insights from your meetings and productivity</p>
             </div>
-            <div class="flex gap-3" role="toolbar" aria-label="Analytics controls">
-                <label for="date-range-select" class="sr-only">Select date range</label>
-                <select id="date-range-select" class="date-range-select" aria-describedby="date-range-help">
+            <div class="flex gap-2 flex-wrap">
+                <select id="date-range-select" class="px-3 py-2 text-sm rounded-lg bg-white/5 border border-white/10 text-white focus:border-primary focus:outline-none" aria-label="Select date range">
                     <option value="7">Last 7 days</option>
                     <option value="30" selected>Last 30 days</option>
                     <option value="90">Last 90 days</option>
-                    <option value="365">Last year</option>
                 </select>
-                <span id="date-range-help" class="sr-only">Filter analytics data by time period</span>
-                <button class="btn btn-outline" id="customizeWidgetsBtn" aria-label="Customize dashboard widgets" aria-haspopup="dialog">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
-                    </svg>
-                    <span>Customize</span>
-                </button>
-                <button class="btn btn-outline" id="exportAnalyticsBtn" aria-label="Export analytics data">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <button class="btn btn-outline text-sm" id="exportAnalyticsBtn" aria-label="Export analytics">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                     </svg>
-                    <span>Export</span>
+                    Export
                 </button>
             </div>
         </div>
     </header>
 
-    <!-- Tier 1: Executive Summary with Meeting Health Score -->
-    <section id="executive-summary" class="mb-6" role="region" aria-label="Executive Summary">
-        <div class="executive-summary-card" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 50%, rgba(6, 182, 212, 0.05) 100%); border-radius: var(--radius-lg); padding: var(--space-6); border: 1px solid rgba(99, 102, 241, 0.1);">
-            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <!-- Health Score Ring -->
-                <div class="flex items-center gap-6">
-                    <div class="health-score-ring" role="img" aria-label="Meeting Health Score" style="position: relative; width: 100px; height: 100px;">
-                        <svg viewBox="0 0 36 36" style="width: 100%; height: 100%; transform: rotate(-90deg);">
-                            <path id="health-score-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="rgba(107, 114, 128, 0.2)" stroke-width="3"/>
-                            <path id="health-score-arc" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--color-primary)" stroke-width="3" stroke-dasharray="0, 100" stroke-linecap="round" style="transition: stroke-dasharray 1s ease-out, stroke 0.3s ease;"/>
+    <!-- Onboarding Banner (shown when < 3 meetings) -->
+    <div id="onboarding-banner" class="onboarding-banner {% if total_meetings >= 3 %}hidden{% endif %}">
+        <div class="onboarding-icon">
+            <svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+        </div>
+        <h2 class="onboarding-title">Unlock Your Meeting Analytics</h2>
+        <p class="onboarding-description">Record at least 3 meetings to unlock detailed analytics, trends, and personalized recommendations.</p>
+        <a href="{{ url_for('dashboard.index') }}" class="onboarding-cta">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+            </svg>
+            Start Recording
+        </a>
+    </div>
+
+    <!-- TIER 1: Executive Summary -->
+    <section id="tier1-summary" class="tier1-executive-summary" role="region" aria-label="Executive Summary">
+        <svg width="0" height="0" style="position: absolute;">
+            <defs>
+                <linearGradient id="healthGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#6366f1"/>
+                    <stop offset="100%" style="stop-color:#8b5cf6"/>
+                </linearGradient>
+            </defs>
+        </svg>
+        
+        <div class="health-score-container">
+            <div class="health-score-main">
+                <div class="health-score-ring" role="img" aria-label="Meeting Health Score">
+                    <svg viewBox="0 0 36 36">
+                        <path class="health-score-ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        <path id="health-score-arc" class="health-score-ring-arc" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    </svg>
+                    <div class="health-score-center">
+                        <span id="health-score-value" class="health-score-value" aria-live="polite">—</span>
+                        <span class="health-score-label">Score</span>
+                    </div>
+                </div>
+                <div class="health-score-info">
+                    <h2>Meeting Health Score</h2>
+                    <p id="health-score-message" class="health-score-message">Analyzing your meeting patterns...</p>
+                    <div id="health-score-trend" class="health-score-trend stable">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14"/>
                         </svg>
-                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
-                            <span id="health-score-value" class="text-2xl font-bold" aria-live="polite">—</span>
-                        </div>
-                    </div>
-                    <div>
-                        <h2 class="text-lg font-semibold mb-1">Meeting Health Score</h2>
-                        <p id="health-score-message" class="text-sm text-secondary">Analyzing your meetings...</p>
-                        <div id="health-score-trend" class="flex items-center gap-2 mt-2" aria-live="polite"></div>
+                        <span>Calculating trend...</span>
                     </div>
                 </div>
-                
-                <!-- Health Breakdown -->
-                <div id="health-breakdown" class="flex flex-wrap gap-4" role="list" aria-label="Health Score Breakdown">
-                    <div class="health-breakdown-item" role="listitem" style="min-width: 100px;">
-                        <p class="text-xs text-tertiary uppercase tracking-wide">Effectiveness</p>
-                        <p id="health-effectiveness" class="text-lg font-semibold">—</p>
-                    </div>
-                    <div class="health-breakdown-item" role="listitem" style="min-width: 100px;">
-                        <p class="text-xs text-tertiary uppercase tracking-wide">Engagement</p>
-                        <p id="health-engagement" class="text-lg font-semibold">—</p>
-                    </div>
-                    <div class="health-breakdown-item" role="listitem" style="min-width: 100px;">
-                        <p class="text-xs text-tertiary uppercase tracking-wide">Follow-through</p>
-                        <p id="health-followthrough" class="text-lg font-semibold">—</p>
-                    </div>
-                    <div class="health-breakdown-item" role="listitem" style="min-width: 100px;">
-                        <p class="text-xs text-tertiary uppercase tracking-wide">Decisions</p>
-                        <p id="health-decisions" class="text-lg font-semibold">—</p>
-                    </div>
+            </div>
+            
+            <div class="health-breakdown" role="list" aria-label="Health Score Breakdown">
+                <div class="health-breakdown-item" role="listitem">
+                    <p class="health-breakdown-label">Effectiveness</p>
+                    <p id="health-effectiveness" class="health-breakdown-value">—</p>
+                </div>
+                <div class="health-breakdown-item" role="listitem">
+                    <p class="health-breakdown-label">Engagement</p>
+                    <p id="health-engagement" class="health-breakdown-value">—</p>
+                </div>
+                <div class="health-breakdown-item" role="listitem">
+                    <p class="health-breakdown-label">Follow-through</p>
+                    <p id="health-followthrough" class="health-breakdown-value">—</p>
+                </div>
+                <div class="health-breakdown-item" role="listitem">
+                    <p class="health-breakdown-label">Decisions</p>
+                    <p id="health-decisions" class="health-breakdown-value">—</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Tier 2: Actionable Insights -->
-    <section id="actionable-insights-section" class="mb-6" role="region" aria-label="Actionable Insights">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">Actionable Insights</h2>
-            <span class="text-xs text-tertiary" id="insights-count">Loading...</span>
+    <!-- TIER 2: KPI Cards -->
+    <section class="tier2-kpi-grid" role="region" aria-label="Key Performance Indicators">
+        <article class="kpi-card" data-kpi="meetings" tabindex="0">
+            <div class="kpi-header">
+                <span class="kpi-label">Total Meetings</span>
+                <span id="kpi-meetings-badge" class="kpi-badge neutral">—</span>
+            </div>
+            <p id="kpi-meetings-value" class="kpi-value">{{ total_meetings|default(0) }}</p>
+            <p id="kpi-meetings-comparison" class="kpi-comparison">Loading comparison...</p>
+        </article>
+        
+        <article class="kpi-card" data-kpi="tasks" tabindex="0">
+            <div class="kpi-header">
+                <span class="kpi-label">Action Items</span>
+                <span id="kpi-tasks-badge" class="kpi-badge {% if task_completion_rate|default(0) >= 70 %}up{% elif task_completion_rate|default(0) >= 40 %}neutral{% else %}down{% endif %}">{{ task_completion_rate|default(0) }}%</span>
+            </div>
+            <p id="kpi-tasks-value" class="kpi-value">{{ total_tasks|default(0) }}</p>
+            <p id="kpi-tasks-comparison" class="kpi-comparison">{{ task_completion_rate|default(0) }}% completion rate</p>
+        </article>
+        
+        <article class="kpi-card" data-kpi="hours" tabindex="0">
+            <div class="kpi-header">
+                <span class="kpi-label">Hours Saved</span>
+                <span id="kpi-hours-badge" class="kpi-badge neutral">—</span>
+            </div>
+            <p id="kpi-hours-value" class="kpi-value">{{ hours_saved|default(0) }}h</p>
+            <p id="kpi-hours-comparison" class="kpi-comparison">Through efficient meetings</p>
+        </article>
+        
+        <article class="kpi-card" data-kpi="duration" tabindex="0">
+            <div class="kpi-header">
+                <span class="kpi-label">Avg Duration</span>
+                <span id="kpi-duration-badge" class="kpi-badge neutral">—</span>
+            </div>
+            <p id="kpi-duration-value" class="kpi-value">{{ avg_duration|default(0) }}m</p>
+            <p id="kpi-duration-comparison" class="kpi-comparison">Per meeting average</p>
+        </article>
+    </section>
+
+    <!-- TIER 2: Actionable Insights -->
+    <section class="tier2-actionable-insights" role="region" aria-label="Actionable Insights">
+        <div class="section-header">
+            <h2 class="section-title">Actionable Insights</h2>
+            <span id="insights-count" class="section-badge">Loading...</span>
         </div>
-        <div id="actionable-insights-container" class="grid gap-3 md:grid-cols-2" role="feed" aria-label="Meeting insights and recommendations">
-            <div class="crown5-empty-state" role="status">
-                <div class="crown5-empty-illustration">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+        
+        <div id="actionable-insights-container" class="insights-grid" role="feed">
+            <div class="insight-card success">
+                <div class="insight-icon">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
-                <p class="crown5-empty-title">Analyzing meeting patterns...</p>
-                <p class="crown5-empty-description">Smart recommendations will appear here</p>
+                <h3 class="insight-title">Task Follow-Through</h3>
+                <p id="insight-tasks-desc" class="insight-description">{{ task_completion_rate|default(0) }}% of action items completed on time</p>
             </div>
-        </div>
-    </section>
-
-    <!-- KPI Cards -->
-    <section class="kpi-grid crown5-tile-grid" role="region" aria-label="Key Performance Indicators">
-        <article class="kpi-card" data-widget="kpi-meetings" data-kpi="total_meetings" role="article" aria-labelledby="kpi-meetings-label" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, transparent 100%);" tabindex="0">
-            <div class="flex justify-between items-start mb-2">
-                <p id="kpi-meetings-label" class="text-tertiary text-sm font-medium">Total Meetings</p>
-                <span id="kpi-meetings-badge" class="kpi-badge px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(107, 114, 128, 0.1); color: var(--color-tertiary);" aria-label="Calculating change">
-                    —
-                </span>
-            </div>
-            <p class="text-3xl font-bold mb-1 crown5-kpi-value" id="kpi-meetings-value" data-format="integer" aria-live="polite">{{ total_meetings|default(0) }}</p>
-            <p class="text-sm text-secondary kpi-comparison" id="kpi-meetings-comparison">Loading comparison...</p>
-        </article>
-        
-        <article class="kpi-card" data-widget="kpi-tasks" data-kpi="action_items" role="article" aria-labelledby="kpi-tasks-label" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, transparent 100%);" tabindex="0">
-            <div class="flex justify-between items-start mb-2">
-                <p id="kpi-tasks-label" class="text-tertiary text-sm font-medium">Action Items</p>
-                <span id="kpi-tasks-badge" class="kpi-badge px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);" aria-label="{{ task_completion_rate|default(0) }} percent complete">
-                    {{ task_completion_rate|default(0) }}%
-                </span>
-            </div>
-            <p class="text-3xl font-bold mb-1 crown5-kpi-value" id="kpi-tasks-value" data-format="integer" aria-live="polite">{{ total_tasks|default(0) }}</p>
-            <p class="text-sm text-secondary kpi-comparison" id="kpi-tasks-comparison">{{ task_completion_rate|default(0) }}% completion rate</p>
-        </article>
-        
-        <article class="kpi-card" data-widget="kpi-hours" data-kpi="hours_saved" role="article" aria-labelledby="kpi-hours-label" style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, transparent 100%);" tabindex="0">
-            <div class="flex justify-between items-start mb-2">
-                <p id="kpi-hours-label" class="text-tertiary text-sm font-medium">Hours Saved</p>
-                <span id="kpi-hours-badge" class="kpi-badge px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(107, 114, 128, 0.1); color: var(--color-tertiary);" aria-label="Calculating change">
-                    —
-                </span>
-            </div>
-            <p class="text-3xl font-bold mb-1 crown5-kpi-value" id="kpi-hours-value" data-format="hours" aria-live="polite">{{ hours_saved|default(0) }}</p>
-            <p class="text-sm text-secondary kpi-comparison" id="kpi-hours-comparison">Loading comparison...</p>
-        </article>
-        
-        <article class="kpi-card" data-widget="kpi-duration" data-kpi="avg_duration" role="article" aria-labelledby="kpi-duration-label" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, transparent 100%);" tabindex="0">
-            <div class="flex justify-between items-start mb-2">
-                <p id="kpi-duration-label" class="text-tertiary text-sm font-medium">Avg Meeting Length</p>
-                <span id="kpi-duration-badge" class="kpi-badge px-2 py-1 rounded-full text-xs font-medium" style="background: rgba(107, 114, 128, 0.1); color: var(--color-tertiary);" aria-label="Calculating change">
-                    —
-                </span>
-            </div>
-            <p class="text-3xl font-bold mb-1 crown5-kpi-value" id="kpi-duration-value" data-format="minutes" aria-live="polite">{{ avg_duration|default(0) }}m</p>
-            <p class="text-sm text-secondary kpi-comparison" id="kpi-duration-comparison">Loading comparison...</p>
-        </article>
-    </section>
-
-    <!-- Tabs Navigation -->
-    <nav class="mb-6" aria-label="Analytics sections">
-        <div class="flex gap-1 border-b border-gray-200 dark:border-gray-700" role="tablist" aria-label="Analytics tabs">
-            <button class="analytics-tab active" data-tab="overview" role="tab" id="tab-overview-btn" aria-selected="true" aria-controls="tab-overview" tabindex="0">Overview</button>
-            <button class="analytics-tab" data-tab="engagement" role="tab" id="tab-engagement-btn" aria-selected="false" aria-controls="tab-engagement" tabindex="-1">Engagement</button>
-            <button class="analytics-tab" data-tab="productivity" role="tab" id="tab-productivity-btn" aria-selected="false" aria-controls="tab-productivity" tabindex="-1">Productivity</button>
-            <button class="analytics-tab" data-tab="insights" role="tab" id="tab-insights-btn" aria-selected="false" aria-controls="tab-insights" tabindex="-1">Insights</button>
-        </div>
-    </nav>
-
-    <!-- Overview Tab -->
-    <div id="tab-overview" class="analytics-tab-content active" role="tabpanel" aria-labelledby="tab-overview-btn" tabindex="0">
-        <div class="charts-primary-grid crown5-tile-grid">
-            <div class="chart-card" data-widget="chart-activity" role="figure" aria-label="Meeting Activity Trend chart">
-                <h2 class="text-lg font-semibold mb-4" id="chart-activity-title">Meeting Activity Trend</h2>
-                <div class="chart-frame">
-                    <canvas id="meetingActivityChart" aria-describedby="chart-activity-title" role="img" aria-label="Line chart showing meeting activity over time"></canvas>
-                </div>
-            </div>
-
-            <div class="chart-card" data-widget="chart-task-status" role="figure" aria-label="Task Status chart">
-                <h2 class="text-lg font-semibold mb-4" id="chart-task-status-title">Task Status</h2>
-                <div class="chart-frame chart-doughnut">
-                    <canvas id="taskStatusChart" aria-describedby="chart-task-status-title" role="img" aria-label="Doughnut chart showing task completion status"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="charts-equal-grid">
-            <div class="chart-card" data-widget="chart-speaker" role="figure" aria-label="Speaker Distribution chart">
-                <h2 class="text-lg font-semibold mb-4" id="chart-speaker-title">Speaker Distribution</h2>
-                <div class="chart-frame">
-                    <canvas id="speakerChart" role="img" aria-describedby="chart-speaker-title" aria-label="Bar chart showing distribution of speaking time across meeting participants"></canvas>
-                </div>
-            </div>
-
-            <div class="chart-card" data-widget="chart-topics" role="figure" aria-label="Top Topics breakdown">
-                <h2 class="text-lg font-semibold mb-4" id="chart-topics-title">Top Topics</h2>
-                <div id="topics-distribution" role="list" aria-label="Meeting topics ranked by frequency" aria-live="polite" style="display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-2) 0;">
-                    <div class="crown5-empty-state" role="status">
-                        <div class="crown5-empty-illustration">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z"/>
-                            </svg>
-                        </div>
-                        <p class="crown5-empty-title">Loading topics...</p>
-                        <p class="crown5-empty-description">Analyzing meeting content</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Engagement Tab -->
-    <div id="tab-engagement" class="analytics-tab-content" role="tabpanel" aria-labelledby="tab-engagement-btn" tabindex="0">
-        <!-- Speaking Time Analysis (T2.33) -->
-        <div class="charts-primary-grid crown5-tile-grid mb-6" data-widget="chart-speaking-time">
-            <div class="chart-card" role="figure" aria-labelledby="chart-speaking-time-title" aria-describedby="chart-speaking-time-desc">
-                <h2 class="text-lg font-semibold mb-1" id="chart-speaking-time-title">Speaking Time Distribution</h2>
-                <p class="text-sm text-secondary mb-4" id="chart-speaking-time-desc">Breakdown of talk time across participants</p>
-                <div class="chart-frame">
-                    <canvas id="speakingTimeBarChart" role="img" aria-describedby="chart-speaking-time-title chart-speaking-time-desc" aria-label="Bar chart showing speaking time for each participant"></canvas>
-                </div>
-            </div>
-
-            <div class="chart-card" role="figure" aria-labelledby="chart-speaking-balance-title" aria-describedby="chart-speaking-balance-desc">
-                <h2 class="text-lg font-semibold mb-1" id="chart-speaking-balance-title">Speaking Balance</h2>
-                <p class="text-sm text-secondary mb-4" id="chart-speaking-balance-desc">Percentage of total meeting time</p>
-                <div class="chart-frame chart-doughnut">
-                    <canvas id="speakingTimePieChart" role="img" aria-describedby="chart-speaking-balance-title chart-speaking-balance-desc" aria-label="Pie chart showing speaking time balance across participants"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Detailed Speaking Time Breakdown -->
-        <div class="charts-single mb-6">
-            <div class="chart-card" role="region" aria-labelledby="participant-details-title" aria-describedby="participant-details-desc">
-                <h2 class="text-lg font-semibold mb-1" id="participant-details-title">Participant Details</h2>
-                <p class="text-sm text-secondary mb-4" id="participant-details-desc">Individual speaking metrics and balance indicators</p>
-                <div id="speakingTimeDetails" class="flex flex-col gap-4" role="list" aria-describedby="participant-details-title participant-details-desc" aria-live="polite">
-                    <div class="crown5-empty-state" role="status">
-                        <div class="crown5-empty-illustration">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                        </div>
-                        <p class="crown5-empty-title">Awaiting participant data</p>
-                        <p class="crown5-empty-description">Speaking metrics will appear after recording</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Participation Balance Metrics (T2.34) -->
-        <div class="charts-single mb-6" data-widget="chart-participation">
-            <div class="chart-card" role="region" aria-labelledby="participation-overview-title" aria-describedby="participation-overview-desc">
-                <h2 class="text-lg font-semibold mb-1" id="participation-overview-title">Participation Balance Overview</h2>
-                <p class="text-sm text-secondary mb-4" id="participation-overview-desc">Multi-dimensional engagement metrics across all participants</p>
-                <div id="participationBalanceMetrics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 crown5-tile-grid" role="list" aria-describedby="participation-overview-title participation-overview-desc" aria-live="polite">
-                </div>
-            </div>
-        </div>
-
-        <!-- Participation and Sentiment -->
-        <div class="charts-equal-grid" data-widget="chart-sentiment">
-            <div class="chart-card" role="figure" aria-label="Participation Rate radar chart">
-                <h2 class="text-lg font-semibold mb-4" id="participation-rate-title">Participation Rate</h2>
-                <div class="chart-frame chart-radar">
-                    <canvas id="participationChart" role="img" aria-describedby="participation-rate-title" aria-label="Radar chart showing participation rates across different meeting dimensions"></canvas>
-                </div>
-            </div>
-
-            <div class="chart-card" role="figure" aria-label="Meeting Sentiment chart">
-                <h2 class="text-lg font-semibold mb-4" id="sentiment-title">Meeting Sentiment</h2>
-                <div class="chart-frame">
-                    <canvas id="sentimentChart" role="img" aria-describedby="sentiment-title" aria-label="Chart showing sentiment analysis of meeting conversations"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Productivity Tab -->
-    <div id="tab-productivity" class="analytics-tab-content" role="tabpanel" aria-labelledby="tab-productivity-btn" tabindex="0">
-        <!-- Action Items Completion (T2.38) -->
-        <div class="charts-single mb-6" data-widget="action-items">
-            <div class="chart-card" role="region" aria-labelledby="action-items-title" aria-describedby="action-items-desc">
-                <h2 class="text-lg font-semibold mb-1" id="action-items-title">Action Item Completion Rate</h2>
-                <p class="text-sm text-secondary mb-4" id="action-items-desc">Track progress of meeting action items</p>
-                <div id="actionItemsCompletion" role="list" aria-describedby="action-items-title action-items-desc" aria-live="polite">
-                    <div class="crown5-empty-state" role="status">
-                        <div class="crown5-empty-illustration">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                            </svg>
-                        </div>
-                        <p class="crown5-empty-title">No action items yet</p>
-                        <p class="crown5-empty-description">Select a meeting to see task completion progress</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Topic Trends Timeline (T2.36) -->
-        <div class="charts-single mb-6" data-widget="topic-trends">
-            <div class="chart-card" role="region" aria-labelledby="topic-trends-title" aria-describedby="topic-trends-desc">
-                <h2 class="text-lg font-semibold mb-1" id="topic-trends-title">Topic Evolution Timeline</h2>
-                <p class="text-sm text-secondary mb-4" id="topic-trends-desc">How conversation topics developed throughout meetings</p>
-                <div id="topicTrendsTimeline" role="list" aria-describedby="topic-trends-title topic-trends-desc" aria-live="polite">
-                    <div class="crown5-empty-state" role="status">
-                        <div class="crown5-empty-illustration">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
-                            </svg>
-                        </div>
-                        <p class="crown5-empty-title">No topic data yet</p>
-                        <p class="crown5-empty-description">Select a meeting to explore conversation flow</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Q&A Tracking (T2.37) -->
-        <div class="charts-single mb-6" data-widget="qa-tracking">
-            <div class="chart-card" role="region" aria-labelledby="qa-tracking-title" aria-describedby="qa-tracking-desc">
-                <h2 class="text-lg font-semibold mb-1" id="qa-tracking-title">Question & Answer Tracking</h2>
-                <p class="text-sm text-secondary mb-4" id="qa-tracking-desc">Questions asked during meetings and their resolution status</p>
-                <div id="qaTracking" role="list" aria-describedby="qa-tracking-title qa-tracking-desc" aria-live="polite">
-                    <div class="crown5-empty-state" role="status">
-                        <div class="crown5-empty-illustration">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                        </div>
-                        <p class="crown5-empty-title">No questions tracked</p>
-                        <p class="crown5-empty-description">Select a meeting to see Q&A insights</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="charts-single">
-            <div class="chart-card" role="figure" aria-label="Task Completion Over Time chart">
-                <h2 class="text-lg font-semibold mb-4" id="task-completion-title">Task Completion Over Time</h2>
-                <div class="chart-frame">
-                    <canvas id="productivityChart" role="img" aria-describedby="task-completion-title" aria-label="Line chart showing task completion trends over time"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Insights Tab -->
-    <div id="tab-insights" class="analytics-tab-content" role="tabpanel" aria-labelledby="tab-insights-btn" tabindex="0">
-        <div class="charts-equal-grid">
-            <div class="chart-card" role="region" aria-labelledby="key-insights-title">
-                <h3 class="font-semibold mb-4" id="key-insights-title">Key Insights</h3>
-                <div role="list" aria-label="Key performance insights" style="display: flex; flex-direction: column; gap: var(--space-3);">
-                    <div class="p-3 rounded-lg" role="listitem" style="background: rgba(34, 197, 94, 0.1); border-left: 3px solid var(--color-success);">
-                        <p class="font-medium text-sm mb-1">High Completion Rate</p>
-                        <p class="text-sm text-secondary">85% of tasks completed on time this month</p>
-                    </div>
-                    <div class="p-3 rounded-lg" role="listitem" style="background: rgba(249, 115, 22, 0.1); border-left: 3px solid var(--color-warning);">
-                        <p class="font-medium text-sm mb-1">Long Meetings Trend</p>
-                        <p class="text-sm text-secondary">Average meeting length increased by 12 minutes</p>
-                    </div>
-                    <div class="p-3 rounded-lg" role="listitem" style="background: rgba(99, 102, 241, 0.1); border-left: 3px solid var(--color-primary);">
-                        <p class="font-medium text-sm mb-1">Active Participation</p>
-                        <p class="text-sm text-secondary">More balanced speaking time distribution</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="chart-card" role="region" aria-labelledby="recommendations-title">
-                <h3 class="font-semibold mb-4" id="recommendations-title">Recommendations</h3>
-                <div role="list" aria-label="Actionable recommendations" style="display: flex; flex-direction: column; gap: var(--space-3);">
-                    <div class="flex gap-3 items-start" role="listitem">
-                        <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0" aria-hidden="true">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <p class="font-medium text-sm mb-1">Schedule shorter meetings</p>
-                            <p class="text-sm text-secondary">Consider 25-minute or 50-minute blocks</p>
-                        </div>
-                    </div>
-                    <div class="flex gap-3 items-start" role="listitem">
-                        <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0" aria-hidden="true">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <p class="font-medium text-sm mb-1">Set task deadlines</p>
-                            <p class="text-sm text-secondary">3 tasks have no due date assigned</p>
-                        </div>
-                    </div>
-                    <div class="flex gap-3 items-start" role="listitem">
-                        <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0" aria-hidden="true">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <p class="font-medium text-sm mb-1">Encourage participation</p>
-                            <p class="text-sm text-secondary">2 members had minimal speaking time</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Widget Customization Modal -->
-<div id="widgetCustomizationModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-description">
-    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden border border-gray-200 dark:border-gray-700" role="document">
-        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-            <div class="flex justify-between items-center">
-                <h2 id="modal-title" class="text-2xl font-bold">Customize Analytics Dashboard</h2>
-                <button id="closeCustomizeModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" aria-label="Close dialog">
-                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            
+            <div class="insight-card info">
+                <div class="insight-icon">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                </button>
+                </div>
+                <h3 class="insight-title">Meeting Efficiency</h3>
+                <p id="insight-efficiency-desc" class="insight-description">Average meeting runs {{ avg_duration|default(45) }} minutes</p>
             </div>
-            <p id="modal-description" class="text-sm text-secondary mt-2">Show or hide widgets to personalize your analytics view</p>
+            
+            <div class="insight-card action">
+                <div class="insight-icon">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                </div>
+                <h3 class="insight-title">Recommendations</h3>
+                <p id="insight-recommendations-desc" class="insight-description">AI-powered suggestions to improve your meetings</p>
+                <span class="insight-action" onclick="document.getElementById('deep-dive-insights').classList.toggle('open')">
+                    View Details
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </span>
+            </div>
         </div>
-        <div class="p-6 overflow-y-auto max-h-[calc(80vh-180px)]">
-            <fieldset id="widgetToggles" class="space-y-3" aria-label="Widget visibility options">
-                <legend class="sr-only">Toggle widget visibility</legend>
-                <!-- Will be populated by JavaScript -->
-            </fieldset>
-        </div>
-        <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-between gap-3">
-            <button id="resetWidgetsBtn" class="btn btn-outline" aria-label="Reset all widgets to default visibility">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+    </section>
+
+    <!-- TIER 3: Deep Dive Analytics (Accordion) -->
+    <section class="tier3-deep-dive" role="region" aria-label="Detailed Analytics">
+        
+        <!-- Task Follow-Through (Consolidated) -->
+        <div id="deep-dive-tasks" class="deep-dive-section open">
+            <div class="deep-dive-header" onclick="this.parentElement.classList.toggle('open')" role="button" aria-expanded="true">
+                <h3>
+                    <svg class="icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                    </svg>
+                    Task Follow-Through
+                </h3>
+                <svg class="deep-dive-toggle" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                 </svg>
-                <span>Reset to Default</span>
-            </button>
-            <button id="saveWidgetsBtn" class="btn btn-primary" aria-label="Save widget preferences">
-                Save Preferences
-            </button>
+            </div>
+            <div class="deep-dive-content">
+                <div class="deep-dive-body">
+                    <div class="consolidated-chart-grid">
+                        <div class="chart-card">
+                            <h4>Task Status Distribution</h4>
+                            <p class="chart-subtitle">Current breakdown of action items</p>
+                            <div class="chart-frame" style="aspect-ratio: 1; max-width: 280px; margin: 0 auto;">
+                                <canvas id="taskStatusChart" aria-label="Task status breakdown"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h4>Completion Over Time</h4>
+                            <p class="chart-subtitle">Task completion trends</p>
+                            <div class="chart-frame" style="aspect-ratio: 16/9;">
+                                <canvas id="taskCompletionChart" aria-label="Task completion trend"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
+
+        <!-- Meeting Activity (Consolidated) -->
+        <div id="deep-dive-activity" class="deep-dive-section">
+            <div class="deep-dive-header" onclick="this.parentElement.classList.toggle('open')" role="button" aria-expanded="false">
+                <h3>
+                    <svg class="icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
+                    </svg>
+                    Meeting Activity
+                </h3>
+                <svg class="deep-dive-toggle" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+            <div class="deep-dive-content">
+                <div class="deep-dive-body">
+                    <div class="chart-card">
+                        <h4>Meeting Frequency</h4>
+                        <p class="chart-subtitle">Number of meetings over time</p>
+                        <div class="chart-frame" style="aspect-ratio: 21/9;">
+                            <canvas id="meetingActivityChart" aria-label="Meeting activity trend"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Participation Balance (Consolidated - was 5 separate widgets) -->
+        <div id="deep-dive-participation" class="deep-dive-section">
+            <div class="deep-dive-header" onclick="this.parentElement.classList.toggle('open')" role="button" aria-expanded="false">
+                <h3>
+                    <svg class="icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    Participation Balance
+                </h3>
+                <svg class="deep-dive-toggle" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+            <div class="deep-dive-content">
+                <div class="deep-dive-body">
+                    <div class="consolidated-chart-grid">
+                        <div class="chart-card">
+                            <h4>Speaking Distribution</h4>
+                            <p class="chart-subtitle">Who contributed to discussions</p>
+                            <div class="chart-frame" style="aspect-ratio: 16/9;">
+                                <canvas id="speakerChart" aria-label="Speaker distribution"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h4>Engagement Balance</h4>
+                            <p class="chart-subtitle">Multi-dimensional participation metrics</p>
+                            <div class="chart-frame" style="aspect-ratio: 1; max-width: 300px; margin: 0 auto;">
+                                <canvas id="participationChart" aria-label="Participation radar"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="participant-outliers" class="mt-4" style="display: none;">
+                        <!-- Populated dynamically with outlier highlights -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Themes (Consolidated - was 2 separate widgets) -->
+        <div id="deep-dive-themes" class="deep-dive-section">
+            <div class="deep-dive-header" onclick="this.parentElement.classList.toggle('open')" role="button" aria-expanded="false">
+                <h3>
+                    <svg class="icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                    </svg>
+                    Key Themes
+                </h3>
+                <svg class="deep-dive-toggle" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+            <div class="deep-dive-content">
+                <div class="deep-dive-body">
+                    <div id="themes-container" class="chart-card">
+                        <h4>Top Discussion Topics</h4>
+                        <p class="chart-subtitle">Most frequent themes across your meetings</p>
+                        <div id="topics-distribution" style="padding: var(--space-4) 0;">
+                            <div class="crown5-empty-state" style="min-height: 120px;">
+                                <p class="crown5-empty-title" style="font-size: 0.9rem;">Record meetings to see topic analysis</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Insights & Recommendations -->
+        <div id="deep-dive-insights" class="deep-dive-section">
+            <div class="deep-dive-header" onclick="this.parentElement.classList.toggle('open')" role="button" aria-expanded="false">
+                <h3>
+                    <svg class="icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                    AI Insights & Recommendations
+                </h3>
+                <svg class="deep-dive-toggle" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+            <div class="deep-dive-content">
+                <div class="deep-dive-body">
+                    <div class="consolidated-chart-grid">
+                        <div class="chart-card">
+                            <h4>Key Insights</h4>
+                            <div id="key-insights-list" style="display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-3);">
+                                <div class="p-3 rounded-lg" style="background: rgba(34, 197, 94, 0.1); border-left: 3px solid #22c55e;">
+                                    <p class="font-medium text-sm mb-1">High Completion Rate</p>
+                                    <p class="text-sm text-secondary">{{ task_completion_rate|default(0) }}% of tasks completed</p>
+                                </div>
+                                <div class="p-3 rounded-lg" style="background: rgba(99, 102, 241, 0.1); border-left: 3px solid #6366f1;">
+                                    <p class="font-medium text-sm mb-1">Active Participation</p>
+                                    <p class="text-sm text-secondary">Good speaking time distribution</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h4>Recommendations</h4>
+                            <div id="recommendations-list" style="display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-3);">
+                                <div class="flex gap-3 items-start">
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(99, 102, 241, 0.1);">
+                                        <svg width="16" height="16" fill="none" stroke="currentColor" class="text-primary" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p class="font-medium text-sm">Optimize meeting length</p>
+                                        <p class="text-sm text-secondary">Consider 25 or 50-minute blocks</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-3 items-start">
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(99, 102, 241, 0.1);">
+                                        <svg width="16" height="16" fill="none" stroke="currentColor" class="text-primary" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p class="font-medium text-sm">Set task deadlines</p>
+                                        <p class="text-sm text-secondary">Improve accountability</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </section>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/static/js/analytics.js" nonce="{{ g.csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
 <script nonce="{{ g.csp_nonce }}">
-/**
- * Analytics Page - Real-time WebSocket Integration
- * CROWN⁴ Event Handling for Live Analytics Updates
- */
-
 (function() {
     'use strict';
     
-    // Get workspace ID from user context
     const WORKSPACE_ID = {{ current_user.workspace_id }};
+    const TOTAL_MEETINGS = {{ total_meetings|default(0) }};
     
-    // Cache KPI elements
-    const kpiElements = {
-        totalMeetings: document.querySelector('.kpi-card:nth-child(1) h3'),
-        totalHours: document.querySelector('.kpi-card:nth-child(2) h3'),
-        actionItems: document.querySelector('.kpi-card:nth-child(3) h3'),
-        avgDuration: document.querySelector('.kpi-card:nth-child(4) h3')
-    };
-    
-    // Store chart instances for updating
-    const chartInstances = {};
-    
-    /**
-     * CROWN⁵+ Cache-First Analytics Store
-     * Implements stale-while-revalidate pattern for sub-200ms warm paint
-     */
+    // CROWN⁵+ Cache-First Store
     const AnalyticsCache = {
-        CACHE_KEY: 'crown5_analytics_cache',
-        CACHE_TTL: 30000, // 30 seconds
+        CACHE_KEY: 'crown5_analytics_v2',
+        CACHE_TTL: 30000,
         lastSequenceId: null,
         
-        async get() {
+        get() {
             try {
                 const cached = localStorage.getItem(this.CACHE_KEY);
                 if (cached) {
                     const data = JSON.parse(cached);
                     if (Date.now() - data.timestamp < this.CACHE_TTL) {
-                        console.log('📦 Using cached analytics data (warm paint)');
                         return data.payload;
                     }
                 }
-            } catch (e) { console.warn('Cache read error:', e); }
+            } catch (e) {}
             return null;
         },
         
@@ -786,570 +1111,279 @@
                 this.lastSequenceId = sequenceId;
                 localStorage.setItem(this.CACHE_KEY, JSON.stringify({
                     timestamp: Date.now(),
-                    sequenceId: sequenceId,
-                    payload: payload
+                    sequenceId,
+                    payload
                 }));
-            } catch (e) { console.warn('Cache write error:', e); }
-        },
-        
-        invalidate() {
-            localStorage.removeItem(this.CACHE_KEY);
+            } catch (e) {}
         }
     };
-    
-    /**
-     * CROWN⁵+ WebSocket Reconnection Manager
-     * Implements exponential backoff for robust connections
-     */
+
+    // Reconnection with exponential backoff
     const ReconnectionManager = {
         retryCount: 0,
-        maxRetries: 10,
+        maxRetries: 8,
         baseDelay: 1000,
-        maxDelay: 30000,
-        reconnecting: false,
         
         getDelay() {
-            const delay = Math.min(
-                this.baseDelay * Math.pow(2, this.retryCount),
-                this.maxDelay
-            );
-            return delay + (Math.random() * 1000); // Add jitter
+            return Math.min(this.baseDelay * Math.pow(2, this.retryCount), 30000) + Math.random() * 1000;
         },
         
         reset() {
             this.retryCount = 0;
-            this.reconnecting = false;
-        },
-        
-        async reconnect(connectFn) {
-            if (this.reconnecting || this.retryCount >= this.maxRetries) return;
-            
-            this.reconnecting = true;
-            const delay = this.getDelay();
-            console.log(`🔄 Reconnecting in ${Math.round(delay/1000)}s (attempt ${this.retryCount + 1}/${this.maxRetries})`);
-            
-            await new Promise(r => setTimeout(r, delay));
-            this.retryCount++;
-            
-            try {
-                await connectFn();
-                this.reset();
-                console.log('✅ Reconnection successful');
-            } catch (e) {
-                this.reconnecting = false;
-                this.reconnect(connectFn);
-            }
         }
     };
-    
-    /**
-     * Initialize WebSocket connection for analytics page
-     * CROWN⁵+ Enhanced with cache-first and reconnection
-     */
-    function initAnalyticsWebSocket() {
-        console.log('🚀 Initializing analytics WebSocket...');
+
+    // Initialize Health Score Ring
+    function updateHealthScore(score, message, trend) {
+        const arc = document.getElementById('health-score-arc');
+        const valueEl = document.getElementById('health-score-value');
+        const msgEl = document.getElementById('health-score-message');
+        const trendEl = document.getElementById('health-score-trend');
         
-        // Initialize WebSocket manager with analytics namespace
-        if (!window.wsManager) {
-            console.error('❌ WebSocket manager not found');
+        if (arc && score !== null && score !== undefined) {
+            const dashArray = `${score}, 100`;
+            arc.style.strokeDasharray = dashArray;
+        }
+        
+        if (valueEl) valueEl.textContent = score !== null ? score : '—';
+        if (msgEl && message) msgEl.textContent = message;
+        
+        if (trendEl && trend) {
+            trendEl.className = `health-score-trend ${trend.direction || 'stable'}`;
+            const icon = trend.direction === 'up' ? 'M5 10l7-7m0 0l7 7m-7-7v18' :
+                        trend.direction === 'down' ? 'M19 14l-7 7m0 0l-7-7m7 7V3' :
+                        'M5 12h14';
+            trendEl.innerHTML = `
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${icon}"/>
+                </svg>
+                <span>${trend.text || 'Stable'}</span>
+            `;
+        }
+    }
+
+    // Update Health Breakdown
+    function updateHealthBreakdown(data) {
+        const fields = ['effectiveness', 'engagement', 'followthrough', 'decisions'];
+        fields.forEach(field => {
+            const el = document.getElementById(`health-${field}`);
+            if (el && data[field] !== undefined) {
+                el.textContent = typeof data[field] === 'number' ? 
+                    (field === 'decisions' ? data[field] : `${Math.round(data[field])}%`) : 
+                    data[field];
+            }
+        });
+    }
+
+    // Update KPI Cards with animation
+    function updateKPI(kpi, value, badge, comparison) {
+        const valueEl = document.getElementById(`kpi-${kpi}-value`);
+        const badgeEl = document.getElementById(`kpi-${kpi}-badge`);
+        const compEl = document.getElementById(`kpi-${kpi}-comparison`);
+        
+        if (valueEl && value !== undefined) {
+            animateValue(valueEl, value);
+        }
+        
+        if (badgeEl && badge) {
+            badgeEl.textContent = badge.text;
+            badgeEl.className = `kpi-badge ${badge.direction || 'neutral'}`;
+        }
+        
+        if (compEl && comparison) {
+            compEl.textContent = comparison;
+        }
+    }
+
+    function animateValue(element, newValue) {
+        const current = parseFloat(element.textContent.replace(/[^0-9.-]/g, '')) || 0;
+        const target = parseFloat(newValue);
+        const suffix = element.textContent.match(/[a-z%]+$/i)?.[0] || '';
+        
+        if (isNaN(target)) {
+            element.textContent = newValue;
             return;
         }
         
-        // Connect to analytics namespace
-        window.wsManager.connect('analytics');
+        const duration = 400;
+        const start = performance.now();
         
-        // Join workspace room
+        function update(now) {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const value = current + (target - current) * eased;
+            
+            element.textContent = (Number.isInteger(target) ? Math.round(value) : value.toFixed(1)) + suffix;
+            
+            if (progress < 1) requestAnimationFrame(update);
+        }
+        
+        requestAnimationFrame(update);
+    }
+
+    // Fetch and load analytics data
+    async function loadAnalyticsData() {
+        // Use cache first
+        const cached = AnalyticsCache.get();
+        if (cached) {
+            applyAnalyticsData(cached);
+        }
+
+        try {
+            const days = document.getElementById('date-range-select')?.value || 30;
+            
+            const [kpiRes, healthRes] = await Promise.all([
+                fetch(`/api/analytics/kpi-comparison?days=${days}`),
+                fetch(`/api/analytics/health-score?days=${days}`)
+            ]);
+            
+            const kpiData = await kpiRes.json();
+            const healthData = await healthRes.json();
+            
+            if (kpiData.success) {
+                applyKPIData(kpiData);
+                AnalyticsCache.set({ kpi: kpiData, health: healthData }, Date.now());
+            }
+            
+            if (healthData.success && healthData.health_score) {
+                applyHealthData(healthData.health_score);
+            }
+            
+            // Update insights count
+            const insightsCount = document.getElementById('insights-count');
+            if (insightsCount) {
+                insightsCount.textContent = `${TOTAL_MEETINGS} meetings analyzed`;
+            }
+            
+        } catch (err) {
+            console.error('Failed to load analytics:', err);
+        }
+    }
+
+    function applyAnalyticsData(data) {
+        if (data.kpi) applyKPIData(data.kpi);
+        if (data.health?.health_score) applyHealthData(data.health.health_score);
+    }
+
+    function applyKPIData(data) {
+        if (!data.kpis) return;
+        
+        const { total_meetings, action_items, hours_saved, avg_duration } = data.kpis;
+        
+        if (total_meetings) {
+            updateKPI('meetings', total_meetings.value, 
+                { text: total_meetings.change_text || '—', direction: total_meetings.trend },
+                total_meetings.comparison_text
+            );
+        }
+        
+        if (action_items) {
+            updateKPI('tasks', action_items.value,
+                { text: `${action_items.completion_rate || 0}%`, direction: action_items.completion_rate >= 70 ? 'up' : 'neutral' },
+                `${action_items.completion_rate || 0}% completion rate`
+            );
+        }
+        
+        if (hours_saved) {
+            updateKPI('hours', hours_saved.value + 'h',
+                { text: hours_saved.change_text || '—', direction: hours_saved.trend },
+                'Through efficient meetings'
+            );
+        }
+        
+        if (avg_duration) {
+            updateKPI('duration', avg_duration.value + 'm',
+                { text: avg_duration.change_text || '—', direction: avg_duration.trend === 'down' ? 'up' : avg_duration.trend },
+                'Per meeting average'
+            );
+        }
+    }
+
+    function applyHealthData(health) {
+        updateHealthScore(
+            health.overall_score,
+            health.message || 'Your meetings are productive',
+            { direction: health.trend || 'stable', text: health.trend_text || 'Stable' }
+        );
+        
+        updateHealthBreakdown({
+            effectiveness: health.effectiveness_score,
+            engagement: health.engagement_score,
+            followthrough: health.follow_through_rate,
+            decisions: health.decisions_count || '—'
+        });
+    }
+
+    // WebSocket Integration
+    function initWebSocket() {
+        if (!window.wsManager) {
+            console.warn('WebSocket manager not available');
+            return;
+        }
+        
+        window.wsManager.connect('analytics');
         window.wsManager.emit('join', { room: `workspace_${WORKSPACE_ID}` });
         
-        // Listen for analytics_refresh events
-        window.wsManager.on('analytics_refresh', handleAnalyticsRefresh);
+        window.wsManager.on('analytics_delta', (delta) => {
+            if (AnalyticsCache.lastSequenceId && delta.sequence_id <= AnalyticsCache.lastSequenceId) {
+                return;
+            }
+            
+            loadAnalyticsData();
+            AnalyticsCache.lastSequenceId = delta.sequence_id;
+            showUpdateIndicator();
+        });
         
-        // Listen for session_update events (new meetings affect analytics)
-        window.wsManager.on('session_update:created', handleNewSession);
+        window.wsManager.on('analytics_update', () => {
+            loadAnalyticsData();
+        });
         
-        // Listen for real-time analytics_update events (CROWN⁵+ broadcast)
-        window.wsManager.on('analytics_update', handleAnalyticsUpdate);
-        
-        // CROWN⁵+ Delta events for incremental updates
-        window.wsManager.on('analytics_delta', handleAnalyticsDelta);
-        
-        // CROWN⁵+ Connection state handlers
         window.wsManager.on('disconnect', () => {
-            console.log('⚠️ WebSocket disconnected, starting reconnection...');
-            ReconnectionManager.reconnect(() => initAnalyticsWebSocket());
+            setTimeout(() => initWebSocket(), ReconnectionManager.getDelay());
+            ReconnectionManager.retryCount++;
         });
         
         window.wsManager.on('connect', () => {
-            console.log('✅ WebSocket connected');
             ReconnectionManager.reset();
-            // Re-sync after reconnection
-            if (window.analyticsManager) {
-                window.analyticsManager.loadDashboardData();
-            }
         });
-        
-        console.log('📡 Analytics WebSocket listeners registered with CROWN⁵+ enhancements');
     }
-    
-    /**
-     * Handle CROWN⁵+ analytics_delta events for incremental updates
-     * @param {Object} delta - Structured delta with sequence ID and affected KPIs
-     */
-    function handleAnalyticsDelta(delta) {
-        console.log('📡 Analytics delta received:', delta);
-        
-        // Verify sequence ordering
-        if (AnalyticsCache.lastSequenceId && 
-            delta.sequence_id <= AnalyticsCache.lastSequenceId) {
-            console.log('⏭️ Skipping duplicate/old delta:', delta.sequence_id);
-            return;
-        }
-        
-        // Apply delta based on affected KPIs
-        const affectedKpis = delta.affected_kpis || [];
-        
-        if (affectedKpis.includes('action_items') || affectedKpis.includes('completion_rate')) {
-            // Task-related update - refresh task charts and KPIs
-            refreshTaskKpis();
-        }
-        
-        if (affectedKpis.includes('hours_saved')) {
-            refreshHoursSaved();
-        }
-        
-        if (affectedKpis.includes('health_score') || affectedKpis.includes('follow_through')) {
-            refreshHealthScore();
-        }
-        
-        // Update cache sequence
-        AnalyticsCache.lastSequenceId = delta.sequence_id;
-        
-        // Show subtle indicator
-        showRefreshIndicator();
-    }
-    
-    /**
-     * Refresh task-related KPIs after delta
-     */
-    async function refreshTaskKpis() {
-        try {
-            const response = await fetch(`/api/analytics/kpi-comparison?days=30`);
-            const data = await response.json();
-            if (data.success && data.kpis) {
-                updateKPIs({
-                    action_items: data.kpis.action_items?.value,
-                    completion_rate: data.kpis.action_items?.completion_rate
-                });
-            }
-        } catch (e) { console.error('Failed to refresh task KPIs:', e); }
-    }
-    
-    /**
-     * Refresh Hours Saved KPI after delta
-     */
-    async function refreshHoursSaved() {
-        try {
-            const response = await fetch(`/api/analytics/kpi-comparison?days=30`);
-            const data = await response.json();
-            if (data.success && data.kpis?.hours_saved) {
-                const hoursSavedEl = document.querySelector('[data-kpi="hours-saved"] h3, .kpi-card:nth-child(2) h3');
-                if (hoursSavedEl) {
-                    animateCounter(hoursSavedEl, 
-                        parseFloat(hoursSavedEl.textContent) || 0, 
-                        data.kpis.hours_saved.value, 
-                        500, true);
-                }
-            }
-        } catch (e) { console.error('Failed to refresh hours saved:', e); }
-    }
-    
-    /**
-     * Refresh Health Score after delta
-     */
-    async function refreshHealthScore() {
-        try {
-            const response = await fetch(`/api/analytics/health-score?days=30`);
-            const data = await response.json();
-            if (data.success && data.health_score && window.analyticsManager) {
-                window.analyticsManager.updateMeetingHealthScore(data.health_score);
-            }
-        } catch (e) { console.error('Failed to refresh health score:', e); }
-    }
-    
-    /**
-     * Handle real-time analytics_update events (CROWN⁵+ broadcast)
-     * @param {Object} data - Event data with type and payload
-     */
-    function handleAnalyticsUpdate(data) {
-        console.log('📡 Real-time analytics update:', data);
-        
-        const updateType = data.type;
-        const updateData = data.data;
-        
-        switch (updateType) {
-            case 'kpi_update':
-                if (updateData.kpis) updateKPIs(updateData.kpis);
-                showRefreshIndicator();
-                break;
-            case 'health_score':
-                if (window.analyticsManager && updateData.health_score) {
-                    window.analyticsManager.updateHealthScore(updateData.health_score);
-                }
-                break;
-            case 'productivity':
-                if (window.analyticsManager && updateData.productivity) {
-                    window.analyticsManager.updateProductivityCharts(updateData.productivity);
-                }
-                break;
-            case 'insights':
-                if (window.analyticsManager && updateData.insights) {
-                    window.analyticsManager.updateActionableInsights(updateData);
-                }
-                break;
-            default:
-                console.log('Unknown analytics update type:', updateType);
-        }
-        
-        showAnalyticsNotification('Data Updated', `Analytics ${updateType} refreshed`);
-    }
-    
-    /**
-     * Handle analytics refresh event
-     * @param {Object} data - Event data with updated analytics
-     */
-    function handleAnalyticsRefresh(data) {
-        console.log('📊 Analytics refresh event received:', data);
-        
-        const analyticsData = data.data || data;
-        
-        // Update KPIs with animation
-        if (analyticsData.kpis) {
-            updateKPIs(analyticsData.kpis);
-        }
-        
-        // Refresh charts if data provided
-        if (analyticsData.charts) {
-            refreshCharts(analyticsData.charts);
-        }
-        
-        // Show refresh indicator
-        showRefreshIndicator();
-    }
-    
-    /**
-     * Handle new session created event
-     * @param {Object} data - Event data with session info
-     */
-    function handleNewSession(data) {
-        console.log('📬 New session affects analytics:', data);
-        
-        // Increment total meetings KPI with CROWN5+ micro-pulse
-        const totalMeetingsEl = kpiElements.totalMeetings;
-        if (totalMeetingsEl) {
-            const currentValue = parseInt(totalMeetingsEl.textContent) || 0;
-            animateCounter(totalMeetingsEl, currentValue, currentValue + 1, 500);
-            addShimmerEffect(totalMeetingsEl.closest('.kpi-card'));
-        }
-        
-        // Show subtle notification
-        showAnalyticsNotification('Analytics updated', 'New meeting data has been added');
-    }
-    
-    /**
-     * Update KPI values with animation
-     * @param {Object} kpis - KPI data object
-     */
-    function updateKPIs(kpis) {
-        // Total Meetings
-        if (kpis.total_meetings !== undefined && kpiElements.totalMeetings) {
-            const currentValue = parseInt(kpiElements.totalMeetings.textContent) || 0;
-            animateCounter(kpiElements.totalMeetings, currentValue, kpis.total_meetings, 500);
-            addShimmerEffect(kpiElements.totalMeetings.closest('.kpi-card'));
-        }
-        
-        // Total Hours
-        if (kpis.total_hours !== undefined && kpiElements.totalHours) {
-            const currentValue = parseFloat(kpiElements.totalHours.textContent) || 0;
-            animateCounter(kpiElements.totalHours, currentValue, kpis.total_hours, 500, true);
-            addShimmerEffect(kpiElements.totalHours.closest('.kpi-card'));
-        }
-        
-        // Action Items
-        if (kpis.action_items !== undefined && kpiElements.actionItems) {
-            const currentValue = parseInt(kpiElements.actionItems.textContent) || 0;
-            animateCounter(kpiElements.actionItems, currentValue, kpis.action_items, 500);
-            addShimmerEffect(kpiElements.actionItems.closest('.kpi-card'));
-        }
-        
-        // Average Duration
-        if (kpis.avg_duration !== undefined && kpiElements.avgDuration) {
-            const currentText = kpiElements.avgDuration.textContent;
-            kpiElements.avgDuration.textContent = kpis.avg_duration;
-            addShimmerEffect(kpiElements.avgDuration.closest('.kpi-card'));
-        }
-    }
-    
-    /**
-     * Refresh chart data
-     * @param {Object} chartsData - Chart data updates
-     */
-    function refreshCharts(chartsData) {
-        // This would integrate with the analytics.js chart instances
-        // For now, we'll trigger a page refresh if major changes
-        console.log('🔄 Chart data update:', chartsData);
-        
-        // Show visual feedback
-        document.querySelectorAll('.chart-card').forEach(card => {
-            addPulseEffect(card);
-        });
-        
-        // In a production implementation, you would update chart.js instances here
-        // Example: chartInstances.meetingsByDay.data = chartsData.meetingsByDay
-        //          chartInstances.meetingsByDay.update()
-    }
-    
-    /**
-     * Animate counter from current to new value
-     * @param {HTMLElement} element - Counter element
-     * @param {number} start - Start value
-     * @param {number} end - End value
-     * @param {number} duration - Animation duration in ms
-     * @param {boolean} isDecimal - Whether to show decimal places
-     */
-    function animateCounter(element, start, end, duration, isDecimal = false) {
-        const startTime = Date.now();
-        const difference = end - start;
-        
-        function update() {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            
-            // Easing function (ease-out cubic)
-            const eased = 1 - Math.pow(1 - progress, 3);
-            const current = start + (difference * eased);
-            
-            if (isDecimal) {
-                element.textContent = current.toFixed(1);
-            } else {
-                element.textContent = Math.round(current);
-            }
-            
-            if (progress < 1) {
-                requestAnimationFrame(update);
-            }
-        }
-        
-        update();
-    }
-    
-    /**
-     * CROWN5+ KPI shimmer effect with micro-pulse animation
-     * @param {HTMLElement} element - Element to shimmer
-     */
-    function addShimmerEffect(element) {
-        if (!element) return;
-        
-        element.classList.add('crown5-updating');
-        
-        const valueEl = element.querySelector('.text-3xl') || element.querySelector('p[id^="kpi-"]') || element.querySelector('h3');
-        if (valueEl) {
-            valueEl.classList.add('crown5-value-updating');
-        }
-        
-        setTimeout(() => {
-            element.classList.remove('crown5-updating');
-            if (valueEl) {
-                valueEl.classList.remove('crown5-value-updating');
-            }
-        }, 600);
-    }
-    
-    /**
-     * CROWN5+ pulse effect for chart cards
-     * @param {HTMLElement} element - Element to pulse
-     */
-    function addPulseEffect(element) {
-        if (!element) return;
-        
-        element.classList.add('crown5-reconciling');
-        setTimeout(() => {
-            element.classList.remove('crown5-reconciling');
-        }, 1500);
-    }
-    
-    /**
-     * Show refresh indicator
-     */
-    function showRefreshIndicator() {
+
+    function showUpdateIndicator() {
         const indicator = document.createElement('div');
-        indicator.className = 'refresh-indicator';
-        indicator.style.cssText = `
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            padding: 12px 20px;
-            background: var(--glass-bg);
-            backdrop-filter: var(--backdrop-blur);
-            border: 1px solid var(--color-primary);
-            border-radius: var(--radius-xl);
-            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
-            color: var(--color-primary);
-            font-weight: 600;
-            font-size: 14px;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            animation: slideInFromRight 0.3s ease-out;
-        `;
-        
-        indicator.innerHTML = `
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="animation: spin 1s linear infinite;">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
-            Analytics refreshing...
-        `;
-        
+        indicator.className = 'fixed top-20 right-4 px-4 py-2 rounded-lg text-sm font-medium z-50';
+        indicator.style.cssText = 'background: rgba(99, 102, 241, 0.9); color: white; animation: crownFadeIn 0.3s ease-out;';
+        indicator.textContent = 'Analytics updated';
         document.body.appendChild(indicator);
         
-        // Auto-remove after 2 seconds
         setTimeout(() => {
-            indicator.style.animation = 'slideOutToRight 0.3s ease-out';
+            indicator.style.opacity = '0';
+            indicator.style.transition = 'opacity 0.3s ease';
             setTimeout(() => indicator.remove(), 300);
         }, 2000);
     }
+
+    // Date range change handler
+    document.getElementById('date-range-select')?.addEventListener('change', () => {
+        AnalyticsCache.set(null, null);
+        loadAnalyticsData();
+    });
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+        loadAnalyticsData();
+        initWebSocket();
+        
+        // Open first accordion by default
+        const firstSection = document.querySelector('.deep-dive-section');
+        if (firstSection) firstSection.classList.add('open');
+    });
     
-    /**
-     * Show analytics notification
-     * @param {string} title - Notification title
-     * @param {string} message - Notification message
-     */
-    function showAnalyticsNotification(title, message) {
-        const notification = document.createElement('div');
-        notification.className = 'analytics-notification';
-        notification.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            max-width: 400px;
-            padding: 16px;
-            background: var(--glass-bg);
-            backdrop-filter: var(--backdrop-blur);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-xl);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
-            animation: slideInFromRight 0.3s ease-out;
-        `;
-        
-        notification.innerHTML = `
-            <div style="display: flex; gap: 12px; align-items: start;">
-                <div style="flex-shrink: 0; width: 40px; height: 40px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                    <svg width="20" height="20" fill="white" viewBox="0 0 24 24">
-                        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                    </svg>
-                </div>
-                <div style="flex: 1;">
-                    <p style="font-weight: 600; margin-bottom: 4px; color: var(--color-text-primary);">${escapeHtml(title)}</p>
-                    <p style="font-size: 14px; color: var(--color-text-secondary);">${escapeHtml(message)}</p>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(notification);
-        
-        // Auto-remove after 4 seconds
-        setTimeout(() => {
-            notification.style.animation = 'slideOutToRight 0.3s ease-out';
-            setTimeout(() => notification.remove(), 300);
-        }, 4000);
-    }
-    
-    /**
-     * Escape HTML to prevent XSS
-     * @param {string} text - Text to escape
-     * @returns {string} Escaped text
-     */
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    // Initialize on DOM ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initAnalyticsWebSocket);
-    } else {
-        initAnalyticsWebSocket();
-    }
-    
-    // Add CSS for animations
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideInFromRight {
-            from {
-                opacity: 0;
-                transform: translateX(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-        
-        @keyframes slideOutToRight {
-            from {
-                opacity: 1;
-                transform: translateX(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateX(20px);
-            }
-        }
-        
-        @keyframes spin {
-            from {
-                transform: rotate(0deg);
-            }
-            to {
-                transform: rotate(360deg);
-            }
-        }
-        
-        @keyframes shimmer {
-            0% {
-                background-position: -200% center;
-            }
-            100% {
-                background-position: 200% center;
-            }
-        }
-        
-        @keyframes chartPulse {
-            0%, 100% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(1.02);
-                box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
-            }
-        }
-        
-        .kpi-shimmer::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-            background-size: 200% 100%;
-            animation: shimmer 1s ease-in-out;
-            pointer-events: none;
-        }
-    `;
-    document.head.appendChild(style);
+    // Expose for analytics.js integration
+    window.analyticsManager = {
+        loadDashboardData: loadAnalyticsData,
+        updateMeetingHealthScore: applyHealthData
+    };
     
 })();
 </script>
