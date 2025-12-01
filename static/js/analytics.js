@@ -1053,6 +1053,11 @@ class AnalyticsDashboard {
         const completionRate = dashboard?.productivity?.completion_rate || 0;
         const remainingRate = 100 - completionRate;
         
+        const context2d = ctx.getContext('2d');
+        const completedGradient = context2d.createLinearGradient(0, 0, ctx.width || 300, 0);
+        completedGradient.addColorStop(0, 'rgba(34, 197, 94, 0.9)');
+        completedGradient.addColorStop(1, 'rgba(22, 163, 74, 1)');
+
         this.charts.taskCompletion = new Chart(ctx, {
             type: 'bar',
             data: {
@@ -1060,24 +1065,35 @@ class AnalyticsDashboard {
                 datasets: [{
                     label: 'Completed',
                     data: [completionRate],
-                    backgroundColor: 'rgb(34, 197, 94)',
-                    borderRadius: 4
+                    backgroundColor: completedGradient,
+                    borderRadius: 6,
+                    barThickness: 24
                 }, {
                     label: 'Remaining',
                     data: [remainingRate],
-                    backgroundColor: 'rgba(156, 163, 175, 0.3)',
-                    borderRadius: 4
+                    backgroundColor: 'rgba(100, 116, 139, 0.2)',
+                    borderRadius: 6,
+                    barThickness: 24
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                aspectRatio: 2.5,
+                aspectRatio: 3,
                 indexAxis: 'y',
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                        titleColor: '#f1f5f9',
+                        bodyColor: '#cbd5e1',
+                        borderColor: 'rgba(99, 102, 241, 0.3)',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        padding: 12,
+                        displayColors: false,
                         callbacks: {
+                            title: () => 'Task Completion',
                             label: (item) => {
                                 if (item.datasetIndex === 0) {
                                     return `Completed: ${Math.round(completionRate)}% (${completed} tasks)`;
@@ -1091,7 +1107,16 @@ class AnalyticsDashboard {
                     x: {
                         stacked: true,
                         max: 100,
-                        ticks: { callback: (v) => v + '%' }
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.08)',
+                            drawBorder: false
+                        },
+                        ticks: { 
+                            callback: (v) => v + '%',
+                            color: 'rgba(148, 163, 184, 0.7)',
+                            font: { size: 11 }
+                        },
+                        border: { display: false }
                     },
                     y: {
                         stacked: true,
@@ -1237,33 +1262,66 @@ class AnalyticsDashboard {
             this.charts.taskStatus.destroy();
         }
 
+        const context2d = ctx.getContext('2d');
+        
+        const completedGradient = context2d.createLinearGradient(0, 0, 0, ctx.height || 200);
+        completedGradient.addColorStop(0, 'rgba(34, 197, 94, 1)');
+        completedGradient.addColorStop(1, 'rgba(22, 163, 74, 1)');
+        
+        const inProgressGradient = context2d.createLinearGradient(0, 0, 0, ctx.height || 200);
+        inProgressGradient.addColorStop(0, 'rgba(249, 115, 22, 1)');
+        inProgressGradient.addColorStop(1, 'rgba(234, 88, 12, 1)');
+        
+        const pendingGradient = context2d.createLinearGradient(0, 0, 0, ctx.height || 200);
+        pendingGradient.addColorStop(0, 'rgba(148, 163, 184, 0.8)');
+        pendingGradient.addColorStop(1, 'rgba(100, 116, 139, 0.8)');
+
         this.charts.taskStatus = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: ['Completed', 'In Progress', 'Pending'],
                 datasets: [{
                     data: [completed, inProgress, pending],
-                    backgroundColor: [
-                        'rgb(34, 197, 94)',
-                        'rgb(249, 115, 22)',
-                        'rgb(156, 163, 175)'
-                    ],
-                    borderWidth: 0
+                    backgroundColor: [completedGradient, inProgressGradient, pendingGradient],
+                    borderWidth: 0,
+                    hoverOffset: 8,
+                    hoverBorderWidth: 2,
+                    hoverBorderColor: 'rgba(255, 255, 255, 0.2)'
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
                 aspectRatio: 1,
+                cutout: '65%',
                 plugins: {
-                    legend: { position: 'bottom' },
+                    legend: { 
+                        position: 'bottom',
+                        labels: {
+                            color: 'rgba(226, 232, 240, 0.9)',
+                            font: { size: 12, weight: '500' },
+                            padding: 16,
+                            usePointStyle: true,
+                            pointStyle: 'rectRounded'
+                        }
+                    },
                     tooltip: {
+                        backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                        titleColor: '#f1f5f9',
+                        bodyColor: '#cbd5e1',
+                        borderColor: 'rgba(99, 102, 241, 0.3)',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        padding: 12,
+                        displayColors: true,
+                        boxWidth: 12,
+                        boxHeight: 12,
                         callbacks: {
                             label: (item) => {
                                 const value = item.parsed;
                                 const total = item.dataset.data.reduce((a, b) => a + b, 0);
                                 const percent = ((value / total) * 100).toFixed(1);
-                                return `${item.label}: ${value} (${percent}%)`;
+                                return ` ${item.label}: ${value} (${percent}%)`;
                             }
                         }
                     }

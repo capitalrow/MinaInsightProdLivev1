@@ -709,8 +709,47 @@
                 <h1 class="analytics-title">Analytics</h1>
                 <p class="analytics-subtitle">Insights from your meetings and productivity</p>
             </div>
-            <div class="flex gap-2 flex-wrap">
-                <select id="date-range-select" class="px-3 py-2 text-sm rounded-lg bg-white/5 border border-white/10 text-white focus:border-primary focus:outline-none" aria-label="Select date range">
+            <div class="flex gap-2 flex-wrap items-center">
+                <!-- Crown+ Custom Date Range Selector -->
+                <div class="crown-date-selector" id="dateRangeSelector">
+                    <button class="crown-date-trigger" id="dateRangeTrigger" aria-haspopup="listbox" aria-expanded="false" aria-label="Select date range">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" class="crown-date-icon">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <span id="dateRangeLabel">Last 30 days</span>
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" class="crown-date-chevron">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div class="crown-date-dropdown" id="dateRangeDropdown" role="listbox" aria-labelledby="dateRangeTrigger">
+                        <button class="crown-date-option" data-value="7" role="option">
+                            <span class="crown-date-option-label">Last 7 days</span>
+                            <span class="crown-date-option-check" aria-hidden="true">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="crown-date-option active" data-value="30" role="option" aria-selected="true">
+                            <span class="crown-date-option-label">Last 30 days</span>
+                            <span class="crown-date-option-check" aria-hidden="true">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="crown-date-option" data-value="90" role="option">
+                            <span class="crown-date-option-label">Last 90 days</span>
+                            <span class="crown-date-option-check" aria-hidden="true">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                <!-- Hidden select for form compatibility -->
+                <select id="date-range-select" class="sr-only" aria-hidden="true">
                     <option value="7">Last 7 days</option>
                     <option value="30" selected>Last 30 days</option>
                     <option value="90">Last 90 days</option>
@@ -1363,16 +1402,103 @@
         }, 2000);
     }
 
-    // Date range change handler
-    document.getElementById('date-range-select')?.addEventListener('change', () => {
-        AnalyticsCache.set(null, null);
-        loadAnalyticsData();
-    });
+    // Crown+ Date Range Selector Handler
+    function initCrownDateSelector() {
+        const trigger = document.getElementById('dateRangeTrigger');
+        const dropdown = document.getElementById('dateRangeDropdown');
+        const label = document.getElementById('dateRangeLabel');
+        const hiddenSelect = document.getElementById('date-range-select');
+        const options = dropdown?.querySelectorAll('.crown-date-option');
+        
+        if (!trigger || !dropdown || !options) return;
+        
+        // Create mobile overlay
+        let overlay = document.querySelector('.crown-date-overlay');
+        if (!overlay && window.innerWidth <= 640) {
+            overlay = document.createElement('div');
+            overlay.className = 'crown-date-overlay';
+            document.body.appendChild(overlay);
+        }
+        
+        function openDropdown() {
+            trigger.setAttribute('aria-expanded', 'true');
+            dropdown.classList.add('open');
+            if (overlay) overlay.classList.add('open');
+            document.body.style.overflow = window.innerWidth <= 640 ? 'hidden' : '';
+        }
+        
+        function closeDropdown() {
+            trigger.setAttribute('aria-expanded', 'false');
+            dropdown.classList.remove('open');
+            if (overlay) overlay.classList.remove('open');
+            document.body.style.overflow = '';
+        }
+        
+        function toggleDropdown() {
+            const isOpen = trigger.getAttribute('aria-expanded') === 'true';
+            isOpen ? closeDropdown() : openDropdown();
+        }
+        
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleDropdown();
+        });
+        
+        // Option selection
+        options.forEach(option => {
+            option.addEventListener('click', () => {
+                const value = option.dataset.value;
+                const text = option.querySelector('.crown-date-option-label').textContent;
+                
+                // Update active state
+                options.forEach(o => {
+                    o.classList.remove('active');
+                    o.setAttribute('aria-selected', 'false');
+                });
+                option.classList.add('active');
+                option.setAttribute('aria-selected', 'true');
+                
+                // Update label and hidden select
+                label.textContent = text;
+                hiddenSelect.value = value;
+                
+                // Close dropdown
+                closeDropdown();
+                
+                // Trigger data reload
+                AnalyticsCache.set(null, null);
+                loadAnalyticsData();
+            });
+        });
+        
+        // Close on overlay click (mobile)
+        if (overlay) {
+            overlay.addEventListener('click', closeDropdown);
+        }
+        
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.crown-date-selector')) {
+                closeDropdown();
+            }
+        });
+        
+        // Keyboard navigation
+        trigger.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleDropdown();
+            } else if (e.key === 'Escape') {
+                closeDropdown();
+            }
+        });
+    }
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
         loadAnalyticsData();
         initWebSocket();
+        initCrownDateSelector();
         
         // Open first accordion by default
         const firstSection = document.querySelector('.deep-dive-section');

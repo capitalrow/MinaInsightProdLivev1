@@ -1033,46 +1033,197 @@
 }
 
 /* ============================================================================
-   DATE FILTER DROPDOWN - Crown+ Glassmorphism Styling
+   CROWN+ DATE RANGE SELECTOR - Premium Glassmorphic Component
    ============================================================================ */
 
-#date-range-select {
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    background: rgba(30, 41, 59, 0.7) !important;
+.crown-date-selector {
+    position: relative;
+    display: inline-block;
+}
+
+.crown-date-trigger {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background: rgba(30, 41, 59, 0.7);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(148, 163, 184, 0.2) !important;
-    border-radius: var(--radius-lg) !important;
-    padding: 0.625rem 2.5rem 0.625rem 1rem !important;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: var(--radius-lg);
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--color-text-primary) !important;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%239ca3af' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") !important;
-    background-repeat: no-repeat !important;
-    background-position: right 0.75rem center !important;
-    background-size: 16px !important;
-    min-width: 140px;
-}
-
-#date-range-select:hover {
-    background: rgba(30, 41, 59, 0.85) !important;
-    border-color: rgba(99, 102, 241, 0.4) !important;
-}
-
-#date-range-select:focus {
-    outline: none !important;
-    border-color: rgba(99, 102, 241, 0.6) !important;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
-}
-
-#date-range-select option {
-    background: var(--color-bg-secondary);
     color: var(--color-text-primary);
-    padding: 0.5rem;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 150px;
+}
+
+.crown-date-trigger:hover {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-1px);
+}
+
+.crown-date-trigger:focus {
+    outline: none;
+    border-color: rgba(99, 102, 241, 0.6);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.crown-date-trigger[aria-expanded="true"] {
+    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(30, 41, 59, 0.9);
+}
+
+.crown-date-trigger[aria-expanded="true"] .crown-date-chevron {
+    transform: rotate(180deg);
+}
+
+.crown-date-icon {
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.crown-date-chevron {
+    margin-left: auto;
+    color: var(--color-text-tertiary);
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+}
+
+/* Dropdown Panel */
+.crown-date-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    min-width: 180px;
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: var(--radius-lg);
+    box-shadow: 
+        0 10px 40px rgba(0, 0, 0, 0.4),
+        0 4px 12px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px) scale(0.96);
+    transform-origin: top center;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+    padding: 0.375rem;
+    overflow: hidden;
+}
+
+.crown-date-dropdown.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+
+/* Options */
+.crown-date-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: left;
+}
+
+.crown-date-option:hover {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-text-primary);
+}
+
+.crown-date-option:focus {
+    outline: none;
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-text-primary);
+}
+
+.crown-date-option.active {
+    color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.crown-date-option-label {
+    flex: 1;
+}
+
+.crown-date-option-check {
+    opacity: 0;
+    color: var(--color-primary);
+    transform: scale(0.8);
+    transition: all 0.2s ease;
+}
+
+.crown-date-option.active .crown-date-option-check {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Mobile Bottom Sheet (for touch devices) */
+@media (max-width: 640px) {
+    .crown-date-dropdown {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: auto;
+        min-width: 100%;
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        transform: translateY(100%);
+        max-height: 50vh;
+        padding: 0.5rem 0.5rem 2rem;
+    }
+    
+    .crown-date-dropdown::before {
+        content: '';
+        display: block;
+        width: 40px;
+        height: 4px;
+        background: rgba(148, 163, 184, 0.3);
+        border-radius: 2px;
+        margin: 0.5rem auto 1rem;
+    }
+    
+    .crown-date-dropdown.open {
+        transform: translateY(0);
+    }
+    
+    .crown-date-option {
+        padding: 1rem 1.25rem;
+        font-size: 1rem;
+    }
+    
+    /* Overlay for mobile */
+    .crown-date-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        z-index: 99;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .crown-date-overlay.open {
+        opacity: 1;
+        visibility: visible;
+    }
 }
 
 /* ============================================================================
