@@ -120,8 +120,43 @@ def get_dashboard_analytics():
         else:
             avg_effectiveness = avg_engagement = avg_sentiment = avg_duration = 0
         
-        # Get productivity metrics
-        total_tasks_created = sum(a.action_items_created or 0 for a in recent_analytics)
+        # Get productivity metrics - Query actual Task table for accurate counts
+        meeting_ids = [a.meeting_id for a in recent_analytics] if recent_analytics else []
+        
+        # Get meetings from period even without analytics
+        all_meetings = db.session.query(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).all()
+        all_meeting_ids = [m.id for m in all_meetings]
+        
+        # Query real task counts from Task table
+        if all_meeting_ids:
+            task_counts = db.session.query(
+                func.count(Task.id).label('total'),
+                func.sum(db.case((Task.status == 'completed', 1), else_=0)).label('completed'),
+                func.sum(db.case((Task.status == 'in_progress', 1), else_=0)).label('in_progress'),
+                func.sum(db.case((Task.status.in_(['pending', 'todo']), 1), else_=0)).label('pending')
+            ).filter(Task.meeting_id.in_(all_meeting_ids)).first()
+            
+            total_tasks_created = task_counts.total or 0
+            completed_tasks = task_counts.completed or 0
+            in_progress_tasks = task_counts.in_progress or 0
+            pending_tasks = task_counts.pending or 0
+        else:
+            # Fallback to workspace-level task count if no meetings in period
+            task_counts = db.session.query(
+                func.count(Task.id).label('total'),
+                func.sum(db.case((Task.status == 'completed', 1), else_=0)).label('completed'),
+                func.sum(db.case((Task.status == 'in_progress', 1), else_=0)).label('in_progress'),
+                func.sum(db.case((Task.status.in_(['pending', 'todo']), 1), else_=0)).label('pending')
+            ).filter(Task.workspace_id == workspace_id).first()
+            
+            total_tasks_created = task_counts.total or 0
+            completed_tasks = task_counts.completed or 0
+            in_progress_tasks = task_counts.in_progress or 0
+            pending_tasks = task_counts.pending or 0
+        
         total_decisions_made = sum(a.decisions_made_count or 0 for a in recent_analytics)
         
         # Meeting trends - Single query with GROUP BY to prevent N+1 (was 7-30 queries, now 1)
@@ -165,8 +200,14 @@ def get_dashboard_analytics():
                 'productivity': {
                     'total_tasks_created': total_tasks_created,
                     'total_decisions_made': total_decisions_made,
-                    'avg_tasks_per_meeting': round(total_tasks_created / len(recent_analytics), 1) if recent_analytics else 0,
-                    'avg_decisions_per_meeting': round(total_decisions_made / len(recent_analytics), 1) if recent_analytics else 0
+                    'avg_tasks_per_meeting': round(total_tasks_created / len(all_meetings), 1) if all_meetings else 0,
+                    'avg_decisions_per_meeting': round(total_decisions_made / len(recent_analytics), 1) if recent_analytics else 0,
+                    'task_status': {
+                        'completed': int(completed_tasks),
+                        'in_progress': int(in_progress_tasks),
+                        'pending': int(pending_tasks)
+                    },
+                    'completion_rate': round((completed_tasks / total_tasks_created * 100), 1) if total_tasks_created > 0 else 0
                 },
                 'trends': {
                     'meeting_frequency': meeting_trend
@@ -865,22 +906,14 @@ def get_kpi_comparison():
         def calc_completion_rate(completed, total):
             return round((completed / total * 100), 1) if total > 0 else 0
         
-        # Hours saved estimate (based on meeting efficiency improvements)
-        current_analytics = db.session.query(Analytics).join(Meeting).filter(
-            Meeting.workspace_id == workspace_id,
-            Meeting.created_at >= current_start,
-            Analytics.analysis_status == 'completed'
-        ).all()
+        # Hours saved estimate - consistent with dashboard calculation
+        # Formula: (total_duration * 0.3) + (tasks * 2 minutes) converted to hours
+        # This represents: 30% efficiency gain from AI + 2 min saved per task via automation
+        current_minutes_saved = (current_duration_sum * 0.3) + (current_tasks * 2)
+        hours_saved = current_minutes_saved / 60
         
-        # Estimate hours saved based on task automation and meeting efficiency
-        hours_saved = len(current_analytics) * 0.5  # 30 min per analyzed meeting
-        previous_analytics_count = db.session.query(Analytics).join(Meeting).filter(
-            Meeting.workspace_id == workspace_id,
-            Meeting.created_at >= previous_start,
-            Meeting.created_at < previous_end,
-            Analytics.analysis_status == 'completed'
-        ).count()
-        previous_hours_saved = previous_analytics_count * 0.5
+        previous_minutes_saved = (previous_duration_sum * 0.3) + (previous_tasks * 2)
+        previous_hours_saved = previous_minutes_saved / 60
         
         return jsonify({
             'success': True,
@@ -928,6 +961,7 @@ def get_meeting_health_score():
     """
     Get composite Meeting Health Score (0-100).
     Combines: effectiveness, engagement, follow-through, decision velocity.
+    Works even when AI analysis isn't complete - falls back to task-based metrics.
     """
     try:
         workspace_id = current_user.workspace_id
@@ -935,12 +969,19 @@ def get_meeting_health_score():
         cutoff_date = datetime.now() - timedelta(days=days)
         previous_cutoff = cutoff_date - timedelta(days=days)
         
-        # Get current period analytics
+        # Get current period analytics (completed ones for AI metrics)
         current_analytics = db.session.query(Analytics).join(Meeting).filter(
             Meeting.workspace_id == workspace_id,
             Meeting.created_at >= cutoff_date,
             Analytics.analysis_status == 'completed'
         ).all()
+        
+        # Get all current period meetings (for task-based metrics even without AI analysis)
+        current_meetings = db.session.query(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= cutoff_date
+        ).all()
+        current_meeting_ids = [m.id for m in current_meetings]
         
         # Get previous period for trend
         previous_analytics = db.session.query(Analytics).join(Meeting).filter(
@@ -950,16 +991,22 @@ def get_meeting_health_score():
             Analytics.analysis_status == 'completed'
         ).all()
         
-        def calc_health_score(analytics_list):
-            if not analytics_list:
-                return 0, {}
+        previous_meetings = db.session.query(Meeting).filter(
+            Meeting.workspace_id == workspace_id,
+            Meeting.created_at >= previous_cutoff,
+            Meeting.created_at < previous_cutoff
+        ).all()
+        previous_meeting_ids = [m.id for m in previous_meetings]
+        
+        def calc_health_score(analytics_list, meeting_ids):
+            """Calculate health score using available data - falls back to task metrics if no AI analysis."""
             
             # Track which components have real data for proper weighting
             components = []
             weights = []
             breakdown = {}
             
-            # Effectiveness (0-100) - only include if there's real data
+            # Effectiveness (0-100) - only include if there's real data from AI analysis
             effectiveness_values = [a.meeting_effectiveness_score for a in analytics_list if a.meeting_effectiveness_score is not None]
             if effectiveness_values:
                 avg_effectiveness = (sum(effectiveness_values) / len(effectiveness_values)) * 100
@@ -969,7 +1016,7 @@ def get_meeting_health_score():
             else:
                 breakdown['effectiveness'] = None
             
-            # Engagement (0-100) - only include if there's real data
+            # Engagement (0-100) - only include if there's real data from AI analysis
             engagement_values = [a.overall_engagement_score for a in analytics_list if a.overall_engagement_score is not None]
             if engagement_values:
                 avg_engagement = (sum(engagement_values) / len(engagement_values)) * 100
@@ -979,8 +1026,7 @@ def get_meeting_health_score():
             else:
                 breakdown['engagement'] = None
             
-            # Follow-through (task completion rate)
-            meeting_ids = [a.meeting_id for a in analytics_list]
+            # Follow-through (task completion rate) - works even without AI analysis
             if meeting_ids:
                 total_tasks = db.session.query(Task).filter(Task.meeting_id.in_(meeting_ids)).count()
                 completed_tasks = db.session.query(Task).filter(
@@ -998,7 +1044,7 @@ def get_meeting_health_score():
                 breakdown['follow_through'] = None
             
             # Decision velocity (decisions per meeting) - only include if there's real data
-            decisions = [a.decisions_made_count for a in analytics_list if a.decisions_made_count is not None]
+            decisions = [a.decisions_made_count for a in analytics_list if a.decisions_made_count is not None and a.decisions_made_count > 0]
             if decisions:
                 avg_decisions = sum(decisions) / len(decisions)
                 decision_score = min(100, avg_decisions * 25)  # 4+ decisions = 100
@@ -1016,10 +1062,10 @@ def get_meeting_health_score():
             else:
                 composite = 0
             
-            return round(composite, 1), breakdown
+            return round(composite, 1), breakdown, len(meeting_ids)
         
-        current_score, current_breakdown = calc_health_score(current_analytics)
-        previous_score, _ = calc_health_score(previous_analytics)
+        current_score, current_breakdown, meetings_analyzed = calc_health_score(current_analytics, current_meeting_ids)
+        previous_score, _, _ = calc_health_score(previous_analytics, previous_meeting_ids)
         
         # Determine trend
         if current_score > previous_score + 5:
@@ -1053,7 +1099,8 @@ def get_meeting_health_score():
                 'status': status,
                 'status_message': status_message,
                 'breakdown': current_breakdown,
-                'meetings_analyzed': len(current_analytics)
+                'meetings_analyzed': meetings_analyzed,
+                'ai_analysis_complete': len(current_analytics)
             }
         })
         

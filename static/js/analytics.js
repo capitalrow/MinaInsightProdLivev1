@@ -1029,10 +1029,13 @@ class AnalyticsDashboard {
         const chartFrame = ctx?.closest('.chart-frame');
         if (!ctx) return;
 
-        const tasks = dashboard?.productivity;
-        const completed = tasks?.total_tasks_created || 0;
-        const inProgress = Math.floor(completed * 0.3);
-        const pending = Math.floor(completed * 0.1);
+        const productivity = dashboard?.productivity;
+        const taskStatus = productivity?.task_status || {};
+        
+        // Use real task status counts from backend
+        const completed = taskStatus.completed || 0;
+        const inProgress = taskStatus.in_progress || 0;
+        const pending = taskStatus.pending || 0;
         const total = completed + inProgress + pending;
 
         if (total === 0) {
