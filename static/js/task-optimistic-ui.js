@@ -965,9 +965,9 @@ class OptimisticUI {
         // Update assignee badge (CRITICAL FIX: Instant UI update for assignments)
         // Handles both existing badges and re-rendering when badge structure needs updating
         // INDUSTRY-STANDARD: Follows Linear/Notion/Asana pattern for instant optimistic updates
-        // CROWN⁴.7: Fixed CSS selectors to match _task_card_macro.html template
-        const taskMeta = card.querySelector('.task-metadata');
-        let assigneeBadge = card.querySelector('.task-assignee');
+        // CROWN⁴.7: Handle BOTH server-rendered (.task-assignee) and JS-rendered (.task-assignees) structures
+        const taskMeta = card.querySelector('.task-metadata') || card.querySelector('.task-content');
+        let assigneeBadge = card.querySelector('.task-assignee') || card.querySelector('.task-assignees');
         
         // STEP 1: Resolve assigned_to from IDs if TaskCache stripped the user object
         // This is the key fix - look up user objects from the assignee selector's cache
