@@ -845,8 +845,14 @@ class TaskEventHandler:
                         users = []
                     
                     task.assignees = users
-                    # Also set the first assignee as assigned_to_id for backward compatibility
-                    task.assigned_to_id = users[0].id if users else None
+                    # Also set the first assignee for backward compatibility
+                    # Set both the ID and the relationship object so to_dict works correctly
+                    if users:
+                        task.assigned_to_id = users[0].id
+                        task.assigned_to = users[0]
+                    else:
+                        task.assigned_to_id = None
+                        task.assigned_to = None
                     logger.info(f"Task {task_id} assigned to {len(users)} user(s): {[u.id for u in users]}")
                 else:
                     logger.warning(f"assignee_ids should be a list, got: {type(assignee_ids)}")
@@ -858,7 +864,9 @@ class TaskEventHandler:
                     logger.warning(f"Blocked cross-workspace assignment: user {assigned_to_id} not in workspace {task_workspace_id}")
                     return {'success': False, 'error': 'Cannot assign user from a different workspace'}
                 
+                # Set both the ID and relationship object so to_dict works correctly
                 task.assigned_to_id = assigned_to_id
+                task.assigned_to = user
                 # Also update assignees relationship for consistency
                 task.assignees = [user] if user else []
             
