@@ -821,3 +821,213 @@
         transform: none;
     }
 }
+
+/* ============================================================================
+   CROWN⁵+ POLISH FIXES - Analytics Page Refinements
+   ============================================================================ */
+
+/* Key Insights Cards - Proper spacing and visual hierarchy */
+.analytics-workspace #key-insights-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4) !important;
+    margin-top: var(--space-4) !important;
+}
+
+.analytics-workspace #key-insights-list > div {
+    padding: var(--space-4) var(--space-4) !important;
+    border-radius: var(--radius-lg) !important;
+    margin-bottom: 0 !important;
+}
+
+.analytics-workspace #key-insights-list > div:first-child {
+    background: rgba(34, 197, 94, 0.08) !important;
+    border-left: 4px solid #22c55e !important;
+}
+
+.analytics-workspace #key-insights-list > div:nth-child(2) {
+    background: rgba(99, 102, 241, 0.08) !important;
+    border-left: 4px solid #6366f1 !important;
+}
+
+.analytics-workspace #key-insights-list .font-medium {
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    color: var(--color-text-primary) !important;
+    margin-bottom: var(--space-2) !important;
+}
+
+.analytics-workspace #key-insights-list .text-secondary {
+    font-size: 0.85rem !important;
+    color: var(--color-text-secondary) !important;
+    line-height: 1.5 !important;
+}
+
+/* Recommendations List - Better alignment */
+.analytics-workspace #recommendations-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4) !important;
+    margin-top: var(--space-4) !important;
+}
+
+.analytics-workspace #recommendations-list > .flex {
+    display: flex;
+    gap: var(--space-3);
+    align-items: flex-start;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+}
+
+.analytics-workspace #recommendations-list > .flex:last-child {
+    border-bottom: none;
+}
+
+/* Health Score Ring - Premium Radial Glow */
+.health-score-ring {
+    position: relative;
+}
+
+.health-score-ring::before {
+    content: '';
+    position: absolute;
+    inset: -15px;
+    background: radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: healthGlow 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes healthGlow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+/* Accordion Smooth Transitions */
+.deep-dive-section {
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.deep-dive-section.open {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.deep-dive-content {
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.3s ease,
+                padding 0.3s ease;
+    opacity: 0;
+}
+
+.deep-dive-section.open .deep-dive-content {
+    opacity: 1;
+}
+
+.deep-dive-body {
+    animation: accordionSlideIn 0.3s ease-out;
+}
+
+@keyframes accordionSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Chart Card Grid - Better mobile spacing */
+.consolidated-chart-grid {
+    display: grid;
+    gap: var(--space-5);
+}
+
+@media (min-width: 768px) {
+    .consolidated-chart-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--space-5);
+    }
+}
+
+/* Chart Cards - Enhanced styling */
+.analytics-workspace .deep-dive-body .chart-card {
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+    min-height: 200px;
+}
+
+.analytics-workspace .deep-dive-body .chart-card h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-2);
+}
+
+/* Empty State Enhancements */
+.analytics-workspace .crown5-empty-state {
+    min-height: 180px;
+    padding: var(--space-6);
+}
+
+.analytics-workspace .crown5-empty-illustration {
+    color: var(--color-text-tertiary);
+}
+
+/* Tier 2 Actionable Insights - Prevent header overlap */
+.tier2-actionable-insights {
+    position: relative;
+    z-index: 1;
+    margin-top: var(--space-2);
+}
+
+.tier2-actionable-insights .insight-card-content {
+    padding: var(--space-4);
+}
+
+/* Chart Color Palette - Crown+ Theme */
+.analytics-workspace canvas {
+    --chart-primary: #6366f1;
+    --chart-success: #22c55e;
+    --chart-warning: #f59e0b;
+    --chart-info: #06b6d4;
+}
+
+/* Engagement Balance Empty State */
+#engagement-balance-chart {
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* KPI Cards Grid - Responsive improvements */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+}
+
+@media (min-width: 1024px) {
+    .kpi-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.kpi-card {
+    min-height: 120px;
+}
+
+/* Donut Chart Legend Spacing */
+.chart-frame + .chart-legend,
+.chart-card .chart-legend {
+    margin-top: var(--space-4);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    justify-content: center;
+}
+
+/* Meeting Frequency Chart Line */
+#meetingActivityChart {
+    max-height: 280px;
+}
