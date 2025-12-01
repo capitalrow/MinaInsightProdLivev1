@@ -1136,7 +1136,7 @@ class OptimisticUI {
                     updateType = 'priority';
                 } else if (data.due_date !== undefined || data.due !== undefined) {
                     updateType = 'due';
-                } else if (data.assignee !== undefined || data.assigned_to !== undefined) {
+                } else if (data.assignee !== undefined || data.assigned_to !== undefined || data.assignee_ids !== undefined) {
                     updateType = 'assign';
                 } else if (data.labels !== undefined) {
                     updateType = 'labels';
