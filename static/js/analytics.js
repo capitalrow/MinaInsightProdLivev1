@@ -1114,6 +1114,7 @@ class AnalyticsDashboard {
                 scales: {
                     x: {
                         stacked: true,
+                        min: 0,
                         max: 100,
                         grid: {
                             color: 'rgba(148, 163, 184, 0.08)',
@@ -1122,7 +1123,9 @@ class AnalyticsDashboard {
                         ticks: { 
                             callback: (v) => v + '%',
                             color: 'rgba(148, 163, 184, 0.7)',
-                            font: { size: 11 }
+                            font: { size: 11 },
+                            stepSize: 25,
+                            padding: 8
                         },
                         border: { display: false }
                     },
@@ -1130,6 +1133,9 @@ class AnalyticsDashboard {
                         stacked: true,
                         display: false
                     }
+                },
+                layout: {
+                    padding: { left: 4, right: 4 }
                 }
             }
         });
