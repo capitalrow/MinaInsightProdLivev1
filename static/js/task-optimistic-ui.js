@@ -964,33 +964,51 @@ class OptimisticUI {
 
         // Update assignee badge (CRITICAL FIX: Instant UI update for assignments)
         // Handles both existing badges and re-rendering when badge structure needs updating
+        // INDUSTRY-STANDARD: Follows Linear/Notion/Asana pattern for instant optimistic updates
         const taskMeta = card.querySelector('.task-meta');
         let assigneeBadge = card.querySelector('.assignee-badge');
         
-        if (task.assigned_to && task.assigned_to.id) {
-            // Show assignee name with full badge structure
-            const displayName = task.assigned_to.display_name || task.assigned_to.username || task.assigned_to.email || 'Assigned';
-            const newBadgeHTML = `<span class="assignee-badge" data-user-id="${task.assigned_to.id}">👤 ${this._escapeHtml(displayName)}</span>`;
+        // STEP 1: Resolve assigned_to from IDs if TaskCache stripped the user object
+        // This is the key fix - look up user objects from the assignee selector's cache
+        let resolvedAssignedTo = task.assigned_to;
+        if (!resolvedAssignedTo && task.assignee_ids && task.assignee_ids.length > 0) {
+            const allUsers = window.taskAssigneeSelector?.allUsers || [];
+            const userId = task.assignee_ids[0];
+            resolvedAssignedTo = allUsers.find(u => u.id === userId);
+            if (resolvedAssignedTo) {
+                console.log('[_updateTaskInDOM] Resolved assignee from ID cache:', resolvedAssignedTo.username || resolvedAssignedTo.display_name);
+            }
+        }
+        
+        // Handle explicit unassign case (assigned_to explicitly set to null)
+        const isExplicitUnassign = task.hasOwnProperty('assigned_to') && task.assigned_to === null;
+        const hasEmptyAssigneeIds = task.assignee_ids && task.assignee_ids.length === 0;
+        
+        if (resolvedAssignedTo && resolvedAssignedTo.id) {
+            // ASSIGN: Show assignee name with full badge structure
+            const displayName = resolvedAssignedTo.display_name || resolvedAssignedTo.username || resolvedAssignedTo.email || 'Assigned';
+            const newBadgeHTML = `<span class="assignee-badge" data-user-id="${resolvedAssignedTo.id}">👤 ${this._escapeHtml(displayName)}</span>`;
+            console.log('[_updateTaskInDOM] Rendering assignee badge:', displayName);
             
             if (assigneeBadge) {
-                // Replace existing badge with proper structure
                 assigneeBadge.outerHTML = newBadgeHTML;
             } else if (taskMeta) {
-                // Create badge if it doesn't exist (virtualized lists may not have it)
                 taskMeta.insertAdjacentHTML('beforeend', newBadgeHTML);
             }
-        } else if (task.assignee_ids && task.assignee_ids.length === 0) {
-            // Explicitly unassigned - show placeholder
+        } else if (isExplicitUnassign || hasEmptyAssigneeIds) {
+            // UNASSIGN: Explicitly unassigned - show placeholder
             const unassignedHTML = `<span class="assignee-badge assignee-add">+ Assign</span>`;
+            console.log('[_updateTaskInDOM] Clearing assignee (unassign)');
             
             if (assigneeBadge) {
                 assigneeBadge.outerHTML = unassignedHTML;
             } else if (taskMeta) {
                 taskMeta.insertAdjacentHTML('beforeend', unassignedHTML);
             }
-        } else if (task.assignee_ids && task.assignee_ids.length > 0 && !task.assigned_to) {
-            // Has assignee IDs but no full object yet - show generic "Assigned" placeholder
+        } else if (task.assignee_ids && task.assignee_ids.length > 0) {
+            // Fallback: Has IDs but couldn't resolve user - show generic placeholder
             const placeholderHTML = `<span class="assignee-badge">👤 Assigned</span>`;
+            console.log('[_updateTaskInDOM] Fallback: showing generic Assigned badge');
             
             if (assigneeBadge) {
                 assigneeBadge.outerHTML = placeholderHTML;
