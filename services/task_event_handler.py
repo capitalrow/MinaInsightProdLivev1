@@ -866,9 +866,10 @@ class TaskEventHandler:
             
             db.session.commit()
             
+            # Include relationships to send full assigned_to user object
             return {
                 'success': True,
-                'task': task.to_dict()
+                'task': task.to_dict(include_relationships=True)
             }
             
         except Exception as e:
