@@ -2241,6 +2241,43 @@ def list_assignable_users():
         return jsonify({"success": False, "error": "Failed to fetch users"}), 500
 
 
+@api_tasks_bp.route('/labels', methods=['GET'])
+@login_required
+def list_labels():
+    """
+    Get list of unique labels used across tasks in workspace.
+    Used for label autocomplete in task editor.
+    CROWN⁴.7: Support for task labeling feature.
+    """
+    try:
+        # Query all tasks in workspace that have labels
+        stmt = select(Task.labels).join(Meeting).where(
+            Meeting.workspace_id == current_user.workspace_id,
+            Task.labels.isnot(None),
+            Task.deleted_at.is_(None)
+        )
+        results = db.session.execute(stmt).scalars().all()
+        
+        # Extract unique labels from all tasks
+        all_labels = set()
+        for labels_list in results:
+            if labels_list and isinstance(labels_list, list):
+                for label in labels_list:
+                    if label and isinstance(label, str):
+                        all_labels.add(label.strip())
+        
+        # Sort alphabetically for consistent ordering
+        sorted_labels = sorted(all_labels, key=str.lower)
+        
+        return jsonify({
+            "success": True,
+            "labels": sorted_labels
+        }), 200
+    except Exception as e:
+        logger.error(f"Error fetching labels: {e}")
+        return jsonify({"success": False, "error": "Failed to fetch labels"}), 500
+
+
 @api_tasks_bp.route('/ai-proposals/<int:meeting_id>', methods=['GET'])
 @login_required
 def get_ai_task_proposals(meeting_id):

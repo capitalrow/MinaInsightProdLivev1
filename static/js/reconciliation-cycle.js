@@ -18,6 +18,19 @@ class ReconciliationCycle {
         this.isRunning = false;
         this.reconciliationCount = 0;
         this.driftDetections = 0;
+        this.REQUEST_TIMEOUT = 5000; // 5 second timeout for network requests
+    }
+    
+    /**
+     * Create a fetch request with timeout using AbortController
+     * CROWN⁴.7: Prevents slow networks from blocking reconciliation indefinitely
+     */
+    fetchWithTimeout(url, options = {}) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT);
+        
+        return fetch(url, { ...options, signal: controller.signal })
+            .finally(() => clearTimeout(timeoutId));
     }
     
     /**
@@ -89,11 +102,12 @@ class ReconciliationCycle {
     
     /**
      * Check meetings endpoint for changes (CROWN ¹⁰ Law #5: HEAD + If-None-Match)
+     * CROWN⁴.7: Uses timeout to prevent slow network blocking
      */
     async checkMeetings() {
         try {
             // STEP 1: HEAD request with If-None-Match to check ETag
-            const headResponse = await fetch('/api/meetings/recent?limit=5', {
+            const headResponse = await this.fetchWithTimeout('/api/meetings/recent?limit=5', {
                 method: 'HEAD',
                 headers: {
                     'If-None-Match': this.lastETags.meetings || ''
@@ -121,7 +135,7 @@ class ReconciliationCycle {
                 console.log(`🔄 Meetings drift detected (ETag: ${oldETag?.substring(0, 12)}... → ${newETag?.substring(0, 12)}...)`);
                 
                 // STEP 3: ETag mismatch - fetch full data with GET
-                const getResponse = await fetch('/api/meetings/recent?limit=5', {
+                const getResponse = await this.fetchWithTimeout('/api/meetings/recent?limit=5', {
                     method: 'GET'
                 });
                 
@@ -139,18 +153,23 @@ class ReconciliationCycle {
             // First check - just store ETag
             return false;
         } catch (error) {
-            console.error('[Reconciliation] Meetings check failed:', error);
+            if (error.name === 'AbortError') {
+                console.warn('[Reconciliation] Meetings check timed out');
+            } else {
+                console.error('[Reconciliation] Meetings check failed:', error);
+            }
             return false;
         }
     }
     
     /**
      * Check tasks endpoint for changes (CROWN ¹⁰ Law #5: HEAD + If-None-Match)
+     * CROWN⁴.7: Uses timeout to prevent slow network blocking
      */
     async checkTasks() {
         try {
             // STEP 1: HEAD request with If-None-Match
-            const headResponse = await fetch('/api/tasks/stats', {
+            const headResponse = await this.fetchWithTimeout('/api/tasks/stats', {
                 method: 'HEAD',
                 headers: {
                     'If-None-Match': this.lastETags.tasks || ''
@@ -176,7 +195,7 @@ class ReconciliationCycle {
                 console.log(`🔄 Tasks drift detected (ETag: ${oldETag?.substring(0, 12)}... → ${newETag?.substring(0, 12)}...)`);
                 
                 // STEP 2: Fetch full data with GET
-                const getResponse = await fetch('/api/tasks/stats', {
+                const getResponse = await this.fetchWithTimeout('/api/tasks/stats', {
                     method: 'GET'
                 });
                 
@@ -193,18 +212,23 @@ class ReconciliationCycle {
             
             return false;
         } catch (error) {
-            console.error('[Reconciliation] Tasks check failed:', error);
+            if (error.name === 'AbortError') {
+                console.warn('[Reconciliation] Tasks check timed out');
+            } else {
+                console.error('[Reconciliation] Tasks check failed:', error);
+            }
             return false;
         }
     }
     
     /**
      * Check analytics endpoint for changes (CROWN ¹⁰ Law #5: HEAD + If-None-Match)
+     * CROWN⁴.7: Uses timeout to prevent slow network blocking
      */
     async checkAnalytics() {
         try {
             // STEP 1: HEAD request with If-None-Match
-            const headResponse = await fetch('/api/analytics/dashboard?days=7', {
+            const headResponse = await this.fetchWithTimeout('/api/analytics/dashboard?days=7', {
                 method: 'HEAD',
                 headers: {
                     'If-None-Match': this.lastETags.analytics || ''
@@ -230,7 +254,7 @@ class ReconciliationCycle {
                 console.log(`🔄 Analytics drift detected (ETag: ${oldETag?.substring(0, 12)}... → ${newETag?.substring(0, 12)}...)`);
                 
                 // STEP 2: Fetch full data with GET
-                const getResponse = await fetch('/api/analytics/dashboard?days=7', {
+                const getResponse = await this.fetchWithTimeout('/api/analytics/dashboard?days=7', {
                     method: 'GET'
                 });
                 
@@ -247,7 +271,11 @@ class ReconciliationCycle {
             
             return false;
         } catch (error) {
-            console.error('[Reconciliation] Analytics check failed:', error);
+            if (error.name === 'AbortError') {
+                console.warn('[Reconciliation] Analytics check timed out');
+            } else {
+                console.error('[Reconciliation] Analytics check failed:', error);
+            }
             return false;
         }
     }
