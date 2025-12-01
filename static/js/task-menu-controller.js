@@ -527,14 +527,23 @@ class TaskMenuController {
 
             // Use OptimisticUI system with full user object for instant display
             if (window.optimisticUI?.updateTask) {
+                console.log('[TaskMenuController] Using OptimisticUI for instant update');
                 await window.optimisticUI.updateTask(taskId, updatePayload);
             } else {
+                // FALLBACK: If OptimisticUI not ready, still update DOM directly
+                console.log('[TaskMenuController] FALLBACK: OptimisticUI not available, using direct DOM update');
+                
+                // 1. Update server
                 const response = await fetch(`/api/tasks/${taskId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ assignee_ids: result })
                 });
                 if (!response.ok) throw new Error('API call failed');
+                
+                // 2. CRITICAL: Update DOM directly for instant visual feedback
+                this._updateAssigneeBadgeInDOM(taskId, updatePayload);
+                
                 this.showToast('Assignees updated', 'success');
             }
         } catch (error) {
@@ -1229,6 +1238,65 @@ class TaskMenuController {
     closeMenu() {
         // Menu is already closed by TaskActionsMenu before actions execute
         // This method is kept for compatibility but does nothing
+    }
+
+    /**
+     * Helper: Directly update assignee badge in DOM (fallback when OptimisticUI not available)
+     * CROWN⁴.7: Ensures instant visual feedback even when optimistic system hasn't initialized
+     * @param {string|number} taskId - Task ID
+     * @param {Object} updatePayload - Contains assigned_to object or null for unassign
+     */
+    _updateAssigneeBadgeInDOM(taskId, updatePayload) {
+        console.log('[TaskMenuController] _updateAssigneeBadgeInDOM called for task:', taskId, updatePayload);
+        
+        const card = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (!card) {
+            console.warn('[TaskMenuController] Task card not found for DOM update:', taskId);
+            return;
+        }
+
+        const taskMeta = card.querySelector('.task-metadata');
+        let assigneeBadge = card.querySelector('.task-assignee');
+        
+        // Helper to escape HTML
+        const escapeHtml = (str) => {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+            })[char]);
+        };
+        
+        const svgIcon = `<svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
+
+        if (updatePayload.assigned_to && updatePayload.assigned_to.id) {
+            // ASSIGN: Show assignee name
+            const user = updatePayload.assigned_to;
+            const displayName = user.display_name || user.username || user.email || 'Assigned';
+            const newBadgeHTML = `<span class="task-assignee" data-field="assignee" data-user-id="${user.id}" title="Click to assign">
+                ${svgIcon}
+                ${escapeHtml(displayName)}
+            </span>`;
+            console.log('[TaskMenuController] Rendering assignee badge:', displayName);
+            
+            if (assigneeBadge) {
+                assigneeBadge.outerHTML = newBadgeHTML;
+            } else if (taskMeta) {
+                taskMeta.insertAdjacentHTML('afterbegin', newBadgeHTML);
+            }
+        } else {
+            // UNASSIGN: Show "Unassigned" placeholder
+            const unassignedHTML = `<span class="task-assignee" data-field="assignee" title="Click to assign">
+                ${svgIcon}
+                Unassigned
+            </span>`;
+            console.log('[TaskMenuController] Clearing assignee (unassign)');
+            
+            if (assigneeBadge) {
+                assigneeBadge.outerHTML = unassignedHTML;
+            } else if (taskMeta) {
+                taskMeta.insertAdjacentHTML('afterbegin', unassignedHTML);
+            }
+        }
     }
 }
 
