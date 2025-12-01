@@ -9,21 +9,28 @@
     min-height: calc(100vh - var(--header-height));
     display: flex;
     flex-direction: column;
-    padding: var(--space-8) 0;
+    padding: var(--space-6) 0;
     background: radial-gradient(ellipse at top, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
                 radial-gradient(ellipse at bottom right, rgba(168, 85, 247, 0.06) 0%, transparent 50%);
+    overflow-x: hidden;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .live-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: var(--space-8);
+    gap: var(--space-6);
     flex: 1;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 @media (min-width: 1024px) {
     .live-grid {
         grid-template-columns: 1fr 380px;
+        gap: var(--space-8);
     }
 }
 
@@ -158,20 +165,25 @@
 .waveform {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     height: 100%;
-    padding: var(--space-6);
+    padding: var(--space-4);
     position: relative;
     z-index: 1;
+    max-width: 100%;
+    overflow: hidden;
+    justify-content: center;
 }
 
 .waveform-bar {
-    width: 4px;
+    width: 3px;
+    min-width: 3px;
+    flex-shrink: 0;
     min-height: 8px;
     background: linear-gradient(180deg, #818cf8 0%, #a855f7 50%, #6366f1 100%);
-    border-radius: 4px;
+    border-radius: 3px;
     transition: height 0.08s ease-out;
-    box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 0 6px rgba(99, 102, 241, 0.3);
 }
 
 .waveform-bar.active {
@@ -769,16 +781,107 @@
 }
 
 @media (max-width: 1023px) {
-    .live-grid {
-        grid-template-columns: 1fr;
+    .live-container {
+        padding: var(--space-4) 0;
     }
     
-    .sidebar {
-        order: -1;
+    .live-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-5);
     }
     
     .recorder-card {
-        padding: var(--space-8) var(--space-6);
+        padding: var(--space-6) var(--space-4);
+        border-radius: var(--radius-2xl);
+    }
+    
+    .waveform-container {
+        height: 100px;
+        margin: var(--space-4) 0;
+    }
+    
+    .waveform {
+        gap: 2px;
+        padding: var(--space-3);
+    }
+    
+    .waveform-bar {
+        width: 2px;
+        min-width: 2px;
+    }
+    
+    .recording-time {
+        font-size: 2.25rem;
+        margin: var(--space-3) 0 var(--space-2);
+    }
+    
+    .recording-controls {
+        gap: var(--space-5);
+        margin-top: var(--space-6);
+    }
+    
+    .record-button {
+        width: 76px;
+        height: 76px;
+    }
+    
+    .record-button-aura {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .control-button {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .transcript-card {
+        padding: var(--space-5);
+        min-height: 300px;
+        border-radius: var(--radius-xl);
+    }
+    
+    .quick-actions-card {
+        padding: var(--space-5);
+        border-radius: var(--radius-xl);
+    }
+    
+    .action-button {
+        padding: var(--space-3) var(--space-4);
+    }
+    
+    .action-icon-wrapper {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .action-hint {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .live-container {
+        padding: var(--space-3) 0;
+    }
+    
+    .recorder-card {
+        padding: var(--space-5) var(--space-3);
+    }
+    
+    .recorder-status {
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--font-size-xs);
+        margin-bottom: var(--space-5);
+    }
+    
+    .waveform-container {
+        height: 80px;
+        border-radius: var(--radius-lg);
+    }
+    
+    .recording-time {
+        font-size: 2rem;
     }
     
     .recording-controls {
@@ -786,13 +889,46 @@
     }
     
     .record-button {
-        width: 80px;
-        height: 80px;
+        width: 70px;
+        height: 70px;
+    }
+    
+    .record-button svg {
+        width: 28px;
+        height: 28px;
     }
     
     .control-button {
-        width: 52px;
-        height: 52px;
+        width: 46px;
+        height: 46px;
+    }
+    
+    .control-button svg {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .transcript-card,
+    .quick-actions-card {
+        padding: var(--space-4);
+    }
+    
+    .transcript-empty {
+        min-height: 200px;
+        padding: var(--space-4);
+    }
+    
+    .transcript-empty-icon {
+        width: 56px;
+        height: 56px;
+    }
+    
+    .transcript-empty-title {
+        font-size: var(--font-size-base);
+    }
+    
+    .transcript-empty-text {
+        font-size: var(--font-size-xs);
     }
 }
 </style>
@@ -957,14 +1093,32 @@
 <script nonce="{{ g.csp_nonce }}">
 const waveform = document.getElementById('waveform');
 const waveformContainer = document.getElementById('waveform-container');
-for (let i = 0; i < 50; i++) {
-    const bar = document.createElement('div');
-    bar.className = 'waveform-bar';
-    bar.style.height = '8px';
-    waveform.appendChild(bar);
+
+function initWaveformBars() {
+    waveform.innerHTML = '';
+    const containerWidth = waveformContainer.offsetWidth || window.innerWidth - 64;
+    const barWidth = window.innerWidth < 480 ? 2 : 3;
+    const gap = window.innerWidth < 480 ? 2 : 3;
+    const padding = window.innerWidth < 480 ? 24 : 32;
+    const availableWidth = containerWidth - padding;
+    const barCount = Math.min(60, Math.floor(availableWidth / (barWidth + gap)));
+    
+    for (let i = 0; i < barCount; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'waveform-bar';
+        bar.style.height = '8px';
+        waveform.appendChild(bar);
+    }
 }
 
 let isRecording = false;
+
+initWaveformBars();
+window.addEventListener('resize', () => {
+    if (!isRecording) {
+        initWaveformBars();
+    }
+});
 let isPaused = false;
 let startTime = null;
 let timerInterval = null;
