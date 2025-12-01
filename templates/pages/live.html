@@ -9,58 +9,93 @@
     min-height: calc(100vh - var(--header-height));
     display: flex;
     flex-direction: column;
-    padding: var(--space-6) 0;
+    padding: var(--space-8) 0;
+    background: radial-gradient(ellipse at top, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at bottom right, rgba(168, 85, 247, 0.06) 0%, transparent 50%);
 }
 
 .live-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: var(--space-6);
+    gap: var(--space-8);
     flex: 1;
 }
 
 @media (min-width: 1024px) {
     .live-grid {
-        grid-template-columns: 1fr 400px;
+        grid-template-columns: 1fr 380px;
     }
 }
 
 .live-main {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-8);
 }
 
 .recorder-card {
+    position: relative;
     background: var(--glass-bg);
     backdrop-filter: var(--backdrop-blur);
     border: 1px solid var(--glass-border);
-    border-radius: var(--radius-2xl);
-    padding: var(--space-8);
+    border-radius: var(--radius-3xl);
+    padding: var(--space-10) var(--space-8);
     text-align: center;
+    overflow: hidden;
+    box-shadow: 
+        0 4px 24px -4px rgba(0, 0, 0, 0.2),
+        0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+        0 1px 0 rgba(255, 255, 255, 0.1) inset;
+    animation: cardFadeIn 0.5s var(--calm-ease-out);
+}
+
+.recorder-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+}
+
+@keyframes cardFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .recorder-status {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-4);
+    padding: var(--space-2) var(--space-5);
     border-radius: var(--radius-full);
-    background-color: var(--color-surface-light);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-8);
+    transition: all 0.3s var(--calm-ease-out);
 }
 
 .recorder-status.recording {
-    background-color: rgba(239, 68, 68, 0.1);
-    color: var(--color-error);
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
 }
 
 .recorder-status.paused {
-    background-color: rgba(245, 158, 11, 0.1);
-    color: var(--color-warning);
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
 }
 
 .status-dot {
@@ -68,114 +103,239 @@
     height: 8px;
     border-radius: 50%;
     background-color: currentColor;
-    animation: pulse 2s infinite;
+    animation: statusPulse 2s ease-in-out infinite;
 }
 
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+.recorder-status.recording .status-dot {
+    animation: recordingPulse 1s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes recordingPulse {
+    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    50% { opacity: 1; transform: scale(1.2); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
 }
 
 .waveform-container {
-    height: 120px;
-    background-color: var(--color-surface);
-    border-radius: var(--radius-xl);
+    height: 140px;
+    background: linear-gradient(180deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.04) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-2xl);
     margin: var(--space-6) 0;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    position: relative;
+}
+
+.waveform-container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, 
+        rgba(99, 102, 241, 0) 0%, 
+        rgba(99, 102, 241, 0.05) 50%, 
+        rgba(168, 85, 247, 0) 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.waveform-container.active::before {
+    opacity: 1;
+    animation: waveformGlow 2s ease-in-out infinite;
+}
+
+@keyframes waveformGlow {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
 }
 
 .waveform {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     height: 100%;
-    padding: var(--space-4);
+    padding: var(--space-6);
+    position: relative;
+    z-index: 1;
 }
 
 .waveform-bar {
     width: 4px;
-    background: var(--gradient-primary);
-    border-radius: 2px;
-    transition: height var(--transition-fast);
+    min-height: 8px;
+    background: linear-gradient(180deg, #818cf8 0%, #a855f7 50%, #6366f1 100%);
+    border-radius: 4px;
+    transition: height 0.08s ease-out;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
+}
+
+.waveform-bar.active {
+    animation: barPulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes barPulse {
+    from { box-shadow: 0 0 4px rgba(99, 102, 241, 0.3); }
+    to { box-shadow: 0 0 12px rgba(168, 85, 247, 0.5); }
 }
 
 .recording-time {
-    font-size: var(--font-size-4xl);
+    font-size: clamp(2.5rem, 8vw, 3.5rem);
     font-weight: var(--font-weight-bold);
+    font-variant-numeric: tabular-nums;
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin: var(--space-4) 0;
+    margin: var(--space-4) 0 var(--space-2);
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 40px rgba(99, 102, 241, 0.3);
 }
 
 .recording-controls {
     display: flex;
-    gap: var(--space-4);
+    gap: var(--space-6);
     justify-content: center;
     align-items: center;
-    margin-top: var(--space-6);
+    margin-top: var(--space-8);
+}
+
+.record-button-wrapper {
+    position: relative;
+}
+
+.record-button-aura {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%);
+    animation: auraBreath 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.record-button-wrapper.recording .record-button-aura {
+    background: radial-gradient(circle, rgba(239, 68, 68, 0.25) 0%, transparent 70%);
+    animation: auraBreathRecording 1.5s ease-in-out infinite;
+}
+
+@keyframes auraBreath {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+    50% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+}
+
+@keyframes auraBreathRecording {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+    50% { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
 }
 
 .record-button {
-    width: 80px;
-    height: 80px;
+    position: relative;
+    width: 88px;
+    height: 88px;
     border-radius: 50%;
     background: var(--gradient-primary);
-    border: 4px solid var(--color-surface);
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+    border: none;
+    box-shadow: 
+        0 0 0 4px rgba(99, 102, 241, 0.15),
+        0 8px 24px -4px rgba(99, 102, 241, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all var(--transition-base);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 1;
 }
 
 .record-button:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.2);
+    transform: scale(1.08);
+    box-shadow: 
+        0 0 0 6px rgba(99, 102, 241, 0.2),
+        0 12px 32px -4px rgba(99, 102, 241, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+}
+
+.record-button:active {
+    transform: scale(0.98);
 }
 
 .record-button.recording {
-    background: var(--color-error);
-    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    box-shadow: 
+        0 0 0 4px rgba(239, 68, 68, 0.2),
+        0 8px 24px -4px rgba(239, 68, 68, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    animation: recordButtonPulse 2s ease-in-out infinite;
+}
+
+@keyframes recordButtonPulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2), 0 8px 24px -4px rgba(239, 68, 68, 0.5); }
+    50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.15), 0 12px 32px -4px rgba(239, 68, 68, 0.6); }
+}
+
+.record-button svg {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    transition: transform 0.2s ease;
 }
 
 .control-button {
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     color: var(--color-text-primary);
-    transition: all var(--transition-base);
+    transition: all 0.25s var(--calm-ease-out);
 }
 
 .control-button:hover:not(:disabled) {
-    background-color: var(--color-surface-light);
-    transform: scale(1.05);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: scale(1.08);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.control-button:active:not(:disabled) {
+    transform: scale(0.95);
 }
 
 .control-button:disabled {
-    opacity: 0.5;
+    opacity: 0.35;
     cursor: not-allowed;
 }
 
+.control-button svg {
+    transition: transform 0.2s ease;
+}
+
 .transcript-card {
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
+    position: relative;
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius-2xl);
     padding: var(--space-6);
     flex: 1;
     display: flex;
     flex-direction: column;
+    min-height: 400px;
+    box-shadow: 
+        0 4px 24px -4px rgba(0, 0, 0, 0.15),
+        0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    animation: cardFadeIn 0.5s var(--calm-ease-out) 0.1s both;
 }
 
 .transcript-header {
@@ -184,68 +344,104 @@
     align-items: center;
     margin-bottom: var(--space-4);
     padding-bottom: var(--space-4);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .transcript-title {
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.transcript-title::before {
+    content: '';
+    width: 3px;
+    height: 18px;
+    background: var(--gradient-primary);
+    border-radius: 2px;
 }
 
 .transcript-content {
     flex: 1;
     overflow-y: auto;
     max-height: 500px;
+    padding-right: var(--space-2);
+}
+
+.transcript-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.transcript-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 3px;
+}
+
+.transcript-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.transcript-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
 }
 
 .transcript-segment {
     margin-bottom: var(--space-4);
-    padding: var(--space-3);
+    padding: var(--space-4);
     border-radius: var(--radius-lg);
-    transition: background-color var(--transition-base);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid transparent;
+    transition: all 0.2s var(--calm-ease-out);
 }
 
 .transcript-segment:hover {
-    background-color: var(--color-surface-light);
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.05);
 }
 
 .transcript-speaker {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    color: var(--color-primary);
-    margin-bottom: var(--space-1);
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: var(--space-2);
 }
 
 .transcript-text {
     color: var(--color-text-primary);
-    line-height: var(--line-height-relaxed);
+    line-height: 1.7;
+    font-size: var(--font-size-base);
 }
 
 .transcript-timestamp {
     font-size: var(--font-size-xs);
     color: var(--color-text-tertiary);
-    margin-top: var(--space-1);
+    margin-top: var(--space-2);
 }
 
-/* Interim transcript styling */
 .transcript-segment.interim {
-    background-color: rgba(124, 58, 237, 0.05);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.04) 100%);
     border-left: 2px solid var(--color-primary);
 }
 
 .transcript-segment.interim .transcript-text {
-    opacity: 0.8;
-    font-style: italic;
+    opacity: 0.85;
 }
 
 .interim-indicator {
     display: inline-block;
     color: var(--color-primary);
-    animation: blink 1.5s infinite;
+    animation: interimBlink 1s ease-in-out infinite;
     margin-left: var(--space-1);
 }
 
-@keyframes blink {
+@keyframes interimBlink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.3; }
 }
@@ -255,9 +451,37 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 300px;
+    height: 100%;
+    min-height: 300px;
     color: var(--color-text-tertiary);
     text-align: center;
+    padding: var(--space-8);
+}
+
+.transcript-empty-icon {
+    width: 80px;
+    height: 80px;
+    margin-bottom: var(--space-6);
+    opacity: 0.4;
+    animation: emptyIconFloat 4s ease-in-out infinite;
+}
+
+@keyframes emptyIconFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.transcript-empty-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.transcript-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    max-width: 280px;
 }
 
 .sidebar {
@@ -266,34 +490,34 @@
     gap: var(--space-6);
 }
 
-.session-info-card {
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
+.quick-actions-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-2xl);
     padding: var(--space-6);
+    box-shadow: 
+        0 4px 24px -4px rgba(0, 0, 0, 0.15),
+        0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    animation: cardFadeIn 0.5s var(--calm-ease-out) 0.2s both;
 }
 
-.info-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-3) 0;
-    border-bottom: 1px solid var(--color-border);
-}
-
-.info-row:last-child {
-    border-bottom: none;
-}
-
-.info-label {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-}
-
-.info-value {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
+.quick-actions-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text-primary);
+    margin-bottom: var(--space-5);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.quick-actions-title::before {
+    content: '';
+    width: 3px;
+    height: 16px;
+    background: var(--gradient-primary);
+    border-radius: 2px;
 }
 
 .quick-actions {
@@ -305,18 +529,43 @@
 .action-button {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-xl);
     cursor: pointer;
-    transition: all var(--transition-base);
+    transition: all 0.25s var(--calm-ease-out);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
 }
 
-.action-button:hover {
-    background-color: var(--color-surface-light);
-    border-color: var(--color-primary);
+.action-button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(99, 102, 241, 0.3);
+    transform: translateX(4px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.action-button:active:not(:disabled) {
+    transform: translateX(2px);
+}
+
+.action-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.action-icon-wrapper {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(168, 85, 247, 0.1) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
 .action-icon {
@@ -325,7 +574,55 @@
     color: var(--color-primary);
 }
 
-/* CROWN+ Processing Shimmer Overlay */
+.action-button:disabled .action-icon-wrapper {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.action-button:disabled .action-icon {
+    color: var(--color-text-tertiary);
+}
+
+.action-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.action-label {
+    font-weight: var(--font-weight-medium);
+}
+
+.action-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all 0.2s var(--calm-ease-out);
+}
+
+.export-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: var(--color-text-primary);
+}
+
+.export-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .processing-shimmer {
     position: fixed;
     top: 0;
@@ -333,25 +630,30 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.95);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(20px);
     z-index: 9999;
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: fadeIn 0.3s ease-in;
+    animation: shimmerFadeIn 0.4s ease-out;
+}
+
+@keyframes shimmerFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .shimmer-content {
     text-align: center;
-    max-width: 500px;
-    padding: var(--space-8);
+    max-width: 480px;
+    padding: var(--space-10);
 }
 
 .shimmer-animation {
     position: relative;
-    width: 120px;
-    height: 120px;
-    margin: 0 auto var(--space-6);
+    width: 140px;
+    height: 140px;
+    margin: 0 auto var(--space-8);
 }
 
 .shimmer-circle, .shimmer-circle-2 {
@@ -361,21 +663,22 @@
     transform: translate(-50%, -50%);
     border-radius: 50%;
     border: 3px solid transparent;
-    border-top-color: var(--color-primary);
-    animation: shimmerSpin 1.5s linear infinite;
 }
 
 .shimmer-circle {
-    width: 100px;
-    height: 100px;
+    width: 120px;
+    height: 120px;
+    border-top-color: #6366f1;
+    border-right-color: rgba(99, 102, 241, 0.3);
+    animation: shimmerSpin 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 .shimmer-circle-2 {
-    width: 70px;
-    height: 70px;
-    border-top-color: var(--color-secondary);
-    animation-duration: 1s;
-    animation-direction: reverse;
+    width: 80px;
+    height: 80px;
+    border-top-color: #a855f7;
+    border-right-color: rgba(168, 85, 247, 0.3);
+    animation: shimmerSpin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite reverse;
 }
 
 @keyframes shimmerSpin {
@@ -386,29 +689,34 @@
 .shimmer-title {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
-    color: var(--color-text-primary);
-    margin-bottom: var(--space-2);
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: var(--space-3);
 }
 
 .shimmer-message {
     font-size: var(--font-size-base);
     color: var(--color-text-secondary);
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-8);
 }
 
 .shimmer-progress {
     width: 100%;
-    height: 4px;
-    background-color: var(--color-surface);
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
     border-radius: var(--radius-full);
     overflow: hidden;
-    margin-bottom: var(--space-8);
+    margin-bottom: var(--space-10);
 }
 
 .shimmer-progress-bar {
     height: 100%;
     background: var(--gradient-primary);
-    transition: width 0.3s ease;
+    border-radius: var(--radius-full);
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
 }
 
 .shimmer-stage-list {
@@ -421,15 +729,15 @@
 .shimmer-stage {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3);
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
     border-radius: var(--radius-lg);
-    color: var(--color-text-secondary);
-    transition: all var(--transition-base);
+    color: var(--color-text-tertiary);
+    transition: all 0.3s var(--calm-ease-out);
 }
 
 .shimmer-stage.active {
-    background-color: rgba(99, 102, 241, 0.1);
+    background: rgba(99, 102, 241, 0.1);
     color: var(--color-primary);
 }
 
@@ -439,6 +747,7 @@
 
 .shimmer-stage-icon {
     flex-shrink: 0;
+    transition: all 0.3s ease;
 }
 
 .shimmer-stage-icon.pending {
@@ -447,16 +756,44 @@
 
 .shimmer-stage-icon.active {
     opacity: 1;
-    animation: pulse 2s infinite;
+    animation: iconPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
 }
 
 .shimmer-stage-icon.completed {
     opacity: 1;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+@media (max-width: 1023px) {
+    .live-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .sidebar {
+        order: -1;
+    }
+    
+    .recorder-card {
+        padding: var(--space-8) var(--space-6);
+    }
+    
+    .recording-controls {
+        gap: var(--space-4);
+    }
+    
+    .record-button {
+        width: 80px;
+        height: 80px;
+    }
+    
+    .control-button {
+        width: 52px;
+        height: 52px;
+    }
 }
 </style>
 {% endblock %}
@@ -472,9 +809,8 @@
                         <span>Ready to record</span>
                     </div>
 
-                    <div class="waveform-container">
+                    <div class="waveform-container" id="waveform-container">
                         <div class="waveform" id="waveform">
-                            <!-- Waveform bars will be generated by JS -->
                         </div>
                     </div>
 
@@ -487,11 +823,14 @@
                             </svg>
                         </button>
 
-                        <button class="record-button" id="record-button" aria-label="Start recording">
-                            <svg width="32" height="32" fill="white" viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="8"/>
-                            </svg>
-                        </button>
+                        <div class="record-button-wrapper" id="record-button-wrapper">
+                            <div class="record-button-aura"></div>
+                            <button class="record-button" id="record-button" aria-label="Start recording">
+                                <svg width="32" height="32" fill="white" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="8"/>
+                                </svg>
+                            </button>
+                        </div>
 
                         <button class="control-button" id="stop-button" disabled aria-label="Stop recording">
                             <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
@@ -504,7 +843,7 @@
                 <div class="transcript-card">
                     <div class="transcript-header">
                         <h2 class="transcript-title">Live Transcript</h2>
-                        <button class="btn btn-sm btn-ghost" id="export-button" disabled>
+                        <button class="export-btn" id="export-button" disabled>
                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                             </svg>
@@ -514,56 +853,52 @@
 
                     <div class="transcript-content" id="transcript-content">
                         <div class="transcript-empty">
-                            <svg width="64" height="64" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-bottom: var(--space-4);">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                            <svg class="transcript-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
                             </svg>
-                            <p>Start recording to see live transcription</p>
+                            <p class="transcript-empty-title">Ready to transcribe</p>
+                            <p class="transcript-empty-text">Press the record button to start capturing your conversation in real-time</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="sidebar">
-                <div class="session-info-card">
-                    <h3 class="text-lg font-semibold mb-4">Session Info</h3>
-                    <div class="info-row">
-                        <span class="info-label">Session ID</span>
-                        <span class="info-value" id="session-id">-</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Audio Quality</span>
-                        <span class="info-value" id="audio-quality">-</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Words Spoken</span>
-                        <span class="info-value" id="word-count">0</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Speakers</span>
-                        <span class="info-value" id="speaker-count">0</span>
-                    </div>
-                </div>
-
-                <div class="session-info-card">
-                    <h3 class="text-lg font-semibold mb-4">Quick Actions</h3>
+                <div class="quick-actions-card">
+                    <h3 class="quick-actions-title">Quick Actions</h3>
                     <div class="quick-actions">
                         <button class="action-button" id="add-marker-button" disabled>
-                            <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
-                            </svg>
-                            <span>Add Bookmark</span>
+                            <div class="action-icon-wrapper">
+                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                                </svg>
+                            </div>
+                            <div class="action-content">
+                                <span class="action-label">Add Bookmark</span>
+                                <span class="action-hint">Mark important moments</span>
+                            </div>
                         </button>
                         <button class="action-button" id="take-note-button" disabled>
-                            <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                            </svg>
-                            <span>Quick Note</span>
+                            <div class="action-icon-wrapper">
+                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                            </div>
+                            <div class="action-content">
+                                <span class="action-label">Quick Note</span>
+                                <span class="action-hint">Capture thoughts instantly</span>
+                            </div>
                         </button>
                         <button class="action-button" id="share-button" disabled>
-                            <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
-                            </svg>
-                            <span>Share Session</span>
+                            <div class="action-icon-wrapper">
+                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                                </svg>
+                            </div>
+                            <div class="action-content">
+                                <span class="action-label">Share Session</span>
+                                <span class="action-hint">Collaborate with your team</span>
+                            </div>
                         </button>
                     </div>
                 </div>
@@ -572,7 +907,6 @@
     </div>
 </div>
 
-<!-- CROWN+ Processing Shimmer Overlay -->
 <div id="processing-shimmer" class="processing-shimmer" style="display: none;">
     <div class="shimmer-content">
         <div class="shimmer-animation">
@@ -621,16 +955,15 @@
 
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script nonce="{{ g.csp_nonce }}">
-// Initialize waveform bars
 const waveform = document.getElementById('waveform');
+const waveformContainer = document.getElementById('waveform-container');
 for (let i = 0; i < 50; i++) {
     const bar = document.createElement('div');
     bar.className = 'waveform-bar';
-    bar.style.height = '10px';
+    bar.style.height = '8px';
     waveform.appendChild(bar);
 }
 
-// Recording state
 let isRecording = false;
 let isPaused = false;
 let startTime = null;
@@ -641,18 +974,19 @@ let stream = null;
 let chunks = [];
 let sessionId = Date.now();
 
-// Elements
 const recordButton = document.getElementById('record-button');
+const recordButtonWrapper = document.getElementById('record-button-wrapper');
 const pauseButton = document.getElementById('pause-button');
 const stopButton = document.getElementById('stop-button');
 const recorderStatus = document.getElementById('recorder-status');
 const recordingTime = document.getElementById('recording-time');
 const transcriptContent = document.getElementById('transcript-content');
-const sessionIdEl = document.getElementById('session-id');
-const audioQualityEl = document.getElementById('audio-quality');
 const wordCountEl = document.getElementById('word-count');
+const addMarkerButton = document.getElementById('add-marker-button');
+const takeNoteButton = document.getElementById('take-note-button');
+const shareButton = document.getElementById('share-button');
+const exportButton = document.getElementById('export-button');
 
-// Initialize Socket.IO connection
 socket = io({
     path: '/socket.io',
     transports: ['websocket', 'polling'],
@@ -663,14 +997,12 @@ socket = io({
 
 socket.on('connect', () => {
     console.log('Socket.IO connected');
-    sessionIdEl.textContent = sessionId;
 });
 
 socket.on('disconnect', () => {
     console.log('Socket.IO disconnected');
 });
 
-// Track interim segment
 let currentInterimSegment = null;
 let lastSpeaker = null;
 
@@ -682,27 +1014,23 @@ socket.on('transcription_result', (data) => {
     const speakerName = data.speaker_name || data.speaker_id || 'Speaker 1';
     const timestamp = new Date(data.timestamp || Date.now()).toLocaleTimeString();
     
-    // If this is a final transcript
     if (data.is_final) {
-        // Remove any interim segment
         if (currentInterimSegment) {
             currentInterimSegment.remove();
             currentInterimSegment = null;
         }
         
-        // Check if we can merge with the last segment (same speaker)
         const lastSegment = transcriptContent.querySelector('.transcript-segment:last-child');
         const lastSegmentSpeaker = lastSegment?.querySelector('.transcript-speaker')?.textContent;
         
         if (lastSegment && !lastSegment.classList.contains('interim') && lastSegmentSpeaker === speakerName) {
-            // Merge with existing segment
             const textEl = lastSegment.querySelector('.transcript-text');
             textEl.textContent += ' ' + data.text;
             lastSegment.querySelector('.transcript-timestamp').textContent = timestamp;
         } else {
-            // Create new final segment
             const segment = document.createElement('div');
-            segment.className = 'transcript-segment fade-in';
+            segment.className = 'transcript-segment';
+            segment.style.animation = 'cardFadeIn 0.3s var(--calm-ease-out)';
             segment.innerHTML = `
                 <div class="transcript-speaker">${speakerName}</div>
                 <div class="transcript-text">${data.text}</div>
@@ -713,14 +1041,11 @@ socket.on('transcription_result', (data) => {
         
         lastSpeaker = speakerName;
     } else {
-        // This is an interim result - update or create interim segment
         if (!currentInterimSegment || lastSpeaker !== speakerName) {
-            // Remove old interim if exists
             if (currentInterimSegment) {
                 currentInterimSegment.remove();
             }
             
-            // Create new interim segment
             currentInterimSegment = document.createElement('div');
             currentInterimSegment.className = 'transcript-segment interim';
             currentInterimSegment.innerHTML = `
@@ -731,7 +1056,6 @@ socket.on('transcription_result', (data) => {
             transcriptContent.appendChild(currentInterimSegment);
             lastSpeaker = speakerName;
         } else {
-            // Update existing interim segment
             const textEl = currentInterimSegment.querySelector('.transcript-text');
             textEl.textContent = data.text;
             currentInterimSegment.querySelector('.transcript-timestamp').innerHTML = `${timestamp} <span class="interim-indicator">●</span>`;
@@ -739,22 +1063,17 @@ socket.on('transcription_result', (data) => {
     }
     
     transcriptContent.scrollTop = transcriptContent.scrollHeight;
-    
-    const wordCount = transcriptContent.textContent.split(/\s+/).filter(w => w.length > 0).length;
-    wordCountEl.textContent = wordCount;
 });
 
 socket.on('final_transcript', (data) => {
     console.log('Final transcript received:', data.text);
     
-    // Remove any lingering interim segment
     if (currentInterimSegment) {
         currentInterimSegment.remove();
         currentInterimSegment = null;
     }
 });
 
-// Update timer
 function updateTimer() {
     if (!startTime) return;
     const elapsed = Date.now() - startTime;
@@ -764,22 +1083,19 @@ function updateTimer() {
     recordingTime.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// Animate waveform
 function animateWaveform() {
     if (!isRecording || isPaused) return;
     const bars = waveform.querySelectorAll('.waveform-bar');
-    bars.forEach(bar => {
-        const height = Math.random() * 100 + 10;
+    bars.forEach((bar, index) => {
+        const height = Math.sin(Date.now() / 200 + index * 0.3) * 40 + 50 + Math.random() * 20;
         bar.style.height = height + 'px';
     });
     requestAnimationFrame(animateWaveform);
 }
 
-// Record button click
 recordButton.addEventListener('click', async () => {
     if (!isRecording) {
         try {
-            // Request microphone access
             stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
                     echoCancellation: true,
@@ -788,7 +1104,6 @@ recordButton.addEventListener('click', async () => {
                 } 
             });
             
-            // Determine best MIME type
             let mimeType = 'audio/webm;codecs=opus';
             if (!MediaRecorder.isTypeSupported(mimeType)) {
                 if (MediaRecorder.isTypeSupported('audio/webm')) {
@@ -801,16 +1116,13 @@ recordButton.addEventListener('click', async () => {
             }
             
             console.log('Using MIME type:', mimeType || 'browser default');
-            audioQualityEl.textContent = 'High (16kHz)';
             
-            // Create MediaRecorder
             mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
             
             mediaRecorder.ondataavailable = (e) => {
                 if (!e.data.size) return;
                 chunks.push(e.data);
                 
-                // Send audio chunk to server via Socket.IO in the format backend expects
                 e.data.arrayBuffer().then((buf) => {
                     const audioArray = Array.from(new Uint8Array(buf));
                     socket.emit('audio_chunk', {
@@ -825,7 +1137,6 @@ recordButton.addEventListener('click', async () => {
             
             mediaRecorder.onstart = () => {
                 console.log('MediaRecorder started');
-                // Emit join_session to initialize backend session
                 socket.emit('join_session', { session_id: String(sessionId) });
             };
             
@@ -834,10 +1145,8 @@ recordButton.addEventListener('click', async () => {
                 const fullBlob = new Blob(chunks, { type: mimeType });
                 chunks = [];
                 
-                // CROWN+: Show processing shimmer immediately
                 showProcessingShimmer();
                 
-                // Call finalize_session to trigger post-transcription pipeline
                 fullBlob.arrayBuffer().then((buf) => {
                     socket.emit('finalize_session', {
                         session_id: String(sessionId),
@@ -848,21 +1157,24 @@ recordButton.addEventListener('click', async () => {
                 });
             };
             
-            // Start recording with 1 second chunks
             mediaRecorder.start(1000);
             
-            // Update UI
             isRecording = true;
             startTime = Date.now();
             timerInterval = setInterval(updateTimer, 1000);
             
             recordButton.classList.add('recording');
+            recordButtonWrapper.classList.add('recording');
             pauseButton.disabled = false;
             stopButton.disabled = false;
+            addMarkerButton.disabled = false;
+            takeNoteButton.disabled = false;
+            shareButton.disabled = false;
+            exportButton.disabled = false;
             recorderStatus.classList.add('recording');
             recorderStatus.querySelector('span:last-child').textContent = 'Recording...';
+            waveformContainer.classList.add('active');
             
-            // Clear transcript
             transcriptContent.innerHTML = '';
             
             animateWaveform();
@@ -874,7 +1186,6 @@ recordButton.addEventListener('click', async () => {
     }
 });
 
-// Pause button click
 pauseButton.addEventListener('click', () => {
     if (!mediaRecorder) return;
     
@@ -885,17 +1196,21 @@ pauseButton.addEventListener('click', () => {
         recorderStatus.classList.remove('recording');
         recorderStatus.classList.add('paused');
         recorderStatus.querySelector('span:last-child').textContent = 'Paused';
+        waveformContainer.classList.remove('active');
+        
+        const bars = waveform.querySelectorAll('.waveform-bar');
+        bars.forEach(bar => bar.style.height = '20px');
     } else {
         mediaRecorder.resume();
         timerInterval = setInterval(updateTimer, 1000);
         recorderStatus.classList.remove('paused');
         recorderStatus.classList.add('recording');
         recorderStatus.querySelector('span:last-child').textContent = 'Recording...';
+        waveformContainer.classList.add('active');
         animateWaveform();
     }
 });
 
-// Stop button click
 stopButton.addEventListener('click', () => {
     isRecording = false;
     isPaused = false;
@@ -910,21 +1225,18 @@ stopButton.addEventListener('click', () => {
     }
     
     recordButton.classList.remove('recording');
+    recordButtonWrapper.classList.remove('recording');
     pauseButton.disabled = true;
     stopButton.disabled = true;
     recorderStatus.classList.remove('recording', 'paused');
     recorderStatus.querySelector('span:last-child').textContent = 'Ready to record';
+    waveformContainer.classList.remove('active');
     
-    // Stop waveform animation
     const bars = waveform.querySelectorAll('.waveform-bar');
-    bars.forEach(bar => bar.style.height = '10px');
+    bars.forEach(bar => bar.style.height = '8px');
     
     console.log('Recording stopped');
 });
-
-// ========================================
-// CROWN+ Event Sequencing System
-// ========================================
 
 const CROWN_STAGES = {
     'transcript_finalized': { progress: 12.5, message: 'Consolidating transcript...' },
@@ -954,21 +1266,16 @@ function updateProcessingState(stageName, message, progress) {
     const progressBar = document.getElementById('shimmer-progress-bar');
     const stageEl = document.querySelector(`.shimmer-stage[data-stage="${stageName}"]`);
     
-    // Update title and message
     if (message) messageEl.textContent = message;
     
-    // Update progress bar
     progressBar.style.width = progress + '%';
     
-    // Update stage indicator
     if (stageEl) {
-        // Mark as active
         stageEl.classList.add('active');
         const icon = stageEl.querySelector('.shimmer-stage-icon');
         icon.classList.remove('pending');
         icon.classList.add('active');
         
-        // After a delay, mark as completed
         setTimeout(() => {
             stageEl.classList.remove('active');
             stageEl.classList.add('completed');
@@ -979,7 +1286,6 @@ function updateProcessingState(stageName, message, progress) {
     }
 }
 
-// CROWN+ WebSocket Event Listeners
 socket.on('transcript_finalized', (data) => {
     console.log('[CROWN+] Stage 1: transcript_finalized', data);
     const stage = CROWN_STAGES['transcript_finalized'];
@@ -1019,7 +1325,6 @@ socket.on('post_transcription_reveal', (data) => {
     const stage = CROWN_STAGES['post_transcription_reveal'];
     updateProcessingState('post_transcription_reveal', stage.message, stage.progress);
     
-    // Auto-redirect after brief delay for UX
     setTimeout(() => {
         window.location.href = data.redirect_url || `/sessions/${sessionId}/refined`;
     }, 1500);
@@ -1036,8 +1341,5 @@ socket.on('dashboard_refresh', (data) => {
     const stage = CROWN_STAGES['dashboard_refresh'];
     updateProcessingState('dashboard_refresh', stage.message, stage.progress);
 });
-
-// Modify MediaRecorder.onstop to show shimmer
-const originalOnstop = mediaRecorder?.onstop;
 </script>
 {% endblock %}
