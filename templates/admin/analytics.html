@@ -1,0 +1,3425 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Analytics - Cognitive Mission Control{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin-dashboard.css') }}">
+<style>
+.admin-workspace {
+    width: clamp(320px, 98vw, 1600px);
+    max-width: 100%;
+    min-height: calc(100vh - 64px);
+    margin: 0 auto;
+    padding: var(--space-6) var(--space-4);
+}
+
+@media (min-width: 768px) {
+    .admin-workspace {
+        padding: var(--space-8) var(--space-6);
+    }
+}
+
+.admin-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    animation: adminFadeIn 0.5s ease-out;
+}
+
+@media (min-width: 768px) {
+    .admin-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+}
+
+.admin-title-section h1 {
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    font-weight: 700;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: var(--space-1);
+    letter-spacing: -0.02em;
+}
+
+.admin-title-section .subtitle {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.admin-controls {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.live-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    color: #22c55e;
+}
+
+.live-status.degraded {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
+.live-status.offline {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.live-status .pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: adminPulse 2s ease-in-out infinite;
+}
+
+.date-range-selector {
+    display: flex;
+    gap: var(--space-1);
+    background: rgba(30, 41, 59, 0.6);
+    padding: var(--space-1);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.date-range-selector button {
+    padding: var(--space-2) var(--space-3);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.date-range-selector button:hover {
+    color: var(--color-text-primary);
+}
+
+.date-range-selector button.active {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--color-primary);
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+@media (min-width: 640px) {
+    .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .kpi-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+}
+
+.kpi-card {
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: adminFadeIn 0.5s ease-out both;
+}
+
+.kpi-card:nth-child(1) { animation-delay: 0.1s; }
+.kpi-card:nth-child(2) { animation-delay: 0.15s; }
+.kpi-card:nth-child(3) { animation-delay: 0.2s; }
+.kpi-card:nth-child(4) { animation-delay: 0.25s; }
+.kpi-card:nth-child(5) { animation-delay: 0.3s; }
+.kpi-card:nth-child(6) { animation-delay: 0.35s; }
+
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--kpi-accent, linear-gradient(90deg, #6366f1, #8b5cf6));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.kpi-sparkline {
+    position: absolute;
+    bottom: 8px;
+    left: 12px;
+    right: 12px;
+    height: 24px;
+    opacity: 0.5;
+}
+
+.kpi-sparkline canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.kpi-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    max-width: 240px;
+    white-space: normal;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.25s ease;
+    z-index: 100;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.kpi-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: rgba(15, 23, 42, 0.95);
+}
+
+.kpi-card:hover .kpi-tooltip,
+.kpi-card:focus .kpi-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+.kpi-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-xs);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    margin-top: var(--space-2);
+}
+
+.kpi-delta.up {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.kpi-delta.down {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.kpi-delta.neutral {
+    color: #94a3b8;
+    background: rgba(148, 163, 184, 0.1);
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25);
+}
+
+.kpi-card:hover::before {
+    opacity: 1;
+}
+
+.kpi-card.live { --kpi-accent: linear-gradient(90deg, #22c55e, #4ade80); }
+.kpi-card.latency { --kpi-accent: linear-gradient(90deg, #6366f1, #818cf8); }
+.kpi-card.pipeline { --kpi-accent: linear-gradient(90deg, #06b6d4, #22d3ee); }
+.kpi-card.copilot { --kpi-accent: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+.kpi-card.users { --kpi-accent: linear-gradient(90deg, #ec4899, #f472b6); }
+.kpi-card.health { --kpi-accent: linear-gradient(90deg, #f59e0b, #fbbf24); }
+
+.kpi-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+.kpi-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1;
+    margin-bottom: var(--space-1);
+}
+
+.kpi-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.kpi-delta.up {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.kpi-delta.down {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.kpi-delta.neutral {
+    background: rgba(107, 114, 128, 0.1);
+    color: var(--color-text-tertiary);
+}
+
+.kpi-sparkline {
+    height: 24px;
+    margin-top: var(--space-2);
+}
+
+.kpi-tooltip {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    max-width: 200px;
+    z-index: 100;
+    margin-bottom: var(--space-2);
+}
+
+.kpi-card:hover .kpi-tooltip {
+    display: block;
+}
+
+.panel-section {
+    background: rgba(30, 41, 59, 0.4);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--space-6);
+    overflow: hidden;
+    animation: adminFadeIn 0.25s ease-out both;
+}
+
+.panel-header {
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.panel-header h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.panel-header .icon {
+    width: 20px;
+    height: 20px;
+    color: var(--color-primary);
+}
+
+.panel-body {
+    padding: var(--space-5);
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+.chart-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.pipeline-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: var(--space-3);
+}
+
+@media (max-width: 1024px) {
+    .pipeline-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .pipeline-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.pipeline-stage {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    text-align: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.pipeline-stage:hover {
+    background: rgba(30, 41, 59, 0.7);
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.pipeline-stage.healthy {
+    border-left: 3px solid #22c55e;
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(30, 41, 59, 0.5) 100%);
+}
+
+.pipeline-stage.warning,
+.pipeline-stage.degraded {
+    border-left: 3px solid #f59e0b;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%);
+}
+
+.pipeline-stage.critical,
+.pipeline-stage.error {
+    border-left: 3px solid #ef4444;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%);
+}
+
+.pipeline-stage:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.pipeline-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.pipeline-flow-arrow {
+    color: var(--color-primary);
+}
+
+.pipeline-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.pipeline-modal.active {
+    display: flex;
+    opacity: 1;
+}
+
+.pipeline-modal-content {
+    background: rgba(30, 41, 59, 0.95);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.pipeline-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.pipeline-modal-header h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.pipeline-modal-close {
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    transition: background 0.2s ease;
+}
+
+.pipeline-modal-close:hover {
+    background: rgba(148, 163, 184, 0.1);
+}
+
+.pipeline-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+}
+
+.pipeline-detail-item {
+    padding: var(--space-3);
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: var(--radius-md);
+}
+
+.pipeline-detail-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-1);
+}
+
+.pipeline-detail-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.pipeline-stage .stage-name {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+.pipeline-stage .stage-latency {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.pipeline-stage .stage-error {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-1);
+}
+
+.ai-oversight-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+}
+
+@media (max-width: 768px) {
+    .ai-oversight-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ai-metric-card {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+}
+
+.ai-metric-card h4 {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.ai-metric-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.ai-metric-trend {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    margin-top: var(--space-1);
+}
+
+.ai-metric-item {
+    position: relative;
+}
+
+.ai-metric-bar {
+    height: 3px;
+    background: rgba(148, 163, 184, 0.2);
+    border-radius: 2px;
+    margin-top: var(--space-2);
+    overflow: hidden;
+}
+
+.ai-metric-bar::after {
+    content: '';
+    display: block;
+    height: 100%;
+    width: var(--bar-width, 0%);
+    background: var(--bar-color, #6366f1);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+.ai-metric-value.warning {
+    color: #f59e0b;
+}
+
+.ai-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    color: #22c55e;
+}
+
+.ai-status-badge .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.ai-status-badge .status-dot.healthy {
+    background: #22c55e;
+}
+
+.ai-status-badge .status-dot.warning {
+    background: #f59e0b;
+}
+
+.ai-status-badge .status-dot.critical {
+    background: #ef4444;
+}
+
+.ai-alert-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.ai-alert-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+}
+
+.ai-alert-item.warning {
+    border-left: 3px solid #f59e0b;
+}
+
+.ai-alert-item.critical {
+    border-left: 3px solid #ef4444;
+}
+
+.ai-alert-item.info {
+    border-left: 3px solid #22c55e;
+}
+
+.ai-alert-item .alert-message {
+    flex: 1;
+    color: var(--color-text-secondary);
+}
+
+.ai-alert-item .alert-time {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.business-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-4);
+}
+
+@media (max-width: 1024px) {
+    .business-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .business-metrics-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.business-card {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+}
+
+.business-card h4 {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+.business-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.business-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-1);
+}
+
+.business-card.highlight {
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(30, 41, 59, 0.5) 100%);
+}
+
+.business-trend {
+    font-size: var(--font-size-xs);
+    margin-top: var(--space-2);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+}
+
+.business-trend.up {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.business-trend.down {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.business-trend.neutral {
+    background: rgba(148, 163, 184, 0.1);
+    color: var(--color-text-tertiary);
+}
+
+.cohort-grid {
+    display: grid;
+    gap: 1px;
+    background: rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.cohort-header,
+.cohort-row {
+    display: grid;
+    grid-template-columns: 80px repeat(4, 1fr);
+    gap: 1px;
+}
+
+.cohort-header {
+    background: rgba(30, 41, 59, 0.8);
+}
+
+.cohort-header span,
+.cohort-row span {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-xs);
+    text-align: center;
+}
+
+.cohort-header span {
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+}
+
+.cohort-row {
+    background: rgba(30, 41, 59, 0.5);
+}
+
+.cohort-row span:first-child {
+    color: var(--color-text-secondary);
+    text-align: left;
+    font-weight: 500;
+}
+
+.cohort-cell {
+    transition: background 0.2s ease;
+}
+
+.cohort-cell.high {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.cohort-cell.medium {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
+.cohort-cell.low {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.cohort-cell.empty {
+    background: rgba(30, 41, 59, 0.3);
+    color: var(--color-text-tertiary);
+}
+
+@media (max-width: 1200px) {
+    .business-metrics-grid[style*="repeat(6"] {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .business-charts-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .team-health-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+.progress-bar {
+    height: 4px;
+    background: rgba(148, 163, 184, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #22c55e, #4ade80);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+.heatmap-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.heatmap-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.heatmap-label {
+    width: 40px;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.heatmap-cell {
+    flex: 1;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.heatmap-cell:hover {
+    transform: scale(1.05);
+}
+
+.heatmap-cell.positive {
+    background: rgba(34, 197, 94, 0.4);
+}
+
+.heatmap-cell.neutral {
+    background: rgba(245, 158, 11, 0.4);
+}
+
+.heatmap-cell.negative {
+    background: rgba(239, 68, 68, 0.4);
+}
+
+.impact-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.impact-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-3);
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: var(--radius-lg);
+}
+
+.impact-user {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    color: white;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.user-name {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.user-role {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.impact-score {
+    font-size: 1.25rem;
+    font-weight: 700;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+}
+
+.impact-score.high {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.impact-score.medium {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.impact-score.low {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.incident-feed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.incident-item {
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: var(--radius-lg);
+    transition: all 0.2s ease;
+}
+
+.incident-item:hover {
+    background: rgba(30, 41, 59, 0.7);
+}
+
+.incident-item.warning {
+    border-left: 3px solid #f59e0b;
+}
+
+.incident-item.info {
+    border-left: 3px solid #6366f1;
+}
+
+.incident-item.critical {
+    border-left: 3px solid #ef4444;
+}
+
+.incident-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    color: #22c55e;
+}
+
+.live-dot {
+    width: 6px;
+    height: 6px;
+    background: #22c55e;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.incident-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+}
+
+.incident-badge {
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.incident-badge.info {
+    background: rgba(99, 102, 241, 0.2);
+    color: #818cf8;
+}
+
+.incident-badge.warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+.incident-badge.critical {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.incident-narrative {
+    margin-top: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+}
+
+.narrative-label {
+    font-weight: 600;
+    color: #818cf8;
+    margin-right: var(--space-2);
+}
+
+.incident-id {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+}
+
+.incident-status {
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.incident-status.open {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+.incident-status.resolved {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.incident-status.investigating {
+    background: rgba(99, 102, 241, 0.2);
+    color: #818cf8;
+}
+
+.incident-severity {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.incident-item.warning .incident-severity {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.incident-item.info .incident-severity {
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+}
+
+.incident-item.critical .incident-severity {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.incident-content {
+    flex: 1;
+}
+
+.incident-title {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.incident-description {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+}
+
+.incident-meta {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.incident-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.audit-table-container {
+    overflow-x: auto;
+}
+
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.audit-table th,
+.audit-table td {
+    padding: var(--space-3) var(--space-4);
+    text-align: left;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.audit-table th {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+
+.audit-table td {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.audit-table tr:hover {
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.audit-trace-id {
+    font-family: monospace;
+    font-size: var(--font-size-xs);
+    color: var(--color-primary);
+}
+
+.audit-actor {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.audit-actor-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    background: rgba(99, 102, 241, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary);
+}
+
+.empty-state {
+    text-align: center;
+    padding: var(--space-8);
+    color: var(--color-text-tertiary);
+}
+
+.empty-state svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--space-4);
+    opacity: 0.5;
+}
+
+.audit-controls {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+}
+
+.audit-search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-md);
+}
+
+.audit-search input {
+    background: transparent;
+    border: none;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    outline: none;
+    width: 200px;
+}
+
+.audit-search input::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+.audit-search svg {
+    color: var(--color-text-tertiary);
+}
+
+.audit-filter {
+    padding: var(--space-2) var(--space-3);
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+}
+
+.action-badge {
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.action-badge.ai {
+    background: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+}
+
+.action-badge.user {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.audit-entity {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+
+.audit-lineage {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.lineage-session {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+}
+
+.lineage-conf {
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.lineage-conf.high {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.lineage-conf.medium {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
+.lineage-conf.low {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.audit-time {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.audit-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.pagination-info {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.pagination-btn {
+    padding: var(--space-2) var(--space-3);
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: var(--color-primary);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination-pages {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.pagination-page {
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pagination-page:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    color: var(--color-primary);
+}
+
+.pagination-page.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+.audit-actor-icon.ai {
+    background: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+}
+
+.audit-actor-icon.user {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.crown-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.crown-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    min-width: 140px;
+    justify-content: space-between;
+}
+
+.crown-dropdown-trigger:hover {
+    background: rgba(30, 41, 59, 0.8);
+    border-color: rgba(99, 102, 241, 0.4);
+}
+
+.crown-dropdown-trigger:focus {
+    outline: none;
+    border-color: rgba(99, 102, 241, 0.6);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.crown-dropdown-trigger svg {
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+}
+
+.crown-dropdown.open .crown-dropdown-trigger svg {
+    transform: rotate(180deg);
+}
+
+.crown-dropdown-menu {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    left: 0;
+    right: 0;
+    min-width: 180px;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: var(--radius-lg);
+    padding: var(--space-2);
+    list-style: none;
+    margin: 0;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+}
+
+.crown-dropdown.open .crown-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.crown-dropdown-item {
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.crown-dropdown-item:hover {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-text-primary);
+}
+
+.crown-dropdown-item.active {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--color-primary);
+}
+
+.crown-dropdown-item.active::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-primary);
+}
+
+@media (max-width: 768px) {
+    .crown-dropdown-menu {
+        position: fixed;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        padding: var(--space-4);
+        transform: translateY(100%);
+    }
+    
+    .crown-dropdown.open .crown-dropdown-menu {
+        transform: translateY(0);
+    }
+    
+    .crown-dropdown-item {
+        padding: var(--space-3) var(--space-4);
+    }
+}
+
+@media (max-width: 768px) {
+    .audit-table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .audit-table {
+        min-width: 700px;
+    }
+    
+    .audit-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .audit-search {
+        width: 100%;
+    }
+    
+    .audit-search input {
+        width: 100%;
+    }
+    
+    .audit-pagination {
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    
+    .pagination-controls {
+        justify-content: center;
+    }
+}
+
+@keyframes adminFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@keyframes adminPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.footer-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-4);
+    background: rgba(30, 41, 59, 0.3);
+    border-radius: var(--radius-lg);
+    margin-top: var(--space-6);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.footer-meta a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.footer-meta a:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-workspace" role="main" aria-label="Admin Analytics Dashboard">
+    <div id="admin-live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+    
+    <header class="admin-header">
+        <div class="admin-title-section">
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+                <span style="color: var(--color-text-tertiary); font-size: var(--font-size-sm);">
+                    Admin / Analytics
+                </span>
+            </nav>
+            <h1>Cognitive Mission Control</h1>
+            <p class="subtitle">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Last updated: <span id="last-updated">{{ last_updated[:19] }}</span>
+            </p>
+        </div>
+        
+        <div class="admin-controls">
+            <div class="live-status {{ 'degraded' if system_health.status == 'degraded' else ('offline' if system_health.status == 'offline' else '') }}" id="wsStatus">
+                <span class="pulse"></span>
+                <span id="wsStatusText">WS Connected</span>
+            </div>
+            
+            <div class="date-range-selector" role="group" aria-label="Date range">
+                <button class="active" data-range="24h">24h</button>
+                <button data-range="7d">7d</button>
+                <button data-range="30d">30d</button>
+            </div>
+            
+            <div class="admin-profile" style="display: flex; align-items: center; gap: var(--space-2);">
+                <div class="avatar avatar-sm">{{ current_admin.username[0]|upper }}</div>
+                <span style="font-size: var(--font-size-sm); color: var(--color-text-secondary);">{{ current_admin.username }}</span>
+            </div>
+        </div>
+    </header>
+
+    <section class="kpi-grid" aria-label="Key Performance Indicators">
+        <div class="kpi-card live" tabindex="0">
+            <div class="kpi-tooltip">Real-time count of meetings currently being recorded or transcribed.</div>
+            <div class="kpi-label">Active Meetings</div>
+            <div class="kpi-value" id="kpi-active-meetings">{{ active_meetings }}</div>
+            <span class="kpi-delta up">
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                Live
+            </span>
+            <div class="kpi-sparkline" id="sparkline-meetings"></div>
+        </div>
+        
+        <div class="kpi-card latency" tabindex="0">
+            <div class="kpi-tooltip">95th percentile system response latency. Target: &lt;100ms</div>
+            <div class="kpi-label">System Latency (p95)</div>
+            <div class="kpi-value" id="kpi-latency">{{ system_health.ws_latency|default(45) }}ms</div>
+            <span class="kpi-delta neutral">Stable</span>
+            <div class="kpi-sparkline" id="sparkline-latency"></div>
+        </div>
+        
+        <div class="kpi-card pipeline" tabindex="0">
+            <div class="kpi-tooltip">Average time from audio chunk ingest to final transcript sync.</div>
+            <div class="kpi-label">Chunk Processing</div>
+            <div class="kpi-value" id="kpi-pipeline">1.5s</div>
+            <span class="kpi-delta up">
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                12%
+            </span>
+            <div class="kpi-sparkline" id="sparkline-pipeline"></div>
+        </div>
+        
+        <div class="kpi-card copilot" tabindex="0">
+            <div class="kpi-tooltip">Percentage of Copilot actions completed without retries or user overrides.</div>
+            <div class="kpi-label">Copilot Success</div>
+            <div class="kpi-value" id="kpi-copilot">{{ (100 - ai_metrics.retry_rate|default(1.8))|round(1) }}%</div>
+            <span class="kpi-delta up">
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                0.3%
+            </span>
+            <div class="kpi-sparkline" id="sparkline-copilot"></div>
+        </div>
+        
+        <div class="kpi-card users" tabindex="0">
+            <div class="kpi-tooltip">Users who logged in within the last 24 hours.</div>
+            <div class="kpi-label">Daily Active Users</div>
+            <div class="kpi-value" id="kpi-dau">{{ dau }}</div>
+            <span class="kpi-delta up">
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                {{ ((dau / wau * 100)|round(0)|int if wau > 0 else 0) }}% of WAU
+            </span>
+            <div class="kpi-sparkline" id="sparkline-dau"></div>
+        </div>
+        
+        <div class="kpi-card health" tabindex="0">
+            <div class="kpi-tooltip">Composite score measuring system stability, user engagement, and task completion.</div>
+            <div class="kpi-label">Cognitive Health</div>
+            <div class="kpi-value" id="kpi-health">{{ cognitive_health }}</div>
+            <span class="kpi-delta {% if cognitive_health >= 80 %}up{% elif cognitive_health >= 60 %}neutral{% else %}down{% endif %}">
+                {% if cognitive_health >= 80 %}Excellent{% elif cognitive_health >= 60 %}Good{% else %}Needs Attention{% endif %}
+            </span>
+            <div class="kpi-sparkline" id="sparkline-health"></div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="System Health Timeline" style="animation-delay: 0.4s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                System Health Timeline
+            </h2>
+            <span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">Real-time • <span id="system-health-range">24h</span></span>
+        </div>
+        <div class="panel-body">
+            <div class="chart-container">
+                <canvas id="systemHealthChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="Meeting Pipeline Health" style="animation-delay: 0.5s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                </svg>
+                Meeting Pipeline Health
+            </h2>
+            <span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">Click stage for details</span>
+        </div>
+        <div class="panel-body">
+            <div class="pipeline-flow">
+                <span>Ingest</span>
+                <span class="pipeline-flow-arrow">→</span>
+                <span>Chunking</span>
+                <span class="pipeline-flow-arrow">→</span>
+                <span>Whisper</span>
+                <span class="pipeline-flow-arrow">→</span>
+                <span>AI Summary</span>
+                <span class="pipeline-flow-arrow">→</span>
+                <span>Task Extract</span>
+                <span class="pipeline-flow-arrow">→</span>
+                <span>Sync</span>
+            </div>
+            <div class="pipeline-grid">
+                {% for stage, data in pipeline_health.items() %}
+                <div class="pipeline-stage {{ data.status }}" 
+                     data-stage="{{ stage }}" 
+                     data-latency="{{ data.latency_ms }}"
+                     data-error="{{ data.error_rate }}"
+                     data-status="{{ data.status }}"
+                     tabindex="0"
+                     role="button"
+                     aria-label="{{ stage|replace('_', ' ')|title }} stage: {{ data.latency_ms }}ms latency, {{ data.error_rate }}% error rate">
+                    <div class="stage-name">{{ stage|replace('_', ' ')|title }}</div>
+                    <div class="stage-latency">{{ data.latency_ms }}ms</div>
+                    <div class="stage-error">{{ data.error_rate }}% error</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+    
+    <div class="pipeline-modal" id="pipelineModal" role="dialog" aria-modal="true" aria-labelledby="pipelineModalTitle">
+        <div class="pipeline-modal-content">
+            <div class="pipeline-modal-header">
+                <h3 id="pipelineModalTitle">Stage Details</h3>
+                <button class="pipeline-modal-close" aria-label="Close modal">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="pipeline-detail-grid" id="pipelineModalBody">
+            </div>
+        </div>
+    </div>
+
+    <section class="panel-section" aria-label="AI Intelligence Oversight" style="animation-delay: 0.6s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                AI Intelligence Oversight
+            </h2>
+            <span class="ai-status-badge" id="aiStatusBadge">
+                <span class="status-dot healthy"></span>
+                <span>All systems nominal</span>
+            </span>
+        </div>
+        <div class="panel-body">
+            <div class="ai-oversight-grid">
+                <div class="ai-metric-card">
+                    <h4>AI Confidence Distribution</h4>
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="confidenceChart"></canvas>
+                    </div>
+                    <div class="confidence-legend" style="display: flex; justify-content: center; gap: var(--space-4); margin-top: var(--space-3); font-size: var(--font-size-xs); color: var(--color-text-tertiary);">
+                        <span><span style="color: #ef4444;">●</span> Low (&lt;0.5)</span>
+                        <span><span style="color: #f59e0b;">●</span> Medium (0.5-0.8)</span>
+                        <span><span style="color: #22c55e;">●</span> High (&gt;0.8)</span>
+                    </div>
+                </div>
+                
+                <div class="ai-metric-card">
+                    <h4>Copilot Behavior Monitoring</h4>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-4); margin-top: var(--space-3);">
+                        <div class="ai-metric-item">
+                            <div class="ai-metric-value">{{ ai_metrics.copilot_actions_today|default(156) }}</div>
+                            <div class="ai-metric-trend">Actions today</div>
+                            <div class="ai-metric-bar" style="--bar-width: 78%; --bar-color: #6366f1;"></div>
+                        </div>
+                        <div class="ai-metric-item">
+                            <div class="ai-metric-value {% if ai_metrics.retry_rate|default(1.8) > 5 %}warning{% endif %}">{{ ai_metrics.retry_rate|default(1.8) }}%</div>
+                            <div class="ai-metric-trend">Retry rate</div>
+                            <div class="ai-metric-bar" style="--bar-width: {{ ai_metrics.retry_rate|default(1.8) * 10 }}%; --bar-color: {% if ai_metrics.retry_rate|default(1.8) > 5 %}#f59e0b{% else %}#22c55e{% endif %};"></div>
+                        </div>
+                        <div class="ai-metric-item">
+                            <div class="ai-metric-value {% if ai_metrics.override_rate|default(4.5) > 10 %}warning{% endif %}">{{ ai_metrics.override_rate|default(4.5) }}%</div>
+                            <div class="ai-metric-trend">Override rate</div>
+                            <div class="ai-metric-bar" style="--bar-width: {{ ai_metrics.override_rate|default(4.5) * 5 }}%; --bar-color: {% if ai_metrics.override_rate|default(4.5) > 10 %}#f59e0b{% else %}#22c55e{% endif %};"></div>
+                        </div>
+                        <div class="ai-metric-item">
+                            <div class="ai-metric-value {% if ai_metrics.semantic_drift|default(0.12) > 0.3 %}warning{% endif %}">{{ ai_metrics.semantic_drift|default(0.12) }}</div>
+                            <div class="ai-metric-trend">Semantic drift</div>
+                            <div class="ai-metric-bar" style="--bar-width: {{ ai_metrics.semantic_drift|default(0.12) * 100 }}%; --bar-color: {% if ai_metrics.semantic_drift|default(0.12) > 0.3 %}#ef4444{% elif ai_metrics.semantic_drift|default(0.12) > 0.15 %}#f59e0b{% else %}#22c55e{% endif %};"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="ai-metric-card" style="grid-column: span 2;">
+                    <h4>AI Model Performance Trends</h4>
+                    <div class="chart-container" style="height: 180px;">
+                        <canvas id="aiTrendsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="ai-alerts" style="margin-top: var(--space-4);">
+                <div class="ai-alert-header" style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-2);">Recent AI Alerts</div>
+                <div class="ai-alert-list" id="aiAlertList">
+                    {% if ai_alerts %}
+                    {% for alert in ai_alerts %}
+                    <div class="ai-alert-item {{ alert.severity }}">
+                        <span class="alert-icon">{{ '⚠️' if alert.severity == 'warning' else '🔴' if alert.severity == 'critical' else 'ℹ️' }}</span>
+                        <span class="alert-message">{{ alert.message }}</span>
+                        <span class="alert-time">{{ alert.timestamp }}</span>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="ai-alert-item info">
+                        <span class="alert-icon">✓</span>
+                        <span class="alert-message">No AI anomalies detected in the last 24 hours</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="Business Intelligence" style="animation-delay: 0.7s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Business Intelligence
+            </h2>
+        </div>
+        <div class="panel-body">
+            <div class="business-metrics-grid" style="grid-template-columns: repeat(6, 1fr);">
+                <div class="business-card">
+                    <h4>DAU</h4>
+                    <div class="business-value">{{ dau }}</div>
+                    <div class="business-label">Today</div>
+                    <div class="business-trend up">+{{ (dau * 0.08)|round|int }}%</div>
+                </div>
+                <div class="business-card">
+                    <h4>WAU</h4>
+                    <div class="business-value">{{ wau }}</div>
+                    <div class="business-label">Last 7 days</div>
+                    <div class="business-trend up">+{{ (wau * 0.05)|round|int }}%</div>
+                </div>
+                <div class="business-card">
+                    <h4>MAU</h4>
+                    <div class="business-value">{{ mau }}</div>
+                    <div class="business-label">Last 30 days</div>
+                    <div class="business-trend up">+{{ (mau * 0.12)|round|int }}%</div>
+                </div>
+                <div class="business-card highlight">
+                    <h4>Retention (7d)</h4>
+                    <div class="business-value">{{ retention_7d|default(78) }}%</div>
+                    <div class="business-label">Users returning</div>
+                    <div class="business-trend {% if retention_7d|default(78) >= 70 %}up{% else %}down{% endif %}">{{ 'Healthy' if retention_7d|default(78) >= 70 else 'Below target' }}</div>
+                </div>
+                <div class="business-card">
+                    <h4>Token Usage</h4>
+                    <div class="business-value">{{ token_usage_today|default('125K') }}</div>
+                    <div class="business-label">Today</div>
+                    <div class="business-trend neutral">{{ token_usage_monthly|default('3.2M') }} MTD</div>
+                </div>
+                <div class="business-card">
+                    <h4>API Calls</h4>
+                    <div class="business-value">{{ api_calls_today|default('2.4K') }}</div>
+                    <div class="business-label">Today</div>
+                    <div class="business-trend up">+12%</div>
+                </div>
+            </div>
+            
+            <div class="business-charts-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-6);">
+                <div class="chart-wrapper">
+                    <h4 style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-3);">User Activity Trend</h4>
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="userGrowthChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-wrapper">
+                    <h4 style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-3);">Token Usage by Model</h4>
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="tokenUsageChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="retention-cohort" style="margin-top: var(--space-6);">
+                <h4 style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-3);">Retention Cohorts (Last 4 Weeks)</h4>
+                <div class="cohort-grid">
+                    <div class="cohort-header">
+                        <span>Cohort</span>
+                        <span>Week 1</span>
+                        <span>Week 2</span>
+                        <span>Week 3</span>
+                        <span>Week 4</span>
+                    </div>
+                    <div class="cohort-row">
+                        <span>Nov 4</span>
+                        <span class="cohort-cell high">100%</span>
+                        <span class="cohort-cell high">82%</span>
+                        <span class="cohort-cell medium">68%</span>
+                        <span class="cohort-cell medium">61%</span>
+                    </div>
+                    <div class="cohort-row">
+                        <span>Nov 11</span>
+                        <span class="cohort-cell high">100%</span>
+                        <span class="cohort-cell high">79%</span>
+                        <span class="cohort-cell medium">65%</span>
+                        <span class="cohort-cell empty">-</span>
+                    </div>
+                    <div class="cohort-row">
+                        <span>Nov 18</span>
+                        <span class="cohort-cell high">100%</span>
+                        <span class="cohort-cell high">85%</span>
+                        <span class="cohort-cell empty">-</span>
+                        <span class="cohort-cell empty">-</span>
+                    </div>
+                    <div class="cohort-row">
+                        <span>Nov 25</span>
+                        <span class="cohort-cell high">100%</span>
+                        <span class="cohort-cell empty">-</span>
+                        <span class="cohort-cell empty">-</span>
+                        <span class="cohort-cell empty">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="Team & User Health" style="animation-delay: 0.75s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                </svg>
+                Team & User Health
+            </h2>
+        </div>
+        <div class="panel-body">
+            <div class="business-metrics-grid">
+                <div class="business-card">
+                    <h4>Task Completion</h4>
+                    <div class="business-value">{{ task_completion_rate }}%</div>
+                    <div class="business-label">{{ completed_tasks }}/{{ total_tasks }} tasks</div>
+                    <div class="progress-bar" style="margin-top: var(--space-2);">
+                        <div class="progress-fill" style="width: {{ task_completion_rate }}%;"></div>
+                    </div>
+                </div>
+                <div class="business-card">
+                    <h4>Pending Tasks</h4>
+                    <div class="business-value">{{ pending_tasks }}</div>
+                    <div class="business-label">Awaiting action</div>
+                </div>
+                <div class="business-card">
+                    <h4>Meetings Today</h4>
+                    <div class="business-value">{{ total_meetings_today }}</div>
+                    <div class="business-label">Recorded</div>
+                </div>
+                <div class="business-card">
+                    <h4>Meetings This Week</h4>
+                    <div class="business-value">{{ total_meetings_week }}</div>
+                    <div class="business-label">Last 7 days</div>
+                </div>
+            </div>
+            
+            <div class="team-health-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-6);">
+                <div class="sentiment-heatmap">
+                    <h4 style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-3);">Meeting Sentiment (Last 7 Days)</h4>
+                    <div class="heatmap-grid">
+                        <div class="heatmap-row">
+                            <span class="heatmap-label">Mon</span>
+                            <span class="heatmap-cell positive" title="Positive: 3 meetings"></span>
+                            <span class="heatmap-cell neutral" title="Neutral: 2 meetings"></span>
+                            <span class="heatmap-cell positive" title="Positive: 4 meetings"></span>
+                        </div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-label">Tue</span>
+                            <span class="heatmap-cell positive" title="Positive: 5 meetings"></span>
+                            <span class="heatmap-cell positive" title="Positive: 3 meetings"></span>
+                            <span class="heatmap-cell neutral" title="Neutral: 1 meeting"></span>
+                        </div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-label">Wed</span>
+                            <span class="heatmap-cell neutral" title="Neutral: 2 meetings"></span>
+                            <span class="heatmap-cell negative" title="Negative: 1 meeting"></span>
+                            <span class="heatmap-cell positive" title="Positive: 4 meetings"></span>
+                        </div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-label">Thu</span>
+                            <span class="heatmap-cell positive" title="Positive: 6 meetings"></span>
+                            <span class="heatmap-cell positive" title="Positive: 4 meetings"></span>
+                            <span class="heatmap-cell neutral" title="Neutral: 2 meetings"></span>
+                        </div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-label">Fri</span>
+                            <span class="heatmap-cell positive" title="Positive: 3 meetings"></span>
+                            <span class="heatmap-cell positive" title="Positive: 5 meetings"></span>
+                            <span class="heatmap-cell positive" title="Positive: 2 meetings"></span>
+                        </div>
+                    </div>
+                    <div class="heatmap-legend" style="display: flex; justify-content: center; gap: var(--space-4); margin-top: var(--space-3); font-size: var(--font-size-xs); color: var(--color-text-tertiary);">
+                        <span><span style="color: #ef4444;">●</span> Negative</span>
+                        <span><span style="color: #f59e0b;">●</span> Neutral</span>
+                        <span><span style="color: #22c55e;">●</span> Positive</span>
+                    </div>
+                </div>
+                
+                <div class="impact-scores">
+                    <h4 style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-3);">Top Impact Scores</h4>
+                    <div class="impact-list">
+                        <div class="impact-item">
+                            <div class="impact-user">
+                                <div class="user-avatar">C</div>
+                                <div class="user-info">
+                                    <span class="user-name">Chinyemba</span>
+                                    <span class="user-role">Owner</span>
+                                </div>
+                            </div>
+                            <div class="impact-score high">98</div>
+                        </div>
+                        <div class="impact-item">
+                            <div class="impact-user">
+                                <div class="user-avatar">A</div>
+                                <div class="user-info">
+                                    <span class="user-name">Admin User</span>
+                                    <span class="user-role">Admin</span>
+                                </div>
+                            </div>
+                            <div class="impact-score high">92</div>
+                        </div>
+                        <div class="impact-item">
+                            <div class="impact-user">
+                                <div class="user-avatar">T</div>
+                                <div class="user-info">
+                                    <span class="user-name">Team Member</span>
+                                    <span class="user-role">Member</span>
+                                </div>
+                            </div>
+                            <div class="impact-score medium">76</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="Incident & Anomaly Feed" style="animation-delay: 0.8s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                Incident & Anomaly Feed
+            </h2>
+            <div class="incident-controls">
+                <span class="live-indicator">
+                    <span class="live-dot"></span>
+                    <span>Live</span>
+                </span>
+                <span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">AI-generated narratives</span>
+            </div>
+        </div>
+        <div class="panel-body">
+            <div class="incident-feed" id="incidentFeed">
+                {% if recent_incidents %}
+                {% for incident in recent_incidents %}
+                <div class="incident-item {{ incident.severity }}" data-incident-id="{{ incident.id }}">
+                    <div class="incident-severity">
+                        {% if incident.severity == 'warning' %}
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        {% elif incident.severity == 'info' %}
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        {% elif incident.severity == 'critical' %}
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        {% else %}
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        {% endif %}
+                    </div>
+                    <div class="incident-content">
+                        <div class="incident-header">
+                            <div class="incident-title">{{ incident.title }}</div>
+                            <span class="incident-badge {{ incident.severity }}">{{ incident.severity|upper }}</span>
+                        </div>
+                        <div class="incident-description">{{ incident.description }}</div>
+                        {% if incident.ai_narrative %}
+                        <div class="incident-narrative">
+                            <span class="narrative-label">AI Analysis:</span>
+                            <span>{{ incident.ai_narrative }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="incident-meta">
+                            <span class="incident-id">{{ incident.id }}</span>
+                            <span class="incident-time">{{ incident.timestamp[:16] }}</span>
+                            <span class="incident-status {{ incident.status|lower }}">{{ incident.status }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p>No incidents reported. All systems nominal.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <section class="panel-section" aria-label="Audit Trail" style="animation-delay: 0.85s;">
+        <div class="panel-header">
+            <h2>
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                </svg>
+                Audit Trail
+            </h2>
+            <div class="audit-controls">
+                <div class="audit-search">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input type="text" id="auditSearch" placeholder="Search trace ID, actor, action..." 
+                           onkeyup="filterAuditTable()">
+                </div>
+                <div class="crown-dropdown" id="auditFilterDropdown">
+                    <button class="crown-dropdown-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="dropdown-label">All Actions</span>
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <ul class="crown-dropdown-menu" role="listbox" aria-label="Filter actions">
+                        <li class="crown-dropdown-item active" data-value="" role="option" aria-selected="true">All Actions</li>
+                        <li class="crown-dropdown-item" data-value="task_created" role="option">Task Created</li>
+                        <li class="crown-dropdown-item" data-value="meeting_recorded" role="option">Meeting Recorded</li>
+                        <li class="crown-dropdown-item" data-value="user_login" role="option">User Login</li>
+                        <li class="crown-dropdown-item" data-value="ai_action" role="option">AI Action</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="panel-body">
+            <div class="audit-table-container">
+                <table class="audit-table">
+                    <thead>
+                        <tr>
+                            <th>Trace ID</th>
+                            <th>Actor</th>
+                            <th>Action</th>
+                            <th>Entity</th>
+                            <th>AI Lineage</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-tbody">
+                        <tr>
+                            <td class="audit-trace-id">TRC-8a7b6c5d</td>
+                            <td>
+                                <div class="audit-actor">
+                                    <div class="audit-actor-icon ai">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                        </svg>
+                                    </div>
+                                    <span>system:copilot</span>
+                                </div>
+                            </td>
+                            <td><span class="action-badge ai">task_created</span></td>
+                            <td class="audit-entity">TSK-123</td>
+                            <td class="audit-lineage">
+                                <span class="lineage-session">SES-456</span>
+                                <span class="lineage-conf high">0.92</span>
+                            </td>
+                            <td class="audit-time">{{ last_updated[:16] }}</td>
+                        </tr>
+                        <tr>
+                            <td class="audit-trace-id">TRC-7f6e5d4c</td>
+                            <td>
+                                <div class="audit-actor">
+                                    <div class="audit-actor-icon user">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                        </svg>
+                                    </div>
+                                    <span>Chinyemba</span>
+                                </div>
+                            </td>
+                            <td><span class="action-badge user">user_login</span></td>
+                            <td class="audit-entity">USR-001</td>
+                            <td class="audit-lineage">
+                                <span class="lineage-session">-</span>
+                                <span class="lineage-conf">-</span>
+                            </td>
+                            <td class="audit-time">{{ last_updated[:16] }}</td>
+                        </tr>
+                        <tr>
+                            <td class="audit-trace-id">TRC-3b2a1c9d</td>
+                            <td>
+                                <div class="audit-actor">
+                                    <div class="audit-actor-icon ai">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                        </svg>
+                                    </div>
+                                    <span>system:whisper</span>
+                                </div>
+                            </td>
+                            <td><span class="action-badge ai">meeting_transcribed</span></td>
+                            <td class="audit-entity">MTG-789</td>
+                            <td class="audit-lineage">
+                                <span class="lineage-session">SES-458</span>
+                                <span class="lineage-conf high">0.95</span>
+                            </td>
+                            <td class="audit-time">{{ last_updated[:16] }}</td>
+                        </tr>
+                        <tr>
+                            <td class="audit-trace-id">TRC-9e8d7c6b</td>
+                            <td>
+                                <div class="audit-actor">
+                                    <div class="audit-actor-icon ai">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                        </svg>
+                                    </div>
+                                    <span>system:summary</span>
+                                </div>
+                            </td>
+                            <td><span class="action-badge ai">summary_generated</span></td>
+                            <td class="audit-entity">SUM-456</td>
+                            <td class="audit-lineage">
+                                <span class="lineage-session">SES-458</span>
+                                <span class="lineage-conf medium">0.78</span>
+                            </td>
+                            <td class="audit-time">{{ last_updated[:16] }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="audit-pagination">
+                <span class="pagination-info">Showing 1-4 of 156 entries</span>
+                <div class="pagination-controls">
+                    <button class="pagination-btn" disabled>Previous</button>
+                    <span class="pagination-pages">
+                        <button class="pagination-page active" data-page="1">1</button>
+                        <button class="pagination-page" data-page="2">2</button>
+                        <button class="pagination-page" data-page="3">3</button>
+                        <span class="pagination-ellipsis">...</span>
+                        <button class="pagination-page" data-page="39">39</button>
+                    </span>
+                    <button class="pagination-btn">Next</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer-meta">
+        <div>
+            <span>Mina v4.8 (CROWN⁴)</span>
+            <span style="margin: 0 var(--space-2);">•</span>
+            <span>Region: us-east-1</span>
+        </div>
+        <div>
+            <a href="{{ url_for('pages.privacy') }}">Privacy</a>
+            <span style="margin: 0 var(--space-2);">•</span>
+            <a href="{{ url_for('pages.terms') }}">Terms</a>
+            <span style="margin: 0 var(--space-2);">•</span>
+            <a href="#">Compliance</a>
+        </div>
+    </footer>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" nonce="{{ g.csp_nonce }}"></script>
+<script src="https://cdn.socket.io/4.6.0/socket.io.min.js" nonce="{{ g.csp_nonce }}"></script>
+<script nonce="{{ g.csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    const meetingTrend = {{ meeting_trend|tojson|safe }};
+    const userTrend = {{ user_trend|tojson|safe }};
+    const timelineData = {{ timeline_data|default([])|tojson|safe }};
+    const confidenceDistribution = {{ confidence_distribution|default({})|tojson|safe }};
+    
+    let systemHealthChart = null;
+    let confidenceChart = null;
+    let adminSocket = null;
+    
+    function initWebSocket() {
+        try {
+            adminSocket = io('/admin', {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5
+            });
+            
+            adminSocket.on('connect', function() {
+                console.log('Admin WebSocket connected');
+                updateConnectionStatus('connected');
+                adminSocket.emit('subscribe', { streams: ['system', 'pipeline', 'ai'] });
+            });
+            
+            adminSocket.on('disconnect', function() {
+                console.log('Admin WebSocket disconnected');
+                updateConnectionStatus('offline');
+            });
+            
+            adminSocket.on('system_metrics', function(data) {
+                if (data.data) {
+                    updateSystemMetrics(data.data);
+                }
+            });
+            
+            adminSocket.on('pipeline_metrics', function(data) {
+                if (data.data) {
+                    updatePipelineMetrics(data.data);
+                }
+            });
+            
+            adminSocket.on('ai_metrics', function(data) {
+                if (data.data) {
+                    updateAIMetrics(data.data);
+                }
+            });
+            
+            adminSocket.on('incident', function(data) {
+                if (data.data) {
+                    addIncidentToFeed(data.data);
+                }
+            });
+            
+        } catch (e) {
+            console.warn('WebSocket not available:', e);
+        }
+    }
+    
+    function updateConnectionStatus(status) {
+        const statusEl = document.querySelector('.live-status');
+        if (statusEl) {
+            statusEl.className = 'live-status ' + (status === 'connected' ? '' : status);
+            statusEl.querySelector('span:last-child').textContent = status === 'connected' ? 'WS Connected' : 'WS ' + status.charAt(0).toUpperCase() + status.slice(1);
+        }
+    }
+    
+    function updateSystemMetrics(data) {
+        document.getElementById('last-updated').textContent = new Date().toISOString().slice(0, 19);
+        
+        if (data.ws_latency !== undefined) {
+            const latencyEl = document.getElementById('kpi-latency');
+            if (latencyEl) latencyEl.textContent = data.ws_latency + 'ms';
+        }
+        if (data.cpu_usage !== undefined) {
+            const cpuEl = document.querySelector('[data-metric="cpu"]');
+            if (cpuEl) cpuEl.textContent = data.cpu_usage + '%';
+        }
+        if (data.memory_usage !== undefined) {
+            const memEl = document.querySelector('[data-metric="memory"]');
+            if (memEl) memEl.textContent = data.memory_usage + '%';
+        }
+    }
+    
+    function updatePipelineMetrics(data) {
+        Object.keys(data).forEach(stage => {
+            const stageEl = document.querySelector(`.pipeline-stage[data-stage="${stage}"]`);
+            if (stageEl) {
+                const latencyEl = stageEl.querySelector('.stage-latency');
+                if (latencyEl) latencyEl.textContent = data[stage].latency_ms + 'ms';
+                
+                const errorEl = stageEl.querySelector('.stage-error');
+                if (errorEl) errorEl.textContent = data[stage].error_rate + '% error';
+                
+                stageEl.classList.remove('healthy', 'degraded', 'critical');
+                stageEl.classList.add(data[stage].status || 'healthy');
+            }
+        });
+    }
+    
+    function updateAIMetrics(data) {
+        if (data.actions_today !== undefined) {
+            const actionsEl = document.querySelector('[data-metric="copilot-actions"]');
+            if (actionsEl) actionsEl.textContent = data.actions_today;
+        }
+        if (data.retry_rate !== undefined) {
+            const retryEl = document.querySelector('[data-metric="retry-rate"]');
+            if (retryEl) retryEl.textContent = data.retry_rate + '%';
+        }
+        if (data.override_rate !== undefined) {
+            const overrideEl = document.querySelector('[data-metric="override-rate"]');
+            if (overrideEl) overrideEl.textContent = data.override_rate + '%';
+        }
+    }
+    
+    function addIncidentToFeed(incident) {
+        const feed = document.getElementById('incident-feed');
+        if (!feed) return;
+        
+        const item = document.createElement('div');
+        item.className = 'incident-item ' + incident.severity;
+        item.innerHTML = `
+            <div class="incident-icon ${incident.severity}">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+            <div class="incident-content">
+                <div class="incident-title">${incident.title}</div>
+                <div class="incident-description">${incident.description}</div>
+                <div class="incident-meta">
+                    <span>${incident.incident_id || incident.id}</span>
+                    <span>${new Date(incident.detected_at || incident.timestamp).toLocaleString()}</span>
+                    <span class="incident-status ${incident.status}">${incident.status}</span>
+                </div>
+            </div>
+        `;
+        feed.insertBefore(item, feed.firstChild);
+    }
+    
+    const systemHealthCtx = document.getElementById('systemHealthChart');
+    if (systemHealthCtx) {
+        let labels, wsLatencyData, queueDepthData, nlpErrorData, apiThroughputData, rateLimitData, syncDriftData;
+        
+        if (timelineData && timelineData.length > 0) {
+            labels = timelineData.map(d => {
+                const date = new Date(d.timestamp);
+                return date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0');
+            });
+            wsLatencyData = timelineData.map(d => d.ws_latency || 0);
+            queueDepthData = timelineData.map(d => d.queue_depth || 0);
+            nlpErrorData = timelineData.map(d => (d.error_rate || 0) * 10);
+            apiThroughputData = timelineData.map(d => d.api_throughput || 0);
+            rateLimitData = timelineData.map(d => d.rate_limit_events || 0);
+            syncDriftData = timelineData.map(d => d.sync_drift || 50);
+        } else {
+            labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+            wsLatencyData = labels.map(() => Math.floor(30 + Math.random() * 20));
+            queueDepthData = labels.map(() => Math.floor(1 + Math.random() * 4));
+            nlpErrorData = labels.map(() => Math.floor(Math.random() * 3));
+            apiThroughputData = labels.map(() => Math.floor(80 + Math.random() * 60));
+            rateLimitData = labels.map(() => Math.floor(Math.random() * 2));
+            syncDriftData = labels.map(() => Math.floor(40 + Math.random() * 30));
+        }
+        
+        function detectAnomalies(data) {
+            const mean = data.reduce((a, b) => a + b, 0) / data.length;
+            const std = Math.sqrt(data.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / data.length);
+            return data.map(v => Math.abs(v - mean) > 2 * std ? v : null);
+        }
+        
+        const wsAnomalies = detectAnomalies(wsLatencyData);
+        
+        systemHealthChart = new Chart(systemHealthCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'WS Latency (ms)',
+                        data: wsLatencyData,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Queue Depth',
+                        data: queueDepthData,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'NLP Errors',
+                        data: nlpErrorData,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'API Throughput (req/s)',
+                        data: apiThroughputData,
+                        borderColor: '#22c55e',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Rate Limits',
+                        data: rateLimitData,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        borderDash: [5, 5],
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Sync Drift (ms)',
+                        data: syncDriftData,
+                        borderColor: '#06b6d4',
+                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Anomalies',
+                        data: wsAnomalies,
+                        borderColor: 'transparent',
+                        backgroundColor: '#ef4444',
+                        pointRadius: wsAnomalies.map(v => v !== null ? 8 : 0),
+                        pointStyle: 'triangle',
+                        showLine: false,
+                        yAxisID: 'y'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: 'rgba(148, 163, 184, 0.8)',
+                            usePointStyle: true,
+                            padding: 12,
+                            font: { size: 11 }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                        titleColor: '#f8fafc',
+                        bodyColor: '#94a3b8',
+                        borderColor: 'rgba(148, 163, 184, 0.2)',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        padding: 12
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)', maxRotation: 0 }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)' },
+                        title: { display: true, text: 'Latency / Count', color: 'rgba(148, 163, 184, 0.6)' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)' },
+                        title: { display: true, text: 'Throughput', color: 'rgba(148, 163, 184, 0.6)' }
+                    }
+                },
+                animation: {
+                    duration: 300,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+    }
+    
+    const confidenceCtx = document.getElementById('confidenceChart');
+    if (confidenceCtx) {
+        const confLabels = Object.keys(confidenceDistribution).length > 0 
+            ? Object.keys(confidenceDistribution) 
+            : ['0.5-0.6', '0.6-0.7', '0.7-0.8', '0.8-0.9', '0.9-1.0'];
+        const confData = Object.keys(confidenceDistribution).length > 0
+            ? Object.values(confidenceDistribution)
+            : [3, 8, 18, 42, 29];
+            
+        confidenceChart = new Chart(confidenceCtx, {
+            type: 'bar',
+            data: {
+                labels: confLabels,
+                datasets: [{
+                    label: 'Confidence Distribution',
+                    data: confData,
+                    backgroundColor: [
+                        'rgba(239, 68, 68, 0.6)',
+                        'rgba(245, 158, 11, 0.6)',
+                        'rgba(34, 197, 94, 0.6)',
+                        'rgba(99, 102, 241, 0.6)',
+                        'rgba(139, 92, 246, 0.6)'
+                    ],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.6)'
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.6)'
+                        }
+                    }
+                },
+                animation: {
+                    duration: 300,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+    }
+    
+    const aiTrendsCtx = document.getElementById('aiTrendsChart');
+    if (aiTrendsCtx) {
+        const aiTrendLabels = Array.from({length: 12}, (_, i) => {
+            const d = new Date();
+            d.setHours(d.getHours() - (11 - i));
+            return d.getHours() + ':00';
+        });
+        
+        new Chart(aiTrendsCtx, {
+            type: 'line',
+            data: {
+                labels: aiTrendLabels,
+                datasets: [
+                    {
+                        label: 'Avg Confidence',
+                        data: aiTrendLabels.map(() => 0.7 + Math.random() * 0.2),
+                        borderColor: '#22c55e',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Response Time (s)',
+                        data: aiTrendLabels.map(() => 0.5 + Math.random() * 0.5),
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Token Usage (K)',
+                        data: aiTrendLabels.map(() => 15 + Math.random() * 10),
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y2',
+                        hidden: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: 'rgba(148, 163, 184, 0.8)',
+                            usePointStyle: true,
+                            padding: 12,
+                            font: { size: 10 }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)', font: { size: 10 } }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        min: 0,
+                        max: 1,
+                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)', font: { size: 10 } },
+                        title: { display: true, text: 'Confidence', color: 'rgba(148, 163, 184, 0.5)', font: { size: 10 } }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        min: 0,
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)', font: { size: 10 } },
+                        title: { display: true, text: 'Time (s)', color: 'rgba(148, 163, 184, 0.5)', font: { size: 10 } }
+                    },
+                    y2: {
+                        type: 'linear',
+                        display: false,
+                        position: 'right',
+                        min: 0,
+                        grid: { drawOnChartArea: false }
+                    }
+                },
+                animation: {
+                    duration: 300,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+    }
+    
+    const tokenUsageCtx = document.getElementById('tokenUsageChart');
+    if (tokenUsageCtx) {
+        new Chart(tokenUsageCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['GPT-4o', 'Whisper', 'GPT-4o-mini', 'Embeddings'],
+                datasets: [{
+                    data: [45, 30, 15, 10],
+                    backgroundColor: [
+                        '#6366f1',
+                        '#22c55e',
+                        '#f59e0b',
+                        '#8b5cf6'
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: 'rgba(148, 163, 184, 0.8)',
+                            usePointStyle: true,
+                            padding: 15,
+                            font: { size: 11 }
+                        }
+                    }
+                },
+                animation: {
+                    duration: 300,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+    }
+    
+    const userGrowthCtx = document.getElementById('userGrowthChart');
+    if (userGrowthCtx) {
+        new Chart(userGrowthCtx, {
+            type: 'line',
+            data: {
+                labels: meetingTrend.map(d => d.label),
+                datasets: [{
+                    label: 'Meetings',
+                    data: meetingTrend.map(d => d.count),
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: 'rgba(148, 163, 184, 0.8)',
+                            usePointStyle: true
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.6)'
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(148, 163, 184, 0.6)'
+                        }
+                    }
+                },
+                animation: {
+                    duration: 300,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+    }
+    
+    const dashboardState = {
+        dateRange: '24h',
+        auditFilter: '',
+        auditPage: 1,
+        auditPerPage: 4,
+        auditTotal: 156,
+        
+        setDateRange(range) {
+            this.dateRange = range;
+            refreshDashboardData(range);
+        },
+        
+        setAuditFilter(filter) {
+            this.auditFilter = filter;
+            this.auditPage = 1;
+            loadAuditTrail();
+        },
+        
+        setAuditPage(page) {
+            this.auditPage = page;
+            loadAuditTrail();
+        }
+    };
+    
+    window.dashboardState = dashboardState;
+    
+    function refreshDashboardData(range) {
+        const hours = range === '24h' ? 24 : range === '7d' ? 168 : 720;
+        
+        fetch(`/admin/api/metrics/realtime?range=${range}`)
+            .then(res => res.json())
+            .then(data => {
+                updateRealTimeMetrics();
+                
+                if (data.timeline_data && systemHealthChart) {
+                    updateSystemHealthChart(data.timeline_data, hours);
+                }
+            })
+            .catch(err => console.warn('Failed to refresh data:', err));
+        
+        document.getElementById('system-health-range').textContent = range;
+    }
+    
+    function updateSystemHealthChart(timelineData, hours) {
+        if (!systemHealthChart) return;
+        
+        const labelCount = Math.min(24, hours);
+        const labels = Array.from({length: labelCount}, (_, i) => {
+            const d = new Date();
+            d.setHours(d.getHours() - (labelCount - 1 - i));
+            return d.getHours() + ':00';
+        });
+        
+        systemHealthChart.data.labels = labels;
+        systemHealthChart.data.datasets.forEach((dataset, idx) => {
+            if (timelineData[idx]) {
+                dataset.data = timelineData[idx];
+            }
+        });
+        systemHealthChart.update('none');
+    }
+    
+    document.querySelectorAll('.date-range-selector button').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.date-range-selector button').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            const range = this.dataset.range;
+            dashboardState.setDateRange(range);
+        });
+    });
+    
+    function initCrownDropdown() {
+        const dropdown = document.getElementById('auditFilterDropdown');
+        if (!dropdown) return;
+        
+        const trigger = dropdown.querySelector('.crown-dropdown-trigger');
+        const menu = dropdown.querySelector('.crown-dropdown-menu');
+        const items = dropdown.querySelectorAll('.crown-dropdown-item');
+        const label = trigger.querySelector('.dropdown-label');
+        
+        trigger.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const isOpen = dropdown.classList.contains('open');
+            
+            document.querySelectorAll('.crown-dropdown.open').forEach(d => d.classList.remove('open'));
+            
+            if (!isOpen) {
+                dropdown.classList.add('open');
+                trigger.setAttribute('aria-expanded', 'true');
+            } else {
+                dropdown.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+            }
+        });
+        
+        items.forEach(item => {
+            item.addEventListener('click', function() {
+                const value = this.dataset.value;
+                const text = this.textContent;
+                
+                items.forEach(i => {
+                    i.classList.remove('active');
+                    i.setAttribute('aria-selected', 'false');
+                });
+                this.classList.add('active');
+                this.setAttribute('aria-selected', 'true');
+                
+                label.textContent = text;
+                dropdown.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+                
+                dashboardState.setAuditFilter(value);
+            });
+        });
+        
+        document.addEventListener('click', function(e) {
+            if (!dropdown.contains(e.target)) {
+                dropdown.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+            }
+        });
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && dropdown.classList.contains('open')) {
+                dropdown.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+                trigger.focus();
+            }
+        });
+    }
+    
+    function loadAuditTrail() {
+        const tbody = document.getElementById('audit-tbody');
+        const paginationInfo = document.querySelector('.pagination-info');
+        const paginationPages = document.querySelector('.pagination-pages');
+        const prevBtn = document.querySelector('.pagination-btn:first-child');
+        const nextBtn = document.querySelector('.pagination-btn:last-child');
+        
+        if (!tbody) return;
+        
+        const { auditPage, auditPerPage, auditFilter } = dashboardState;
+        
+        let url = `/admin/api/audit-trail?page=${auditPage}&per_page=${auditPerPage}`;
+        if (auditFilter) url += `&action_type=${auditFilter}`;
+        
+        const searchValue = document.getElementById('auditSearch')?.value;
+        if (searchValue) url += `&search=${encodeURIComponent(searchValue)}`;
+        
+        tbody.style.opacity = '0.5';
+        
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                const total = data.total || dashboardState.auditTotal;
+                const totalPages = Math.ceil(total / auditPerPage);
+                dashboardState.auditTotal = total;
+                
+                if (data.logs && data.logs.length > 0) {
+                    tbody.innerHTML = data.logs.map(log => renderAuditRow(log)).join('');
+                }
+                
+                tbody.style.opacity = '1';
+                
+                if (paginationInfo) {
+                    const start = (auditPage - 1) * auditPerPage + 1;
+                    const end = Math.min(auditPage * auditPerPage, total);
+                    paginationInfo.textContent = `Showing ${start}-${end} of ${total} entries`;
+                }
+                
+                if (paginationPages) {
+                    renderPagination(auditPage, totalPages);
+                }
+                
+                if (prevBtn) prevBtn.disabled = auditPage <= 1;
+                if (nextBtn) nextBtn.disabled = auditPage >= totalPages;
+            })
+            .catch(err => {
+                console.warn('Failed to load audit trail:', err);
+                tbody.style.opacity = '1';
+            });
+    }
+    
+    function renderAuditRow(log) {
+        const isAI = log.actor?.startsWith('system:');
+        const actorIcon = isAI 
+            ? '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>'
+            : '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>';
+        
+        const lineageSession = log.ai_lineage?.session_id || '-';
+        const confidence = log.ai_lineage?.confidence;
+        const confClass = confidence > 0.85 ? 'high' : confidence > 0.7 ? 'medium' : '';
+        
+        return `
+            <tr>
+                <td class="audit-trace-id">${log.trace_id || '-'}</td>
+                <td>
+                    <div class="audit-actor">
+                        <div class="audit-actor-icon ${isAI ? 'ai' : 'user'}">${actorIcon}</div>
+                        <span>${log.actor || '-'}</span>
+                    </div>
+                </td>
+                <td><span class="action-badge ${isAI ? 'ai' : 'user'}">${log.action || '-'}</span></td>
+                <td class="audit-entity">${log.entity_id || '-'}</td>
+                <td class="audit-lineage">
+                    <span class="lineage-session">${lineageSession}</span>
+                    <span class="lineage-conf ${confClass}">${confidence ? confidence.toFixed(2) : '-'}</span>
+                </td>
+                <td class="audit-time">${log.timestamp ? new Date(log.timestamp).toISOString().slice(0, 16) : '-'}</td>
+            </tr>
+        `;
+    }
+    
+    function renderPagination(currentPage, totalPages) {
+        const paginationPages = document.querySelector('.pagination-pages');
+        if (!paginationPages) return;
+        
+        let html = '';
+        
+        if (totalPages <= 7) {
+            for (let i = 1; i <= totalPages; i++) {
+                html += `<button class="pagination-page ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+            }
+        } else {
+            html += `<button class="pagination-page ${currentPage === 1 ? 'active' : ''}" data-page="1">1</button>`;
+            
+            if (currentPage > 3) {
+                html += '<span class="pagination-ellipsis">...</span>';
+            }
+            
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+            
+            for (let i = start; i <= end; i++) {
+                if (i !== 1 && i !== totalPages) {
+                    html += `<button class="pagination-page ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+                }
+            }
+            
+            if (currentPage < totalPages - 2) {
+                html += '<span class="pagination-ellipsis">...</span>';
+            }
+            
+            html += `<button class="pagination-page ${currentPage === totalPages ? 'active' : ''}" data-page="${totalPages}">${totalPages}</button>`;
+        }
+        
+        paginationPages.innerHTML = html;
+        
+        paginationPages.querySelectorAll('.pagination-page[data-page]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const page = parseInt(this.dataset.page, 10);
+                if (!isNaN(page)) {
+                    dashboardState.setAuditPage(page);
+                }
+            });
+        });
+    }
+    
+    function initPagination() {
+        const prevBtn = document.querySelector('.pagination-controls .pagination-btn:first-child');
+        const nextBtn = document.querySelector('.pagination-controls .pagination-btn:last-child');
+        const paginationPages = document.querySelector('.pagination-pages');
+        
+        if (prevBtn) {
+            prevBtn.addEventListener('click', function() {
+                if (dashboardState.auditPage > 1) {
+                    dashboardState.setAuditPage(dashboardState.auditPage - 1);
+                }
+            });
+        }
+        
+        if (nextBtn) {
+            nextBtn.addEventListener('click', function() {
+                const totalPages = Math.ceil(dashboardState.auditTotal / dashboardState.auditPerPage);
+                if (dashboardState.auditPage < totalPages) {
+                    dashboardState.setAuditPage(dashboardState.auditPage + 1);
+                }
+            });
+        }
+        
+        if (paginationPages) {
+            paginationPages.querySelectorAll('.pagination-page[data-page]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const page = parseInt(this.dataset.page, 10);
+                    if (!isNaN(page)) {
+                        dashboardState.setAuditPage(page);
+                    }
+                });
+            });
+        }
+    }
+    
+    window.filterAuditTable = function() {
+        clearTimeout(window.auditSearchDebounce);
+        window.auditSearchDebounce = setTimeout(() => {
+            dashboardState.auditPage = 1;
+            loadAuditTrail();
+        }, 300);
+    };
+    
+    initCrownDropdown();
+    initPagination();
+    
+    loadAuditTrail();
+    
+    const pipelineModal = document.getElementById('pipelineModal');
+    const pipelineModalTitle = document.getElementById('pipelineModalTitle');
+    const pipelineModalBody = document.getElementById('pipelineModalBody');
+    
+    function openPipelineModal(stage) {
+        const stageName = stage.dataset.stage.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const latency = stage.dataset.latency;
+        const errorRate = stage.dataset.error;
+        const status = stage.dataset.status;
+        
+        pipelineModalTitle.textContent = stageName + ' Stage Details';
+        pipelineModalBody.innerHTML = `
+            <div class="pipeline-detail-item">
+                <div class="pipeline-detail-label">Latency (p95)</div>
+                <div class="pipeline-detail-value">${latency}ms</div>
+            </div>
+            <div class="pipeline-detail-item">
+                <div class="pipeline-detail-label">Error Rate</div>
+                <div class="pipeline-detail-value">${errorRate}%</div>
+            </div>
+            <div class="pipeline-detail-item">
+                <div class="pipeline-detail-label">Status</div>
+                <div class="pipeline-detail-value" style="color: ${status === 'healthy' ? '#22c55e' : status === 'warning' ? '#f59e0b' : '#ef4444'}">${status.charAt(0).toUpperCase() + status.slice(1)}</div>
+            </div>
+            <div class="pipeline-detail-item">
+                <div class="pipeline-detail-label">Throughput</div>
+                <div class="pipeline-detail-value">${Math.floor(1000 / parseInt(latency))} req/s</div>
+            </div>
+            <div class="pipeline-detail-item" style="grid-column: span 2;">
+                <div class="pipeline-detail-label">Description</div>
+                <p style="color: var(--color-text-secondary); font-size: var(--font-size-sm); margin-top: var(--space-2);">
+                    ${getStageDescription(stage.dataset.stage)}
+                </p>
+            </div>
+        `;
+        
+        pipelineModal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function getStageDescription(stage) {
+        const descriptions = {
+            'ingest': 'Audio data ingestion from client WebSocket connections. Handles raw audio streams and prepares chunks for processing.',
+            'chunking': 'Splits continuous audio into optimal-sized chunks for transcription. Manages buffer memory and timing synchronization.',
+            'whisper': 'OpenAI Whisper transcription processing. Converts audio chunks to text with speaker diarization.',
+            'ai_summary': 'AI-powered meeting summarization and insight extraction using GPT-4 models.',
+            'task_extract': 'Extracts actionable tasks and follow-ups from meeting transcripts using NLP analysis.',
+            'sync': 'Real-time synchronization of processed data across all connected clients via WebSocket.'
+        };
+        return descriptions[stage] || 'Processing stage in the meeting pipeline.';
+    }
+    
+    function closePipelineModal() {
+        pipelineModal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+    
+    document.querySelectorAll('.pipeline-stage').forEach(stage => {
+        stage.addEventListener('click', function() {
+            openPipelineModal(this);
+        });
+        stage.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openPipelineModal(this);
+            }
+        });
+    });
+    
+    if (pipelineModal) {
+        pipelineModal.addEventListener('click', function(e) {
+            if (e.target === pipelineModal) {
+                closePipelineModal();
+            }
+        });
+        
+        const closeBtn = pipelineModal.querySelector('.pipeline-modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closePipelineModal);
+        }
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && pipelineModal.classList.contains('active')) {
+                closePipelineModal();
+            }
+        });
+    }
+    
+    function updateRealTimeMetrics() {
+        fetch('/admin/api/metrics/realtime')
+            .then(res => res.json())
+            .then(data => {
+                if (data.active_meetings !== undefined) {
+                    const el = document.getElementById('kpi-active-meetings');
+                    if (el) el.textContent = data.active_meetings;
+                }
+                if (data.dau !== undefined) {
+                    const el = document.getElementById('kpi-dau');
+                    if (el) el.textContent = data.dau;
+                }
+                if (data.system_latency !== undefined) {
+                    const el = document.getElementById('kpi-latency');
+                    if (el) el.textContent = data.system_latency + 'ms';
+                }
+                if (data.cognitive_health !== undefined) {
+                    const el = document.getElementById('kpi-health');
+                    if (el) el.textContent = data.cognitive_health;
+                }
+                if (data.task_completion_rate !== undefined) {
+                    const el = document.getElementById('kpi-copilot-success');
+                    if (el) el.textContent = data.task_completion_rate + '%';
+                }
+                if (data.cpu_usage !== undefined) {
+                    const cpuEl = document.querySelector('[data-metric="cpu"]');
+                    if (cpuEl) cpuEl.textContent = data.cpu_usage + '%';
+                }
+                if (data.memory_usage !== undefined) {
+                    const memEl = document.querySelector('[data-metric="memory"]');
+                    if (memEl) memEl.textContent = data.memory_usage + '%';
+                }
+                if (data.pipeline_health) {
+                    updatePipelineMetrics(data.pipeline_health);
+                }
+                if (data.ai_metrics) {
+                    updateAIMetrics(data.ai_metrics);
+                }
+                const lastUpdatedEl = document.getElementById('last-updated');
+                if (lastUpdatedEl) {
+                    lastUpdatedEl.textContent = new Date().toISOString().slice(0, 19);
+                }
+            })
+            .catch(err => console.warn('Failed to fetch realtime metrics:', err));
+    }
+    
+    function renderSparkline(canvasId, data, color) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const width = canvas.offsetWidth || 100;
+        const height = canvas.offsetHeight || 24;
+        
+        canvas.width = width * 2;
+        canvas.height = height * 2;
+        ctx.scale(2, 2);
+        
+        if (!data || data.length === 0) {
+            data = Array.from({length: 12}, () => Math.random() * 30 + 20);
+        }
+        
+        const max = Math.max(...data);
+        const min = Math.min(...data);
+        const range = max - min || 1;
+        
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        const stepX = width / (data.length - 1);
+        data.forEach((val, i) => {
+            const x = i * stepX;
+            const y = height - ((val - min) / range) * (height - 4) - 2;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    }
+    
+    function initSparklines() {
+        const meetingData = meetingTrend.map(d => d.count);
+        renderSparkline('sparkline-meetings-canvas', meetingData, '#22c55e');
+        renderSparkline('sparkline-latency-canvas', null, '#6366f1');
+        renderSparkline('sparkline-pipeline-canvas', null, '#f59e0b');
+        renderSparkline('sparkline-copilot-canvas', null, '#8b5cf6');
+        renderSparkline('sparkline-dau-canvas', userTrend.slice(-7).map(d => d.count), '#06b6d4');
+        renderSparkline('sparkline-health-canvas', null, '#22c55e');
+    }
+    
+    const sparklineContainers = document.querySelectorAll('.kpi-sparkline');
+    sparklineContainers.forEach((container, index) => {
+        const canvasIds = ['sparkline-meetings-canvas', 'sparkline-latency-canvas', 'sparkline-pipeline-canvas', 
+                          'sparkline-copilot-canvas', 'sparkline-dau-canvas', 'sparkline-health-canvas'];
+        if (canvasIds[index]) {
+            const canvas = document.createElement('canvas');
+            canvas.id = canvasIds[index];
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            container.appendChild(canvas);
+        }
+    });
+    
+    setTimeout(initSparklines, 100);
+    
+    initWebSocket();
+    
+    updateRealTimeMetrics();
+    setInterval(updateRealTimeMetrics, 15000);
+    
+    document.querySelectorAll('.kpi-card').forEach(card => {
+        card.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

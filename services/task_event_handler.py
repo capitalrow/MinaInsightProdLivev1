@@ -825,7 +825,7 @@ class TaskEventHandler:
             task_workspace_id = task.workspace_id
             
             if assignee_ids is not None:
-                # Clear existing assignees and set new ones
+                # CROWN⁴.8: Properly sync assignees to avoid duplicate key errors
                 if isinstance(assignee_ids, list):
                     if assignee_ids:
                         # SECURITY: Validate all users belong to the same workspace as the task
@@ -844,7 +844,23 @@ class TaskEventHandler:
                     else:
                         users = []
                     
-                    task.assignees = users
+                    # CROWN⁴.8: Sync assignees properly to avoid UniqueViolation errors
+                    # Compare current vs desired and only add/remove what's needed
+                    current_ids = set(u.id for u in task.assignees) if task.assignees else set()
+                    desired_ids = set(u.id for u in users)
+                    
+                    if current_ids != desired_ids:
+                        # Remove users that should no longer be assigned
+                        to_remove = [u for u in task.assignees if u.id not in desired_ids]
+                        for user in to_remove:
+                            task.assignees.remove(user)
+                        
+                        # Add users that aren't already assigned
+                        for user in users:
+                            if user.id not in current_ids:
+                                task.assignees.append(user)
+                        
+                        logger.debug(f"Task {task.id} assignees synced: removed {len(to_remove)}, added {len(desired_ids - current_ids)}")
                     # Also set the first assignee for backward compatibility
                     # Set both the ID and the relationship object so to_dict works correctly
                     if users:
@@ -867,8 +883,16 @@ class TaskEventHandler:
                 # Set both the ID and relationship object so to_dict works correctly
                 task.assigned_to_id = assigned_to_id
                 task.assigned_to = user
-                # Also update assignees relationship for consistency
-                task.assignees = [user] if user else []
+                
+                # CROWN⁴.8: Sync assignees properly to avoid UniqueViolation errors
+                current_ids = set(u.id for u in task.assignees) if task.assignees else set()
+                desired_ids = {user.id} if user else set()
+                
+                if current_ids != desired_ids:
+                    # Clear existing and add the single user
+                    task.assignees.clear()
+                    if user:
+                        task.assignees.append(user)
             
             task.updated_at = datetime.utcnow()
             

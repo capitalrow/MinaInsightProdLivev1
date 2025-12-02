@@ -1,0 +1,386 @@
+/**
+ * Admin Dashboard Styles - Cognitive Mission Control
+ * CROWN⁴.8 Admin Analytics Dashboard
+ */
+
+:root {
+    --admin-bg-primary: rgba(30, 41, 59, 0.6);
+    --admin-bg-secondary: rgba(30, 41, 59, 0.4);
+    --admin-border: rgba(148, 163, 184, 0.1);
+    --admin-border-hover: rgba(99, 102, 241, 0.3);
+    --admin-accent: #6366f1;
+    --admin-success: #22c55e;
+    --admin-warning: #f59e0b;
+    --admin-error: #ef4444;
+    --admin-info: #06b6d4;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.admin-workspace {
+    animation: adminFadeIn 0.4s ease-out;
+}
+
+.admin-workspace:focus-visible,
+.kpi-card:focus-visible,
+.pipeline-stage:focus-visible,
+.panel-section:focus-visible {
+    outline: 2px solid var(--admin-accent);
+    outline-offset: 2px;
+}
+
+@keyframes adminFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes adminPulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(1.1);
+    }
+}
+
+@keyframes adminShimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.admin-updating {
+    animation: adminPulse 0.6s ease-out;
+}
+
+.admin-skeleton {
+    background: linear-gradient(90deg, 
+        var(--admin-bg-primary) 25%,
+        rgba(99, 102, 241, 0.1) 50%,
+        var(--admin-bg-primary) 75%
+    );
+    background-size: 200% 100%;
+    animation: adminShimmer 1.5s ease-in-out infinite;
+    border-radius: var(--radius-md);
+}
+
+[data-theme="light"] .admin-workspace {
+    --admin-bg-primary: rgba(255, 255, 255, 0.9);
+    --admin-bg-secondary: rgba(255, 255, 255, 0.7);
+    --admin-border: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .kpi-card,
+[data-theme="light"] .panel-section,
+[data-theme="light"] .pipeline-stage,
+[data-theme="light"] .ai-metric-card,
+[data-theme="light"] .business-card,
+[data-theme="light"] .incident-item {
+    background: var(--admin-bg-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .kpi-value,
+[data-theme="light"] .business-value,
+[data-theme="light"] .ai-metric-value,
+[data-theme="light"] .stage-latency {
+    color: var(--color-text-primary);
+}
+
+.chart-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-text-tertiary);
+}
+
+.chart-loading svg {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.tooltip-narrative {
+    max-width: 280px;
+    padding: var(--space-3) var(--space-4);
+    background: rgba(15, 23, 42, 0.98);
+    border: 1px solid var(--admin-border);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+}
+
+.tooltip-narrative::before {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid rgba(15, 23, 42, 0.98);
+}
+
+.heatmap-cell {
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.heatmap-cell.level-0 { background: rgba(34, 197, 94, 0.2); }
+.heatmap-cell.level-1 { background: rgba(34, 197, 94, 0.4); }
+.heatmap-cell.level-2 { background: rgba(34, 197, 94, 0.6); }
+.heatmap-cell.level-3 { background: rgba(245, 158, 11, 0.4); }
+.heatmap-cell.level-4 { background: rgba(245, 158, 11, 0.6); }
+.heatmap-cell.level-5 { background: rgba(239, 68, 68, 0.5); }
+
+.heatmap-cell:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+    padding: var(--space-3) var(--space-4);
+    text-align: left;
+    border-bottom: 1px solid var(--admin-border);
+}
+
+.data-table th {
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.data-table tr:hover {
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.data-table .mono {
+    font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+    font-size: var(--font-size-xs);
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+}
+
+.badge-success {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--admin-success);
+}
+
+.badge-warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--admin-warning);
+}
+
+.badge-error {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--admin-error);
+}
+
+.badge-info {
+    background: rgba(6, 182, 212, 0.1);
+    color: var(--admin-info);
+}
+
+.badge-neutral {
+    background: rgba(107, 114, 128, 0.1);
+    color: var(--color-text-secondary);
+}
+
+.progress-ring {
+    width: 80px;
+    height: 80px;
+}
+
+.progress-ring-bg {
+    fill: none;
+    stroke: rgba(107, 114, 128, 0.2);
+    stroke-width: 6;
+}
+
+.progress-ring-value {
+    fill: none;
+    stroke: var(--admin-accent);
+    stroke-width: 6;
+    stroke-linecap: round;
+    transform: rotate(-90deg);
+    transform-origin: center;
+    transition: stroke-dasharray 0.8s ease-out;
+}
+
+.progress-ring-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.metric-trend-up::before {
+    content: '';
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid var(--admin-success);
+    margin-right: 4px;
+}
+
+.metric-trend-down::before {
+    content: '';
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--admin-error);
+    margin-right: 4px;
+}
+
+.metric-trend-stable::before {
+    content: '—';
+    margin-right: 4px;
+    color: var(--color-text-tertiary);
+}
+
+@media (max-width: 768px) {
+    .admin-workspace {
+        padding: var(--space-4) var(--space-3);
+    }
+    
+    .admin-header {
+        flex-direction: column;
+        gap: var(--space-4);
+    }
+    
+    .admin-controls {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+    
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .pipeline-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .ai-oversight-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .business-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .panel-header {
+        flex-direction: column;
+        gap: var(--space-3);
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 480px) {
+    .kpi-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .business-metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .date-range-selector {
+        width: 100%;
+    }
+    
+    .date-range-selector button {
+        flex: 1;
+    }
+}
+
+@media print {
+    .admin-workspace {
+        background: white;
+    }
+    
+    .admin-controls {
+        display: none;
+    }
+    
+    .panel-section {
+        break-inside: avoid;
+    }
+    
+    .kpi-card,
+    .panel-section {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-workspace,
+    .kpi-card,
+    .panel-section,
+    .pipeline-stage,
+    .incident-item {
+        animation: none;
+        transition: none;
+    }
+    
+    .live-status .pulse {
+        animation: none;
+    }
+}
