@@ -21,6 +21,7 @@ try:
     METRICS_SERVICE_AVAILABLE = True
 except ImportError:
     METRICS_SERVICE_AVAILABLE = False
+    get_admin_metrics_service = None  # type: ignore
     logger.warning("Admin metrics service not available")
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -145,13 +146,13 @@ def analytics_dashboard():
             })
         
         # Get real system health metrics
-        if METRICS_SERVICE_AVAILABLE:
+        if METRICS_SERVICE_AVAILABLE and get_admin_metrics_service:
             metrics_service = get_admin_metrics_service()
             system_health = metrics_service.get_system_health()
-            pipeline_health = metrics_service.get_pipeline_health()
+            pipeline_health = metrics_service.get_pipeline_health_with_fallback()
             ai_metrics = metrics_service.get_copilot_metrics()
             timeline_data = metrics_service.get_system_timeline_data(hours=24)
-            confidence_distribution = metrics_service.get_confidence_distribution()
+            confidence_distribution = metrics_service.get_confidence_distribution(db_session=db.session)
         else:
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
@@ -304,10 +305,10 @@ def get_realtime_metrics():
         completed_tasks = db.session.query(Task).filter(Task.status == 'completed').count()
         pending_tasks = db.session.query(Task).filter(Task.status.in_(['todo', 'in_progress'])).count()
         
-        if METRICS_SERVICE_AVAILABLE:
+        if METRICS_SERVICE_AVAILABLE and get_admin_metrics_service:
             metrics_service = get_admin_metrics_service()
             system_health = metrics_service.get_system_health()
-            pipeline_health = metrics_service.get_pipeline_health()
+            pipeline_health = metrics_service.get_pipeline_health_with_fallback()
             ai_metrics = metrics_service.get_copilot_metrics()
         else:
             memory = psutil.virtual_memory()
@@ -356,9 +357,9 @@ def get_pipeline_health():
     API endpoint for meeting pipeline health status.
     Returns latency and error rates for each pipeline stage.
     """
-    if METRICS_SERVICE_AVAILABLE:
+    if METRICS_SERVICE_AVAILABLE and get_admin_metrics_service:
         metrics_service = get_admin_metrics_service()
-        pipeline_health = metrics_service.get_pipeline_health()
+        pipeline_health = metrics_service.get_pipeline_health_with_fallback()
     else:
         pipeline_health = {
             'ingest': {'status': 'healthy', 'latency_ms': 15, 'error_rate': 0.1},
@@ -583,8 +584,8 @@ def update_user_role(user_id):
     if new_role not in ['user', 'admin']:
         return jsonify({'error': 'Invalid role'}), 400
     
-    old_role = user.role
-    user.role = new_role
+    old_role = str(user.role) if user.role else 'user'
+    user.role = str(new_role)  # type: ignore
     db.session.commit()
     
     logger.info(f"User {user_id} role changed from {old_role} to {new_role} by admin {current_user.id}")

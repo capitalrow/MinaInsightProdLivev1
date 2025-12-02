@@ -2318,11 +2318,11 @@
                 <div class="pagination-controls">
                     <button class="pagination-btn" disabled>Previous</button>
                     <span class="pagination-pages">
-                        <button class="pagination-page active">1</button>
-                        <button class="pagination-page">2</button>
-                        <button class="pagination-page">3</button>
-                        <span>...</span>
-                        <button class="pagination-page">39</button>
+                        <button class="pagination-page active" data-page="1">1</button>
+                        <button class="pagination-page" data-page="2">2</button>
+                        <button class="pagination-page" data-page="3">3</button>
+                        <span class="pagination-ellipsis">...</span>
+                        <button class="pagination-page" data-page="39">39</button>
                     </span>
                     <button class="pagination-btn">Next</button>
                 </div>
@@ -3128,13 +3128,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (totalPages <= 7) {
             for (let i = 1; i <= totalPages; i++) {
-                html += `<button class="pagination-page ${i === currentPage ? 'active' : ''}" onclick="dashboardState.setAuditPage(${i})">${i}</button>`;
+                html += `<button class="pagination-page ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
             }
         } else {
-            html += `<button class="pagination-page ${currentPage === 1 ? 'active' : ''}" onclick="dashboardState.setAuditPage(1)">1</button>`;
+            html += `<button class="pagination-page ${currentPage === 1 ? 'active' : ''}" data-page="1">1</button>`;
             
             if (currentPage > 3) {
-                html += '<span>...</span>';
+                html += '<span class="pagination-ellipsis">...</span>';
             }
             
             const start = Math.max(2, currentPage - 1);
@@ -3142,23 +3142,33 @@ document.addEventListener('DOMContentLoaded', function() {
             
             for (let i = start; i <= end; i++) {
                 if (i !== 1 && i !== totalPages) {
-                    html += `<button class="pagination-page ${i === currentPage ? 'active' : ''}" onclick="dashboardState.setAuditPage(${i})">${i}</button>`;
+                    html += `<button class="pagination-page ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
                 }
             }
             
             if (currentPage < totalPages - 2) {
-                html += '<span>...</span>';
+                html += '<span class="pagination-ellipsis">...</span>';
             }
             
-            html += `<button class="pagination-page ${currentPage === totalPages ? 'active' : ''}" onclick="dashboardState.setAuditPage(${totalPages})">${totalPages}</button>`;
+            html += `<button class="pagination-page ${currentPage === totalPages ? 'active' : ''}" data-page="${totalPages}">${totalPages}</button>`;
         }
         
         paginationPages.innerHTML = html;
+        
+        paginationPages.querySelectorAll('.pagination-page[data-page]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const page = parseInt(this.dataset.page, 10);
+                if (!isNaN(page)) {
+                    dashboardState.setAuditPage(page);
+                }
+            });
+        });
     }
     
     function initPagination() {
         const prevBtn = document.querySelector('.pagination-controls .pagination-btn:first-child');
         const nextBtn = document.querySelector('.pagination-controls .pagination-btn:last-child');
+        const paginationPages = document.querySelector('.pagination-pages');
         
         if (prevBtn) {
             prevBtn.addEventListener('click', function() {
@@ -3176,6 +3186,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
+        
+        if (paginationPages) {
+            paginationPages.querySelectorAll('.pagination-page[data-page]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const page = parseInt(this.dataset.page, 10);
+                    if (!isNaN(page)) {
+                        dashboardState.setAuditPage(page);
+                    }
+                });
+            });
+        }
     }
     
     window.filterAuditTable = function() {
@@ -3188,6 +3209,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     initCrownDropdown();
     initPagination();
+    
+    loadAuditTrail();
     
     const pipelineModal = document.getElementById('pipelineModal');
     const pipelineModalTitle = document.getElementById('pipelineModalTitle');
