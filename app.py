@@ -333,17 +333,12 @@ def create_app() -> Flask:
     # Store CSRF protect for blueprint access
     app.extensions['csrf'] = csrf
 
-    # Configure Flask-Limiter for production-grade rate limiting
-    # Use Redis if available, fallback to memory storage
-    limiter_redis_url = os.environ.get("REDIS_URL")
-    if limiter_redis_url:
-        limiter_redis_url = _normalize_redis_url(limiter_redis_url)
-    storage_uri = limiter_redis_url if limiter_redis_url else "memory://"
-    
+    # Configure Flask-Limiter for rate limiting with in-memory storage
+    # Memory storage works well for single-server deployments
     limiter = Limiter(
         get_remote_address,
         app=app,
-        storage_uri=storage_uri,
+        storage_uri="memory://",
         default_limits=["100 per minute", "1000 per hour"],
         strategy="fixed-window",
         headers_enabled=True,  # Include X-RateLimit-* headers in responses
@@ -352,9 +347,7 @@ def create_app() -> Flask:
     
     # Make limiter available via extensions (proper Flask pattern)
     app.extensions['limiter'] = limiter
-    
-    storage_type = "Redis" if limiter_redis_url else "Memory"
-    app.logger.info(f"✅ Flask-Limiter configured ({storage_type} backend): 100/min, 1000/hour per IP")
+    app.logger.info("✅ Flask-Limiter configured (Memory backend): 100/min, 1000/hour per IP")
 
     # gzip (optional)
     try:
