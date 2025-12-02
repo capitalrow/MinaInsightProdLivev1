@@ -1116,19 +1116,6 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.error(f"❌ Failed to start background task manager: {e}")
     
-    # Initialize Redis connection manager with failover support
-    try:
-        from services.redis_failover import init_redis_manager
-        
-        redis_url = os.getenv('REDIS_URL')
-        if redis_url:
-            redis_manager = init_redis_manager(redis_url)
-            app.logger.info("✅ Redis connection manager initialized with failover support")
-        else:
-            app.logger.info("ℹ️  No REDIS_URL configured - using in-memory fallback for caching")
-    except Exception as e:
-        app.logger.error(f"❌ Failed to initialize Redis manager: {e}")
-    
     # Run startup validation and mark as complete
     try:
         from utils.startup_validation import run_startup_validation
