@@ -47,7 +47,8 @@ class TestDatabaseConnectionIntegration:
     
     def test_database_connection_active(self, db_session):
         """Test that database connection is active."""
-        result = db_session.execute('SELECT 1')
+        from sqlalchemy import text
+        result = db_session.execute(text('SELECT 1'))
         assert result is not None
 
 
