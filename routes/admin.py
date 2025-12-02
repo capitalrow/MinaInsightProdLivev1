@@ -473,15 +473,16 @@ def get_audit_trail():
                 User.last_login.isnot(None)
             ).order_by(desc(User.last_login)).limit(30).all()
             for user in users:
-                audit_logs.append({
-                    'trace_id': f'TRC-{format(hash(str(user.id) + "login") % 0xFFFFFF, "06x")}',
-                    'timestamp': user.last_login.isoformat(),
-                    'actor': user.username,
-                    'action': 'user_login',
-                    'entity_type': 'user',
-                    'entity_id': f'USR-{user.id:03d}',
-                    'ai_lineage': None
-                })
+                if user.last_login:
+                    audit_logs.append({
+                        'trace_id': f'TRC-{format(hash(str(user.id) + "login") % 0xFFFFFF, "06x")}',
+                        'timestamp': user.last_login.isoformat(),
+                        'actor': user.username,
+                        'action': 'user_login',
+                        'entity_type': 'user',
+                        'entity_id': f'USR-{user.id:03d}',
+                        'ai_lineage': None
+                    })
         
         if not action_type or action_type == 'summary_generated':
             completed_sessions = db.session.query(Session).filter(
