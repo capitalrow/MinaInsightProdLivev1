@@ -144,7 +144,7 @@ class AdvancedDeduplicationEngine:
             'text': segment.text,
             'is_committed': decision['should_commit'],
             'is_duplicate': decision['is_duplicate'],
-            'confidence': segment.avg_confidence,
+            'confidence': segment.confidence,
             'confirmation_count': segment.confirmation_count,
             'similar_segments_found': len(similar_segments),
             'overlap_resolution': overlap_resolution,
@@ -276,7 +276,7 @@ class AdvancedDeduplicationEngine:
                 }
         
         # Check if text is stable for minimum duration
-        if len(segment.text.split()) >= 3 and segment.avg_confidence > 0.7:
+        if len(segment.text.split()) >= 3 and segment.confidence > 0.7:
             segment.is_committed = True
             return {
                 'should_commit': True,
@@ -335,7 +335,7 @@ class AdvancedDeduplicationEngine:
         
         for segment in segments:
             score = (
-                segment.avg_confidence * 0.4 +
+                segment.confidence * 0.4 +
                 min(segment.word_count / 10, 1.0) * 0.3 +
                 min(segment.confirmation_count / 5, 1.0) * 0.3
             )
