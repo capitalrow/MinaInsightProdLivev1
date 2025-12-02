@@ -200,9 +200,11 @@ def _broadcast_loop(interval: int):
     """Main broadcast loop for pushing real-time updates."""
     global _socketio, _broadcast_active
     
+    time.sleep(2)
+    
     while _broadcast_active:
         try:
-            if _socketio:
+            if _socketio and hasattr(_socketio, 'server') and _socketio.server:
                 _broadcast_metrics()
         except Exception as e:
             logger.error(f"Broadcast error: {e}", exc_info=True)
