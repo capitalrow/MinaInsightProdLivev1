@@ -80,8 +80,10 @@ class TestSessionDatabaseOperations:
         """Test creating a session."""
         try:
             from models import Session
+            import uuid
             
             session = Session(
+                external_id=str(uuid.uuid4())[:32],
                 user_id=test_user.id,
                 title='Test Session',
                 status='active'
@@ -108,8 +110,10 @@ class TestSessionDatabaseOperations:
         """Test updating session status."""
         try:
             from models import Session
+            import uuid
             
             session = Session(
+                external_id=str(uuid.uuid4())[:32],
                 user_id=test_user.id,
                 title='Test Session',
                 status='active'
@@ -134,9 +138,10 @@ class TestDatabaseRelationships:
         """Test user to sessions relationship."""
         try:
             from models import Session
+            import uuid
             
-            session1 = Session(user_id=test_user.id, title='Session 1', status='active')
-            session2 = Session(user_id=test_user.id, title='Session 2', status='active')
+            session1 = Session(external_id=str(uuid.uuid4())[:32], user_id=test_user.id, title='Session 1', status='active')
+            session2 = Session(external_id=str(uuid.uuid4())[:32], user_id=test_user.id, title='Session 2', status='active')
             db_session.add(session1)
             db_session.add(session2)
             db_session.commit()

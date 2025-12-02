@@ -3,10 +3,12 @@ E2E test configuration and fixtures for Playwright browser tests.
 Handles authentication and page setup for AI Proposals and Tasks testing.
 """
 import pytest
+import pytest_asyncio
 import os
 import sys
 from pathlib import Path
 from playwright.sync_api import Page, Browser, BrowserContext
+from playwright.async_api import Page as AsyncPage, async_playwright
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -60,3 +62,34 @@ def tasks_page(authenticated_page: Page) -> Page:
         authenticated_page.wait_for_timeout(3000)
     
     return authenticated_page
+
+
+@pytest_asyncio.fixture(scope="function")
+async def live_page():
+    """Async fixture that provides a page navigated to the live transcription page."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            viewport={"width": 1280, "height": 720},
+            ignore_https_errors=True,
+            permissions=['microphone']
+        )
+        page = await context.new_page()
+        
+        await page.goto(f"{BASE_URL}/live")
+        await page.wait_for_load_state('networkidle')
+        
+        yield page
+        
+        await context.close()
+        await browser.close()
+
+
+@pytest.fixture(scope="function")
+def performance_monitor():
+    """Fixture that provides a performance monitoring dict for tests."""
+    return {
+        'test_duration': None,
+        'flow_completed': False,
+        'metrics': {}
+    }
