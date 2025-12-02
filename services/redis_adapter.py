@@ -91,7 +91,17 @@ class RedisSocketIOAdapter:
         logger.info(f"🚀 Redis Socket.IO adapter initialized: instance {self.instance_id}")
     
     def _get_config_from_env(self) -> RedisConfig:
-        """Get Redis configuration from environment variables."""
+        """Get Redis configuration from environment variables.
+        
+        Supports both REDIS_URL format (redis://user:pass@host:port/db or rediss://...)
+        and individual environment variables (REDIS_HOST, REDIS_PORT, etc.).
+        REDIS_URL takes precedence if present.
+        """
+        redis_url = os.environ.get('REDIS_URL')
+        
+        if redis_url:
+            return self._parse_redis_url(redis_url)
+        
         return RedisConfig(
             host=os.environ.get('REDIS_HOST', 'localhost'),
             port=int(os.environ.get('REDIS_PORT', '6379')),
@@ -99,6 +109,41 @@ class RedisSocketIOAdapter:
             password=os.environ.get('REDIS_PASSWORD'),
             max_connections=int(os.environ.get('REDIS_MAX_CONNECTIONS', '20'))
         )
+    
+    def _parse_redis_url(self, url: str) -> RedisConfig:
+        """Parse a Redis URL into RedisConfig.
+        
+        Supports formats:
+        - redis://host:port/db
+        - redis://user:password@host:port/db
+        - rediss://... (TLS)
+        """
+        from urllib.parse import urlparse
+        
+        parsed = urlparse(url)
+        
+        host = parsed.hostname or 'localhost'
+        port = parsed.port or 6379
+        password = parsed.password
+        
+        db = 0
+        if parsed.path and parsed.path != '/':
+            try:
+                db = int(parsed.path.lstrip('/'))
+            except ValueError:
+                db = 0
+        
+        logger.info(f"📡 Parsed Redis URL: host={host}, port={port}, db={db}, ssl={parsed.scheme == 'rediss'}")
+        
+        config = RedisConfig(
+            host=host,
+            port=port,
+            db=db,
+            password=password,
+            max_connections=int(os.environ.get('REDIS_MAX_CONNECTIONS', '20'))
+        )
+        
+        return config
     
     def _initialize_redis(self):
         """Initialize Redis connections with connection pooling."""
