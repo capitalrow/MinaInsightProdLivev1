@@ -13,7 +13,6 @@ from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
-import redis
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
@@ -223,38 +222,6 @@ def _validate_socketio_origin(origin):
     
     return False
 
-def _normalize_redis_url(url: str) -> str:
-    """Normalize Redis URL by adding redis:// prefix if missing."""
-    if not url.startswith(("redis://", "rediss://", "unix://")):
-        return f"redis://{url}"
-    return url
-
-def _get_redis_message_queue() -> Optional[str]:
-    """Get Redis URL for Socket.IO message queue (horizontal scaling).
-    
-    Returns REDIS_URL if configured, enabling cross-worker broadcasts.
-    Returns None if not configured (single-worker mode).
-    """
-    redis_url = os.environ.get('REDIS_URL')
-    if redis_url:
-        normalized = _normalize_redis_url(redis_url)
-        logging.getLogger(__name__).info("🚀 Redis message queue enabled for horizontal scaling")
-        return normalized
-    
-    redis_host = os.environ.get('REDIS_HOST')
-    if redis_host:
-        redis_port = os.environ.get('REDIS_PORT', '6379')
-        redis_db = os.environ.get('REDIS_DB', '0')
-        redis_pass = os.environ.get('REDIS_PASSWORD')
-        if redis_pass:
-            url = f"redis://:{redis_pass}@{redis_host}:{redis_port}/{redis_db}"
-        else:
-            url = f"redis://{redis_host}:{redis_port}/{redis_db}"
-        logging.getLogger(__name__).info("🚀 Redis message queue enabled for horizontal scaling")
-        return url
-    
-    return None
-
 socketio = SocketIO(
     cors_allowed_origins=_validate_socketio_origin,  # Custom validator for pattern matching
     async_mode=os.getenv("SOCKETIO_ASYNC_MODE", "eventlet"),  # Default to eventlet, overridable for tests
@@ -266,7 +233,6 @@ socketio = SocketIO(
     max_http_buffer_size=int(os.getenv("SIO_MAX_HTTP_BUFFER", str(10 * 1024 * 1024))),  # 10 MB per message
     allow_upgrades=True,  # Allow WebSocket upgrades
     transports=['websocket', 'polling'],  # WebSocket first, polling fallback
-    message_queue=_get_redis_message_queue()  # Enable horizontal scaling with Redis
 )
 
 def create_app() -> Flask:
