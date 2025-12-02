@@ -59,3 +59,4 @@ nest-asyncio
 playwright
 eventlet
 python-dateutil
+oauthlib
