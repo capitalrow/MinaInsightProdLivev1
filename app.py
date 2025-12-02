@@ -223,6 +223,12 @@ def _validate_socketio_origin(origin):
     
     return False
 
+def _normalize_redis_url(url: str) -> str:
+    """Normalize Redis URL by adding redis:// prefix if missing."""
+    if not url.startswith(("redis://", "rediss://", "unix://")):
+        return f"redis://{url}"
+    return url
+
 def _get_redis_message_queue() -> Optional[str]:
     """Get Redis URL for Socket.IO message queue (horizontal scaling).
     
@@ -231,8 +237,9 @@ def _get_redis_message_queue() -> Optional[str]:
     """
     redis_url = os.environ.get('REDIS_URL')
     if redis_url:
+        normalized = _normalize_redis_url(redis_url)
         logging.getLogger(__name__).info("🚀 Redis message queue enabled for horizontal scaling")
-        return redis_url
+        return normalized
     
     redis_host = os.environ.get('REDIS_HOST')
     if redis_host:
@@ -320,7 +327,8 @@ def create_app() -> Flask:
     
     # Configure Redis-backed server-side sessions (CRITICAL: keeps cookies under 4KB)
     # Industry standard: Store only session ID in cookie (~50 bytes), all data in Redis
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+    redis_url_raw = os.environ.get("REDIS_URL", "redis://localhost:6379")
+    redis_url = _normalize_redis_url(redis_url_raw)  # Add redis:// prefix if missing
     is_production = os.getenv("FLASK_ENV") == "production" or os.getenv("REPLIT_DEPLOYMENT")
     
     try:
@@ -406,8 +414,10 @@ def create_app() -> Flask:
 
     # Configure Flask-Limiter for production-grade rate limiting
     # Use Redis if available, fallback to memory storage
-    redis_url = os.environ.get("REDIS_URL")
-    storage_uri = redis_url if redis_url else "memory://"
+    limiter_redis_url = os.environ.get("REDIS_URL")
+    if limiter_redis_url:
+        limiter_redis_url = _normalize_redis_url(limiter_redis_url)
+    storage_uri = limiter_redis_url if limiter_redis_url else "memory://"
     
     limiter = Limiter(
         get_remote_address,
@@ -422,7 +432,7 @@ def create_app() -> Flask:
     # Make limiter available via extensions (proper Flask pattern)
     app.extensions['limiter'] = limiter
     
-    storage_type = "Redis" if redis_url else "Memory"
+    storage_type = "Redis" if limiter_redis_url else "Memory"
     app.logger.info(f"✅ Flask-Limiter configured ({storage_type} backend): 100/min, 1000/hour per IP")
 
     # gzip (optional)
