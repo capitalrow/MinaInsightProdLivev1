@@ -630,6 +630,23 @@ def create_app() -> Flask:
         app.logger.info("✅ CROWN⁴ WebSocket namespaces registered: /dashboard, /tasks, /analytics, /meetings, /copilot")
     except Exception as e:
         app.logger.warning(f"Failed to register CROWN⁴ WebSocket namespaces: {e}")
+    
+    # Register Admin Dashboard WebSocket namespace for real-time metrics
+    try:
+        from routes.admin_websocket import register_admin_namespace, start_admin_broadcast
+        from services.admin_metrics_service import get_admin_metrics_service
+        
+        register_admin_namespace(socketio)
+        
+        admin_metrics = get_admin_metrics_service()
+        admin_metrics.start_monitoring(interval=10)
+        
+        start_admin_broadcast(interval=5)
+        
+        app.logger.info("✅ Admin Dashboard WebSocket namespace registered (/admin)")
+        app.logger.info("✅ Admin metrics collection started")
+    except Exception as e:
+        app.logger.warning(f"Failed to register admin WebSocket namespace: {e}")
 
     # Register transcription APIs
     # FIXED: Only register the working unified transcription API to avoid route conflicts

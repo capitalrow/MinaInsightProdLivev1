@@ -1044,41 +1044,191 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const meetingTrend = {{ meeting_trend|tojson|safe }};
     const userTrend = {{ user_trend|tojson|safe }};
+    const timelineData = {{ timeline_data|default([])|tojson|safe }};
+    const confidenceDistribution = {{ confidence_distribution|default({})|tojson|safe }};
+    
+    let systemHealthChart = null;
+    let confidenceChart = null;
+    let adminSocket = null;
+    
+    function initWebSocket() {
+        try {
+            adminSocket = io('/admin', {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5
+            });
+            
+            adminSocket.on('connect', function() {
+                console.log('Admin WebSocket connected');
+                updateConnectionStatus('connected');
+                adminSocket.emit('subscribe', { streams: ['system', 'pipeline', 'ai'] });
+            });
+            
+            adminSocket.on('disconnect', function() {
+                console.log('Admin WebSocket disconnected');
+                updateConnectionStatus('offline');
+            });
+            
+            adminSocket.on('system_metrics', function(data) {
+                if (data.data) {
+                    updateSystemMetrics(data.data);
+                }
+            });
+            
+            adminSocket.on('pipeline_metrics', function(data) {
+                if (data.data) {
+                    updatePipelineMetrics(data.data);
+                }
+            });
+            
+            adminSocket.on('ai_metrics', function(data) {
+                if (data.data) {
+                    updateAIMetrics(data.data);
+                }
+            });
+            
+            adminSocket.on('incident', function(data) {
+                if (data.data) {
+                    addIncidentToFeed(data.data);
+                }
+            });
+            
+        } catch (e) {
+            console.warn('WebSocket not available:', e);
+        }
+    }
+    
+    function updateConnectionStatus(status) {
+        const statusEl = document.querySelector('.live-status');
+        if (statusEl) {
+            statusEl.className = 'live-status ' + (status === 'connected' ? '' : status);
+            statusEl.querySelector('span:last-child').textContent = status === 'connected' ? 'WS Connected' : 'WS ' + status.charAt(0).toUpperCase() + status.slice(1);
+        }
+    }
+    
+    function updateSystemMetrics(data) {
+        document.getElementById('last-updated').textContent = new Date().toISOString().slice(0, 19);
+        
+        if (data.ws_latency !== undefined) {
+            const latencyEl = document.getElementById('kpi-latency');
+            if (latencyEl) latencyEl.textContent = data.ws_latency + 'ms';
+        }
+        if (data.cpu_usage !== undefined) {
+            const cpuEl = document.querySelector('[data-metric="cpu"]');
+            if (cpuEl) cpuEl.textContent = data.cpu_usage + '%';
+        }
+        if (data.memory_usage !== undefined) {
+            const memEl = document.querySelector('[data-metric="memory"]');
+            if (memEl) memEl.textContent = data.memory_usage + '%';
+        }
+    }
+    
+    function updatePipelineMetrics(data) {
+        Object.keys(data).forEach(stage => {
+            const stageEl = document.querySelector(`.pipeline-stage[data-stage="${stage}"]`);
+            if (stageEl) {
+                const latencyEl = stageEl.querySelector('.stage-latency');
+                if (latencyEl) latencyEl.textContent = data[stage].latency_ms + 'ms';
+                
+                const errorEl = stageEl.querySelector('.stage-error');
+                if (errorEl) errorEl.textContent = data[stage].error_rate + '% error';
+                
+                stageEl.classList.remove('healthy', 'degraded', 'critical');
+                stageEl.classList.add(data[stage].status || 'healthy');
+            }
+        });
+    }
+    
+    function updateAIMetrics(data) {
+        if (data.actions_today !== undefined) {
+            const actionsEl = document.querySelector('[data-metric="copilot-actions"]');
+            if (actionsEl) actionsEl.textContent = data.actions_today;
+        }
+        if (data.retry_rate !== undefined) {
+            const retryEl = document.querySelector('[data-metric="retry-rate"]');
+            if (retryEl) retryEl.textContent = data.retry_rate + '%';
+        }
+        if (data.override_rate !== undefined) {
+            const overrideEl = document.querySelector('[data-metric="override-rate"]');
+            if (overrideEl) overrideEl.textContent = data.override_rate + '%';
+        }
+    }
+    
+    function addIncidentToFeed(incident) {
+        const feed = document.getElementById('incident-feed');
+        if (!feed) return;
+        
+        const item = document.createElement('div');
+        item.className = 'incident-item ' + incident.severity;
+        item.innerHTML = `
+            <div class="incident-icon ${incident.severity}">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+            <div class="incident-content">
+                <div class="incident-title">${incident.title}</div>
+                <div class="incident-description">${incident.description}</div>
+                <div class="incident-meta">
+                    <span>${incident.incident_id || incident.id}</span>
+                    <span>${new Date(incident.detected_at || incident.timestamp).toLocaleString()}</span>
+                    <span class="incident-status ${incident.status}">${incident.status}</span>
+                </div>
+            </div>
+        `;
+        feed.insertBefore(item, feed.firstChild);
+    }
     
     const systemHealthCtx = document.getElementById('systemHealthChart');
     if (systemHealthCtx) {
-        const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
-        const generateMockData = (base, variance) => 
-            labels.map(() => base + (Math.random() - 0.5) * variance);
+        let labels, wsLatencyData, cpuData, memoryData;
         
-        new Chart(systemHealthCtx, {
+        if (timelineData && timelineData.length > 0) {
+            labels = timelineData.map(d => {
+                const date = new Date(d.timestamp);
+                return date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0');
+            });
+            wsLatencyData = timelineData.map(d => d.ws_latency || 0);
+            cpuData = timelineData.map(d => d.cpu || 0);
+            memoryData = timelineData.map(d => d.memory || 0);
+        } else {
+            labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+            wsLatencyData = labels.map(() => Math.floor(30 + Math.random() * 20));
+            cpuData = labels.map(() => Math.floor(20 + Math.random() * 40));
+            memoryData = labels.map(() => Math.floor(40 + Math.random() * 30));
+        }
+        
+        systemHealthChart = new Chart(systemHealthCtx, {
             type: 'line',
             data: {
                 labels: labels,
                 datasets: [
                     {
                         label: 'WS Latency (ms)',
-                        data: generateMockData(45, 20),
+                        data: wsLatencyData,
                         borderColor: '#6366f1',
                         backgroundColor: 'rgba(99, 102, 241, 0.1)',
                         tension: 0.4,
                         fill: true
                     },
                     {
-                        label: 'API Throughput (req/s)',
-                        data: generateMockData(150, 50),
+                        label: 'CPU (%)',
+                        data: cpuData,
                         borderColor: '#22c55e',
                         backgroundColor: 'rgba(34, 197, 94, 0.1)',
                         tension: 0.4,
                         fill: true
                     },
                     {
-                        label: 'Queue Depth',
-                        data: generateMockData(3, 2),
+                        label: 'Memory (%)',
+                        data: memoryData,
                         borderColor: '#f59e0b',
                         backgroundColor: 'rgba(245, 158, 11, 0.1)',
                         tension: 0.4,
@@ -1131,13 +1281,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const confidenceCtx = document.getElementById('confidenceChart');
     if (confidenceCtx) {
-        new Chart(confidenceCtx, {
+        const confLabels = Object.keys(confidenceDistribution).length > 0 
+            ? Object.keys(confidenceDistribution) 
+            : ['0.5-0.6', '0.6-0.7', '0.7-0.8', '0.8-0.9', '0.9-1.0'];
+        const confData = Object.keys(confidenceDistribution).length > 0
+            ? Object.values(confidenceDistribution)
+            : [3, 8, 18, 42, 29];
+            
+        confidenceChart = new Chart(confidenceCtx, {
             type: 'bar',
             data: {
-                labels: ['0.5-0.6', '0.6-0.7', '0.7-0.8', '0.8-0.9', '0.9-1.0'],
+                labels: confLabels,
                 datasets: [{
                     label: 'Confidence Distribution',
-                    data: [5, 12, 25, 45, 35],
+                    data: confData,
                     backgroundColor: [
                         'rgba(239, 68, 68, 0.6)',
                         'rgba(245, 158, 11, 0.6)',
@@ -1254,23 +1411,51 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(res => res.json())
             .then(data => {
                 if (data.active_meetings !== undefined) {
-                    document.getElementById('kpi-active-meetings').textContent = data.active_meetings;
+                    const el = document.getElementById('kpi-active-meetings');
+                    if (el) el.textContent = data.active_meetings;
                 }
                 if (data.dau !== undefined) {
-                    document.getElementById('kpi-dau').textContent = data.dau;
+                    const el = document.getElementById('kpi-dau');
+                    if (el) el.textContent = data.dau;
                 }
                 if (data.system_latency !== undefined) {
-                    document.getElementById('kpi-latency').textContent = data.system_latency + 'ms';
+                    const el = document.getElementById('kpi-latency');
+                    if (el) el.textContent = data.system_latency + 'ms';
                 }
                 if (data.cognitive_health !== undefined) {
-                    document.getElementById('kpi-health').textContent = data.cognitive_health;
+                    const el = document.getElementById('kpi-health');
+                    if (el) el.textContent = data.cognitive_health;
                 }
-                document.getElementById('last-updated').textContent = new Date().toISOString().slice(0, 19);
+                if (data.task_completion_rate !== undefined) {
+                    const el = document.getElementById('kpi-copilot-success');
+                    if (el) el.textContent = data.task_completion_rate + '%';
+                }
+                if (data.cpu_usage !== undefined) {
+                    const cpuEl = document.querySelector('[data-metric="cpu"]');
+                    if (cpuEl) cpuEl.textContent = data.cpu_usage + '%';
+                }
+                if (data.memory_usage !== undefined) {
+                    const memEl = document.querySelector('[data-metric="memory"]');
+                    if (memEl) memEl.textContent = data.memory_usage + '%';
+                }
+                if (data.pipeline_health) {
+                    updatePipelineMetrics(data.pipeline_health);
+                }
+                if (data.ai_metrics) {
+                    updateAIMetrics(data.ai_metrics);
+                }
+                const lastUpdatedEl = document.getElementById('last-updated');
+                if (lastUpdatedEl) {
+                    lastUpdatedEl.textContent = new Date().toISOString().slice(0, 19);
+                }
             })
             .catch(err => console.warn('Failed to fetch realtime metrics:', err));
     }
     
-    setInterval(updateRealTimeMetrics, 30000);
+    initWebSocket();
+    
+    updateRealTimeMetrics();
+    setInterval(updateRealTimeMetrics, 15000);
 });
 </script>
 {% endblock %}
