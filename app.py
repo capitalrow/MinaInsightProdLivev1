@@ -696,6 +696,13 @@ def create_app() -> Flask:
         app.logger.warning(f"Failed to register auth routes: {e}")
     
     try:
+        from routes.google_auth import google_auth_bp
+        app.register_blueprint(google_auth_bp)
+        app.logger.info("Google OAuth routes registered")
+    except Exception as e:
+        app.logger.warning(f"Failed to register Google OAuth routes: {e}")
+    
+    try:
         from routes.dashboard import dashboard_bp
         app.register_blueprint(dashboard_bp)
         app.logger.info("Dashboard routes registered")
