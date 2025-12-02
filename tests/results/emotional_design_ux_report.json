@@ -1,0 +1,24 @@
+{
+  "animation_smoothness": {
+    "valid": false,
+    "reason": "No animation measurements"
+  },
+  "calm_score": {
+    "valid": false,
+    "reason": "No calm score measurements"
+  },
+  "completion_delight": {
+    "valid": false,
+    "reason": "No delight measurements"
+  },
+  "micro_interactions": {
+    "valid": false,
+    "reason": "No micro-interaction measurements"
+  },
+  "metrics": {
+    "animation_fps": [],
+    "completion_delight_score": [],
+    "calm_score_components": [],
+    "micro_interaction_latency_ms": []
+  }
+}
