@@ -18,9 +18,12 @@ import logging
 import time
 import json
 import os
-from typing import Dict, Any, Optional, List, Callable
-from dataclasses import dataclass
+from typing import Dict, Any, Optional, List, Callable, Union
+from dataclasses import dataclass, field
 import redis
+from redis import Redis
+from redis.client import PubSub
+from redis.connection import ConnectionPool
 import threading
 from datetime import datetime, timedelta
 import uuid
@@ -36,10 +39,10 @@ class RedisConfig:
     password: Optional[str] = None
     max_connections: int = 20
     socket_keepalive: bool = True
-    socket_keepalive_options: Dict[str, int] = None
+    socket_keepalive_options: Optional[Dict[str, int]] = None
     decode_responses: bool = True
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.socket_keepalive_options is None:
             self.socket_keepalive_options = {
                 'TCP_KEEPIDLE': 600,
@@ -59,16 +62,16 @@ class RedisSocketIOAdapter:
         self.config = config or self._get_config_from_env()
         self.instance_id = f"mina_{uuid.uuid4().hex[:8]}"
         
-        # Redis connections
-        self.redis_pub = None
-        self.redis_sub = None
-        self.redis_state = None
-        self.connection_pool = None
+        # Redis connections - typed as Optional for proper type checking
+        self.redis_pub: Optional[Redis] = None
+        self.redis_sub: Optional[Redis] = None
+        self.redis_state: Optional[Redis] = None
+        self.connection_pool: Optional[ConnectionPool] = None
         
         # Pub/Sub management
-        self.pubsub = None
-        self.pubsub_thread = None
-        self.message_handlers: Dict[str, Callable] = {}
+        self.pubsub: Optional[PubSub] = None
+        self.pubsub_thread: Optional[threading.Thread] = None
+        self.message_handlers: Dict[str, Callable[..., Any]] = {}
         
         # State management
         self.local_rooms: Dict[str, set] = {}  # {room: {client_ids}}
