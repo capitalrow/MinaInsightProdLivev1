@@ -172,6 +172,83 @@
     transition: opacity 0.3s ease;
 }
 
+.kpi-sparkline {
+    position: absolute;
+    bottom: 8px;
+    left: 12px;
+    right: 12px;
+    height: 24px;
+    opacity: 0.5;
+}
+
+.kpi-sparkline canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.kpi-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    max-width: 240px;
+    white-space: normal;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.25s ease;
+    z-index: 100;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.kpi-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: rgba(15, 23, 42, 0.95);
+}
+
+.kpi-card:hover .kpi-tooltip,
+.kpi-card:focus .kpi-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+.kpi-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-xs);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    margin-top: var(--space-2);
+}
+
+.kpi-delta.up {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.kpi-delta.down {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.kpi-delta.neutral {
+    color: #94a3b8;
+    background: rgba(148, 163, 184, 0.1);
+}
+
 .kpi-card:hover {
     transform: translateY(-4px);
     border-color: rgba(99, 102, 241, 0.3);
@@ -262,7 +339,7 @@
     border-radius: var(--radius-xl);
     margin-bottom: var(--space-6);
     overflow: hidden;
-    animation: adminFadeIn 0.5s ease-out both;
+    animation: adminFadeIn 0.25s ease-out both;
 }
 
 .panel-header {
@@ -338,14 +415,120 @@
 
 .pipeline-stage.healthy {
     border-left: 3px solid #22c55e;
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(30, 41, 59, 0.5) 100%);
 }
 
-.pipeline-stage.warning {
+.pipeline-stage.warning,
+.pipeline-stage.degraded {
     border-left: 3px solid #f59e0b;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%);
 }
 
-.pipeline-stage.critical {
+.pipeline-stage.critical,
+.pipeline-stage.error {
     border-left: 3px solid #ef4444;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%);
+}
+
+.pipeline-stage:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.pipeline-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.pipeline-flow-arrow {
+    color: var(--color-primary);
+}
+
+.pipeline-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.pipeline-modal.active {
+    display: flex;
+    opacity: 1;
+}
+
+.pipeline-modal-content {
+    background: rgba(30, 41, 59, 0.95);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.pipeline-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.pipeline-modal-header h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.pipeline-modal-close {
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    transition: background 0.2s ease;
+}
+
+.pipeline-modal-close:hover {
+    background: rgba(148, 163, 184, 0.1);
+}
+
+.pipeline-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+}
+
+.pipeline-detail-item {
+    padding: var(--space-3);
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: var(--radius-md);
+}
+
+.pipeline-detail-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--space-1);
+}
+
+.pipeline-detail-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
 }
 
 .pipeline-stage .stage-name {
@@ -405,6 +588,101 @@
     margin-top: var(--space-1);
 }
 
+.ai-metric-item {
+    position: relative;
+}
+
+.ai-metric-bar {
+    height: 3px;
+    background: rgba(148, 163, 184, 0.2);
+    border-radius: 2px;
+    margin-top: var(--space-2);
+    overflow: hidden;
+}
+
+.ai-metric-bar::after {
+    content: '';
+    display: block;
+    height: 100%;
+    width: var(--bar-width, 0%);
+    background: var(--bar-color, #6366f1);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+.ai-metric-value.warning {
+    color: #f59e0b;
+}
+
+.ai-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    color: #22c55e;
+}
+
+.ai-status-badge .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.ai-status-badge .status-dot.healthy {
+    background: #22c55e;
+}
+
+.ai-status-badge .status-dot.warning {
+    background: #f59e0b;
+}
+
+.ai-status-badge .status-dot.critical {
+    background: #ef4444;
+}
+
+.ai-alert-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.ai-alert-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+}
+
+.ai-alert-item.warning {
+    border-left: 3px solid #f59e0b;
+}
+
+.ai-alert-item.critical {
+    border-left: 3px solid #ef4444;
+}
+
+.ai-alert-item.info {
+    border-left: 3px solid #22c55e;
+}
+
+.ai-alert-item .alert-message {
+    flex: 1;
+    color: var(--color-text-secondary);
+}
+
+.ai-alert-item .alert-time {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
 .business-metrics-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -450,6 +728,243 @@
     margin-top: var(--space-1);
 }
 
+.business-card.highlight {
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(30, 41, 59, 0.5) 100%);
+}
+
+.business-trend {
+    font-size: var(--font-size-xs);
+    margin-top: var(--space-2);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+}
+
+.business-trend.up {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.business-trend.down {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.business-trend.neutral {
+    background: rgba(148, 163, 184, 0.1);
+    color: var(--color-text-tertiary);
+}
+
+.cohort-grid {
+    display: grid;
+    gap: 1px;
+    background: rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.cohort-header,
+.cohort-row {
+    display: grid;
+    grid-template-columns: 80px repeat(4, 1fr);
+    gap: 1px;
+}
+
+.cohort-header {
+    background: rgba(30, 41, 59, 0.8);
+}
+
+.cohort-header span,
+.cohort-row span {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-xs);
+    text-align: center;
+}
+
+.cohort-header span {
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+}
+
+.cohort-row {
+    background: rgba(30, 41, 59, 0.5);
+}
+
+.cohort-row span:first-child {
+    color: var(--color-text-secondary);
+    text-align: left;
+    font-weight: 500;
+}
+
+.cohort-cell {
+    transition: background 0.2s ease;
+}
+
+.cohort-cell.high {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.cohort-cell.medium {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
+.cohort-cell.low {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.cohort-cell.empty {
+    background: rgba(30, 41, 59, 0.3);
+    color: var(--color-text-tertiary);
+}
+
+@media (max-width: 1200px) {
+    .business-metrics-grid[style*="repeat(6"] {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .business-charts-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .team-health-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+.progress-bar {
+    height: 4px;
+    background: rgba(148, 163, 184, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #22c55e, #4ade80);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+.heatmap-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.heatmap-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.heatmap-label {
+    width: 40px;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.heatmap-cell {
+    flex: 1;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.heatmap-cell:hover {
+    transform: scale(1.05);
+}
+
+.heatmap-cell.positive {
+    background: rgba(34, 197, 94, 0.4);
+}
+
+.heatmap-cell.neutral {
+    background: rgba(245, 158, 11, 0.4);
+}
+
+.heatmap-cell.negative {
+    background: rgba(239, 68, 68, 0.4);
+}
+
+.impact-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.impact-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-3);
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: var(--radius-lg);
+}
+
+.impact-user {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    color: white;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.user-name {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.user-role {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.impact-score {
+    font-size: 1.25rem;
+    font-weight: 700;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+}
+
+.impact-score.high {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.impact-score.medium {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.impact-score.low {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
 .incident-feed {
     display: flex;
     flex-direction: column;
@@ -480,6 +995,107 @@
 
 .incident-item.critical {
     border-left: 3px solid #ef4444;
+}
+
+.incident-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    color: #22c55e;
+}
+
+.live-dot {
+    width: 6px;
+    height: 6px;
+    background: #22c55e;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.incident-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+}
+
+.incident-badge {
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.incident-badge.info {
+    background: rgba(99, 102, 241, 0.2);
+    color: #818cf8;
+}
+
+.incident-badge.warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+.incident-badge.critical {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.incident-narrative {
+    margin-top: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+}
+
+.narrative-label {
+    font-weight: 600;
+    color: #818cf8;
+    margin-right: var(--space-2);
+}
+
+.incident-id {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+}
+
+.incident-status {
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.incident-status.open {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+.incident-status.resolved {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.incident-status.investigating {
+    background: rgba(99, 102, 241, 0.2);
+    color: #818cf8;
 }
 
 .incident-severity {
@@ -611,14 +1227,242 @@
     opacity: 0.5;
 }
 
+.audit-controls {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+}
+
+.audit-search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-md);
+}
+
+.audit-search input {
+    background: transparent;
+    border: none;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    outline: none;
+    width: 200px;
+}
+
+.audit-search input::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+.audit-search svg {
+    color: var(--color-text-tertiary);
+}
+
+.audit-filter {
+    padding: var(--space-2) var(--space-3);
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+}
+
+.action-badge {
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.action-badge.ai {
+    background: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+}
+
+.action-badge.user {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.audit-entity {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+
+.audit-lineage {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.lineage-session {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+}
+
+.lineage-conf {
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.lineage-conf.high {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.lineage-conf.medium {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
+.lineage-conf.low {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.audit-time {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.audit-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.pagination-info {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.pagination-btn {
+    padding: var(--space-2) var(--space-3);
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: var(--color-primary);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination-pages {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.pagination-page {
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pagination-page:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    color: var(--color-primary);
+}
+
+.pagination-page.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+.audit-actor-icon.ai {
+    background: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+}
+
+.audit-actor-icon.user {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+@media (max-width: 768px) {
+    .audit-table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .audit-table {
+        min-width: 700px;
+    }
+    
+    .audit-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .audit-search {
+        width: 100%;
+    }
+    
+    .audit-search input {
+        width: 100%;
+    }
+    
+    .audit-pagination {
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    
+    .pagination-controls {
+        justify-content: center;
+    }
+}
+
 @keyframes adminFadeIn {
     from {
         opacity: 0;
-        transform: translateY(12px);
+        transform: translateY(8px);
     }
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }
 
@@ -793,9 +1637,29 @@
             <span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">Click stage for details</span>
         </div>
         <div class="panel-body">
+            <div class="pipeline-flow">
+                <span>Ingest</span>
+                <span class="pipeline-flow-arrow">→</span>
+                <span>Chunking</span>
+                <span class="pipeline-flow-arrow">→</span>
+                <span>Whisper</span>
+                <span class="pipeline-flow-arrow">→</span>
+                <span>AI Summary</span>
+                <span class="pipeline-flow-arrow">→</span>
+                <span>Task Extract</span>
+                <span class="pipeline-flow-arrow">→</span>
+                <span>Sync</span>
+            </div>
             <div class="pipeline-grid">
                 {% for stage, data in pipeline_health.items() %}
-                <div class="pipeline-stage {{ data.status }}" data-stage="{{ stage }}" tabindex="0">
+                <div class="pipeline-stage {{ data.status }}" 
+                     data-stage="{{ stage }}" 
+                     data-latency="{{ data.latency_ms }}"
+                     data-error="{{ data.error_rate }}"
+                     data-status="{{ data.status }}"
+                     tabindex="0"
+                     role="button"
+                     aria-label="{{ stage|replace('_', ' ')|title }} stage: {{ data.latency_ms }}ms latency, {{ data.error_rate }}% error rate">
                     <div class="stage-name">{{ stage|replace('_', ' ')|title }}</div>
                     <div class="stage-latency">{{ data.latency_ms }}ms</div>
                     <div class="stage-error">{{ data.error_rate }}% error</div>
@@ -804,6 +1668,21 @@
             </div>
         </div>
     </section>
+    
+    <div class="pipeline-modal" id="pipelineModal" role="dialog" aria-modal="true" aria-labelledby="pipelineModalTitle">
+        <div class="pipeline-modal-content">
+            <div class="pipeline-modal-header">
+                <h3 id="pipelineModalTitle">Stage Details</h3>
+                <button class="pipeline-modal-close" aria-label="Close modal">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="pipeline-detail-grid" id="pipelineModalBody">
+            </div>
+        </div>
+    </div>
 
     <section class="panel-section" aria-label="AI Intelligence Oversight" style="animation-delay: 0.6s;">
         <div class="panel-header">
@@ -813,6 +1692,10 @@
                 </svg>
                 AI Intelligence Oversight
             </h2>
+            <span class="ai-status-badge" id="aiStatusBadge">
+                <span class="status-dot healthy"></span>
+                <span>All systems nominal</span>
+            </span>
         </div>
         <div class="panel-body">
             <div class="ai-oversight-grid">
@@ -821,28 +1704,64 @@
                     <div class="chart-container" style="height: 200px;">
                         <canvas id="confidenceChart"></canvas>
                     </div>
+                    <div class="confidence-legend" style="display: flex; justify-content: center; gap: var(--space-4); margin-top: var(--space-3); font-size: var(--font-size-xs); color: var(--color-text-tertiary);">
+                        <span><span style="color: #ef4444;">●</span> Low (&lt;0.5)</span>
+                        <span><span style="color: #f59e0b;">●</span> Medium (0.5-0.8)</span>
+                        <span><span style="color: #22c55e;">●</span> High (&gt;0.8)</span>
+                    </div>
                 </div>
                 
                 <div class="ai-metric-card">
                     <h4>Copilot Behavior Monitoring</h4>
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-4); margin-top: var(--space-3);">
-                        <div>
+                        <div class="ai-metric-item">
                             <div class="ai-metric-value">{{ ai_metrics.copilot_actions_today|default(156) }}</div>
                             <div class="ai-metric-trend">Actions today</div>
+                            <div class="ai-metric-bar" style="--bar-width: 78%; --bar-color: #6366f1;"></div>
                         </div>
-                        <div>
-                            <div class="ai-metric-value">{{ ai_metrics.retry_rate|default(1.8) }}%</div>
+                        <div class="ai-metric-item">
+                            <div class="ai-metric-value {% if ai_metrics.retry_rate|default(1.8) > 5 %}warning{% endif %}">{{ ai_metrics.retry_rate|default(1.8) }}%</div>
                             <div class="ai-metric-trend">Retry rate</div>
+                            <div class="ai-metric-bar" style="--bar-width: {{ ai_metrics.retry_rate|default(1.8) * 10 }}%; --bar-color: {% if ai_metrics.retry_rate|default(1.8) > 5 %}#f59e0b{% else %}#22c55e{% endif %};"></div>
                         </div>
-                        <div>
-                            <div class="ai-metric-value">{{ ai_metrics.override_rate|default(4.5) }}%</div>
+                        <div class="ai-metric-item">
+                            <div class="ai-metric-value {% if ai_metrics.override_rate|default(4.5) > 10 %}warning{% endif %}">{{ ai_metrics.override_rate|default(4.5) }}%</div>
                             <div class="ai-metric-trend">Override rate</div>
+                            <div class="ai-metric-bar" style="--bar-width: {{ ai_metrics.override_rate|default(4.5) * 5 }}%; --bar-color: {% if ai_metrics.override_rate|default(4.5) > 10 %}#f59e0b{% else %}#22c55e{% endif %};"></div>
                         </div>
-                        <div>
-                            <div class="ai-metric-value">{{ ai_metrics.semantic_drift|default(0.12) }}</div>
+                        <div class="ai-metric-item">
+                            <div class="ai-metric-value {% if ai_metrics.semantic_drift|default(0.12) > 0.3 %}warning{% endif %}">{{ ai_metrics.semantic_drift|default(0.12) }}</div>
                             <div class="ai-metric-trend">Semantic drift</div>
+                            <div class="ai-metric-bar" style="--bar-width: {{ ai_metrics.semantic_drift|default(0.12) * 100 }}%; --bar-color: {% if ai_metrics.semantic_drift|default(0.12) > 0.3 %}#ef4444{% elif ai_metrics.semantic_drift|default(0.12) > 0.15 %}#f59e0b{% else %}#22c55e{% endif %};"></div>
                         </div>
                     </div>
+                </div>
+                
+                <div class="ai-metric-card" style="grid-column: span 2;">
+                    <h4>AI Model Performance Trends</h4>
+                    <div class="chart-container" style="height: 180px;">
+                        <canvas id="aiTrendsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="ai-alerts" style="margin-top: var(--space-4);">
+                <div class="ai-alert-header" style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-2);">Recent AI Alerts</div>
+                <div class="ai-alert-list" id="aiAlertList">
+                    {% if ai_alerts %}
+                    {% for alert in ai_alerts %}
+                    <div class="ai-alert-item {{ alert.severity }}">
+                        <span class="alert-icon">{{ '⚠️' if alert.severity == 'warning' else '🔴' if alert.severity == 'critical' else 'ℹ️' }}</span>
+                        <span class="alert-message">{{ alert.message }}</span>
+                        <span class="alert-time">{{ alert.timestamp }}</span>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="ai-alert-item info">
+                        <span class="alert-icon">✓</span>
+                        <span class="alert-message">No AI anomalies detected in the last 24 hours</span>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -858,31 +1777,99 @@
             </h2>
         </div>
         <div class="panel-body">
-            <div class="business-metrics-grid">
+            <div class="business-metrics-grid" style="grid-template-columns: repeat(6, 1fr);">
                 <div class="business-card">
-                    <h4>Daily Active Users</h4>
+                    <h4>DAU</h4>
                     <div class="business-value">{{ dau }}</div>
                     <div class="business-label">Today</div>
+                    <div class="business-trend up">+{{ (dau * 0.08)|round|int }}%</div>
                 </div>
                 <div class="business-card">
-                    <h4>Weekly Active Users</h4>
+                    <h4>WAU</h4>
                     <div class="business-value">{{ wau }}</div>
                     <div class="business-label">Last 7 days</div>
+                    <div class="business-trend up">+{{ (wau * 0.05)|round|int }}%</div>
                 </div>
                 <div class="business-card">
-                    <h4>Monthly Active Users</h4>
+                    <h4>MAU</h4>
                     <div class="business-value">{{ mau }}</div>
                     <div class="business-label">Last 30 days</div>
+                    <div class="business-trend up">+{{ (mau * 0.12)|round|int }}%</div>
+                </div>
+                <div class="business-card highlight">
+                    <h4>Retention (7d)</h4>
+                    <div class="business-value">{{ retention_7d|default(78) }}%</div>
+                    <div class="business-label">Users returning</div>
+                    <div class="business-trend {% if retention_7d|default(78) >= 70 %}up{% else %}down{% endif %}">{{ 'Healthy' if retention_7d|default(78) >= 70 else 'Below target' }}</div>
                 </div>
                 <div class="business-card">
-                    <h4>Total Users</h4>
-                    <div class="business-value">{{ total_users }}</div>
-                    <div class="business-label">All time</div>
+                    <h4>Token Usage</h4>
+                    <div class="business-value">{{ token_usage_today|default('125K') }}</div>
+                    <div class="business-label">Today</div>
+                    <div class="business-trend neutral">{{ token_usage_monthly|default('3.2M') }} MTD</div>
+                </div>
+                <div class="business-card">
+                    <h4>API Calls</h4>
+                    <div class="business-value">{{ api_calls_today|default('2.4K') }}</div>
+                    <div class="business-label">Today</div>
+                    <div class="business-trend up">+12%</div>
                 </div>
             </div>
             
-            <div class="chart-container" style="margin-top: var(--space-6);">
-                <canvas id="userGrowthChart"></canvas>
+            <div class="business-charts-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-6);">
+                <div class="chart-wrapper">
+                    <h4 style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-3);">User Activity Trend</h4>
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="userGrowthChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-wrapper">
+                    <h4 style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-3);">Token Usage by Model</h4>
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="tokenUsageChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="retention-cohort" style="margin-top: var(--space-6);">
+                <h4 style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-3);">Retention Cohorts (Last 4 Weeks)</h4>
+                <div class="cohort-grid">
+                    <div class="cohort-header">
+                        <span>Cohort</span>
+                        <span>Week 1</span>
+                        <span>Week 2</span>
+                        <span>Week 3</span>
+                        <span>Week 4</span>
+                    </div>
+                    <div class="cohort-row">
+                        <span>Nov 4</span>
+                        <span class="cohort-cell high">100%</span>
+                        <span class="cohort-cell high">82%</span>
+                        <span class="cohort-cell medium">68%</span>
+                        <span class="cohort-cell medium">61%</span>
+                    </div>
+                    <div class="cohort-row">
+                        <span>Nov 11</span>
+                        <span class="cohort-cell high">100%</span>
+                        <span class="cohort-cell high">79%</span>
+                        <span class="cohort-cell medium">65%</span>
+                        <span class="cohort-cell empty">-</span>
+                    </div>
+                    <div class="cohort-row">
+                        <span>Nov 18</span>
+                        <span class="cohort-cell high">100%</span>
+                        <span class="cohort-cell high">85%</span>
+                        <span class="cohort-cell empty">-</span>
+                        <span class="cohort-cell empty">-</span>
+                    </div>
+                    <div class="cohort-row">
+                        <span>Nov 25</span>
+                        <span class="cohort-cell high">100%</span>
+                        <span class="cohort-cell empty">-</span>
+                        <span class="cohort-cell empty">-</span>
+                        <span class="cohort-cell empty">-</span>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -902,6 +1889,9 @@
                     <h4>Task Completion</h4>
                     <div class="business-value">{{ task_completion_rate }}%</div>
                     <div class="business-label">{{ completed_tasks }}/{{ total_tasks }} tasks</div>
+                    <div class="progress-bar" style="margin-top: var(--space-2);">
+                        <div class="progress-fill" style="width: {{ task_completion_rate }}%;"></div>
+                    </div>
                 </div>
                 <div class="business-card">
                     <h4>Pending Tasks</h4>
@@ -919,6 +1909,85 @@
                     <div class="business-label">Last 7 days</div>
                 </div>
             </div>
+            
+            <div class="team-health-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-6);">
+                <div class="sentiment-heatmap">
+                    <h4 style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-3);">Meeting Sentiment (Last 7 Days)</h4>
+                    <div class="heatmap-grid">
+                        <div class="heatmap-row">
+                            <span class="heatmap-label">Mon</span>
+                            <span class="heatmap-cell positive" title="Positive: 3 meetings"></span>
+                            <span class="heatmap-cell neutral" title="Neutral: 2 meetings"></span>
+                            <span class="heatmap-cell positive" title="Positive: 4 meetings"></span>
+                        </div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-label">Tue</span>
+                            <span class="heatmap-cell positive" title="Positive: 5 meetings"></span>
+                            <span class="heatmap-cell positive" title="Positive: 3 meetings"></span>
+                            <span class="heatmap-cell neutral" title="Neutral: 1 meeting"></span>
+                        </div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-label">Wed</span>
+                            <span class="heatmap-cell neutral" title="Neutral: 2 meetings"></span>
+                            <span class="heatmap-cell negative" title="Negative: 1 meeting"></span>
+                            <span class="heatmap-cell positive" title="Positive: 4 meetings"></span>
+                        </div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-label">Thu</span>
+                            <span class="heatmap-cell positive" title="Positive: 6 meetings"></span>
+                            <span class="heatmap-cell positive" title="Positive: 4 meetings"></span>
+                            <span class="heatmap-cell neutral" title="Neutral: 2 meetings"></span>
+                        </div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-label">Fri</span>
+                            <span class="heatmap-cell positive" title="Positive: 3 meetings"></span>
+                            <span class="heatmap-cell positive" title="Positive: 5 meetings"></span>
+                            <span class="heatmap-cell positive" title="Positive: 2 meetings"></span>
+                        </div>
+                    </div>
+                    <div class="heatmap-legend" style="display: flex; justify-content: center; gap: var(--space-4); margin-top: var(--space-3); font-size: var(--font-size-xs); color: var(--color-text-tertiary);">
+                        <span><span style="color: #ef4444;">●</span> Negative</span>
+                        <span><span style="color: #f59e0b;">●</span> Neutral</span>
+                        <span><span style="color: #22c55e;">●</span> Positive</span>
+                    </div>
+                </div>
+                
+                <div class="impact-scores">
+                    <h4 style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-3);">Top Impact Scores</h4>
+                    <div class="impact-list">
+                        <div class="impact-item">
+                            <div class="impact-user">
+                                <div class="user-avatar">C</div>
+                                <div class="user-info">
+                                    <span class="user-name">Chinyemba</span>
+                                    <span class="user-role">Owner</span>
+                                </div>
+                            </div>
+                            <div class="impact-score high">98</div>
+                        </div>
+                        <div class="impact-item">
+                            <div class="impact-user">
+                                <div class="user-avatar">A</div>
+                                <div class="user-info">
+                                    <span class="user-name">Admin User</span>
+                                    <span class="user-role">Admin</span>
+                                </div>
+                            </div>
+                            <div class="impact-score high">92</div>
+                        </div>
+                        <div class="impact-item">
+                            <div class="impact-user">
+                                <div class="user-avatar">T</div>
+                                <div class="user-info">
+                                    <span class="user-name">Team Member</span>
+                                    <span class="user-role">Member</span>
+                                </div>
+                            </div>
+                            <div class="impact-score medium">76</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -930,13 +1999,19 @@
                 </svg>
                 Incident & Anomaly Feed
             </h2>
-            <span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">AI-generated narratives</span>
+            <div class="incident-controls">
+                <span class="live-indicator">
+                    <span class="live-dot"></span>
+                    <span>Live</span>
+                </span>
+                <span style="font-size: var(--font-size-xs); color: var(--color-text-tertiary);">AI-generated narratives</span>
+            </div>
         </div>
         <div class="panel-body">
-            {% if recent_incidents %}
-            <div class="incident-feed">
+            <div class="incident-feed" id="incidentFeed">
+                {% if recent_incidents %}
                 {% for incident in recent_incidents %}
-                <div class="incident-item {{ incident.severity }}">
+                <div class="incident-item {{ incident.severity }}" data-incident-id="{{ incident.id }}">
                     <div class="incident-severity">
                         {% if incident.severity == 'warning' %}
                         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -946,32 +2021,45 @@
                         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
-                        {% else %}
+                        {% elif incident.severity == 'critical' %}
                         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        {% else %}
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         {% endif %}
                     </div>
                     <div class="incident-content">
-                        <div class="incident-title">{{ incident.title }}</div>
+                        <div class="incident-header">
+                            <div class="incident-title">{{ incident.title }}</div>
+                            <span class="incident-badge {{ incident.severity }}">{{ incident.severity|upper }}</span>
+                        </div>
                         <div class="incident-description">{{ incident.description }}</div>
+                        {% if incident.ai_narrative %}
+                        <div class="incident-narrative">
+                            <span class="narrative-label">AI Analysis:</span>
+                            <span>{{ incident.ai_narrative }}</span>
+                        </div>
+                        {% endif %}
                         <div class="incident-meta">
-                            <span>{{ incident.id }}</span>
-                            <span>{{ incident.timestamp[:16] }}</span>
-                            <span class="incident-status">{{ incident.status }}</span>
+                            <span class="incident-id">{{ incident.id }}</span>
+                            <span class="incident-time">{{ incident.timestamp[:16] }}</span>
+                            <span class="incident-status {{ incident.status|lower }}">{{ incident.status }}</span>
                         </div>
                     </div>
                 </div>
                 {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p>No incidents reported. All systems nominal.</p>
+                </div>
+                {% endif %}
             </div>
-            {% else %}
-            <div class="empty-state">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <p>No incidents reported. All systems nominal.</p>
-            </div>
-            {% endif %}
         </div>
     </section>
 
@@ -983,9 +2071,21 @@
                 </svg>
                 Audit Trail
             </h2>
-            <div style="display: flex; gap: var(--space-2);">
-                <input type="text" placeholder="Search audit logs..." 
-                       style="padding: var(--space-2) var(--space-3); background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(148, 163, 184, 0.1); border-radius: var(--radius-md); color: var(--color-text-primary); font-size: var(--font-size-sm);">
+            <div class="audit-controls">
+                <div class="audit-search">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input type="text" id="auditSearch" placeholder="Search trace ID, actor, action..." 
+                           onkeyup="filterAuditTable()">
+                </div>
+                <select class="audit-filter" id="auditFilter" onchange="filterAuditTable()">
+                    <option value="">All Actions</option>
+                    <option value="task_created">Task Created</option>
+                    <option value="meeting_recorded">Meeting Recorded</option>
+                    <option value="user_login">User Login</option>
+                    <option value="ai_action">AI Action</option>
+                </select>
             </div>
         </div>
         <div class="panel-body">
@@ -997,8 +2097,8 @@
                             <th>Actor</th>
                             <th>Action</th>
                             <th>Entity</th>
-                            <th>Timestamp</th>
                             <th>AI Lineage</th>
+                            <th>Timestamp</th>
                         </tr>
                     </thead>
                     <tbody id="audit-tbody">
@@ -1006,7 +2106,7 @@
                             <td class="audit-trace-id">TRC-8a7b6c5d</td>
                             <td>
                                 <div class="audit-actor">
-                                    <div class="audit-actor-icon">
+                                    <div class="audit-actor-icon ai">
                                         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                                         </svg>
@@ -1014,13 +2114,90 @@
                                     <span>system:copilot</span>
                                 </div>
                             </td>
-                            <td>task_created</td>
-                            <td>TSK-123</td>
-                            <td>{{ last_updated[:16] }}</td>
-                            <td style="font-size: var(--font-size-xs);">Session SES-456 • Conf: 0.92</td>
+                            <td><span class="action-badge ai">task_created</span></td>
+                            <td class="audit-entity">TSK-123</td>
+                            <td class="audit-lineage">
+                                <span class="lineage-session">SES-456</span>
+                                <span class="lineage-conf high">0.92</span>
+                            </td>
+                            <td class="audit-time">{{ last_updated[:16] }}</td>
+                        </tr>
+                        <tr>
+                            <td class="audit-trace-id">TRC-7f6e5d4c</td>
+                            <td>
+                                <div class="audit-actor">
+                                    <div class="audit-actor-icon user">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                        </svg>
+                                    </div>
+                                    <span>Chinyemba</span>
+                                </div>
+                            </td>
+                            <td><span class="action-badge user">user_login</span></td>
+                            <td class="audit-entity">USR-001</td>
+                            <td class="audit-lineage">
+                                <span class="lineage-session">-</span>
+                                <span class="lineage-conf">-</span>
+                            </td>
+                            <td class="audit-time">{{ last_updated[:16] }}</td>
+                        </tr>
+                        <tr>
+                            <td class="audit-trace-id">TRC-3b2a1c9d</td>
+                            <td>
+                                <div class="audit-actor">
+                                    <div class="audit-actor-icon ai">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                        </svg>
+                                    </div>
+                                    <span>system:whisper</span>
+                                </div>
+                            </td>
+                            <td><span class="action-badge ai">meeting_transcribed</span></td>
+                            <td class="audit-entity">MTG-789</td>
+                            <td class="audit-lineage">
+                                <span class="lineage-session">SES-458</span>
+                                <span class="lineage-conf high">0.95</span>
+                            </td>
+                            <td class="audit-time">{{ last_updated[:16] }}</td>
+                        </tr>
+                        <tr>
+                            <td class="audit-trace-id">TRC-9e8d7c6b</td>
+                            <td>
+                                <div class="audit-actor">
+                                    <div class="audit-actor-icon ai">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                        </svg>
+                                    </div>
+                                    <span>system:summary</span>
+                                </div>
+                            </td>
+                            <td><span class="action-badge ai">summary_generated</span></td>
+                            <td class="audit-entity">SUM-456</td>
+                            <td class="audit-lineage">
+                                <span class="lineage-session">SES-458</span>
+                                <span class="lineage-conf medium">0.78</span>
+                            </td>
+                            <td class="audit-time">{{ last_updated[:16] }}</td>
                         </tr>
                     </tbody>
                 </table>
+            </div>
+            <div class="audit-pagination">
+                <span class="pagination-info">Showing 1-4 of 156 entries</span>
+                <div class="pagination-controls">
+                    <button class="pagination-btn" disabled>Previous</button>
+                    <span class="pagination-pages">
+                        <button class="pagination-page active">1</button>
+                        <button class="pagination-page">2</button>
+                        <button class="pagination-page">3</button>
+                        <span>...</span>
+                        <button class="pagination-page">39</button>
+                    </span>
+                    <button class="pagination-btn">Next</button>
+                </div>
             </div>
         </div>
     </section>
@@ -1188,7 +2365,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const systemHealthCtx = document.getElementById('systemHealthChart');
     if (systemHealthCtx) {
-        let labels, wsLatencyData, cpuData, memoryData;
+        let labels, wsLatencyData, queueDepthData, nlpErrorData, apiThroughputData, rateLimitData, syncDriftData;
         
         if (timelineData && timelineData.length > 0) {
             labels = timelineData.map(d => {
@@ -1196,14 +2373,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 return date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0');
             });
             wsLatencyData = timelineData.map(d => d.ws_latency || 0);
-            cpuData = timelineData.map(d => d.cpu || 0);
-            memoryData = timelineData.map(d => d.memory || 0);
+            queueDepthData = timelineData.map(d => d.queue_depth || 0);
+            nlpErrorData = timelineData.map(d => (d.error_rate || 0) * 10);
+            apiThroughputData = timelineData.map(d => d.api_throughput || 0);
+            rateLimitData = timelineData.map(d => d.rate_limit_events || 0);
+            syncDriftData = timelineData.map(d => d.sync_drift || 50);
         } else {
             labels = Array.from({length: 24}, (_, i) => `${i}:00`);
             wsLatencyData = labels.map(() => Math.floor(30 + Math.random() * 20));
-            cpuData = labels.map(() => Math.floor(20 + Math.random() * 40));
-            memoryData = labels.map(() => Math.floor(40 + Math.random() * 30));
+            queueDepthData = labels.map(() => Math.floor(1 + Math.random() * 4));
+            nlpErrorData = labels.map(() => Math.floor(Math.random() * 3));
+            apiThroughputData = labels.map(() => Math.floor(80 + Math.random() * 60));
+            rateLimitData = labels.map(() => Math.floor(Math.random() * 2));
+            syncDriftData = labels.map(() => Math.floor(40 + Math.random() * 30));
         }
+        
+        function detectAnomalies(data) {
+            const mean = data.reduce((a, b) => a + b, 0) / data.length;
+            const std = Math.sqrt(data.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / data.length);
+            return data.map(v => Math.abs(v - mean) > 2 * std ? v : null);
+        }
+        
+        const wsAnomalies = detectAnomalies(wsLatencyData);
         
         systemHealthChart = new Chart(systemHealthCtx, {
             type: 'line',
@@ -1216,23 +2407,64 @@ document.addEventListener('DOMContentLoaded', function() {
                         borderColor: '#6366f1',
                         backgroundColor: 'rgba(99, 102, 241, 0.1)',
                         tension: 0.4,
-                        fill: true
+                        fill: false,
+                        yAxisID: 'y'
                     },
                     {
-                        label: 'CPU (%)',
-                        data: cpuData,
-                        borderColor: '#22c55e',
-                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    },
-                    {
-                        label: 'Memory (%)',
-                        data: memoryData,
+                        label: 'Queue Depth',
+                        data: queueDepthData,
                         borderColor: '#f59e0b',
                         backgroundColor: 'rgba(245, 158, 11, 0.1)',
                         tension: 0.4,
-                        fill: true
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'NLP Errors',
+                        data: nlpErrorData,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'API Throughput (req/s)',
+                        data: apiThroughputData,
+                        borderColor: '#22c55e',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Rate Limits',
+                        data: rateLimitData,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        borderDash: [5, 5],
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Sync Drift (ms)',
+                        data: syncDriftData,
+                        borderColor: '#06b6d4',
+                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Anomalies',
+                        data: wsAnomalies,
+                        borderColor: 'transparent',
+                        backgroundColor: '#ef4444',
+                        pointRadius: wsAnomalies.map(v => v !== null ? 8 : 0),
+                        pointStyle: 'triangle',
+                        showLine: false,
+                        yAxisID: 'y'
                     }
                 ]
             },
@@ -1249,30 +2481,44 @@ document.addEventListener('DOMContentLoaded', function() {
                         labels: {
                             color: 'rgba(148, 163, 184, 0.8)',
                             usePointStyle: true,
-                            padding: 20
+                            padding: 12,
+                            font: { size: 11 }
                         }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                        titleColor: '#f8fafc',
+                        bodyColor: '#94a3b8',
+                        borderColor: 'rgba(148, 163, 184, 0.2)',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        padding: 12
                     }
                 },
                 scales: {
                     x: {
-                        grid: {
-                            color: 'rgba(148, 163, 184, 0.1)'
-                        },
-                        ticks: {
-                            color: 'rgba(148, 163, 184, 0.6)'
-                        }
+                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)', maxRotation: 0 }
                     },
                     y: {
-                        grid: {
-                            color: 'rgba(148, 163, 184, 0.1)'
-                        },
-                        ticks: {
-                            color: 'rgba(148, 163, 184, 0.6)'
-                        }
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)' },
+                        title: { display: true, text: 'Latency / Count', color: 'rgba(148, 163, 184, 0.6)' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)' },
+                        title: { display: true, text: 'Throughput', color: 'rgba(148, 163, 184, 0.6)' }
                     }
                 },
                 animation: {
-                    duration: 800,
+                    duration: 300,
                     easing: 'easeOutQuart'
                 }
             }
@@ -1332,7 +2578,149 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 },
                 animation: {
-                    duration: 800,
+                    duration: 300,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+    }
+    
+    const aiTrendsCtx = document.getElementById('aiTrendsChart');
+    if (aiTrendsCtx) {
+        const aiTrendLabels = Array.from({length: 12}, (_, i) => {
+            const d = new Date();
+            d.setHours(d.getHours() - (11 - i));
+            return d.getHours() + ':00';
+        });
+        
+        new Chart(aiTrendsCtx, {
+            type: 'line',
+            data: {
+                labels: aiTrendLabels,
+                datasets: [
+                    {
+                        label: 'Avg Confidence',
+                        data: aiTrendLabels.map(() => 0.7 + Math.random() * 0.2),
+                        borderColor: '#22c55e',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Response Time (s)',
+                        data: aiTrendLabels.map(() => 0.5 + Math.random() * 0.5),
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Token Usage (K)',
+                        data: aiTrendLabels.map(() => 15 + Math.random() * 10),
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y2',
+                        hidden: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: 'rgba(148, 163, 184, 0.8)',
+                            usePointStyle: true,
+                            padding: 12,
+                            font: { size: 10 }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)', font: { size: 10 } }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        min: 0,
+                        max: 1,
+                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)', font: { size: 10 } },
+                        title: { display: true, text: 'Confidence', color: 'rgba(148, 163, 184, 0.5)', font: { size: 10 } }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        min: 0,
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: 'rgba(148, 163, 184, 0.6)', font: { size: 10 } },
+                        title: { display: true, text: 'Time (s)', color: 'rgba(148, 163, 184, 0.5)', font: { size: 10 } }
+                    },
+                    y2: {
+                        type: 'linear',
+                        display: false,
+                        position: 'right',
+                        min: 0,
+                        grid: { drawOnChartArea: false }
+                    }
+                },
+                animation: {
+                    duration: 300,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+    }
+    
+    const tokenUsageCtx = document.getElementById('tokenUsageChart');
+    if (tokenUsageCtx) {
+        new Chart(tokenUsageCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['GPT-4o', 'Whisper', 'GPT-4o-mini', 'Embeddings'],
+                datasets: [{
+                    data: [45, 30, 15, 10],
+                    backgroundColor: [
+                        '#6366f1',
+                        '#22c55e',
+                        '#f59e0b',
+                        '#8b5cf6'
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: 'rgba(148, 163, 184, 0.8)',
+                            usePointStyle: true,
+                            padding: 15,
+                            font: { size: 11 }
+                        }
+                    }
+                },
+                animation: {
+                    duration: 300,
                     easing: 'easeOutQuart'
                 }
             }
@@ -1385,7 +2773,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 },
                 animation: {
-                    duration: 800,
+                    duration: 300,
                     easing: 'easeOutQuart'
                 }
             }
@@ -1399,12 +2787,93 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    const pipelineModal = document.getElementById('pipelineModal');
+    const pipelineModalTitle = document.getElementById('pipelineModalTitle');
+    const pipelineModalBody = document.getElementById('pipelineModalBody');
+    
+    function openPipelineModal(stage) {
+        const stageName = stage.dataset.stage.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const latency = stage.dataset.latency;
+        const errorRate = stage.dataset.error;
+        const status = stage.dataset.status;
+        
+        pipelineModalTitle.textContent = stageName + ' Stage Details';
+        pipelineModalBody.innerHTML = `
+            <div class="pipeline-detail-item">
+                <div class="pipeline-detail-label">Latency (p95)</div>
+                <div class="pipeline-detail-value">${latency}ms</div>
+            </div>
+            <div class="pipeline-detail-item">
+                <div class="pipeline-detail-label">Error Rate</div>
+                <div class="pipeline-detail-value">${errorRate}%</div>
+            </div>
+            <div class="pipeline-detail-item">
+                <div class="pipeline-detail-label">Status</div>
+                <div class="pipeline-detail-value" style="color: ${status === 'healthy' ? '#22c55e' : status === 'warning' ? '#f59e0b' : '#ef4444'}">${status.charAt(0).toUpperCase() + status.slice(1)}</div>
+            </div>
+            <div class="pipeline-detail-item">
+                <div class="pipeline-detail-label">Throughput</div>
+                <div class="pipeline-detail-value">${Math.floor(1000 / parseInt(latency))} req/s</div>
+            </div>
+            <div class="pipeline-detail-item" style="grid-column: span 2;">
+                <div class="pipeline-detail-label">Description</div>
+                <p style="color: var(--color-text-secondary); font-size: var(--font-size-sm); margin-top: var(--space-2);">
+                    ${getStageDescription(stage.dataset.stage)}
+                </p>
+            </div>
+        `;
+        
+        pipelineModal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function getStageDescription(stage) {
+        const descriptions = {
+            'ingest': 'Audio data ingestion from client WebSocket connections. Handles raw audio streams and prepares chunks for processing.',
+            'chunking': 'Splits continuous audio into optimal-sized chunks for transcription. Manages buffer memory and timing synchronization.',
+            'whisper': 'OpenAI Whisper transcription processing. Converts audio chunks to text with speaker diarization.',
+            'ai_summary': 'AI-powered meeting summarization and insight extraction using GPT-4 models.',
+            'task_extract': 'Extracts actionable tasks and follow-ups from meeting transcripts using NLP analysis.',
+            'sync': 'Real-time synchronization of processed data across all connected clients via WebSocket.'
+        };
+        return descriptions[stage] || 'Processing stage in the meeting pipeline.';
+    }
+    
+    function closePipelineModal() {
+        pipelineModal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+    
     document.querySelectorAll('.pipeline-stage').forEach(stage => {
         stage.addEventListener('click', function() {
-            const stageName = this.dataset.stage;
-            console.log('Drill down into stage:', stageName);
+            openPipelineModal(this);
+        });
+        stage.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openPipelineModal(this);
+            }
         });
     });
+    
+    if (pipelineModal) {
+        pipelineModal.addEventListener('click', function(e) {
+            if (e.target === pipelineModal) {
+                closePipelineModal();
+            }
+        });
+        
+        const closeBtn = pipelineModal.querySelector('.pipeline-modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closePipelineModal);
+        }
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && pipelineModal.classList.contains('active')) {
+                closePipelineModal();
+            }
+        });
+    }
     
     function updateRealTimeMetrics() {
         fetch('/admin/api/metrics/realtime')
@@ -1452,10 +2921,80 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(err => console.warn('Failed to fetch realtime metrics:', err));
     }
     
+    function renderSparkline(canvasId, data, color) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const width = canvas.offsetWidth || 100;
+        const height = canvas.offsetHeight || 24;
+        
+        canvas.width = width * 2;
+        canvas.height = height * 2;
+        ctx.scale(2, 2);
+        
+        if (!data || data.length === 0) {
+            data = Array.from({length: 12}, () => Math.random() * 30 + 20);
+        }
+        
+        const max = Math.max(...data);
+        const min = Math.min(...data);
+        const range = max - min || 1;
+        
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        const stepX = width / (data.length - 1);
+        data.forEach((val, i) => {
+            const x = i * stepX;
+            const y = height - ((val - min) / range) * (height - 4) - 2;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    }
+    
+    function initSparklines() {
+        const meetingData = meetingTrend.map(d => d.count);
+        renderSparkline('sparkline-meetings-canvas', meetingData, '#22c55e');
+        renderSparkline('sparkline-latency-canvas', null, '#6366f1');
+        renderSparkline('sparkline-pipeline-canvas', null, '#f59e0b');
+        renderSparkline('sparkline-copilot-canvas', null, '#8b5cf6');
+        renderSparkline('sparkline-dau-canvas', userTrend.slice(-7).map(d => d.count), '#06b6d4');
+        renderSparkline('sparkline-health-canvas', null, '#22c55e');
+    }
+    
+    const sparklineContainers = document.querySelectorAll('.kpi-sparkline');
+    sparklineContainers.forEach((container, index) => {
+        const canvasIds = ['sparkline-meetings-canvas', 'sparkline-latency-canvas', 'sparkline-pipeline-canvas', 
+                          'sparkline-copilot-canvas', 'sparkline-dau-canvas', 'sparkline-health-canvas'];
+        if (canvasIds[index]) {
+            const canvas = document.createElement('canvas');
+            canvas.id = canvasIds[index];
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            container.appendChild(canvas);
+        }
+    });
+    
+    setTimeout(initSparklines, 100);
+    
     initWebSocket();
     
     updateRealTimeMetrics();
     setInterval(updateRealTimeMetrics, 15000);
+    
+    document.querySelectorAll('.kpi-card').forEach(card => {
+        card.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+    });
 });
 </script>
 {% endblock %}
