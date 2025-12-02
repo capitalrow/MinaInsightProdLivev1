@@ -193,6 +193,36 @@ def test_user(db_session):
         db_session.rollback()
 
 @pytest.fixture(scope='function')
+def test_workspace(db_session, test_user):
+    """Create a test workspace."""
+    from models import Workspace
+    import uuid
+    
+    unique_id = str(uuid.uuid4())[:8]
+    name = f'Test Workspace {unique_id}'
+    slug = Workspace.generate_slug(name) + f'-{unique_id}'
+    
+    workspace = Workspace(
+        name=name,
+        slug=slug,
+        owner_id=test_user.id
+    )
+    db_session.add(workspace)
+    db_session.commit()
+    
+    yield workspace
+    
+    try:
+        db_session.rollback()
+        from models import Workspace
+        existing = db_session.query(Workspace).filter_by(id=workspace.id).first()
+        if existing:
+            db_session.delete(existing)
+            db_session.commit()
+    except Exception:
+        db_session.rollback()
+
+@pytest.fixture(scope='function')
 def mock_openai_response(mocker):
     """Mock OpenAI API response."""
     mock_response = {
