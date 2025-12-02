@@ -2348,9 +2348,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
-<script nonce="{{ csp_nonce }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" nonce="{{ g.csp_nonce }}"></script>
+<script src="https://cdn.socket.io/4.6.0/socket.io.min.js" nonce="{{ g.csp_nonce }}"></script>
+<script nonce="{{ g.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const meetingTrend = {{ meeting_trend|tojson|safe }};
     const userTrend = {{ user_trend|tojson|safe }};
