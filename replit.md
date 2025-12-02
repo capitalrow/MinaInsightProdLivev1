@@ -115,8 +115,7 @@ The application utilizes a layered architecture with Flask as the web framework 
 
 ## Recent Changes
 
-**December 2, 2025 - Phase 2: Enterprise Testing Suite (87 new tests):**
-- Total test suite now 311 tests passing, 17 skipped, 0 failures
+**December 2, 2025 - Phase 2: Enterprise Testing Suite (87 new tests, all passing):**
 - **E2E Tests (6)**: Full transcription pipeline flow, session lifecycle, AI insights chain
 - **Load Tests (12)**: Concurrent user sessions, WebSocket scalability, buffer management, API latency under load
 - **Chaos Tests (13)**: OpenAI failures, Redis failover, database disconnections, WebSocket chaos, circuit breakers
@@ -125,6 +124,7 @@ The application utilizes a layered architecture with Flask as the web framework 
 - **Integration Tests (19)**: Service contracts between transcription↔AI↔session↔WebSocket↔database↔cache layers
 - Service API fixes: CircuitBreakerService (get_breaker().call()), EventSequencer (create_event, validate_and_sequence_event), SessionBufferManager (get_or_create_session)
 - Model field fixes: Meeting.organizer_id, Task.assigned_to_id
+- Legacy tests moved to tests/_legacy/ (deprecated module references)
 
 **December 2, 2025 - Phase 1: Production Readiness Validation:**
 - Expanded test suite to 224 tests passing, 17 skipped, 0 failures
