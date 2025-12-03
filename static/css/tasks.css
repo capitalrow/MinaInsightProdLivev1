@@ -3737,3 +3737,173 @@
             0 18px 36px rgba(0,0,0,0.45);
     }
 }
+
+/* ========================================
+ * CROWN⁴.7: MOBILE TASK CARD LAYOUT FIX
+ * Following Linear/Things3 best practices:
+ * - Title full width, metadata stacked below
+ * - Compact padding, reduced min-height
+ * - 2-line title truncation
+ * - Icon-only metadata where possible
+ * ======================================== */
+
+@media (max-width: 640px) {
+    /* Task Card: Tighter padding and reduced min-height */
+    .task-card {
+        padding: 10px 12px;
+        min-height: 56px;
+        gap: 10px;
+    }
+    
+    /* Checkbox wrapper: slightly smaller touch target on mobile */
+    .task-card .checkbox-wrapper {
+        width: 40px;
+        height: 40px;
+    }
+    
+    /* Task Content: Full width, stacked layout */
+    .task-card .task-content {
+        flex: 1;
+        min-width: 0;
+        gap: 6px;
+    }
+    
+    /* Task Title: 2-line truncation on mobile */
+    .task-card .task-title {
+        display: -webkit-box !important;
+        -webkit-line-clamp: 2 !important;
+        -webkit-box-orient: vertical !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 14px;
+        line-height: 1.35;
+        word-break: break-word;
+    }
+    
+    /* Meeting Provenance Header: Hide on mobile (progressive disclosure) */
+    .task-card .task-provenance-header {
+        display: none;
+    }
+    
+    /* Task Metadata: Compact single row */
+    .task-card .task-metadata {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 8px;
+        font-size: 12px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    
+    .task-card .task-metadata::-webkit-scrollbar {
+        display: none;
+    }
+    
+    /* Metadata items: Compact on mobile */
+    .task-card .task-assignee,
+    .task-card .task-due-date {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+        white-space: nowrap;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Labels: Horizontal scroll, compact */
+    .task-card .task-labels {
+        display: flex;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+    
+    .task-card .task-label {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+    
+    /* Hide empty labels placeholder on mobile */
+    .task-card .task-labels-empty {
+        display: none;
+    }
+    
+    /* Jump to Transcript: Icon only on mobile */
+    .task-card .jump-to-transcript-btn span {
+        display: none;
+    }
+    
+    .task-card .jump-to-transcript-btn {
+        padding: 4px;
+        min-width: 28px;
+    }
+    
+    /* Task Actions: Compact on mobile */
+    .task-card .task-actions {
+        gap: 4px;
+        min-width: auto;
+        padding-right: 0;
+    }
+    
+    /* Priority badge: Smaller on mobile */
+    .task-card .priority-badge {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+    
+    /* Hide low priority badge entirely on mobile */
+    .task-card .priority-badge.priority-low {
+        display: none;
+    }
+    
+    /* Impact score badge: Hide on mobile */
+    .task-card .impact-score-badge {
+        display: none;
+    }
+    
+    /* Menu trigger: Smaller on mobile */
+    .task-card .task-menu-trigger {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .task-card .task-menu-trigger svg {
+        width: 18px;
+        height: 18px;
+    }
+}
+
+/* Extra small screens (phones in portrait) */
+@media (max-width: 375px) {
+    .task-card {
+        padding: 8px 10px;
+        min-height: 52px;
+    }
+    
+    .task-card .checkbox-wrapper {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .task-card .task-checkbox {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .task-card .task-title {
+        font-size: 13px;
+    }
+    
+    .task-card .task-metadata {
+        font-size: 11px;
+        gap: 6px;
+    }
+    
+    /* On very small screens, show only essential metadata */
+    .task-card .task-labels {
+        display: none;
+    }
+}
