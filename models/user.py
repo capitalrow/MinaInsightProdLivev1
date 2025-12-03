@@ -67,6 +67,10 @@ class User(UserMixin, Base):
     # Preferences
     preferences: Mapped[Optional[str]] = mapped_column(Text)  # JSON string for user preferences
     
+    # Onboarding tracking
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    onboarding_step: Mapped[int] = mapped_column(Integer, default=0)  # 0=not started, 1-4=steps, 5=complete
+    
     # Relationships
     sessions: Mapped[list["Session"]] = relationship(back_populates="user", foreign_keys="Session.user_id")
     meetings: Mapped[list["Meeting"]] = relationship(back_populates="organizer", foreign_keys="Meeting.organizer_id")
@@ -139,8 +143,16 @@ class User(UserMixin, Base):
         
         if include_sensitive:
             data['preferences'] = self.preferences
+        
+        data['onboarding_completed'] = self.onboarding_completed
+        data['onboarding_step'] = self.onboarding_step
             
         return data
+    
+    @property
+    def needs_onboarding(self) -> bool:
+        """Check if user needs to complete onboarding."""
+        return not self.onboarding_completed
 
     # Flask-Login required methods
     def get_id(self):

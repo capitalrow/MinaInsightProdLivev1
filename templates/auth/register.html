@@ -8,13 +8,33 @@
     <div class="container">
         <div class="auth-wrapper">
             <div class="auth-card card-glass">
+                {% if invite_info and invite_info.valid %}
+                <div class="invite-banner">
+                    <div class="invite-banner-icon">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                    </div>
+                    <div class="invite-banner-text">
+                        <span class="invite-banner-title">You're invited!</span>
+                        <span class="invite-banner-description">
+                            {% if invite_info.inviter_name %}{{ invite_info.inviter_name }} invited you to join{% else %}You've been invited to join{% endif %}
+                            <strong>{{ invite_info.workspace_name or 'a team' }}</strong>
+                        </span>
+                    </div>
+                </div>
+                {% endif %}
+                
                 <div class="auth-header">
-                    <h1 class="auth-title">Get started free</h1>
-                    <p class="auth-subtitle">Create your account and transform your meetings</p>
+                    <h1 class="auth-title">{% if invite_info and invite_info.valid %}Join the team{% else %}Get started free{% endif %}</h1>
+                    <p class="auth-subtitle">{% if invite_info and invite_info.valid %}Create your account to accept the invitation{% else %}Create your account and transform your meetings{% endif %}</p>
                 </div>
 
                 <form method="POST" action="{{ url_for('auth.register') }}" class="auth-form" novalidate>
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% if invite_token %}
+                    <input type="hidden" name="invite_token" value="{{ invite_token }}">
+                    {% endif %}
                     
                     <div class="form-group">
                         <label for="username" class="form-label">Full name</label>
@@ -235,6 +255,57 @@
 </div>
 
 <style>
+/* Invite Banner Styling */
+.invite-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--space-6);
+    animation: slideDown 0.4s ease-out;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.invite-banner-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(99, 102, 241, 0.2);
+    border-radius: var(--radius-lg);
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.invite-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.invite-banner-title {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+}
+
+.invite-banner-description {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.invite-banner-description strong {
+    color: var(--color-primary);
+}
+
 /* Crown+ Auth Page Enhancement */
 .auth-container {
     min-height: calc(100vh - var(--header-height));

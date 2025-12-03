@@ -659,6 +659,13 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning(f"Failed to register dashboard routes: {e}")
     
+    try:
+        from routes.onboarding import onboarding_bp
+        app.register_blueprint(onboarding_bp)
+        app.logger.info("Onboarding routes registered")
+    except Exception as e:
+        app.logger.warning(f"Failed to register onboarding routes: {e}")
+    
     # Register sessions blueprint for refined view and session management
     try:
         from routes.sessions import sessions_bp
