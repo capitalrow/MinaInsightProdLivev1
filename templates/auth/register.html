@@ -460,22 +460,30 @@
 
 .password-toggle {
     position: absolute;
-    right: 12px;
+    right: 4px;
     top: 50%;
     transform: translateY(-50%);
-    background: none;
+    background: transparent;
     border: none;
     cursor: pointer;
     color: var(--color-text-tertiary);
-    padding: 4px;
+    padding: 12px;
+    min-width: 44px;
+    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: color var(--transition-base);
+    z-index: 10;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.password-toggle:hover {
+.password-toggle:hover,
+.password-toggle:active,
+.password-toggle:focus {
     color: var(--color-text-secondary);
+    outline: none;
 }
 
 .password-strength-container {
@@ -884,29 +892,52 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function initPasswordToggles() {
         const toggleButtons = document.querySelectorAll('.password-toggle');
+        
+        function togglePassword(toggle) {
+            const wrapper = toggle.closest('.password-input-wrapper');
+            if (!wrapper) return;
+            
+            const input = wrapper.querySelector('input');
+            const eyeOpen = toggle.querySelector('.eye-open');
+            const eyeClosed = toggle.querySelector('.eye-closed');
+            
+            if (!input) return;
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                input.setAttribute('type', 'text');
+                if (eyeOpen) eyeOpen.style.display = 'none';
+                if (eyeClosed) eyeClosed.style.display = 'block';
+            } else {
+                input.type = 'password';
+                input.setAttribute('type', 'password');
+                if (eyeOpen) eyeOpen.style.display = 'block';
+                if (eyeClosed) eyeClosed.style.display = 'none';
+            }
+        }
+        
         toggleButtons.forEach(function(toggle) {
+            let touchMoved = false;
+            
+            toggle.addEventListener('touchstart', function(e) {
+                touchMoved = false;
+            }, { passive: true });
+            
+            toggle.addEventListener('touchmove', function(e) {
+                touchMoved = true;
+            }, { passive: true });
+            
+            toggle.addEventListener('touchend', function(e) {
+                if (!touchMoved) {
+                    e.preventDefault();
+                    togglePassword(this);
+                }
+            });
+            
             toggle.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                
-                const wrapper = this.closest('.password-input-wrapper');
-                if (!wrapper) return;
-                
-                const input = wrapper.querySelector('input[type="password"], input[type="text"]');
-                const eyeOpen = this.querySelector('.eye-open');
-                const eyeClosed = this.querySelector('.eye-closed');
-                
-                if (!input) return;
-                
-                if (input.type === 'password') {
-                    input.type = 'text';
-                    if (eyeOpen) eyeOpen.style.display = 'none';
-                    if (eyeClosed) eyeClosed.style.display = 'block';
-                } else {
-                    input.type = 'password';
-                    if (eyeOpen) eyeOpen.style.display = 'block';
-                    if (eyeClosed) eyeClosed.style.display = 'none';
-                }
+                togglePassword(this);
             });
         });
     }
