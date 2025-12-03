@@ -1,13 +1,32 @@
 from __future__ import annotations
 import os
 import stripe
+import logging
 from stripe import InvalidRequestError
 from typing import Optional
 from models.core_models import Customer, Subscription
 from models import db
 
-stripe.api_key = os.getenv("STRIPE_TEST_API_KEY", "")
-stripe.api_version = "2024-11-20.acacia"
+logger = logging.getLogger(__name__)
+
+def _init_stripe_from_connector():
+    """Initialize Stripe with credentials from Replit connector or env vars"""
+    try:
+        from services.replit_connectors import get_stripe_credentials_sync
+        credentials = get_stripe_credentials_sync()
+        stripe.api_key = credentials["secret_key"]
+        stripe.api_version = "2024-11-20.acacia"
+        logger.info(f"Stripe initialized from Replit connector ({credentials['environment']})")
+    except Exception as e:
+        # Fallback to environment variable
+        stripe.api_key = os.getenv("STRIPE_SECRET_KEY") or os.getenv("STRIPE_TEST_API_KEY", "")
+        stripe.api_version = "2024-11-20.acacia"
+        if stripe.api_key:
+            logger.info("Stripe initialized from environment variables")
+        else:
+            logger.warning(f"Stripe not configured: {e}")
+
+_init_stripe_from_connector()
 
 class StripeService:
     def _get_base_url(self) -> str:
