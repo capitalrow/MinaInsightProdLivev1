@@ -3739,171 +3739,237 @@
 }
 
 /* ========================================
- * CROWN⁴.7: MOBILE TASK CARD LAYOUT FIX
+ * CROWN⁴.8: MOBILE TASK CARD ULTRA-COMPACT
  * Following Linear/Things3 best practices:
- * - Title full width, metadata stacked below
- * - Compact padding, reduced min-height
- * - 2-line title truncation
- * - Icon-only metadata where possible
+ * - 56-64px card height target
+ * - Icon-only metadata (no text labels)
+ * - Hidden meeting provenance
+ * - Larger touch targets (44px min)
+ * - Completed tasks visually compressed
  * ======================================== */
 
 @media (max-width: 640px) {
-    /* Task Card: Tighter padding and reduced min-height */
+    /* Task Card: Compact layout (no max-height to avoid clipping) */
     .task-card {
-        padding: 10px 12px;
-        min-height: 56px;
-        gap: 10px;
+        padding: 10px 12px !important;
+        min-height: 56px !important;
+        gap: 8px !important;
+        align-items: flex-start !important;
     }
     
-    /* Checkbox wrapper: slightly smaller touch target on mobile */
+    /* Completed cards: Reduced visual weight */
+    .task-card.completed {
+        opacity: 0.65;
+    }
+    
+    .task-card.completed .task-metadata {
+        display: none !important;
+    }
+    
+    .task-card.completed .task-title {
+        color: var(--text-tertiary, rgba(148, 163, 184, 0.6)) !important;
+    }
+    
+    /* Checkbox: 44px touch target (Apple HIG minimum) */
     .task-card .checkbox-wrapper {
-        width: 40px;
-        height: 40px;
+        width: 44px !important;
+        height: 44px !important;
+        flex-shrink: 0;
     }
     
-    /* Task Content: Full width, stacked layout */
+    /* Task Content: Vertical stack */
     .task-card .task-content {
         flex: 1;
         min-width: 0;
-        gap: 6px;
+        gap: 4px !important;
+        overflow: hidden;
     }
     
-    /* Task Title: 2-line truncation on mobile */
+    /* Task Title: 2-line max with ellipsis */
     .task-card .task-title {
         display: -webkit-box !important;
         -webkit-line-clamp: 2 !important;
         -webkit-box-orient: vertical !important;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font-size: 14px;
-        line-height: 1.35;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        font-size: 14px !important;
+        line-height: 1.3 !important;
         word-break: break-word;
+        margin: 0 !important;
     }
     
-    /* Meeting Provenance Header: Hide on mobile (progressive disclosure) */
-    .task-card .task-provenance-header {
-        display: none;
+    /* Meeting Provenance: HIDE on mobile */
+    .task-card .task-provenance-header,
+    .task-card .provenance-badge {
+        display: none !important;
     }
     
-    /* Task Metadata: Compact single row */
+    /* Task Metadata: Single compact row */
     .task-card .task-metadata {
-        display: flex;
-        flex-wrap: nowrap;
-        gap: 8px;
-        font-size: 12px;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        font-size: 11px !important;
+        overflow: hidden !important;
+        max-height: 20px;
     }
     
-    .task-card .task-metadata::-webkit-scrollbar {
-        display: none;
-    }
-    
-    /* Metadata items: Compact on mobile */
+    /* Hide ALL text inside assignee/due-date, keep only SVG icon */
     .task-card .task-assignee,
     .task-card .task-due-date {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        flex-shrink: 0;
-        white-space: nowrap;
-        max-width: 120px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    
-    /* Labels: Horizontal scroll, compact */
-    .task-card .task-labels {
-        display: flex;
-        gap: 4px;
+        font-size: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
         flex-shrink: 0;
     }
     
+    .task-card .task-assignee svg,
+    .task-card .task-due-date svg {
+        font-size: 14px;
+        width: 14px !important;
+        height: 14px !important;
+        flex-shrink: 0;
+        opacity: 0.7;
+    }
+    
+    /* Hide labels entirely on mobile */
+    .task-card .task-labels,
+    .task-card .task-labels-empty,
     .task-card .task-label {
-        font-size: 10px;
-        padding: 2px 6px;
+        display: none !important;
     }
     
-    /* Hide empty labels placeholder on mobile */
-    .task-card .task-labels-empty {
-        display: none;
-    }
-    
-    /* Jump to Transcript: Icon only on mobile */
-    .task-card .jump-to-transcript-btn span {
-        display: none;
-    }
-    
+    /* Jump to Transcript: Icon only */
     .task-card .jump-to-transcript-btn {
-        padding: 4px;
+        padding: 4px !important;
         min-width: 28px;
+        font-size: 0 !important;
     }
     
-    /* Task Actions: Compact on mobile */
+    .task-card .jump-to-transcript-btn span {
+        display: none !important;
+    }
+    
+    .task-card .jump-to-transcript-btn svg {
+        width: 14px !important;
+        height: 14px !important;
+    }
+    
+    /* Task Actions: Compact */
     .task-card .task-actions {
-        gap: 4px;
-        min-width: auto;
-        padding-right: 0;
+        gap: 4px !important;
+        min-width: auto !important;
+        flex-shrink: 0;
+        align-items: center;
     }
     
-    /* Priority badge: Smaller on mobile */
+    /* Priority badge: Tiny chip */
     .task-card .priority-badge {
-        font-size: 10px;
-        padding: 2px 6px;
+        font-size: 9px !important;
+        padding: 2px 5px !important;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
     }
     
-    /* Hide low priority badge entirely on mobile */
+    /* Hide medium priority on mobile (only show urgent/high) */
+    .task-card .priority-badge.priority-medium,
     .task-card .priority-badge.priority-low {
-        display: none;
+        display: none !important;
     }
     
     /* Impact score badge: Hide on mobile */
     .task-card .impact-score-badge {
-        display: none;
+        display: none !important;
     }
     
-    /* Menu trigger: Smaller on mobile */
+    /* Menu trigger: 44px touch target */
     .task-card .task-menu-trigger {
-        width: 36px;
-        height: 36px;
+        width: 44px !important;
+        height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     
     .task-card .task-menu-trigger svg {
-        width: 18px;
-        height: 18px;
+        width: 20px !important;
+        height: 20px !important;
+    }
+    
+    /* ----------------------------------------
+     * MEETING ACTIVITY: Collapse on mobile
+     * ---------------------------------------- */
+    .meeting-heatmap-section {
+        max-height: 200px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    
+    .meeting-heatmap-section .meeting-rows {
+        max-height: 140px;
+        overflow-y: auto;
+    }
+    
+    .meeting-heatmap-section .meeting-row {
+        padding: 8px 12px !important;
+        min-height: 36px;
+    }
+    
+    /* Recently Updated header: Compact */
+    .recently-updated-header {
+        padding: 8px 0 !important;
+    }
+    
+    /* Due date badges: Keep overdue/soon visible */
+    .task-card .task-due-date .overdue-badge,
+    .task-card .task-due-date .due-soon-badge {
+        font-size: 10px !important;
+        padding: 1px 4px;
+        margin-left: 4px;
     }
 }
 
-/* Extra small screens (phones in portrait) */
+/* Extra small screens (375px and below) */
 @media (max-width: 375px) {
     .task-card {
-        padding: 8px 10px;
-        min-height: 52px;
+        padding: 8px 10px !important;
+        min-height: 48px !important;
     }
     
     .task-card .checkbox-wrapper {
-        width: 36px;
-        height: 36px;
+        width: 40px !important;
+        height: 40px !important;
     }
     
     .task-card .task-checkbox {
-        width: 20px;
-        height: 20px;
+        width: 18px !important;
+        height: 18px !important;
     }
     
     .task-card .task-title {
-        font-size: 13px;
+        font-size: 13px !important;
+        line-height: 1.25 !important;
+        -webkit-line-clamp: 1 !important;
     }
     
+    /* Hide ALL metadata on extra-small screens */
     .task-card .task-metadata {
-        font-size: 11px;
-        gap: 6px;
+        display: none !important;
     }
     
-    /* On very small screens, show only essential metadata */
-    .task-card .task-labels {
-        display: none;
+    /* Only show priority for urgent/high */
+    .task-card .priority-badge.priority-medium,
+    .task-card .priority-badge.priority-low {
+        display: none !important;
+    }
+    
+    /* Meeting Activity: Even more compact */
+    .meeting-heatmap-section {
+        max-height: 160px;
+    }
+    
+    .meeting-heatmap-section .meeting-rows {
+        max-height: 100px;
     }
 }
