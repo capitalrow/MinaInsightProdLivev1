@@ -84,7 +84,7 @@
                                 autocomplete="new-password"
                                 required
                             >
-                            <button type="button" class="password-toggle" aria-label="Toggle password visibility" onclick="togglePasswordVisibility('password', this)">
+                            <button type="button" class="password-toggle" data-target="password" aria-label="Toggle password visibility">
                                 <svg class="eye-open" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
@@ -145,7 +145,7 @@
                                 autocomplete="new-password"
                                 required
                             >
-                            <button type="button" class="password-toggle" aria-label="Toggle password visibility" onclick="togglePasswordVisibility('confirm_password', this)">
+                            <button type="button" class="password-toggle" data-target="confirm_password" aria-label="Toggle password visibility">
                                 <svg class="eye-open" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
@@ -777,23 +777,41 @@
 </style>
 
 <script>
-function togglePasswordVisibility(inputId, button) {
-    var input = document.getElementById(inputId);
-    var eyeOpen = button.querySelector('.eye-open');
-    var eyeClosed = button.querySelector('.eye-closed');
-    
-    if (input && input.type === 'password') {
-        input.type = 'text';
-        if (eyeOpen) eyeOpen.style.display = 'none';
-        if (eyeClosed) eyeClosed.style.display = 'block';
-    } else if (input) {
-        input.type = 'password';
-        if (eyeOpen) eyeOpen.style.display = 'block';
-        if (eyeClosed) eyeClosed.style.display = 'none';
-    }
-}
-
 document.addEventListener('DOMContentLoaded', function() {
+    (function initPasswordToggles() {
+        var toggles = document.querySelectorAll('.password-toggle');
+        toggles.forEach(function(toggle) {
+            var inputId = toggle.getAttribute('data-target');
+            
+            function doToggle(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var input = document.getElementById(inputId);
+                if (!input) return;
+                
+                var eyeOpen = toggle.querySelector('.eye-open');
+                var eyeClosed = toggle.querySelector('.eye-closed');
+                
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    if (eyeOpen) eyeOpen.style.display = 'none';
+                    if (eyeClosed) eyeClosed.style.display = 'block';
+                } else {
+                    input.type = 'password';
+                    if (eyeOpen) eyeOpen.style.display = 'block';
+                    if (eyeClosed) eyeClosed.style.display = 'none';
+                }
+            }
+            
+            toggle.addEventListener('click', doToggle, false);
+            toggle.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                doToggle(e);
+            }, { passive: false });
+        });
+    })();
+    
     const passwordInput = document.getElementById('password');
     const confirmPasswordInput = document.getElementById('confirm_password');
     const strengthBar = document.querySelector('.password-strength-bar');
