@@ -43,25 +43,6 @@ class TaskSearchSort {
                 this.searchQuery = e.target.value.toLowerCase().trim();
                 this.updateClearButton();
                 this.safeApplyFiltersAndSort();
-            }, 150); // 150ms debounce for smooth performance
-        });
-
-        // Clear button
-        this.searchClearBtn?.addEventListener('click', () => {
-            this.searchInput.value = '';
-            this.searchQuery = '';
-            this.updateClearButton();
-            this.safeApplyFiltersAndSort();
-            this.searchInput.focus();
-        });
-
-        // Sort selector
-        this.sortSelect?.addEventListener('change', (e) => {
-            this.currentSort = e.target.value;
-            this.safeApplyFiltersAndSort();
-        });
-
-                this.applyFiltersAndSort();
                 document.dispatchEvent(new CustomEvent('task:search', { detail: { query: this.searchQuery } }));
             }, 150);
         };
@@ -77,7 +58,7 @@ class TaskSearchSort {
             }
             this.searchQuery = '';
             this.updateClearButton();
-            this.applyFiltersAndSort();
+            this.safeApplyFiltersAndSort();
             this.searchInput?.focus();
             document.dispatchEvent(new CustomEvent('task:search-cleared'));
         };
@@ -86,7 +67,7 @@ class TaskSearchSort {
         this.handleSortChange = (e) => {
             if (e.target.id !== 'task-sort-select') return;
             this.currentSort = e.target.value;
-            this.applyFiltersAndSort();
+            this.safeApplyFiltersAndSort();
             document.dispatchEvent(new CustomEvent('task:sort', { detail: { sort: this.currentSort } }));
         };
 

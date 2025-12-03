@@ -11,10 +11,24 @@
 console.log('🔧 [TaskGrouping] FILE LOADED - Starting module initialization...');
 
 class TaskGrouping {
-    constructor(taskStore) {
+    constructor(taskStore, options = {}) {
         this.taskStore = taskStore;
         this.sectionStates = this.loadSectionStates();
-        console.log('[TaskGrouping] Initialized with section states:', this.sectionStates);
+        
+        // REFACTORED: Feature flag to control section rendering
+        // By default, sections are DISABLED for a clean Linear-like flat list
+        this.sectionsEnabled = options.sectionsEnabled ?? false;
+        
+        console.log('[TaskGrouping] Initialized with sectionsEnabled:', this.sectionsEnabled);
+    }
+    
+    /**
+     * Enable or disable section grouping
+     * @param {boolean} enabled
+     */
+    setSectionsEnabled(enabled) {
+        this.sectionsEnabled = enabled;
+        console.log('[TaskGrouping] Sections enabled:', enabled);
     }
 
     /**
@@ -167,6 +181,16 @@ class TaskGrouping {
         const container = document.createElement('div');
         container.className = 'task-sections';
 
+        // REFACTORED: If sections are disabled, render flat list without headers
+        if (!this.sectionsEnabled) {
+            console.log('[TaskGrouping] Sections disabled - rendering flat list');
+            tasks.forEach(task => {
+                container.appendChild(taskRenderer(task));
+            });
+            return container;
+        }
+
+        // Only group when sectionsEnabled is true
         const groups = this.groupTasks(tasks);
 
         // Render Focus Slices (always expanded)
