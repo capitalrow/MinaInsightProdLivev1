@@ -164,7 +164,7 @@ def register():
                 base_slug = Workspace.generate_slug(workspace_name)
                 slug = base_slug
                 
-                existing = Workspace.query.filter_by(slug=slug).first()
+                existing = db.session.query(Workspace).filter_by(slug=slug).first()
                 if existing:
                     import secrets
                     slug = f"{base_slug}-{secrets.token_hex(4)}"
