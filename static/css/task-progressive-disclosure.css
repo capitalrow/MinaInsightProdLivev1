@@ -682,3 +682,115 @@
   opacity: 1;
   margin-top: var(--space-3, 12px);
 }
+
+/* ============================================
+   BACKWARD COMPATIBILITY - OLD TASK STRUCTURE
+   Applies progressive disclosure to JS-rendered cards
+   that use .task-metadata/.task-provenance-header
+   ============================================ */
+
+/* Hide old-structure secondary elements by default on mobile */
+@media (max-width: 768px) {
+  .task-card .task-metadata,
+  .task-card .task-provenance-header {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: 
+      max-height var(--disclosure-transition),
+      opacity var(--disclosure-transition),
+      margin var(--disclosure-transition);
+    margin-top: 0;
+  }
+  
+  /* Reveal on tap (expanded class) */
+  .task-card.expanded .task-metadata,
+  .task-card.expanded .task-provenance-header {
+    max-height: 150px;
+    opacity: 1;
+    margin-top: var(--space-2, 8px);
+  }
+  
+  /* Simplify metadata items */
+  .task-card .task-metadata .task-assignee,
+  .task-card .task-metadata .task-labels,
+  .task-card .task-metadata .task-labels-empty {
+    display: none;
+  }
+  
+  .task-card.expanded .task-metadata .task-assignee,
+  .task-card.expanded .task-metadata .task-labels {
+    display: inline-flex;
+  }
+  
+  /* Keep due date always visible */
+  .task-card .task-due-date {
+    max-height: none;
+    opacity: 1;
+  }
+}
+
+/* Desktop: reveal old-structure elements on hover */
+@media (hover: hover) and (pointer: fine) {
+  .task-card .task-metadata,
+  .task-card .task-provenance-header {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: 
+      max-height var(--disclosure-transition),
+      opacity var(--disclosure-transition),
+      margin var(--disclosure-transition);
+    margin-top: 0;
+  }
+  
+  .task-card:hover .task-metadata,
+  .task-card:hover .task-provenance-header,
+  .task-card:focus-within .task-metadata,
+  .task-card:focus-within .task-provenance-header {
+    max-height: 150px;
+    opacity: 1;
+    margin-top: var(--space-2, 8px);
+  }
+}
+
+/* Expanded class overrides for both mobile and desktop */
+.task-card.expanded .task-metadata,
+.task-card.expanded .task-provenance-header {
+  max-height: 150px !important;
+  opacity: 1 !important;
+  margin-top: var(--space-2, 8px) !important;
+}
+
+/* Reduce visual weight of metadata when revealed */
+.task-card .task-metadata {
+  font-size: 12px;
+  color: var(--color-text-secondary, #9ca3af);
+}
+
+/* Make priority badge more subtle */
+.task-card .task-metadata .priority-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  opacity: 0.8;
+}
+
+/* Meeting provenance header - simplify on mobile */
+@media (max-width: 768px) {
+  .task-card .task-provenance-header .provenance-badge {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  
+  .task-card .task-provenance-header .provenance-date,
+  .task-card .task-provenance-header .provenance-speaker,
+  .task-card .task-provenance-header .provenance-confidence {
+    display: none;
+  }
+  
+  .task-card.expanded .task-provenance-header .provenance-date,
+  .task-card.expanded .task-provenance-header .provenance-speaker,
+  .task-card.expanded .task-provenance-header .provenance-confidence {
+    display: inline-flex;
+  }
+}
