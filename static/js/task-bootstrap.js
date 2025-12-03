@@ -166,8 +166,46 @@ class TaskBootstrap {
         console.log('🚀 Starting CROWN⁴.6 cache-first bootstrap...');
         this.perf.cache_load_start = performance.now();
 
-        // CROWN⁴.6: Skeleton is already visible in HTML by default
-        // Just set the internal state to track it (no DOM manipulation needed)
+        // CROWN⁴.8 FIX: Check if server already rendered tasks BEFORE any DOM manipulation
+        // This prevents the flicker caused by cache clearing server content
+        const container = document.getElementById('tasks-list-container');
+        const serverRenderedTasks = container?.querySelectorAll('.task-card') || [];
+        const hasServerContent = serverRenderedTasks.length > 0;
+        
+        if (hasServerContent) {
+            console.log(`✅ [Bootstrap] Server rendered ${serverRenderedTasks.length} tasks - skipping cache DOM swap`);
+            this.currentState = 'tasks';
+            this.showTasksList();
+            
+            // Hydrate TaskStateStore from server DOM without re-rendering
+            if (window.taskStateStore) {
+                const serverTasks = Array.from(serverRenderedTasks).map(card => ({
+                    id: card.dataset.taskId,
+                    status: card.dataset.status || 'todo',
+                    priority: card.dataset.priority || 'medium'
+                }));
+                window.taskStateStore.hydrate(serverTasks, 'server');
+            }
+            
+            // Background: sync cache to IndexedDB without touching DOM
+            this.syncInBackground();
+            this.initialized = true;
+            
+            // Emit bootstrap complete with server source
+            requestAnimationFrame(() => {
+                document.dispatchEvent(new CustomEvent('task:bootstrap:complete', {
+                    detail: {
+                        cached_tasks: serverRenderedTasks.length,
+                        first_paint_ms: performance.now() - this.perf.cache_load_start,
+                        source: 'server'
+                    }
+                }));
+            });
+            
+            return { success: true, source: 'server', task_count: serverRenderedTasks.length };
+        }
+
+        // No server content - proceed with cache-first loading
         this.currentState = 'loading';
 
         try {
