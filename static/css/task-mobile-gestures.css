@@ -1,0 +1,383 @@
+/**
+ * CROWN⁴.8 Mobile Gestures & Touch Interactions
+ * 
+ * Features:
+ * - Swipe action indicators
+ * - Touch feedback states
+ * - Haptic-paired animations
+ * - Long-press context menu styles
+ */
+
+/* ============================================
+   SWIPE INDICATOR
+   ============================================ */
+
+.swipe-indicator {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--space-4, 16px);
+    opacity: 0;
+    transition: opacity 150ms ease;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.swipe-indicator.swipe-complete {
+    right: 0;
+    left: auto;
+    background: linear-gradient(270deg, rgba(34, 197, 94, 0.2), transparent);
+    opacity: 1;
+}
+
+.swipe-indicator.swipe-snooze {
+    left: 0;
+    right: auto;
+    background: linear-gradient(90deg, rgba(251, 191, 36, 0.2), transparent);
+    opacity: 1;
+}
+
+.swipe-action-icon {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.swipe-complete .swipe-action-icon {
+    color: #4ade80;
+}
+
+.swipe-snooze .swipe-action-icon {
+    color: #fbbf24;
+}
+
+.swipe-action-text {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.swipe-complete .swipe-action-text {
+    color: #4ade80;
+}
+
+.swipe-snooze .swipe-action-text {
+    color: #fbbf24;
+}
+
+/* ============================================
+   SNOOZED FLASH ANIMATION
+   ============================================ */
+
+.task-card.snoozed-flash {
+    animation: snoozeFlash 300ms ease-out;
+}
+
+@keyframes snoozeFlash {
+    0% {
+        background: var(--glass-bg, rgba(255, 255, 255, 0.02));
+    }
+    50% {
+        background: rgba(251, 191, 36, 0.1);
+        border-color: rgba(251, 191, 36, 0.3);
+    }
+    100% {
+        background: var(--glass-bg, rgba(255, 255, 255, 0.02));
+    }
+}
+
+/* ============================================
+   LONG PRESS CONTEXT MENU
+   ============================================ */
+
+.long-press-menu {
+    position: fixed;
+    z-index: 1000;
+    min-width: 180px;
+    padding: var(--space-2, 8px);
+    background: var(--color-surface, #1a1a1a);
+    border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+    border-radius: var(--radius-lg, 12px);
+    box-shadow: 
+        0 20px 40px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    opacity: 0;
+    transform: scale(0.95) translateY(-8px);
+    transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+.long-press-menu.visible {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    pointer-events: auto;
+}
+
+.long-press-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3, 12px);
+    padding: var(--space-3, 12px) var(--space-4, 16px);
+    border-radius: var(--radius-md, 8px);
+    color: var(--color-text-primary, #f9fafb);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 150ms ease;
+    min-height: 44px;
+}
+
+.long-press-menu-item:hover,
+.long-press-menu-item:active {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.long-press-menu-item svg {
+    width: 18px;
+    height: 18px;
+    color: var(--color-text-secondary, #9ca3af);
+}
+
+.long-press-menu-item.destructive {
+    color: #fca5a5;
+}
+
+.long-press-menu-item.destructive svg {
+    color: #fca5a5;
+}
+
+.long-press-menu-divider {
+    height: 1px;
+    margin: var(--space-2, 8px) 0;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* ============================================
+   PULL TO REFRESH
+   ============================================ */
+
+.pull-to-refresh-indicator {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, rgba(99, 102, 241, 0.1), transparent);
+    opacity: 0;
+    transform: translateY(-100%);
+    transition: all 200ms ease;
+    z-index: 100;
+}
+
+.pull-to-refresh-indicator.pulling {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.pull-to-refresh-indicator.refreshing {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.refresh-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    border-top-color: var(--color-primary, #6366f1);
+    border-radius: 50%;
+    animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.refresh-arrow {
+    color: var(--color-primary, #6366f1);
+    transition: transform 200ms ease;
+}
+
+.pull-to-refresh-indicator.ready .refresh-arrow {
+    transform: rotate(180deg);
+}
+
+/* ============================================
+   DENSITY TOGGLE
+   ============================================ */
+
+.density-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+
+.density-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary, #9ca3af);
+    cursor: pointer;
+    transition: all 150ms ease;
+}
+
+.density-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-primary, #f9fafb);
+}
+
+.density-btn.active {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary, #6366f1);
+}
+
+/* ============================================
+   TOUCH FEEDBACK
+   ============================================ */
+
+@media (pointer: coarse) {
+    .task-card {
+        -webkit-tap-highlight-color: transparent;
+    }
+    
+    .task-card:active {
+        background: rgba(255, 255, 255, 0.04) !important;
+        transform: scale(0.99);
+    }
+    
+    .quick-action-btn:active,
+    .task-checkbox:active,
+    .task-menu-trigger:active {
+        transform: scale(0.95);
+    }
+}
+
+/* ============================================
+   BOTTOM SHEET (for mobile pickers)
+   ============================================ */
+
+.bottom-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 200ms ease;
+    z-index: 999;
+    pointer-events: none;
+}
+
+.bottom-sheet-backdrop.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--color-surface, #1a1a1a);
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    padding: var(--space-4, 16px);
+    padding-bottom: calc(var(--space-4, 16px) + env(safe-area-inset-bottom, 0));
+    max-height: 80vh;
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+}
+
+.bottom-sheet.visible {
+    transform: translateY(0);
+}
+
+.bottom-sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    margin: 0 auto var(--space-4, 16px);
+}
+
+.bottom-sheet-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary, #f9fafb);
+    margin-bottom: var(--space-4, 16px);
+    text-align: center;
+}
+
+/* ============================================
+   MOBILE-SPECIFIC OVERRIDES
+   ============================================ */
+
+@media (max-width: 640px) {
+    .density-toggle {
+        display: none; /* Hide density toggle on small mobile */
+    }
+    
+    /* Ensure full width touch targets */
+    .task-card {
+        margin-left: calc(-1 * var(--space-3, 12px));
+        margin-right: calc(-1 * var(--space-3, 12px));
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+    
+    /* Sticky action buttons at bottom */
+    .task-actions-row {
+        position: sticky;
+        bottom: 0;
+        background: inherit;
+        padding-top: var(--space-2, 8px);
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        margin-top: var(--space-3, 12px) !important;
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY - TOUCH ACCOMMODATIONS
+   ============================================ */
+
+@media (pointer: coarse) {
+    /* Larger touch targets on touch devices */
+    .task-checkbox {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    .task-menu-trigger {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    .quick-action-btn {
+        min-height: 44px;
+        padding: 10px 16px;
+    }
+    
+    .priority-dot {
+        min-width: 20px;
+        min-height: 20px;
+        padding: 6px;
+    }
+}
