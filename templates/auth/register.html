@@ -54,37 +54,91 @@
 
                     <div class="form-group">
                         <label for="password" class="form-label">Password</label>
-                        <input 
-                            type="password" 
-                            id="password" 
-                            name="password" 
-                            class="input {% if form and form.password.errors %}input-error{% endif %}" 
-                            placeholder="At least 8 characters"
-                            autocomplete="new-password"
-                            required
-                        >
+                        <div class="password-input-wrapper">
+                            <input 
+                                type="password" 
+                                id="password" 
+                                name="password" 
+                                class="input {% if form and form.password.errors %}input-error{% endif %}" 
+                                placeholder="Create a strong password"
+                                autocomplete="new-password"
+                                required
+                            >
+                            <button type="button" class="password-toggle" aria-label="Toggle password visibility">
+                                <svg class="eye-open" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                                <svg class="eye-closed" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: none;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                </svg>
+                            </button>
+                        </div>
                         {% if form and form.password.errors %}
                             <span class="form-error">{{ form.password.errors[0] }}</span>
                         {% endif %}
-                        <div class="password-strength" id="password-strength">
-                            <div class="password-strength-bar"></div>
+                        
+                        <div class="password-strength-container" id="password-strength-container">
+                            <div class="password-strength" id="password-strength">
+                                <div class="password-strength-bar"></div>
+                            </div>
+                            <span class="password-strength-label" id="password-strength-label"></span>
+                        </div>
+                        
+                        <div class="password-requirements" id="password-requirements">
+                            <div class="requirement" data-requirement="length">
+                                <svg class="check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span>At least 8 characters</span>
+                            </div>
+                            <div class="requirement" data-requirement="letter">
+                                <svg class="check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span>Contains a letter</span>
+                            </div>
+                            <div class="requirement" data-requirement="number">
+                                <svg class="check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span>Contains a number</span>
+                            </div>
+                            <div class="requirement bonus" data-requirement="special">
+                                <svg class="check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span>Special character (bonus)</span>
+                            </div>
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label for="confirm_password" class="form-label">Confirm password</label>
-                        <input 
-                            type="password" 
-                            id="confirm_password" 
-                            name="confirm_password" 
-                            class="input {% if form and form.confirm_password.errors %}input-error{% endif %}" 
-                            placeholder="Re-enter your password"
-                            autocomplete="new-password"
-                            required
-                        >
+                        <div class="password-input-wrapper">
+                            <input 
+                                type="password" 
+                                id="confirm_password" 
+                                name="confirm_password" 
+                                class="input {% if form and form.confirm_password.errors %}input-error{% endif %}" 
+                                placeholder="Re-enter your password"
+                                autocomplete="new-password"
+                                required
+                            >
+                            <button type="button" class="password-toggle" aria-label="Toggle password visibility">
+                                <svg class="eye-open" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                                <svg class="eye-closed" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: none;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                </svg>
+                            </button>
+                        </div>
                         {% if form and form.confirm_password.errors %}
                             <span class="form-error">{{ form.confirm_password.errors[0] }}</span>
                         {% endif %}
+                        <div class="password-match-indicator" id="password-match-indicator"></div>
                     </div>
 
                     <div class="form-group consent-group">
@@ -325,8 +379,43 @@
     padding-left: var(--space-6);
 }
 
-.password-strength {
+.password-input-wrapper {
+    position: relative;
+}
+
+.password-input-wrapper .input {
+    padding-right: 48px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-tertiary);
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--transition-base);
+}
+
+.password-toggle:hover {
+    color: var(--color-text-secondary);
+}
+
+.password-strength-container {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
     margin-top: var(--space-2);
+}
+
+.password-strength {
+    flex: 1;
     height: 4px;
     background-color: var(--color-surface-light);
     border-radius: var(--radius-full);
@@ -338,6 +427,88 @@
     width: 0;
     transition: all var(--transition-base);
     background-color: var(--color-error);
+}
+
+.password-strength-label {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    min-width: 60px;
+    text-align: right;
+    transition: color var(--transition-base);
+}
+
+.password-strength-label.weak { color: var(--color-error); }
+.password-strength-label.fair { color: var(--color-warning); }
+.password-strength-label.good { color: var(--color-info); }
+.password-strength-label.strong { color: var(--color-success); }
+
+.password-requirements {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.password-requirements.visible {
+    opacity: 1;
+    max-height: 100px;
+}
+
+.requirement {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    transition: color var(--transition-base);
+}
+
+.requirement .check-icon {
+    opacity: 0.3;
+    transition: all var(--transition-base);
+}
+
+.requirement.met {
+    color: var(--color-success);
+}
+
+.requirement.met .check-icon {
+    opacity: 1;
+    color: var(--color-success);
+}
+
+.requirement.bonus {
+    opacity: 0.7;
+}
+
+.requirement.bonus.met {
+    opacity: 1;
+}
+
+.password-match-indicator {
+    margin-top: var(--space-2);
+    font-size: var(--font-size-xs);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    opacity: 0;
+    transition: opacity var(--transition-base);
+}
+
+.password-match-indicator.visible {
+    opacity: 1;
+}
+
+.password-match-indicator.match {
+    color: var(--color-success);
+}
+
+.password-match-indicator.no-match {
+    color: var(--color-error);
 }
 
 .auth-divider {
@@ -522,27 +693,139 @@
 </style>
 
 <script>
-document.getElementById('password')?.addEventListener('input', (e) => {
-    const password = e.target.value;
+(function() {
+    const passwordInput = document.getElementById('password');
+    const confirmPasswordInput = document.getElementById('confirm_password');
     const strengthBar = document.querySelector('.password-strength-bar');
+    const strengthLabel = document.getElementById('password-strength-label');
+    const requirements = document.getElementById('password-requirements');
+    const matchIndicator = document.getElementById('password-match-indicator');
     
-    let strength = 0;
-    if (password.length >= 8) strength += 25;
-    if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength += 25;
-    if (password.match(/[0-9]/)) strength += 25;
-    if (password.match(/[^a-zA-Z0-9]/)) strength += 25;
+    const checks = {
+        length: (pw) => pw.length >= 8,
+        letter: (pw) => /[a-zA-Z]/.test(pw),
+        number: (pw) => /[0-9]/.test(pw),
+        special: (pw) => /[^a-zA-Z0-9]/.test(pw)
+    };
     
-    strengthBar.style.width = strength + '%';
-    
-    if (strength <= 25) {
-        strengthBar.style.backgroundColor = 'var(--color-error)';
-    } else if (strength <= 50) {
-        strengthBar.style.backgroundColor = 'var(--color-warning)';
-    } else if (strength <= 75) {
-        strengthBar.style.backgroundColor = 'var(--color-info)';
-    } else {
-        strengthBar.style.backgroundColor = 'var(--color-success)';
+    function updatePasswordStrength() {
+        const password = passwordInput?.value || '';
+        
+        if (!password) {
+            strengthBar.style.width = '0%';
+            strengthLabel.textContent = '';
+            strengthLabel.className = 'password-strength-label';
+            requirements?.classList.remove('visible');
+            return;
+        }
+        
+        requirements?.classList.add('visible');
+        
+        let score = 0;
+        let metCount = 0;
+        
+        Object.entries(checks).forEach(([key, check]) => {
+            const met = check(password);
+            const reqEl = document.querySelector(`[data-requirement="${key}"]`);
+            if (reqEl) {
+                reqEl.classList.toggle('met', met);
+            }
+            if (met) {
+                metCount++;
+                if (key === 'special') {
+                    score += 15;
+                } else {
+                    score += 28;
+                }
+            }
+        });
+        
+        if (password.length >= 12) score += 5;
+        if (password.length >= 16) score += 10;
+        if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 5;
+        
+        score = Math.min(100, score);
+        strengthBar.style.width = score + '%';
+        
+        let label, className;
+        if (score < 30) {
+            label = 'Weak';
+            className = 'weak';
+            strengthBar.style.backgroundColor = 'var(--color-error)';
+        } else if (score < 55) {
+            label = 'Fair';
+            className = 'fair';
+            strengthBar.style.backgroundColor = 'var(--color-warning)';
+        } else if (score < 80) {
+            label = 'Good';
+            className = 'good';
+            strengthBar.style.backgroundColor = 'var(--color-info)';
+        } else {
+            label = 'Strong';
+            className = 'strong';
+            strengthBar.style.backgroundColor = 'var(--color-success)';
+        }
+        
+        strengthLabel.textContent = label;
+        strengthLabel.className = `password-strength-label ${className}`;
+        
+        checkPasswordMatch();
     }
-});
+    
+    function checkPasswordMatch() {
+        const password = passwordInput?.value || '';
+        const confirmPassword = confirmPasswordInput?.value || '';
+        
+        if (!confirmPassword) {
+            matchIndicator.classList.remove('visible', 'match', 'no-match');
+            matchIndicator.innerHTML = '';
+            return;
+        }
+        
+        matchIndicator.classList.add('visible');
+        
+        if (password === confirmPassword) {
+            matchIndicator.classList.add('match');
+            matchIndicator.classList.remove('no-match');
+            matchIndicator.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>Passwords match</span>
+            `;
+        } else {
+            matchIndicator.classList.add('no-match');
+            matchIndicator.classList.remove('match');
+            matchIndicator.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+                <span>Passwords don't match</span>
+            `;
+        }
+    }
+    
+    document.querySelectorAll('.password-toggle').forEach(toggle => {
+        toggle.addEventListener('click', function() {
+            const wrapper = this.closest('.password-input-wrapper');
+            const input = wrapper.querySelector('input');
+            const eyeOpen = this.querySelector('.eye-open');
+            const eyeClosed = this.querySelector('.eye-closed');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                eyeOpen.style.display = 'none';
+                eyeClosed.style.display = 'block';
+            } else {
+                input.type = 'password';
+                eyeOpen.style.display = 'block';
+                eyeClosed.style.display = 'none';
+            }
+        });
+    });
+    
+    passwordInput?.addEventListener('input', updatePasswordStrength);
+    confirmPasswordInput?.addEventListener('input', checkPasswordMatch);
+})();
 </script>
 {% endblock %}
