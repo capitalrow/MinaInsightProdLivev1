@@ -463,9 +463,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal-backdrop, 1040);
     padding: var(--space-4);
     animation: fadeIn 0.2s ease-out;
+}
+
+.modal-overlay.hidden {
+    display: none !important;
+    pointer-events: none;
+    visibility: hidden;
 }
 
 .modal {
