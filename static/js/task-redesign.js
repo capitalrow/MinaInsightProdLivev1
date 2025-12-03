@@ -136,42 +136,29 @@
     container.classList.remove('view-list', 'view-grid', 'view-bar');
     container.classList.add('view-' + view);
     
-    document.querySelectorAll('.view-toggle-btn, [data-view]').forEach(btn => {
-      const btnView = btn.dataset.view || btn.getAttribute('data-view');
-      btn.classList.toggle('active', btnView === view);
-    });
+    // CROWN⁴.8 FIX: Only update buttons INSIDE .view-toggle-group
+    const viewToggleGroup = document.querySelector('.view-toggle-group');
+    if (viewToggleGroup) {
+      viewToggleGroup.querySelectorAll('.view-toggle-btn[data-view]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === view);
+      });
+    }
     
     console.log('[TaskRedesign] Applied view:', view);
   }
   
   function initViewToggles() {
-    const viewButtons = document.querySelectorAll('.view-toggle-btn, [data-view]');
-    
-    if (viewButtons.length === 0) {
-      const headerActions = document.querySelector('.header-actions');
-      if (headerActions) {
-        const existingToggles = headerActions.querySelectorAll('svg[viewBox="0 0 24 24"]');
-        existingToggles.forEach((svg, index) => {
-          const parent = svg.parentElement;
-          if (parent && parent.tagName === 'BUTTON' || parent.tagName === 'A') {
-            return;
-          }
-          
-          const views = ['list', 'grid', 'bar'];
-          if (index < 3) {
-            const wrapper = svg.closest('button, a, span, div');
-            if (wrapper && !wrapper.dataset.view) {
-              wrapper.dataset.view = views[index];
-              wrapper.classList.add('view-toggle-btn');
-              wrapper.style.cursor = 'pointer';
-            }
-          }
-        });
-      }
+    // CROWN⁴.8 FIX: Only use the official .view-toggle-btn buttons in .view-toggle-group
+    // Do NOT create additional toggles from stray SVGs - this was causing duplicates!
+    const viewToggleGroup = document.querySelector('.view-toggle-group');
+    if (!viewToggleGroup) {
+      console.warn('[TaskRedesign] No .view-toggle-group found');
+      return;
     }
     
-    document.addEventListener('click', function(e) {
-      const viewBtn = e.target.closest('[data-view]');
+    // Only listen to clicks on official toggle buttons
+    viewToggleGroup.addEventListener('click', function(e) {
+      const viewBtn = e.target.closest('.view-toggle-btn[data-view]');
       if (!viewBtn) return;
       
       e.preventDefault();
@@ -187,7 +174,7 @@
     const savedView = getViewPreference();
     applyView(savedView);
     
-    console.log('[TaskRedesign] View toggles initialized, current view:', savedView);
+    console.log('[TaskRedesign] View toggles initialized (official group only), current view:', savedView);
   }
 
   // ========================================

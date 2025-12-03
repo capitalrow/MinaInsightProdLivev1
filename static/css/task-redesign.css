@@ -1317,15 +1317,19 @@ body.clustering-active .task-cluster {
   height: 0 !important;
 }
 
-/* 8. SUBTLE OVERDUE INDICATOR (inline, not bar) */
-.task-card[data-overdue="true"],
-.task-card.overdue {
-  border-left: 3px solid var(--task-accent-danger) !important;
+/* 7. SUBTLE OVERDUE INDICATOR - Very subtle, not distracting */
+/* Only show red text on due date, NO border changes */
+.task-card[data-overdue="true"] .due-date-compact,
+.task-card.overdue .due-date-compact,
+.due-date-compact.overdue {
+  color: var(--task-accent-danger, #ef4444) !important;
 }
 
-.task-card[data-overdue="true"] .due-date-compact,
-.task-card.overdue .due-date-compact {
-  color: var(--task-accent-danger) !important;
+/* Remove any thick borders that might be applied elsewhere */
+.task-card[data-overdue="true"],
+.task-card.overdue {
+  border-left-color: transparent !important;
+  border-left-width: 0 !important;
 }
 
 /* 9. SHOW TASK LIST IMMEDIATELY (override hidden default) */
