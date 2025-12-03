@@ -10,7 +10,7 @@
     display: none;
     align-items: flex-end;
     justify-content: center;
-    z-index: 10000;
+    z-index: var(--z-modal, 1050);
     transition: background 0.3s ease;
     -webkit-tap-highlight-color: transparent;
 }

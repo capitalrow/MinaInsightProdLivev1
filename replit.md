@@ -115,6 +115,37 @@ The application utilizes a layered architecture with Flask as the web framework 
 
 ## Recent Changes
 
+**December 3, 2025 - CROWN⁴.8 Task Page Critical Bug Fixes & Architecture Documentation:**
+
+**Bug Fixes:**
+- **task-proposal-ui.js syntax repair**: Fixed 35 cascading LSP errors caused by orphaned renderProposal() function, undefined meetingSource variable, and broken acceptProposal function
+- **Z-index normalization**: Implemented design token-based z-index scale (--z-base:100, --z-dropdown:1000, --z-modal:1050, --z-toast:1080) across 12+ CSS files. Eliminated !important overrides and conflicting values ranging up to 999999
+- **Modal overlay blocking**: Added proper .hidden state handling and unified task-modal-overlay class for consistent modal behavior
+- **Cookie consent test interference**: Added isTestEnvironment() detection (playwright/puppeteer/headless) with auto-accept cookies to prevent banner blocking interactions during tests
+- **Stale temp task cleanup**: Added cleanupStaleTempTasks() function to TaskCache that removes temp tasks older than 24 hours. Cleanup runs automatically on cache initialization via TaskPageOrchestrator
+- **Health Monitor redundant initialization**: Added singleton pattern to AdvancedErrorRecovery and SessionReliabilityManager classes with _instance/_initialized static guards and interval cleanup to prevent duplicate setIntervals
+
+**Z-Index Token System (static/css/tokens.css):**
+```
+--z-base: 1;
+--z-sticky: 200;
+--z-dropdown: 1000;
+--z-modal-backdrop: 1040;
+--z-modal: 1050;
+--z-toast: 1080;
+--z-popover: 1100;
+--z-max: 1200;
+```
+
+**Task Page Architecture (static/js/task-*.js):**
+- `task-page-orchestrator.js`: Module initialization coordinator
+- `task-cache.js`: IndexedDB cache layer with CROWN⁴.5 schema (tasks, temp_tasks, events, offline_queue, compaction, metadata, view_state stores)
+- `task-optimistic-ui.js`: Optimistic UI updates with server reconciliation
+- `task-proposal-ui.js`: AI proposal rendering and acceptance flows
+- `task-state-store.js`: Single source of truth with TaskStateStore singleton
+- `task-bootstrap.js`: Initial data loading and hydration
+- `task-menu-controller.js`: Task action menu coordination
+
 **December 2, 2025 - Phase 2: Enterprise Testing Suite (87 new tests, all passing):**
 - **E2E Tests (6)**: Full transcription pipeline flow, session lifecycle, AI insights chain
 - **Load Tests (12)**: Concurrent user sessions, WebSocket scalability, buffer management, API latency under load

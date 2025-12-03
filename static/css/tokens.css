@@ -155,8 +155,11 @@
   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
   
   /* ============================================
-     Z-INDEX SCALE
+     Z-INDEX SCALE - Unified Stacking Order
+     Use these tokens instead of hardcoded values
      ============================================ */
+  --z-base: 1;
+  --z-above: 10;
   --z-dropdown: 1000;
   --z-sticky: 1020;
   --z-fixed: 1030;
@@ -164,6 +167,9 @@
   --z-modal: 1050;
   --z-popover: 1060;
   --z-tooltip: 1070;
+  --z-toast: 1080;
+  --z-loading: 1090;
+  --z-max: 9999;
   
   /* ============================================
      LAYOUT

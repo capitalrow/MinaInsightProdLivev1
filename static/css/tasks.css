@@ -3617,7 +3617,7 @@
 
     width: 220px;
     max-width: 260px;
-    z-index: 999999 !important;
+    z-index: var(--z-popover, 1060);
 
     /* CRITICAL: Hidden state by default - prevents phantom rendering */
     display: none;

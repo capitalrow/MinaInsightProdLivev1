@@ -107,10 +107,12 @@ class TasksPageOrchestrator {
     async _waitForTaskCache() {
         if (window.taskCache) {
             if (window.taskCache.ready) {
+                await this._cleanupStaleTempTasks();
                 return window.taskCache;
             }
             if (typeof window.taskCache.init === 'function') {
                 await window.taskCache.init();
+                await this._cleanupStaleTempTasks();
                 return window.taskCache;
             }
         }
@@ -122,11 +124,15 @@ class TasksPageOrchestrator {
             const check = () => {
                 if (window.taskCache) {
                     if (window.taskCache.ready) {
-                        resolve(window.taskCache);
+                        this._cleanupStaleTempTasks().then(() => {
+                            resolve(window.taskCache);
+                        });
                         return;
                     }
                     if (typeof window.taskCache.init === 'function') {
                         window.taskCache.init().then(() => {
+                            return this._cleanupStaleTempTasks();
+                        }).then(() => {
                             resolve(window.taskCache);
                         }).catch(reject);
                         return;
@@ -143,6 +149,19 @@ class TasksPageOrchestrator {
             
             check();
         });
+    }
+
+    async _cleanupStaleTempTasks() {
+        if (window.taskCache?.cleanupStaleTempTasks) {
+            try {
+                const result = await window.taskCache.cleanupStaleTempTasks();
+                if (result.removed > 0) {
+                    console.log(`[Orchestrator] Cleaned up ${result.removed} stale temp tasks`);
+                }
+            } catch (err) {
+                console.warn('[Orchestrator] Failed to cleanup stale temp tasks:', err);
+            }
+        }
     }
 
     async _ensureTaskBootstrap() {
