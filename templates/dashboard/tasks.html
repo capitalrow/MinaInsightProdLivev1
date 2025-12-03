@@ -46,6 +46,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-progressive-disclosure.css') }}?v=1">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-mobile-gestures.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-empty-states.css') }}?v=1" media="print" data-async-css>
+<!-- REDESIGN: Clean design system - must load last to override -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-redesign.css') }}?v=1">
 <script nonce="{{ csp_nonce }}">
 (function(){var a=document.querySelectorAll('link[data-async-css]');a.forEach(function(l){l.onload=function(){l.media='all'};if(l.sheet)l.media='all'})})();
 </script>
@@ -78,6 +80,25 @@
                 </svg>
                 New Task
             </button>
+            
+            <!-- View Toggle Buttons -->
+            <div class="view-toggle-group" role="group" aria-label="View options">
+                <button class="view-toggle-btn active" data-view="list" title="List view" aria-label="List view">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <button class="view-toggle-btn" data-view="grid" title="Grid view" aria-label="Grid view">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+                    </svg>
+                </button>
+                <button class="view-toggle-btn" data-view="bar" title="Compact view" aria-label="Compact view">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                    </svg>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -863,6 +884,9 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 
 <!-- CROWN⁴.8: Progressive Disclosure & Mobile UX -->
 <script defer src="{{ url_for('static', filename='js/task-progressive-disclosure.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+
+<!-- REDESIGN: Clean task page interactions -->
+<script defer src="{{ url_for('static', filename='js/task-redesign.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Mobile Gestures (swipe-to-complete/snooze, long-press context) -->
 <script defer src="{{ url_for('static', filename='js/task-mobile-gestures.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
