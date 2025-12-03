@@ -1256,3 +1256,237 @@
     position: static;
   }
 }
+
+/* ========================================
+ * CRITICAL FIXES - REMOVE DUPLICATES & CLUTTER
+ * ======================================== */
+
+/* 1. HIDE DUPLICATE "GROUP SIMILAR" - Keep only as standalone button, not filter tab */
+.task-filters .cluster-toggle {
+  display: none !important;
+}
+
+/* 2. HIDE TOOLBAR STATS - Already shown in filter tab counters */
+.toolbar-stats {
+  display: none !important;
+}
+
+/* 3. HIDE DUPLICATE VIEW TOGGLES - Keep only header set */
+.search-sort-toolbar .view-toggle-group,
+.search-sort-toolbar [data-view],
+.task-filters ~ .view-toggle-group {
+  display: none !important;
+}
+
+/* 4. COLLAPSE MEETING ACTIVITY - Show as minimal summary, not dominant section */
+#meeting-heatmap-container {
+  display: none !important;
+}
+
+#meeting-filter-indicator {
+  display: none !important;
+}
+
+/* 5. HIDE "RECENTLY UPDATED" GROUPING - Use filter tabs only */
+.task-group-header[data-group="recently-updated"],
+.task-group[data-type="recently-updated"],
+[class*="recently-updated"],
+.recently-updated-header {
+  display: none !important;
+}
+
+/* 6. HIDE ALL MEETING GROUPINGS - Keep tasks flat, not grouped by meeting on landing */
+.meeting-group-header,
+.task-group-header:not(.collapsed-tasks-header),
+.task-group-wrapper,
+.grouped-by-meeting {
+  display: none !important;
+}
+
+/* 7. ENSURE OVERDUE PROGRESS BARS ARE COMPLETELY HIDDEN */
+.overdue-progress,
+.overdue-progress-bar,
+.task-overdue-bar,
+.overdue-bar,
+.task-card .progress-bar,
+.task-card progress,
+[class*="overdue-progress"],
+[class*="progress-bar"]:not(.loading-progress) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* 8. SUBTLE OVERDUE INDICATOR (inline, not bar) */
+.task-card[data-overdue="true"],
+.task-card.overdue {
+  border-left: 3px solid var(--task-accent-danger) !important;
+}
+
+.task-card[data-overdue="true"] .due-date-compact,
+.task-card.overdue .due-date-compact {
+  color: var(--task-accent-danger) !important;
+}
+
+/* 9. SHOW TASK LIST IMMEDIATELY (override hidden default) */
+#tasks-list-container {
+  display: block !important;
+}
+
+/* 10. HIDE SKELETON AFTER LOAD */
+#tasks-loading-state.loaded,
+body.tasks-loaded #tasks-loading-state {
+  display: none !important;
+}
+
+/* 11. ENSURE FILTER TABS ARE SINGLE ROW, NO WRAP */
+.task-filters {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: var(--task-space-2) !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  padding-bottom: var(--task-space-2) !important;
+}
+
+.task-filters::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* 12. CLEAN FILTER TAB STYLING */
+.filter-tab {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+  padding: var(--task-space-2) var(--task-space-4) !important;
+  font-size: var(--task-font-sm) !important;
+  font-weight: var(--task-weight-medium) !important;
+  border-radius: var(--task-radius-full) !important;
+  background: transparent !important;
+  border: 1px solid var(--task-border-subtle) !important;
+  color: var(--task-text-secondary) !important;
+  cursor: pointer !important;
+  transition: all var(--task-transition-fast) !important;
+  min-height: 36px !important;
+}
+
+.filter-tab:hover {
+  background: var(--task-bg-card-hover) !important;
+  border-color: var(--task-border-default) !important;
+  color: var(--task-text-primary) !important;
+}
+
+.filter-tab.active {
+  background: var(--task-accent-primary) !important;
+  border-color: var(--task-accent-primary) !important;
+  color: white !important;
+}
+
+.filter-counter {
+  margin-left: var(--task-space-2) !important;
+  padding: 2px 6px !important;
+  font-size: var(--task-font-xs) !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-radius: var(--task-radius-full) !important;
+}
+
+.filter-tab.active .filter-counter {
+  background: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* 13. HEADER VIEW TOGGLE GROUP STYLING */
+.view-toggle-group {
+  display: flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  background: var(--task-bg-card) !important;
+  border: 1px solid var(--task-border-subtle) !important;
+  border-radius: var(--task-radius-md) !important;
+  padding: 2px !important;
+}
+
+.view-toggle-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--task-radius-sm) !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--task-text-tertiary) !important;
+  cursor: pointer !important;
+  transition: all var(--task-transition-fast) !important;
+}
+
+.view-toggle-btn:hover {
+  background: var(--task-bg-card-hover) !important;
+  color: var(--task-text-secondary) !important;
+}
+
+.view-toggle-btn.active {
+  background: var(--task-accent-primary) !important;
+  color: white !important;
+}
+
+/* 14. MOBILE HEADER ADJUSTMENTS */
+@media (max-width: 640px) {
+  .tasks-header {
+    flex-direction: column !important;
+    gap: var(--task-space-3) !important;
+  }
+  
+  .header-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: var(--task-space-2) !important;
+    width: 100% !important;
+  }
+  
+  .view-toggle-group {
+    order: 10 !important;
+  }
+  
+  #new-task-btn {
+    flex: 1 !important;
+    min-width: 120px !important;
+  }
+  
+  .btn-generate-proposals {
+    flex: 1 !important;
+    min-width: 120px !important;
+  }
+}
+
+/* 15. HIDE AI CLUSTERING SUMMARY THAT DOMINATES PAGE */
+.cluster-summary,
+.grouped-by-similarity,
+#cluster-container,
+.cluster-view-container {
+  display: none !important;
+}
+
+/* 16. ONLY SHOW CLUSTERING WHEN EXPLICITLY ENABLED */
+body.clustering-active .cluster-summary,
+body.clustering-active .grouped-by-similarity,
+body.clustering-active #cluster-container,
+body.clustering-active .cluster-view-container {
+  display: block !important;
+}
+
+/* 17. ENSURE TASK CARDS ARE VISIBLE AND NOT HIDDEN */
+.task-card {
+  display: flex !important;
+}
+
+/* 18. HIDE "X of Y tasks" IN TOOLBAR - redundant with filter counts */
+.toolbar-stats,
+#visible-task-count,
+#total-task-count,
+.stats-label {
+  display: none !important;
+}
