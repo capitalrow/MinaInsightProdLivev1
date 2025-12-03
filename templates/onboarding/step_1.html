@@ -1,0 +1,367 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to Mina - Step 1{% endblock %}
+
+{% block content %}
+<div class="onboarding-container">
+    <div class="onboarding-wrapper">
+        <div class="onboarding-progress">
+            <div class="progress-steps">
+                {% for i in range(1, total_steps + 1) %}
+                <div class="progress-step {% if i < step %}completed{% elif i == step %}active{% endif %}">
+                    <div class="step-indicator">
+                        {% if i < step %}
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        {% else %}
+                        {{ i }}
+                        {% endif %}
+                    </div>
+                    <span class="step-label">
+                        {% if i == 1 %}Workspace{% elif i == 2 %}Team{% elif i == 3 %}Preferences{% else %}Get Started{% endif %}
+                    </span>
+                </div>
+                {% if i < total_steps %}
+                <div class="progress-connector {% if i < step %}completed{% endif %}"></div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="onboarding-card card-glass">
+            <div class="onboarding-header">
+                <div class="welcome-icon">
+                    <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                </div>
+                <h1 class="onboarding-title">Welcome, {{ current_user.first_name or current_user.username }}!</h1>
+                <p class="onboarding-subtitle">Let's set up your workspace in just a few steps</p>
+            </div>
+
+            <form method="POST" class="onboarding-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="form-section">
+                    <div class="form-group">
+                        <label for="workspace_name" class="form-label">Workspace Name</label>
+                        <input 
+                            type="text" 
+                            id="workspace_name" 
+                            name="workspace_name" 
+                            class="input"
+                            placeholder="e.g., Acme Inc, Product Team, My Company"
+                            value="{{ current_user.workspace.name if current_user.workspace else '' }}"
+                            required
+                        >
+                        <span class="form-hint">This is where your team will collaborate on meetings</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="role" class="form-label">What's your role?</label>
+                        <select id="role" name="role" class="input" required>
+                            <option value="">Select your role</option>
+                            <option value="founder">Founder / CEO</option>
+                            <option value="executive">Executive / VP</option>
+                            <option value="manager">Manager / Team Lead</option>
+                            <option value="engineer">Engineer / Developer</option>
+                            <option value="designer">Designer</option>
+                            <option value="product">Product Manager</option>
+                            <option value="sales">Sales / Business Development</option>
+                            <option value="marketing">Marketing</option>
+                            <option value="hr">HR / People Operations</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="team_size" class="form-label">How big is your team?</label>
+                        <div class="team-size-options">
+                            <label class="size-option">
+                                <input type="radio" name="team_size" value="just_me" required>
+                                <span class="size-card">
+                                    <span class="size-icon">👤</span>
+                                    <span class="size-text">Just me</span>
+                                </span>
+                            </label>
+                            <label class="size-option">
+                                <input type="radio" name="team_size" value="2-5">
+                                <span class="size-card">
+                                    <span class="size-icon">👥</span>
+                                    <span class="size-text">2-5</span>
+                                </span>
+                            </label>
+                            <label class="size-option">
+                                <input type="radio" name="team_size" value="6-20">
+                                <span class="size-card">
+                                    <span class="size-icon">👨‍👩‍👧‍👦</span>
+                                    <span class="size-text">6-20</span>
+                                </span>
+                            </label>
+                            <label class="size-option">
+                                <input type="radio" name="team_size" value="21-50">
+                                <span class="size-card">
+                                    <span class="size-icon">🏢</span>
+                                    <span class="size-text">21-50</span>
+                                </span>
+                            </label>
+                            <label class="size-option">
+                                <input type="radio" name="team_size" value="50+">
+                                <span class="size-card">
+                                    <span class="size-icon">🏙️</span>
+                                    <span class="size-text">50+</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="onboarding-actions">
+                    <form action="{{ url_for('onboarding.skip') }}" method="POST" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-ghost">Skip for now</button>
+                    </form>
+                    <button type="submit" class="btn btn-primary">
+                        Continue
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.onboarding-container {
+    min-height: calc(100vh - var(--header-height, 64px));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    background: 
+        radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.12) 0%, transparent 50%);
+}
+
+.onboarding-wrapper {
+    width: 100%;
+    max-width: 640px;
+    animation: fadeInUp 0.5s ease-out;
+}
+
+.onboarding-progress {
+    margin-bottom: var(--space-8);
+}
+
+.progress-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.step-indicator {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    background: var(--color-surface-light);
+    color: var(--color-text-tertiary);
+    border: 2px solid var(--color-border);
+    transition: all var(--transition-base);
+}
+
+.progress-step.active .step-indicator {
+    background: var(--gradient-primary);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.progress-step.completed .step-indicator {
+    background: var(--color-success);
+    color: white;
+    border-color: transparent;
+}
+
+.step-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    font-weight: var(--font-weight-medium);
+}
+
+.progress-step.active .step-label,
+.progress-step.completed .step-label {
+    color: var(--color-text-primary);
+}
+
+.progress-connector {
+    width: 48px;
+    height: 2px;
+    background: var(--color-border);
+    margin: 0 var(--space-2);
+    margin-bottom: 24px;
+}
+
+.progress-connector.completed {
+    background: var(--color-success);
+}
+
+.onboarding-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-8);
+    box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.3);
+}
+
+.onboarding-header {
+    text-align: center;
+    margin-bottom: var(--space-8);
+}
+
+.welcome-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto var(--space-4);
+    background: var(--gradient-primary);
+    border-radius: var(--radius-xl);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+}
+
+.onboarding-title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-2);
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.onboarding-subtitle {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-base);
+}
+
+.form-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+.team-size-options {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+.size-option {
+    flex: 1;
+    min-width: 80px;
+}
+
+.size-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.size-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    background: var(--color-surface);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.size-card:hover {
+    border-color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.size-option input:checked + .size-card {
+    border-color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.size-icon {
+    font-size: 24px;
+}
+
+.size-text {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+}
+
+.onboarding-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--space-8);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-border);
+}
+
+.btn-primary svg {
+    margin-left: var(--space-2);
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 640px) {
+    .progress-connector {
+        width: 24px;
+    }
+    
+    .step-label {
+        display: none;
+    }
+    
+    .team-size-options {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .size-option:nth-child(4),
+    .size-option:nth-child(5) {
+        grid-column: span 1;
+    }
+}
+</style>
+{% endblock %}

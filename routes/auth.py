@@ -76,12 +76,25 @@ def register():
     """User registration page and handler.
     
     Rate limited: 3 attempts per minute (industry standard like Slack, Auth0).
+    Supports invite token for team invitations.
     """
     if current_user.is_authenticated:
         return redirect(url_for('dashboard.index'))
     
+    invite_token = request.args.get('invite')
+    invite_info = None
+    
+    if invite_token:
+        from services.team_invite_service import validate_invite_token
+        invite_info = validate_invite_token(invite_token)
+        if not invite_info.get('valid'):
+            flash('This invitation link is invalid or has expired.', 'warning')
+            invite_token = None
+            invite_info = None
+    
     if request.method == 'POST':
-        # Get form data
+        invite_token = request.form.get('invite_token', '') or invite_token
+        
         email = request.form.get('email', '').strip().lower()
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
@@ -123,7 +136,6 @@ def register():
             return render_template('auth/register.html')
         
         try:
-            # Create new user
             user = User(
                 email=email,
                 username=username,
@@ -132,28 +144,40 @@ def register():
             )
             user.set_password(password)
             
-            # For first user, set owner role
             if db.session.query(User).count() == 0:
                 user.role = 'owner'
             
-            # Add user to session but don't commit yet
             db.session.add(user)
-            db.session.flush()  # Flush to get user.id assigned
+            db.session.flush()
             
-            # Create personal workspace for new user
-            workspace_name = f"{first_name}'s Workspace" if first_name else f"{username}'s Workspace"
-            workspace = Workspace(
-                name=workspace_name,
-                slug=Workspace.generate_slug(workspace_name),
-                owner_id=user.id
-            )
-            db.session.add(workspace)
-            db.session.flush()  # Flush to get workspace.id assigned
+            joined_via_invite = False
+            if invite_token:
+                from services.team_invite_service import accept_invite
+                accept_result = accept_invite(invite_token, user)
+                if accept_result.get('success'):
+                    joined_via_invite = True
+                    user.onboarding_step = 2
+                    logging.info(f"User {email} joined workspace via invite")
             
-            # Assign user to workspace (circular FK handled by post_update=True)
-            user.workspace_id = workspace.id
+            if not user.workspace_id:
+                workspace_name = f"{first_name}'s Workspace" if first_name else f"{username}'s Workspace"
+                base_slug = Workspace.generate_slug(workspace_name)
+                slug = base_slug
+                
+                existing = Workspace.query.filter_by(slug=slug).first()
+                if existing:
+                    import secrets
+                    slug = f"{base_slug}-{secrets.token_hex(4)}"
+                
+                workspace = Workspace(
+                    name=workspace_name,
+                    slug=slug,
+                    owner_id=user.id
+                )
+                db.session.add(workspace)
+                db.session.flush()
+                user.workspace_id = workspace.id
             
-            # Store GDPR consent in user preferences
             import json
             from datetime import datetime as dt
             gdpr_consent = {
@@ -166,13 +190,10 @@ def register():
             }
             user.preferences = json.dumps({'gdpr_consent': gdpr_consent})
             
-            # Create verification token for passive verification
             verification_token = auth_email_service.create_verification_token(user)
             
-            # Commit both user and workspace together
             db.session.commit()
             
-            # Send welcome email (non-blocking - don't fail registration if email fails)
             try:
                 base_url = request.url_root
                 auth_email_service.send_welcome_email(
@@ -184,15 +205,14 @@ def register():
             except Exception as email_error:
                 logging.warning(f"Welcome email failed (non-blocking): {email_error}")
             
-            # Auto-login the new user for smooth onboarding
             login_user(user)
-            flash('Welcome to Mina! Your account has been created successfully.', 'success')
             
-            # Redirect to next parameter or dashboard
-            next_page = request.args.get('next')
-            if next_page and next_page.startswith('/'):
-                return redirect(next_page)
-            return redirect(url_for('dashboard.index'))
+            if joined_via_invite:
+                flash('Welcome to Mina! You have joined the team.', 'success')
+                return redirect(url_for('onboarding.step_2'))
+            else:
+                flash('Welcome to Mina! Your account has been created successfully.', 'success')
+                return redirect(url_for('onboarding.step_1'))
             
         except Exception as e:
             db.session.rollback()
@@ -200,9 +220,9 @@ def register():
             logging.error(traceback.format_exc())
             # Generic error message to prevent information leakage (security best practice)
             flash('Registration failed. Please try again or contact support.', 'error')
-            return render_template('auth/register.html')
+            return render_template('auth/register.html', invite_token=invite_token, invite_info=invite_info)
     
-    return render_template('auth/register.html')
+    return render_template('auth/register.html', invite_token=invite_token, invite_info=invite_info)
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
