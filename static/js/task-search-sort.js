@@ -322,8 +322,11 @@ class TaskSearchSort {
 
     filterTasksData(tasks) {
         return tasks.filter(task => {
-            if (this.currentFilter === 'active' && task.archived_at) return false;
-            if (this.currentFilter === 'archived' && !task.archived_at) return false;
+            // Use status field - Active = todo, in_progress, pending, blocked
+            // Archived = completed or cancelled (Task model has no archived_at column)
+            const status = task.status || 'todo';
+            if (this.currentFilter === 'active' && (status === 'completed' || status === 'cancelled')) return false;
+            if (this.currentFilter === 'archived' && status !== 'completed' && status !== 'cancelled') return false;
 
             if (this.quickFilter) {
                 const passesQuickFilter = this.applyQuickFilterLogic([task], this.quickFilter).length > 0;
