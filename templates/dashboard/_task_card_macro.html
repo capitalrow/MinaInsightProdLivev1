@@ -1,7 +1,14 @@
 {# Task Card Macro - Reusable template for server-rendered task cards #}
-{# CROWN⁴.6: Fragment-based hydration for optimistic inserts #}
+{# CROWN⁴.8: Progressive Disclosure - Essential info visible, details on hover/tap #}
 
 {% macro task_card(task) %}
+{# Precompute context data for efficiency #}
+{% set full_quote = task.extraction_context.evidence_quote if task.extraction_context and task.extraction_context.evidence_quote else '' %}
+{% set speaker = task.extraction_context.speaker if task.extraction_context and task.extraction_context.speaker else '' %}
+{% set start_ms = task.transcript_span.start_ms if task.transcript_span and task.transcript_span.start_ms is not none else 0 %}
+{% set has_provenance = task.extracted_by_ai and task.meeting %}
+{% set has_transcript = task.meeting_id and task.transcript_span and task.transcript_span.start_ms is not none %}
+
 <div class="task-card{% if task.status == 'completed' %} completed{% endif %}" 
      data-task-id="{{ task.id }}"
      data-meeting-id="{{ task.meeting_id or '' }}"
@@ -12,20 +19,74 @@
      data-assigned-to="{{ task.assigned_to_id or '' }}"
      data-due-date="{{ task.due_date or '' }}"
      data-labels="{{ task.labels|tojson|escape if task.labels else '[]' }}"
-     data-transcript-span="{{ task.transcript_span|tojson|escape if task.transcript_span else '{}' }}">
+     data-transcript-span="{{ task.transcript_span|tojson|escape if task.transcript_span else '{}' }}"
+     role="article"
+     aria-label="Task: {{ task.title }}">
+    
+    {# Checkbox with enhanced touch target #}
     <div class="checkbox-wrapper">
-        <input type="checkbox" {% if task.status == 'completed' %}checked{% endif %} class="task-checkbox" data-task-id="{{ task.id }}">
+        <input type="checkbox" 
+               {% if task.status == 'completed' %}checked{% endif %} 
+               class="task-checkbox" 
+               data-task-id="{{ task.id }}"
+               aria-label="Mark task as {% if task.status == 'completed' %}incomplete{% else %}complete{% endif %}">
     </div>
+    
     <div class="task-content">
-        {# CROWN⁴.6: Spoken Provenance - Meeting origin display #}
-        {% if task.extracted_by_ai and task.meeting %}
-        <div class="task-provenance-header">
-            {# Embed full context data in badge for zero-fetch preview #}
-            {# Use evidence_quote (actual DB field) instead of quote #}
-            {% set full_quote = task.extraction_context.evidence_quote if task.extraction_context and task.extraction_context.evidence_quote else '' %}
-            {% set speaker = task.extraction_context.speaker if task.extraction_context and task.extraction_context.speaker else '' %}
-            {% set start_ms = task.transcript_span.start_ms if task.transcript_span and task.transcript_span.start_ms is not none else 0 %}
-            <span class="provenance-badge" 
+        {# PRIMARY ROW - Always visible: Title + Essential metadata #}
+        <div class="task-primary-row">
+            <h3 class="task-title" data-field="title">{{ task.title or 'Untitled Task' }}</h3>
+            
+            <div class="task-essential-meta">
+                {# Priority dot (subtle indicator) #}
+                <span class="priority-dot priority-{{ task.priority|default('medium')|lower }}" 
+                      data-field="priority"
+                      title="Priority: {{ task.priority|default('Medium')|capitalize }}. Click to change."></span>
+                
+                {# Due date - only show if set #}
+                {% if task.due_date %}
+                {% set today = now() if now is defined else none %}
+                {% set is_overdue = task.is_overdue if task.is_overdue is defined else false %}
+                {% set is_due_soon = task.is_due_soon if task.is_due_soon is defined else false %}
+                <span class="due-date-compact{% if is_overdue %} overdue{% elif is_due_soon %} due-soon{% endif %}" 
+                      data-field="due_date"
+                      title="Due {{ task.due_date.strftime('%B %d, %Y') }}">
+                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/>
+                    </svg>
+                    {{ task.due_date.strftime('%b %d') }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        
+        {# SECONDARY ROW - Revealed on hover/tap: Assignee, Labels, Provenance #}
+        <div class="task-secondary-row">
+            {# Assignee badge #}
+            {% if task.assigned_to %}
+            <span class="assignee-compact" data-field="assignee" title="Assigned to {{ task.assigned_to.display_name or task.assigned_to.username }}">
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+                {{ task.assigned_to.display_name or task.assigned_to.username }}
+            </span>
+            {% endif %}
+            
+            {# Labels #}
+            {% if task.labels and task.labels|length > 0 %}
+            <div class="labels-compact" data-field="labels">
+                {% for label in task.labels[:3] %}
+                <span class="label-compact">{{ label }}</span>
+                {% endfor %}
+                {% if task.labels|length > 3 %}
+                <span class="label-compact">+{{ task.labels|length - 3 }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {# Meeting Provenance Badge #}
+            {% if has_provenance %}
+            <span class="provenance-compact" 
                   data-task-id="{{ task.id }}"
                   data-action="show-context-preview"
                   data-has-context="{{ 'true' if full_quote else 'false' }}"
@@ -35,101 +96,41 @@
                   data-meeting-id="{{ task.meeting_id }}"
                   data-meeting-title="{{ task.meeting.title|escape }}"
                   data-confidence="{{ task.confidence_score if task.confidence_score else 0 }}"
-                  title="{{ full_quote if full_quote else 'Click to see meeting context' }}">
-                <svg class="provenance-icon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                  title="From meeting: {{ task.meeting.title }}{% if speaker %} - {{ speaker }}{% endif %}">
+                <svg class="provenance-icon" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
                 </svg>
-                <span class="provenance-text">{{ task.meeting.title|truncate(20, True) }}</span>
-                <span class="provenance-date">
-                    • {{ task.meeting.created_at.strftime('%b %d') if task.meeting.created_at else '' }}
-                </span>
-                {% if task.extraction_context and task.extraction_context.speaker %}
-                <span class="provenance-speaker">
-                    • {{ task.extraction_context.speaker|truncate(12, True) }}
-                </span>
-                {% endif %}
-                {% if task.confidence_score %}
-                <span class="provenance-confidence {% if task.confidence_score >= 0.8 %}high{% elif task.confidence_score >= 0.6 %}medium{% else %}low{% endif %}" 
-                      title="AI confidence: {{ (task.confidence_score * 100)|int }}%">
-                    {% if task.confidence_score >= 0.8 %}
-                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                    </svg>
-                    {% elif task.confidence_score >= 0.6 %}
-                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="3"/>
-                    </svg>
-                    {% else %}
-                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                    </svg>
-                    {% endif %}
-                </span>
+                <span>{{ task.meeting.title|truncate(15, True) }}</span>
+                {% if task.confidence_score and task.confidence_score >= 0.8 %}
+                <span class="confidence-dot high" title="High confidence"></span>
                 {% endif %}
             </span>
-        </div>
-        {% endif %}
-        
-        <h3 class="task-title">{{ task.title or 'Untitled Task' }}</h3>
-        <div class="task-metadata">
-            <span class="task-assignee" data-field="assignee" title="Click to assign">
-                {% if task.assigned_to %}
-                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                    {{ task.assigned_to.display_name or task.assigned_to.username }}
-                {% else %}
-                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                    Unassigned
-                {% endif %}
-            </span>
-            <span class="task-due-date" data-field="due_date" title="Click to set due date">
-                {% if task.due_date %}
-                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
-                    {{ task.due_date.strftime('%b %d') }}
-                {% else %}
-                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
-                    No due date
-                {% endif %}
-            </span>
-            {% if task.labels and task.labels|length > 0 %}
-                <div class="task-labels" data-field="labels" title="Click to edit labels">
-                    {% for label in task.labels %}
-                        <span class="task-label">{{ label }}</span>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <span class="task-labels-empty" data-field="labels" title="Click to add labels">
-                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z"/></svg>
-                    Add labels
-                </span>
             {% endif %}
             
-            {# CROWN⁴.6: Jump to Transcript - Signature Meeting-Native Feature #}
-            {% if task.meeting_id and task.transcript_span and task.transcript_span.start_ms is not none %}
-            <button class="jump-to-transcript-btn" 
+            {# Jump to Transcript (if available) #}
+            {% if has_transcript %}
+            <button class="provenance-compact jump-to-transcript-btn" 
                     data-action="jump-to-transcript"
                     data-task-id="{{ task.id }}"
-                    title="Jump to the moment in the meeting transcript where this task was mentioned">
-                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    title="Jump to transcript at {{ (start_ms / 60000)|int }}:{{ ((start_ms / 1000) % 60)|int|string|truncate(2, True, '') }}">
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
-                <span>View in Transcript</span>
+                <span>Transcript</span>
             </button>
             {% endif %}
         </div>
     </div>
+    
+    {# Actions area - Menu trigger always present but revealed on hover #}
     <div class="task-actions">
-        {# CROWN⁴.6: Impact Score Badge from Meeting #}
-        {% if task.meeting and task.meeting.analytics and task.meeting.analytics.meeting_effectiveness_score and task.meeting.analytics.meeting_effectiveness_score >= 0.7 %}
-        <span class="impact-score-badge" title="From high-impact meeting ({{ (task.meeting.analytics.meeting_effectiveness_score * 100)|int }}% effectiveness)">
-            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-            </svg>
-            High Impact
+        {# Priority badge (full version for editing) #}
+        <span class="priority-badge priority-{{ task.priority|default('medium')|lower }}" 
+              data-field="priority"
+              title="Click to change priority">
+            {{ task.priority|default('medium')|capitalize }}
         </span>
-        {% endif %}
-        <span class="priority-badge priority-{{ task.priority|default('medium')|lower }}">
-            {{ task.priority|default('medium') }}
-        </span>
+        
         <button class="task-menu-trigger" 
                 data-task-id="{{ task.id }}"
                 role="button"
@@ -146,3 +147,33 @@
     </div>
 </div>
 {% endmacro %}
+
+{# 
+CROWN⁴.8 Progressive Disclosure Structure:
+
+PRIMARY ROW (Always visible):
+- Checkbox
+- Task title
+- Priority dot (subtle)
+- Due date (if set)
+
+SECONDARY ROW (Revealed on hover/tap):
+- Assignee
+- Labels (max 3 + overflow)
+- Meeting provenance
+- Jump to transcript
+
+ACTION AREA:
+- Priority badge (for editing)
+- Three-dot menu (for other actions)
+
+CSS classes work together:
+- .task-primary-row: Always visible
+- .task-secondary-row: Hidden, revealed by CSS on .task-card:hover or .task-card.expanded
+- Mobile: Tap toggles .expanded class via JS
+
+Touch targets:
+- Checkbox wrapper: 48×48dp minimum
+- All buttons: 44px minimum height
+- Priority dot: Expandable on hover
+#}
