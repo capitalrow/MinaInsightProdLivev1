@@ -1259,19 +1259,62 @@
 
 /* ========================================
  * CRITICAL FIXES - REMOVE DUPLICATES & CLUTTER
+ * Linear/Asana-style clean interface
  * ======================================== */
 
-/* 1. HIDE DUPLICATE "GROUP SIMILAR" - Keep only as standalone button, not filter tab */
+/* 1. HIDE ALL TASK SECTION HEADERS (Recently Updated, Due Soon, etc.) */
+.task-section,
+.task-section-header,
+.task-sections,
+.task-section-content,
+[class*="section-header"],
+[class*="task-section"] {
+  display: contents !important;
+  border: none !important;
+  background: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Completely hide the section header text/icons */
+.task-section-header *,
+.section-title,
+.section-toggle,
+.section-count {
+  display: none !important;
+}
+
+/* But show task cards inside sections */
+.task-section .task-card,
+.task-section-content .task-card,
+.task-sections .task-card {
+  display: flex !important;
+}
+
+/* 2. HIDE DUPLICATE "GROUP SIMILAR" - Keep only as standalone button, not filter tab */
 .task-filters .cluster-toggle {
   display: none !important;
 }
 
-/* 2. HIDE TOOLBAR STATS - Already shown in filter tab counters */
+/* 3. HIDE TOOLBAR STATS - Already shown in filter tab counters */
 .toolbar-stats {
   display: none !important;
 }
 
-/* 3. HIDE DUPLICATE VIEW TOGGLES - Keep only header set */
+/* 4. HIDE ALL DUPLICATE VIEW TOGGLE BUTTONS */
+/* Keep only the .view-toggle-group we added in the header */
+.header-actions > button:not(.btn):not(.view-toggle-btn):not(.btn-generate-proposals),
+.header-actions > span:not(.stress-indicator),
+.header-actions > a:not(.btn) {
+  display: none !important;
+}
+
+/* Hide stray view toggle buttons that aren't in our designated group */
+button[data-view]:not(.view-toggle-btn) {
+  display: none !important;
+}
+
+/* 5. HIDE DUPLICATE VIEW TOGGLES - Keep only header set */
 .search-sort-toolbar .view-toggle-group,
 .search-sort-toolbar [data-view],
 .task-filters ~ .view-toggle-group {
@@ -1488,5 +1531,75 @@ body.clustering-active .cluster-view-container {
 #visible-task-count,
 #total-task-count,
 .stats-label {
+  display: none !important;
+}
+
+/* ========================================
+ * 19. COMPREHENSIVE PROGRESS BAR REMOVAL
+ * Yellow/orange overdue bars must be completely hidden
+ * ======================================== */
+
+/* Hide ALL progress bar variations */
+.task-card::after,
+.task-card::before,
+.task-card > .progress,
+.task-card > progress,
+.task-card > .progress-bar,
+.task-card > [class*="progress"],
+.task-card > [class*="urgency"],
+.task-card > [class*="overdue"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  position: absolute !important;
+  pointer-events: none !important;
+}
+
+/* Remove any progress pseudo-elements */
+.task-card.overdue::after,
+.task-card.urgent::after,
+.task-card[data-overdue]::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* Ensure no colored bar at bottom of task cards */
+.task-card {
+  border-bottom: 1px solid var(--task-border-subtle) !important;
+  overflow: visible !important;
+}
+
+/* Remove all urgency/progress bar backgrounds */
+.urgency-bar,
+.urgency-indicator,
+.task-urgency,
+[class*="urgency-bar"],
+[class*="progress-indicator"] {
+  display: none !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  background: transparent !important;
+}
+
+/* ========================================
+ * 20. REMOVE ALL STANDALONE VIEW TOGGLE ICONS
+ * Only our .view-toggle-group should be visible
+ * ======================================== */
+
+/* Hide all icon buttons that appear between New Task and our toggle group */
+.header-actions > *:not(.btn):not(.btn-primary):not(.btn-secondary):not(.view-toggle-group):not(.stress-indicator) {
+  display: none !important;
+}
+
+/* Ensure our view toggle group is visible */
+.header-actions > .view-toggle-group {
+  display: flex !important;
+  order: 100 !important;
+}
+
+/* Hide any other [data-view] elements outside our group */
+[data-view]:not(.view-toggle-btn) {
   display: none !important;
 }
