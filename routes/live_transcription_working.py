@@ -18,6 +18,7 @@ import json
 # Import socketio instance
 from app import socketio
 from services.subscription_service import subscription_service
+from services import openai_whisper_client
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,12 @@ def transcribe_chunk_streaming():
     # Initialize variables early to avoid LSP errors
     chunk_id = '1'
     session_id = f'session_{int(time.time())}'
+    
+    # Set usage tracking context for cost monitoring
+    openai_whisper_client.set_tracking_context(
+        user_id=str(current_user.id),
+        session_id=session_id
+    )
     
     try:
         print(f"[LIVE-API] 🎵 Received transcription request")
@@ -194,6 +201,31 @@ def transcribe_chunk_streaming():
             
             processing_time = time.time() - start_time
             
+            # PHASE 2: Track API usage for cost monitoring
+            try:
+                from services.usage_tracking_service import track_transcription
+                
+                # Get file size for tracking
+                audio_file.seek(0, 2)  # Seek to end
+                audio_size = audio_file.tell()
+                audio_file.seek(0)  # Reset position
+                
+                track_transcription(
+                    user_id=str(current_user.id),
+                    audio_bytes=b'',  # We already processed it, use size instead
+                    session_id=session_id,
+                    transcription_type='final' if is_final else 'interim',
+                    model_used='whisper-1',
+                    api_latency_ms=int(processing_time * 1000),
+                    was_cached=False,
+                    error_occurred=False,
+                    mime_type='audio/wav',
+                    actual_duration=getattr(transcription, 'duration', None)
+                )
+                logger.debug(f"📊 Usage tracked for user {current_user.id}: {processing_time:.2f}s latency")
+            except Exception as tracking_error:
+                logger.warning(f"⚠️ Usage tracking failed (non-blocking): {tracking_error}")
+            
             print(f"[LIVE-API] ✅ Chunk {chunk_id} transcribed successfully:")
 
             from services.transcription_service import TranscriptionService
@@ -263,6 +295,24 @@ def transcribe_chunk_streaming():
         error_msg = str(e)
         
         print(f"[LIVE-API] ❌ Transcription error for chunk {chunk_id}: {error_msg}")
+        
+        # PHASE 2: Track failed transcription for cost monitoring
+        try:
+            from services.usage_tracking_service import track_transcription
+            track_transcription(
+                user_id=str(current_user.id),
+                audio_bytes=b'',
+                session_id=session_id,
+                transcription_type='final' if request.form.get('is_final', 'false').lower() == 'true' else 'interim',
+                model_used='whisper-1',
+                api_latency_ms=int(processing_time * 1000),
+                was_cached=False,
+                error_occurred=True,
+                error_message=error_msg[:500],
+                mime_type='audio/wav'
+            )
+        except Exception as tracking_error:
+            logger.warning(f"⚠️ Error tracking failed: {tracking_error}")
         
         # Handle specific OpenAI errors
         if "rate_limit" in error_msg.lower():
@@ -366,3 +416,77 @@ def transcription_test():
             'files': list(request.files.keys()),
             'openai_ready': openai_client is not None
         })
+
+
+# ============================================================================
+# PHASE 2: Usage Tracking API Endpoints
+# ============================================================================
+
+@live_transcription_bp.route('/api/transcription/usage', methods=['GET'])
+@login_required
+def get_user_transcription_usage():
+    """Get current user's transcription usage for the billing period."""
+    try:
+        from services.usage_tracking_service import get_user_usage, get_usage_alerts
+        
+        usage = get_user_usage(str(current_user.id))
+        alerts = get_usage_alerts(str(current_user.id))
+        
+        return jsonify({
+            'success': True,
+            'usage': usage,
+            'alerts': alerts
+        })
+    except Exception as e:
+        logger.error(f"Failed to get usage: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@live_transcription_bp.route('/api/transcription/usage/check', methods=['GET'])
+@login_required
+def check_transcription_quota():
+    """Check if user has remaining transcription quota."""
+    try:
+        from services.usage_tracking_service import check_usage_limit
+        
+        can_transcribe, usage_info = check_usage_limit(str(current_user.id))
+        
+        return jsonify({
+            'success': True,
+            'can_transcribe': can_transcribe,
+            'usage': usage_info
+        })
+    except Exception as e:
+        logger.error(f"Failed to check quota: {e}")
+        return jsonify({
+            'success': False,
+            'can_transcribe': True,
+            'error': str(e)
+        }), 500
+
+
+@live_transcription_bp.route('/api/admin/transcription/usage-stats', methods=['GET'])
+@login_required
+def get_admin_usage_stats():
+    """Get aggregate usage statistics for admin dashboard."""
+    try:
+        if not getattr(current_user, 'is_admin', False):
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        from services.usage_tracking_service import get_admin_usage_stats
+        
+        stats = get_admin_usage_stats()
+        
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+    except Exception as e:
+        logger.error(f"Failed to get admin stats: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

@@ -182,3 +182,87 @@ class SubscriptionTier:
     def has_live_transcription(cls, tier: str) -> bool:
         """Check if tier includes live transcription."""
         return cls.TIERS.get(tier, {}).get('live_transcription', False)
+
+
+class TranscriptionUsage(db.Model):
+    """Track transcription API usage for cost monitoring and tier limits."""
+    __tablename__ = "transcription_usage"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(64), nullable=False, index=True)
+    session_id = db.Column(db.String(64), nullable=True, index=True)
+    
+    audio_duration_seconds = db.Column(db.Float, nullable=False, default=0.0)
+    audio_size_bytes = db.Column(db.Integer, nullable=False, default=0)
+    
+    model_used = db.Column(db.String(64), nullable=False, default='whisper-1')
+    api_latency_ms = db.Column(db.Integer, nullable=True)
+    
+    cost_usd = db.Column(db.Float, nullable=False, default=0.0)
+    
+    transcription_type = db.Column(db.String(32), nullable=False, default='final')
+    was_cached = db.Column(db.Boolean, default=False)
+    error_occurred = db.Column(db.Boolean, default=False)
+    error_message = db.Column(db.String(512), nullable=True)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    billing_period_start = db.Column(db.DateTime, nullable=True, index=True)
+    
+    WHISPER_COST_PER_MINUTE_USD = 0.006
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "session_id": self.session_id,
+            "audio_duration_seconds": self.audio_duration_seconds,
+            "audio_size_bytes": self.audio_size_bytes,
+            "model_used": self.model_used,
+            "api_latency_ms": self.api_latency_ms,
+            "cost_usd": self.cost_usd,
+            "transcription_type": self.transcription_type,
+            "was_cached": self.was_cached,
+            "error_occurred": self.error_occurred,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class UsageSummary(db.Model):
+    """Aggregated usage summary per user per billing period."""
+    __tablename__ = "usage_summaries"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(64), nullable=False, index=True)
+    
+    billing_period_start = db.Column(db.DateTime, nullable=False, index=True)
+    billing_period_end = db.Column(db.DateTime, nullable=False)
+    
+    total_audio_seconds = db.Column(db.Float, nullable=False, default=0.0)
+    total_api_calls = db.Column(db.Integer, nullable=False, default=0)
+    total_cost_usd = db.Column(db.Float, nullable=False, default=0.0)
+    
+    tier = db.Column(db.String(32), nullable=False, default='free')
+    hours_limit = db.Column(db.Float, nullable=True)
+    hours_used = db.Column(db.Float, nullable=False, default=0.0)
+    
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'billing_period_start', name='uq_user_billing_period'),
+    )
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "billing_period_start": self.billing_period_start.isoformat() if self.billing_period_start else None,
+            "billing_period_end": self.billing_period_end.isoformat() if self.billing_period_end else None,
+            "total_audio_seconds": self.total_audio_seconds,
+            "total_api_calls": self.total_api_calls,
+            "total_cost_usd": self.total_cost_usd,
+            "tier": self.tier,
+            "hours_limit": self.hours_limit,
+            "hours_used": self.hours_used,
+            "percent_used": (self.hours_used / self.hours_limit * 100) if self.hours_limit and self.hours_limit > 0 else 0,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
