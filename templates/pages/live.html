@@ -77,6 +77,28 @@
     }
 }
 
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+}
+
 .recorder-status {
     display: inline-flex;
     align-items: center;
@@ -1491,6 +1513,74 @@ socket.on('connect', () => {
 socket.on('disconnect', () => {
     console.log('Socket.IO disconnected');
 });
+
+// Tier status - check if user has live transcription access
+let userTierStatus = { tier: 'free', has_live_transcription: false };
+
+async function checkTierStatus() {
+    try {
+        const response = await fetch('/api/transcription/tier-status');
+        if (response.ok) {
+            userTierStatus = await response.json();
+            console.log('User tier status:', userTierStatus);
+            
+            // Show upgrade banner for non-Business users
+            if (!userTierStatus.has_live_transcription) {
+                showTierBanner();
+            }
+        }
+    } catch (e) {
+        console.warn('Could not check tier status:', e);
+    }
+}
+
+function showTierBanner() {
+    const banner = document.createElement('div');
+    banner.id = 'tier-upgrade-banner';
+    banner.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(139, 92, 246, 0.95));
+        color: white;
+        padding: 14px 24px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        z-index: 1000;
+        box-shadow: 0 8px 32px rgba(99, 102, 241, 0.4);
+        animation: slideUp 0.4s ease-out;
+        max-width: 90%;
+    `;
+    banner.innerHTML = `
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+        <span><strong>${userTierStatus.tier_name || 'Free'} Plan:</strong> Transcript available after recording stops. Upgrade for live updates!</span>
+        <a href="/ui/billing" style="background: white; color: #6366f1; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-weight: 600; white-space: nowrap;">
+            Upgrade Now
+        </a>
+        <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; padding: 4px;">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    `;
+    document.body.appendChild(banner);
+    
+    // Auto-hide after 15 seconds
+    setTimeout(() => {
+        if (document.getElementById('tier-upgrade-banner')) {
+            banner.style.animation = 'slideDown 0.4s ease-out forwards';
+            setTimeout(() => banner.remove(), 400);
+        }
+    }, 15000);
+}
+
+// Check tier on page load
+checkTierStatus();
 
 let currentInterimSegment = null;
 let lastSpeaker = null;
