@@ -28,8 +28,43 @@ from app import socketio
 
 # Import advanced buffer management and services
 from services.session_buffer_manager import buffer_registry, BufferConfig, SessionBufferManager
+from services.streaming_transcription_service import streaming_transcription_service, TranscriptionChunk
 
 logger = logging.getLogger(__name__)
+
+# Phase 3: Direct transcription using streaming service for faster delivery
+def _transcribe_direct(session_id: str, audio_data: bytes, metadata: Dict, processing_state: Dict) -> Optional[Dict]:
+    """Direct transcription using streaming service for <2s latency (Phase 3)"""
+    try:
+        chunk = TranscriptionChunk(
+            chunk_id=int(time.time() * 1000),
+            session_id=session_id,
+            audio_data=audio_data,
+            timestamp=time.time(),
+            duration_ms=metadata.get('duration_ms', 2500),
+            sequence=processing_state.get('sequence', 0),
+            is_final=False
+        )
+        
+        processing_state['sequence'] = processing_state.get('sequence', 0) + 1
+        
+        result = streaming_transcription_service.process_chunk(chunk)
+        
+        if result and result.text:
+            return {
+                'success': True,
+                'text': result.text,
+                'confidence': result.confidence,
+                'is_final': result.is_interim == False,
+                'chunk_id': str(result.chunk_id),
+                'processing_time': result.latency_ms,
+                'audio_quality': 'high' if result.confidence > 0.8 else 'medium',
+                'speech_ratio': metadata.get('speech_ratio', 0.5)
+            }
+        return None
+    except Exception as e:
+        logger.error(f"Direct transcription failed: {e}")
+        return None
 
 def _background_processor(session_id: str, buffer_manager: SessionBufferManager):
     """Enhanced background worker with event-driven processing and dynamic backoff"""
@@ -159,16 +194,22 @@ def _process_enhanced_transcription_request(
     metadata: Dict,
     processing_state: Dict
 ) -> bool:
-    """Process transcription request with comprehensive enhancements"""
+    """Process transcription request with comprehensive enhancements (Phase 3: direct transcription)"""
     try:
-        # Enhanced payload preparation
-        enhanced_payload = _prepare_enhanced_payload(session_id, audio_data, metadata, processing_state)
-        
-        # Make API request with circuit breaker pattern
-        response = _make_resilient_api_request(enhanced_payload, processing_state)
+        # Phase 3: Try direct transcription first for lower latency
+        response = _transcribe_direct(session_id, audio_data, metadata, processing_state)
         
         if response and response.get('success'):
             # Advanced result processing
+            _process_enhanced_transcription_result(session_id, response, processing_state)
+            logger.debug(f"✅ Direct transcription succeeded in {response.get('processing_time', 0):.0f}ms")
+            return True
+        
+        # Fallback to API request if direct fails
+        enhanced_payload = _prepare_enhanced_payload(session_id, audio_data, metadata, processing_state)
+        response = _make_resilient_api_request(enhanced_payload, processing_state)
+        
+        if response and response.get('success'):
             _process_enhanced_transcription_result(session_id, response, processing_state)
             return True
         else:
@@ -384,9 +425,9 @@ def _calculate_throughput_score(metrics: Dict) -> float:
 enhanced_active_sessions = {}
 enhanced_buffer_config = BufferConfig(
     max_buffer_ms=25000,      # Reduced for lower latency
-    min_flush_ms=1500,        # Faster minimum flush
-    max_flush_ms=6000,        # Faster maximum flush
-    overlap_ms=750,           # More overlap for context
+    min_flush_ms=1500,        # Faster minimum flush (Phase 3: unchanged)
+    max_flush_ms=2500,        # Phase 3: Reduced from 6000 to 2500 for <2s latency
+    overlap_ms=300,           # Phase 3: Reduced from 750 to 300 for faster processing
     enable_vad=True,
     enable_quality_gating=True,
     min_energy_threshold=0.005,  # More sensitive threshold
