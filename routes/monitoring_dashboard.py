@@ -267,6 +267,52 @@ def get_error_statistics():
         }), 500
 
 
+@monitoring_bp.route('/transcription-latency', methods=['GET'])
+def get_transcription_latency():
+    """Get real-time transcription latency metrics (Phase 3)"""
+    try:
+        from services.streaming_transcription_service import streaming_transcription_service
+        
+        stats = streaming_transcription_service.get_stats()
+        target_latency_ms = stats.get('target_latency_ms', 2000)
+        avg_latency_ms = stats.get('avg_latency_ms', 0)
+        p95_latency_ms = stats.get('p95_latency_ms', 0)
+        
+        sla_status = 'healthy' if avg_latency_ms < target_latency_ms else 'degraded'
+        if avg_latency_ms > target_latency_ms * 1.5:
+            sla_status = 'critical'
+        
+        return jsonify({
+            'timestamp': datetime.utcnow().isoformat(),
+            'latency_metrics': {
+                'avg_latency_ms': avg_latency_ms,
+                'p95_latency_ms': p95_latency_ms,
+                'target_latency_ms': target_latency_ms,
+                'sla_status': sla_status,
+                'meets_target': avg_latency_ms < target_latency_ms
+            },
+            'throughput': {
+                'total_chunks': stats.get('total_chunks', 0),
+                'successful': stats.get('successful', 0),
+                'failed': stats.get('failed', 0),
+                'success_rate': round(stats.get('successful', 0) / max(1, stats.get('total_chunks', 1)) * 100, 1)
+            },
+            'active_sessions': stats.get('active_sessions', 0),
+            'comparison': {
+                'vs_otter_ai': '✅ Meeting target' if avg_latency_ms < 2000 else '⚠️ Above target',
+                'vs_google_recorder': '✅ Better' if avg_latency_ms < 500 else '⚠️ Slower',
+                'phase3_target': f"{'✅' if avg_latency_ms < 2000 else '❌'} <2s target"
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to get transcription latency: {e}", exc_info=True)
+        return jsonify({
+            'error': f'Latency metrics failed: {str(e)}',
+            'timestamp': datetime.utcnow().isoformat()
+        }), 500
+
+
 @monitoring_bp.route('/accessibility', methods=['GET'])
 def get_accessibility_status():
     """Get accessibility compliance status"""

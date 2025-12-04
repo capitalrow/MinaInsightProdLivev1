@@ -1141,6 +1141,44 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning(f"Startup validation skipped: {e}")
     
+    # Phase 3: Prewarm AI services for faster first transcription
+    try:
+        import threading
+        
+        def _prewarm_ai_services():
+            """Background prewarm of AI services for lower latency on first request"""
+            try:
+                # Prewarm streaming transcription service (OpenAI client)
+                from services.streaming_transcription_service import streaming_transcription_service
+                streaming_transcription_service.prewarm()
+                app.logger.info("✅ Streaming transcription service prewarmed")
+            except Exception as e:
+                app.logger.warning(f"⚠️ Streaming transcription prewarm failed (non-critical): {e}")
+            
+            try:
+                # Prewarm local Whisper service if available
+                from services.local_whisper_service import local_whisper_service
+                local_whisper_service.prewarm()
+                app.logger.info("✅ Local Whisper service prewarmed")
+            except Exception as e:
+                app.logger.debug(f"Local Whisper prewarm skipped: {e}")
+            
+            try:
+                # Prewarm OpenAI client for insights generation
+                import openai
+                client = openai.OpenAI()
+                _ = client.models.list()
+                app.logger.info("✅ OpenAI client prewarmed")
+            except Exception as e:
+                app.logger.debug(f"OpenAI client prewarm skipped: {e}")
+        
+        # Run prewarm in background to not block startup
+        prewarm_thread = threading.Thread(target=_prewarm_ai_services, daemon=True)
+        prewarm_thread.start()
+        app.logger.info("🔥 AI service prewarm initiated in background")
+    except Exception as e:
+        app.logger.warning(f"AI prewarm initialization failed (non-critical): {e}")
+    
     app.logger.info("✅ Mina app ready for traffic")
     return app
 

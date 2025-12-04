@@ -488,3 +488,71 @@ def get_per_user_stats(limit: int = 20) -> list:
     except Exception as e:
         logger.error(f"❌ Failed to get per-user stats: {e}")
         return []
+
+
+def can_use_streaming(user_id: str) -> Tuple[bool, str]:
+    """
+    Check if user can use real-time streaming transcription (Business tier only).
+    
+    Returns:
+        Tuple of (can_stream: bool, reason: str)
+    """
+    tier = get_user_tier(user_id)
+    
+    if tier == SubscriptionTier.BUSINESS:
+        return True, "Business tier - streaming enabled"
+    elif tier == SubscriptionTier.PRO:
+        return False, "Streaming requires Business tier. Upgrade to unlock real-time transcription."
+    else:
+        return False, "Streaming requires Business tier. Upgrade to unlock real-time transcription."
+
+
+def enforce_usage_limits(user_id: str) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+    """
+    Enforce usage limits before allowing transcription.
+    
+    Returns:
+        Tuple of (allowed: bool, error_message: Optional[str], usage_info: Dict)
+    """
+    can_transcribe, usage = check_usage_limit(user_id)
+    
+    if not can_transcribe:
+        tier = usage.get('tier', SubscriptionTier.FREE)
+        hours_limit = usage.get('hours_limit', 5)
+        
+        if tier == SubscriptionTier.FREE:
+            error_msg = f"You've reached your {hours_limit} hour monthly limit on the Free plan. Upgrade to Pro for unlimited transcription."
+        else:
+            error_msg = f"You've reached your monthly transcription limit ({hours_limit} hours). Please contact support or wait for the next billing period."
+        
+        return False, error_msg, usage
+    
+    return True, None, usage
+
+
+def get_enforcement_status(user_id: str) -> Dict[str, Any]:
+    """
+    Get complete enforcement status for a user.
+    
+    Returns comprehensive status including:
+    - can_transcribe: Whether user can make transcription requests
+    - can_stream: Whether user can use streaming (Business only)
+    - usage_info: Current usage statistics
+    - alerts: Any active usage alerts
+    """
+    can_transcribe, usage = check_usage_limit(user_id)
+    can_stream, stream_reason = can_use_streaming(user_id)
+    alerts = get_usage_alerts(user_id)
+    
+    return {
+        'can_transcribe': can_transcribe,
+        'can_stream': can_stream,
+        'stream_reason': stream_reason,
+        'usage': usage,
+        'alerts': alerts,
+        'tier': usage.get('tier', SubscriptionTier.FREE),
+        'tier_name': usage.get('tier_name', 'Free'),
+        'hours_used': usage.get('hours_used', 0),
+        'hours_limit': usage.get('hours_limit', 5),
+        'percent_used': usage.get('percent_used', 0)
+    }
