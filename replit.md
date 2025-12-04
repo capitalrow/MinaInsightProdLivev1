@@ -36,6 +36,15 @@ The application utilizes a layered architecture with Flask as the web framework 
 - **Archive Functionality**: Meeting archival with metadata tracking, event logging, WebSocket broadcasts, toast notifications with undo, restore capability with audit trail.
 - **AI-Powered Insight Reminders**: Predictive AI reminders using GPT-4o-mini to analyze meeting patterns and tasks, real-time WebSocket delivery, smart fallback, toast notifications with action buttons, analyzes overdue tasks/missing follow-ups/recurring patterns, confidence scoring, workspace isolation.
 - **CROWN⁴.5 Tasks Page**: Enterprise-grade task management with offline-first architecture, event-sequenced updates, sub-200ms first paint. Includes `PredictiveEngine`, `QuietStateManager`, `Deduper`, `CognitiveSynchronizer`, `TemporalRecoveryEngine`, and `LedgerCompactor`. Core CRUD events fully implemented with multi-tab sync and optimistic UI. Mobile gestures and AI Partner Nudges are integrated.
+- **Phase 3: Low-Latency Transcription Pipeline** (December 2025): Optimized for <2s transcription delivery targeting Otter.ai parity. Features include:
+  - `StreamingTranscriptionService` with 2.5s chunk duration, 300ms overlap, 3 parallel workers
+  - Direct transcription integration bypassing internal HTTP for reduced latency
+  - Tiered usage enforcement: Free (5 hrs/month), Pro (unlimited), Business (unlimited + streaming)
+  - Server-side authentication binding for secure tier enforcement (prevents spoofing)
+  - Real-time latency metrics via WebSocket (`latency_metrics` event) with P95 tracking
+  - `/api/monitoring/transcription-latency` endpoint for SLA monitoring
+  - Background AI service prewarm on startup (OpenAI client, local Whisper)
+  - Buffer configuration: max_flush 2.5s, min_flush 1.5s for faster delivery
 
 **System Design Choices:**
 - **Backend**: Flask with Flask-SocketIO.
