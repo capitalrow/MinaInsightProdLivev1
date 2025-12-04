@@ -776,7 +776,7 @@
 }
 </style>
 
-<script>
+<script nonce="{{ g.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     (function initPasswordToggles() {
         var toggles = document.querySelectorAll('.password-toggle');
