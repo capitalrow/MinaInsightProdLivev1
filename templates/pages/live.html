@@ -1700,7 +1700,7 @@ recordButton.addEventListener('click', async () => {
             }
             
             console.log('Using MIME type:', mimeType || 'browser default');
-            console.log('💰 Cost optimization: VAD + 3-second chunks enabled');
+            console.log('💰 Final-only mode: Audio buffered locally, transcribed on stop (most accurate & cost-effective)');
             
             mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
             
@@ -1708,26 +1708,10 @@ recordButton.addEventListener('click', async () => {
                 if (!e.data.size) return;
                 chunks.push(e.data);
                 
-                // COST OPTIMIZATION: Only send if voice activity was detected during this chunk
-                if (!shouldSendChunk()) {
-                    silentChunksSkipped++;
-                    console.log(`🔇 Silent chunk skipped (${silentChunksSkipped} total, saved ${silentChunksSkipped * 3}s of API calls)`);
-                    return; // Don't send silent audio to API
-                }
-                
+                // FINAL-ONLY MODE: Just buffer audio locally, don't send during recording
+                // This is more cost-effective and accurate than chunked transcription
                 voiceChunksProcessed++;
-                console.log(`🎤 Voice detected - sending chunk ${voiceChunksProcessed} (${e.data.size} bytes)`);
-                
-                e.data.arrayBuffer().then((buf) => {
-                    const audioArray = Array.from(new Uint8Array(buf));
-                    socket.emit('audio_chunk', {
-                        session_id: String(sessionId),
-                        audio_data: audioArray,
-                        settings: {
-                            mimeType: mimeType
-                        }
-                    });
-                });
+                console.log(`📦 Buffering chunk ${voiceChunksProcessed} (${e.data.size} bytes) - will transcribe on stop`);
             };
             
             mediaRecorder.onstart = () => {
@@ -1739,39 +1723,47 @@ recordButton.addEventListener('click', async () => {
             
             mediaRecorder.onstop = () => {
                 console.log('MediaRecorder stopped');
-                console.log(`💰 Cost summary: ${voiceChunksProcessed} voice chunks sent, ${silentChunksSkipped} silent chunks skipped`);
-                const savingsPercent = silentChunksSkipped > 0 ? Math.round((silentChunksSkipped / (silentChunksSkipped + voiceChunksProcessed)) * 100) : 0;
-                console.log(`💰 Cost savings: ${savingsPercent}% of chunks filtered by VAD`);
+                console.log(`📦 Final-only mode: ${voiceChunksProcessed} chunks buffered locally`);
                 
                 // Stop VAD monitor and close audio context
                 if (vadMonitorId) clearInterval(vadMonitorId);
                 audioContext.close();
                 
                 const fullBlob = new Blob(chunks, { type: mimeType });
+                const audioDurationSec = Math.round((Date.now() - startTime) / 1000);
                 chunks = [];
                 
-                // Show quick save indicator (industry-standard approach)
-                showQuickSaveIndicator();
+                console.log(`🎤 Sending ${fullBlob.size} bytes (${audioDurationSec}s) for transcription...`);
+                
+                // Update transcript area to show transcribing state
+                transcriptContent.innerHTML = `
+                    <div class="transcript-empty" id="transcribing-indicator">
+                        <svg class="transcript-empty-icon" style="animation: shimmerSpin 1s linear infinite;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="40" stroke-dashoffset="10"/>
+                        </svg>
+                        <p class="transcript-empty-title" style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Transcribing your recording...</p>
+                        <p class="transcript-empty-text">This usually takes just a few seconds</p>
+                    </div>
+                `;
                 
                 fullBlob.arrayBuffer().then((buf) => {
+                    // Send full audio for transcription
+                    const audioArray = Array.from(new Uint8Array(buf));
                     socket.emit('finalize_session', {
                         session_id: String(sessionId),
+                        audio_data: audioArray,
                         settings: {
                             mimeType: mimeType
                         }
                     });
                     
-                    // Redirect immediately to transcript view (don't wait for insights)
-                    // Insights will continue processing in background
-                    console.log('🚀 Redirecting to transcript view immediately...');
-                    setTimeout(() => {
-                        window.location.href = `/sessions/${sessionId}/refined`;
-                    }, 500); // Brief delay to ensure finalize event is sent
+                    console.log('📤 Full audio sent for transcription');
                 });
             };
             
-            // COST OPTIMIZATION: 3-second chunks instead of 1-second (3x fewer API calls)
-            mediaRecorder.start(3000);
+            // FINAL-ONLY MODE: No timeslice - record continuously and process on stop
+            // This ensures onstop fires immediately when user clicks stop (no 3s delay)
+            mediaRecorder.start();
             
             isRecording = true;
             startTime = Date.now();
@@ -1789,7 +1781,17 @@ recordButton.addEventListener('click', async () => {
             quickActionsCard.style.display = 'block';
             quickActionsCard.classList.add('revealed');
             
-            transcriptContent.innerHTML = '';
+            // Show recording indicator in transcript area
+            transcriptContent.innerHTML = `
+                <div class="transcript-empty" id="recording-indicator">
+                    <svg class="transcript-empty-icon" style="animation: recordingPulse 1.5s ease-in-out infinite;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                        <circle cx="12" cy="12" r="4" fill="currentColor"/>
+                    </svg>
+                    <p class="transcript-empty-title" style="color: #ef4444;">Recording in progress</p>
+                    <p class="transcript-empty-text">Your transcript will appear when you stop recording</p>
+                </div>
+            `;
             
             animateWaveform();
             
