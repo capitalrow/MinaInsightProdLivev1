@@ -138,3 +138,47 @@ def usage_monitoring():
         )
     except TemplateNotFound:
         abort(404)
+
+
+@ui_bp.route('/admin/analytics')
+@login_required
+def admin_analytics():
+    """Admin analytics dashboard for system-wide monitoring."""
+    if not current_user.is_admin:
+        logger.warning(f"Non-admin user {current_user.id} attempted to access admin analytics")
+        abort(403)
+    
+    from services.usage_tracking_service import get_admin_usage_stats, get_per_user_stats
+    from services.whisper_api import get_fallback_stats
+    from services.voice_activity_detector import get_vad_stats
+    from services.audio_payload_optimizer import get_optimization_stats
+    
+    try:
+        admin_stats = get_admin_usage_stats()
+        fallback_stats = get_fallback_stats()
+        vad_stats = get_vad_stats()
+        optimization_stats = get_optimization_stats()
+        per_user_stats = get_per_user_stats()
+        
+        return render_template(
+            'admin/analytics.html',
+            title='Admin Analytics',
+            admin_stats=admin_stats,
+            fallback_stats=fallback_stats,
+            vad_stats=vad_stats,
+            optimization_stats=optimization_stats,
+            per_user_stats=per_user_stats
+        )
+    except TemplateNotFound:
+        abort(404)
+    except Exception as e:
+        logger.error(f"Error loading admin analytics: {e}")
+        return render_template(
+            'admin/analytics.html',
+            title='Admin Analytics',
+            admin_stats={},
+            fallback_stats={},
+            vad_stats={},
+            optimization_stats={},
+            per_user_stats=[]
+        )

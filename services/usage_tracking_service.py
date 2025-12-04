@@ -367,28 +367,27 @@ def get_admin_usage_stats() -> Dict[str, Any]:
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
     monthly_totals = db.session.query(
-        db.func.sum(TranscriptionUsage.audio_duration_seconds).label('total_seconds'),
-        db.func.sum(TranscriptionUsage.cost_usd).label('total_cost'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, TranscriptionUsage.audio_duration_seconds), else_=0)).label('total_seconds'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, TranscriptionUsage.cost_usd), else_=0)).label('total_cost'),
         db.func.count(TranscriptionUsage.id).label('total_calls'),
-        db.func.count(db.func.distinct(TranscriptionUsage.user_id)).label('unique_users')
+        db.func.count(db.func.distinct(TranscriptionUsage.user_id)).label('unique_users'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, 1), else_=0)).label('success_calls')
     ).filter(
-        TranscriptionUsage.billing_period_start == period_start,
-        TranscriptionUsage.error_occurred == False
+        TranscriptionUsage.billing_period_start == period_start
     ).first()
     
     daily_totals = db.session.query(
-        db.func.sum(TranscriptionUsage.audio_duration_seconds).label('total_seconds'),
-        db.func.sum(TranscriptionUsage.cost_usd).label('total_cost'),
-        db.func.count(TranscriptionUsage.id).label('total_calls')
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, TranscriptionUsage.audio_duration_seconds), else_=0)).label('total_seconds'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, TranscriptionUsage.cost_usd), else_=0)).label('total_cost'),
+        db.func.count(TranscriptionUsage.id).label('total_calls'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, 1), else_=0)).label('success_calls')
     ).filter(
-        TranscriptionUsage.created_at >= today_start,
-        TranscriptionUsage.error_occurred == False
+        TranscriptionUsage.created_at >= today_start
     ).first()
     
-    error_count = TranscriptionUsage.query.filter(
-        TranscriptionUsage.billing_period_start == period_start,
-        TranscriptionUsage.error_occurred == True
-    ).count()
+    success_calls = monthly_totals.success_calls or 0
+    total_calls = monthly_totals.total_calls or 0
+    error_count = total_calls - success_calls
     
     avg_latency = db.session.query(
         db.func.avg(TranscriptionUsage.api_latency_ms)
@@ -397,24 +396,95 @@ def get_admin_usage_stats() -> Dict[str, Any]:
         TranscriptionUsage.api_latency_ms.isnot(None)
     ).scalar()
     
+    total_cost_gbp = (monthly_totals.total_cost or 0) * 0.79
+    today_cost_gbp = (daily_totals.total_cost or 0) * 0.79
+    
     return {
         'period': 'current_month',
         'period_start': period_start.isoformat(),
         'monthly': {
             'total_hours': round((monthly_totals.total_seconds or 0) / 3600, 2),
+            'total_minutes': round((monthly_totals.total_seconds or 0) / 60, 1),
             'total_cost_usd': round(monthly_totals.total_cost or 0, 2),
+            'total_cost_gbp': round(total_cost_gbp, 2),
             'total_api_calls': monthly_totals.total_calls or 0,
             'unique_users': monthly_totals.unique_users or 0
         },
         'today': {
             'total_hours': round((daily_totals.total_seconds or 0) / 3600, 2),
+            'total_minutes': round((daily_totals.total_seconds or 0) / 60, 1),
             'total_cost_usd': round(daily_totals.total_cost or 0, 4),
+            'total_cost_gbp': round(today_cost_gbp, 4),
             'total_api_calls': daily_totals.total_calls or 0
         },
         'errors': {
-            'monthly_error_count': error_count
+            'monthly_error_count': error_count,
+            'success_rate': round((success_calls / max(1, total_calls)) * 100, 1)
         },
         'performance': {
             'avg_latency_ms': round(avg_latency or 0, 0)
         }
     }
+
+
+def get_per_user_stats(limit: int = 20) -> list:
+    """
+    Get per-user usage statistics for admin dashboard.
+    Returns top users by usage in the current billing period.
+    """
+    from services.subscription_service import get_user_tier
+    
+    now = datetime.utcnow()
+    period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    try:
+        user_stats = db.session.query(
+            TranscriptionUsage.user_id,
+            db.func.sum(TranscriptionUsage.audio_duration_seconds).label('total_seconds'),
+            db.func.sum(TranscriptionUsage.cost_usd).label('total_cost'),
+            db.func.count(TranscriptionUsage.id).label('total_calls'),
+            db.func.avg(TranscriptionUsage.api_latency_ms).label('avg_latency'),
+            db.func.sum(db.case((TranscriptionUsage.error_occurred == True, 1), else_=0)).label('error_count')
+        ).filter(
+            TranscriptionUsage.billing_period_start == period_start
+        ).group_by(
+            TranscriptionUsage.user_id
+        ).order_by(
+            db.desc('total_seconds')
+        ).limit(limit).all()
+        
+        results = []
+        for stat in user_stats:
+            tier = get_user_tier(stat.user_id)
+            tier_config = SubscriptionTier.get_tier_config(tier)
+            hours_limit = tier_config.get('hours_per_month', 5)
+            hours_used = (stat.total_seconds or 0) / 3600
+            
+            if hours_limit == -1:
+                percent_used = 0
+            else:
+                percent_used = (hours_used / hours_limit * 100) if hours_limit > 0 else 0
+            
+            success_count = (stat.total_calls or 0) - (stat.error_count or 0)
+            success_rate = (success_count / max(1, stat.total_calls or 1)) * 100
+            
+            results.append({
+                'user_id': stat.user_id,
+                'tier': tier,
+                'tier_name': tier_config.get('name', 'Free'),
+                'hours_used': round(hours_used, 2),
+                'hours_limit': hours_limit if hours_limit != -1 else 'unlimited',
+                'percent_used': round(percent_used, 1),
+                'total_cost_usd': round(stat.total_cost or 0, 4),
+                'total_cost_gbp': round((stat.total_cost or 0) * 0.79, 2),
+                'api_calls': stat.total_calls or 0,
+                'avg_latency_ms': round(stat.avg_latency or 0, 0),
+                'success_rate': round(success_rate, 1),
+                'error_count': stat.error_count or 0
+            })
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to get per-user stats: {e}")
+        return []
