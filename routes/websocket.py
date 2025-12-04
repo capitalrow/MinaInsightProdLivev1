@@ -312,9 +312,28 @@ def on_finalize(data):
     # Get settings from frontend
     settings = (data or {}).get("settings", {})
     mime_type = settings.get("mimeType", "audio/webm")
-    full_audio = bytes(_BUFFERS.get(session_id, b""))
+    
+    # FINAL-ONLY MODE: Get audio from the finalize event (sent as complete blob)
+    audio_data = (data or {}).get("audio_data")
+    if audio_data:
+        # Audio sent directly in finalize_session
+        if isinstance(audio_data, list):
+            full_audio = bytes(audio_data)
+        else:
+            full_audio = bytes(audio_data)
+        logger.info(f"[ws] 🎤 Final-only mode: received {len(full_audio)} bytes for transcription")
+    else:
+        # Fallback to buffered audio (for backwards compatibility)
+        full_audio = bytes(_BUFFERS.get(session_id, b""))
+    
     if not full_audio:
         emit("final_transcript", {"text": ""})
+        emit("transcription_result", {
+            "text": "",
+            "is_final": True,
+            "session_id": session_id,
+            "timestamp": int(_now_ms())
+        })
         return
 
     try:
