@@ -17,7 +17,7 @@ from app import socketio
 # Import database models for persistence
 from models import db, Session, Segment, Participant
 
-from services.openai_whisper_client import transcribe_bytes
+from services.openai_whisper_client import transcribe_bytes, QuotaExhaustedError, is_quota_available, get_api_stats
 from services.speaker_diarization import SpeakerDiarizationEngine, DiarizationConfig
 from services.multi_speaker_diarization import MultiSpeakerDiarization
 
@@ -29,13 +29,19 @@ _BUFFERS: Dict[str, bytearray] = defaultdict(bytearray)
 _LAST_EMIT_AT: Dict[str, float] = {}
 _LAST_INTERIM_TEXT: Dict[str, str] = {}
 
+# COST OPTIMIZATION: Track transcribed position to avoid re-transcribing
+_TRANSCRIBED_POSITION: Dict[str, int] = defaultdict(int)  # bytes already transcribed
+_PENDING_CHUNKS: Dict[str, bytearray] = defaultdict(bytearray)  # new audio not yet transcribed
+_CUMULATIVE_TRANSCRIPT: Dict[str, str] = defaultdict(str)  # running transcript text
+
 # Speaker diarization state (per session)
 _SPEAKER_ENGINES: Dict[str, SpeakerDiarizationEngine] = {}
 _MULTI_SPEAKER_SYSTEMS: Dict[str, MultiSpeakerDiarization] = {}
 _SESSION_SPEAKERS: Dict[str, Dict[str, Dict]] = defaultdict(dict)  # session_id -> speaker_id -> speaker_info
 
-# Tunables
-_MIN_MS_BETWEEN_INTERIM = 400.0      # Real-time feel: ~400ms cadence  
+# Tunables - OPTIMIZED FOR COST
+_MIN_MS_BETWEEN_INTERIM = 2000.0     # 2 second minimum between API calls (was 400ms!)
+_MIN_CHUNK_BYTES = 8000              # Minimum audio bytes before transcribing (~0.5s of audio)
 _MAX_INTERIM_WINDOW_SEC = 14.0       # last N seconds for interim context (optional)
 _MAX_B64_SIZE = 1024 * 1024 * 6      # 6MB guard
 
@@ -99,6 +105,11 @@ def on_join_session(data):
     _BUFFERS[session_id] = bytearray()
     _LAST_EMIT_AT[session_id] = 0
     _LAST_INTERIM_TEXT[session_id] = ""
+    
+    # COST OPTIMIZATION: Reset incremental transcription state
+    _TRANSCRIBED_POSITION[session_id] = 0
+    _PENDING_CHUNKS[session_id] = bytearray()
+    _CUMULATIVE_TRANSCRIPT[session_id] = ""
     
     # Initialize speaker diarization for this session
     try:
@@ -164,13 +175,17 @@ def on_audio_chunk(data):
 
     # Append to full buffer for the eventual final pass
     _BUFFERS[session_id].extend(chunk)
+    
+    # COST OPTIMIZATION: Accumulate new chunks for incremental transcription
+    _PENDING_CHUNKS[session_id].extend(chunk)
 
-    # Only process if we have meaningful audio data (> 200 bytes for real-time feel)
-    if len(chunk) < 200:
+    # Only process if we have enough new audio data (cost optimization)
+    pending_size = len(_PENDING_CHUNKS[session_id])
+    if pending_size < _MIN_CHUNK_BYTES:
         emit("ack", {"ok": True})
         return
     
-    # Rate-limit interim requests
+    # Rate-limit interim requests (2 second minimum between API calls)
     now = _now_ms()
     if (now - _LAST_EMIT_AT.get(session_id, 0)) < _MIN_MS_BETWEEN_INTERIM:
         emit("ack", {"ok": True})
@@ -178,20 +193,44 @@ def on_audio_chunk(data):
 
     _LAST_EMIT_AT[session_id] = now
 
-    # INTERIM: transcribe the last few seconds to keep latency low but with context
-    # (Whisper works on full files; we send a small "window" for near real-time effect)
-    window_bytes = bytes(_BUFFERS[session_id])
-
-    # If the buffer is huge, just take the tail ~N seconds.
-    # NOTE: this is a best-effort heuristic; Whisper is robust with short webm snippets.
+    # COST OPTIMIZATION: Only transcribe NEW audio, not the full buffer!
+    # This prevents quadratic API usage (was re-transcribing entire recording each time)
+    new_audio_bytes = bytes(_PENDING_CHUNKS[session_id])
+    _PENDING_CHUNKS[session_id] = bytearray()  # Clear pending after taking
+    
+    logger.info(f"[ws] 💰 Cost-optimized: transcribing {len(new_audio_bytes)} new bytes (not {len(_BUFFERS[session_id])} total)")
+    
     try:
-        text = transcribe_bytes(window_bytes, mime_hint=mime_type)
+        text = transcribe_bytes(new_audio_bytes, mime_hint=mime_type)
+    except QuotaExhaustedError as e:
+        # GRACEFUL DEGRADATION: Quota exhausted - notify user with friendly message
+        logger.warning(f"[ws] 🚫 Quota exhausted: {e}")
+        stats = get_api_stats()
+        emit("quota_warning", {
+            "message": "Transcription is temporarily paused. Your recording is still being saved.",
+            "retry_in_seconds": int(stats["seconds_until_retry"]),
+            "action": "Your transcript will update when the service resumes.",
+            "session_id": session_id
+        })
+        # Store pending audio for later processing
+        _PENDING_CHUNKS[session_id].extend(new_audio_bytes)
+        emit("ack", {"ok": True, "quota_paused": True})
+        return
     except Exception as e:
         logger.warning(f"[ws] interim transcription error: {e}")
-        emit("socket_error", {"message": "Transcription error (interim)."})
+        emit("socket_error", {"message": "Transcription temporarily unavailable. Recording continues."})
+        # Keep the audio for retry
+        _PENDING_CHUNKS[session_id].extend(new_audio_bytes)
         return
 
     text = (text or "").strip()
+    
+    # COST OPTIMIZATION: Append to cumulative transcript
+    if text:
+        if _CUMULATIVE_TRANSCRIPT[session_id]:
+            _CUMULATIVE_TRANSCRIPT[session_id] += " " + text
+        else:
+            _CUMULATIVE_TRANSCRIPT[session_id] = text
     
     # Enhanced: Process with speaker diarization
     speaker_info = None
@@ -232,16 +271,21 @@ def on_audio_chunk(data):
         except Exception as e:
             logger.warning(f"⚠️ Speaker diarization failed for interim: {e}")
     
-    if text and text != _LAST_INTERIM_TEXT.get(session_id, ""):
+    # Emit if we have new text (use cumulative transcript for display)
+    cumulative = _CUMULATIVE_TRANSCRIPT.get(session_id, "")
+    if text:
         _LAST_INTERIM_TEXT[session_id] = text
         
         # Emit enhanced transcription_result with speaker information
+        # COST OPTIMIZATION: Send cumulative transcript for seamless display
         result = {
-            "text": text,
+            "text": cumulative,  # Send full cumulative transcript
+            "new_text": text,    # New text from this chunk
             "is_final": False,
             "confidence": 0.8,  # Default confidence for interim
             "session_id": session_id,
-            "timestamp": int(_now_ms())
+            "timestamp": int(_now_ms()),
+            "cost_optimized": True  # Flag for debugging
         }
         
         # Add speaker information if available
