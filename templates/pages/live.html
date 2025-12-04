@@ -1563,6 +1563,52 @@ socket.on('final_transcript', (data) => {
     }
 });
 
+// GRACEFUL DEGRADATION: Handle quota exhaustion with user-friendly message
+socket.on('quota_warning', (data) => {
+    console.warn('⚠️ Quota warning:', data.message);
+    
+    // Show non-intrusive notification
+    const notification = document.createElement('div');
+    notification.className = 'quota-notification';
+    notification.innerHTML = `
+        <div style="
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+            z-index: 10000;
+            max-width: 350px;
+            font-size: 14px;
+            animation: slideIn 0.3s ease-out;
+        ">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <span style="font-size: 20px;">⏸️</span>
+                <strong>Live transcription paused</strong>
+            </div>
+            <p style="margin: 0; opacity: 0.9;">${data.message}</p>
+            <p style="margin: 8px 0 0 0; font-size: 12px; opacity: 0.8;">
+                ${data.action} Resuming in ${data.retry_in_seconds}s...
+            </p>
+        </div>
+    `;
+    document.body.appendChild(notification);
+    
+    // Remove notification after a few seconds
+    setTimeout(() => {
+        notification.remove();
+    }, Math.min(data.retry_in_seconds * 1000, 10000));
+});
+
+// Handle socket errors gracefully
+socket.on('socket_error', (data) => {
+    console.warn('⚠️ Socket error:', data.message);
+    // Don't interrupt recording, just log
+});
+
 function updateTimer() {
     if (!startTime) return;
     const elapsed = Date.now() - startTime;
@@ -1593,6 +1639,55 @@ recordButton.addEventListener('click', async () => {
                 } 
             });
             
+            // COST OPTIMIZATION: Set up Voice Activity Detection (VAD) with continuous monitoring
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 512;
+            analyser.smoothingTimeConstant = 0.3;  // Faster response for speech detection
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+            
+            // VAD configuration
+            const VAD_THRESHOLD = 0.015;  // RMS threshold for voice activity
+            const VAD_HYSTERESIS_MS = 1000;  // Continue sending for 1s after last voice
+            let silentChunksSkipped = 0;
+            let voiceChunksProcessed = 0;
+            let voiceDetectedInChunk = false;  // Track if voice was detected in current chunk
+            let lastVoiceTime = 0;  // Time of last voice detection
+            let vadMonitorId = null;
+            
+            // Continuous VAD monitoring (runs every 100ms during recording)
+            function startVADMonitor() {
+                vadMonitorId = setInterval(() => {
+                    const dataArray = new Float32Array(analyser.frequencyBinCount);
+                    analyser.getFloatTimeDomainData(dataArray);
+                    
+                    // Calculate RMS (root mean square) for volume level
+                    let sum = 0;
+                    for (let i = 0; i < dataArray.length; i++) {
+                        sum += dataArray[i] * dataArray[i];
+                    }
+                    const rms = Math.sqrt(sum / dataArray.length);
+                    
+                    if (rms > VAD_THRESHOLD) {
+                        voiceDetectedInChunk = true;
+                        lastVoiceTime = Date.now();
+                    }
+                }, 100);  // Check every 100ms
+            }
+            
+            // Check if we should send this chunk (voice detected OR within hysteresis window)
+            function shouldSendChunk() {
+                const now = Date.now();
+                const inHysteresisWindow = (now - lastVoiceTime) < VAD_HYSTERESIS_MS;
+                const shouldSend = voiceDetectedInChunk || inHysteresisWindow;
+                
+                // Reset for next chunk
+                voiceDetectedInChunk = false;
+                
+                return shouldSend;
+            }
+            
             let mimeType = 'audio/webm;codecs=opus';
             if (!MediaRecorder.isTypeSupported(mimeType)) {
                 if (MediaRecorder.isTypeSupported('audio/webm')) {
@@ -1605,12 +1700,23 @@ recordButton.addEventListener('click', async () => {
             }
             
             console.log('Using MIME type:', mimeType || 'browser default');
+            console.log('💰 Cost optimization: VAD + 3-second chunks enabled');
             
             mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
             
             mediaRecorder.ondataavailable = (e) => {
                 if (!e.data.size) return;
                 chunks.push(e.data);
+                
+                // COST OPTIMIZATION: Only send if voice activity was detected during this chunk
+                if (!shouldSendChunk()) {
+                    silentChunksSkipped++;
+                    console.log(`🔇 Silent chunk skipped (${silentChunksSkipped} total, saved ${silentChunksSkipped * 3}s of API calls)`);
+                    return; // Don't send silent audio to API
+                }
+                
+                voiceChunksProcessed++;
+                console.log(`🎤 Voice detected - sending chunk ${voiceChunksProcessed} (${e.data.size} bytes)`);
                 
                 e.data.arrayBuffer().then((buf) => {
                     const audioArray = Array.from(new Uint8Array(buf));
@@ -1625,12 +1731,22 @@ recordButton.addEventListener('click', async () => {
             };
             
             mediaRecorder.onstart = () => {
-                console.log('MediaRecorder started');
+                console.log('MediaRecorder started with cost optimization');
+                console.log('💰 VAD monitor started - tracking voice activity');
+                startVADMonitor();  // Start continuous VAD monitoring
                 socket.emit('join_session', { session_id: String(sessionId) });
             };
             
             mediaRecorder.onstop = () => {
                 console.log('MediaRecorder stopped');
+                console.log(`💰 Cost summary: ${voiceChunksProcessed} voice chunks sent, ${silentChunksSkipped} silent chunks skipped`);
+                const savingsPercent = silentChunksSkipped > 0 ? Math.round((silentChunksSkipped / (silentChunksSkipped + voiceChunksProcessed)) * 100) : 0;
+                console.log(`💰 Cost savings: ${savingsPercent}% of chunks filtered by VAD`);
+                
+                // Stop VAD monitor and close audio context
+                if (vadMonitorId) clearInterval(vadMonitorId);
+                audioContext.close();
+                
                 const fullBlob = new Blob(chunks, { type: mimeType });
                 chunks = [];
                 
@@ -1654,7 +1770,8 @@ recordButton.addEventListener('click', async () => {
                 });
             };
             
-            mediaRecorder.start(1000);
+            // COST OPTIMIZATION: 3-second chunks instead of 1-second (3x fewer API calls)
+            mediaRecorder.start(3000);
             
             isRecording = true;
             startTime = Date.now();
