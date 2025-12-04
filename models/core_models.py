@@ -78,6 +78,9 @@ class Subscription(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=False, index=True)
     stripe_subscription_id = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    stripe_price_id = db.Column(db.String(255), nullable=True, index=True)
+    stripe_product_id = db.Column(db.String(255), nullable=True, index=True)
+    tier = db.Column(db.String(32), nullable=False, default='free')
     status = db.Column(db.String(32), nullable=False)
     current_period_start = db.Column(db.DateTime, nullable=True)
     current_period_end = db.Column(db.DateTime, nullable=True)
@@ -87,15 +90,95 @@ class Subscription(db.Model):
     
     customer = db.relationship('Customer', back_populates='subscriptions')
     
+    @property
+    def is_active(self) -> bool:
+        """Check if subscription is active."""
+        return self.status in ('active', 'trialing')
+    
+    @property
+    def has_live_transcription(self) -> bool:
+        """Check if subscription tier includes live transcription updates."""
+        return self.tier == 'business' and self.is_active
+    
     def to_dict(self):
         return {
             "id": self.id,
             "customer_id": self.customer_id,
             "stripe_subscription_id": self.stripe_subscription_id,
+            "stripe_price_id": self.stripe_price_id,
+            "stripe_product_id": self.stripe_product_id,
+            "tier": self.tier,
             "status": self.status,
+            "is_active": self.is_active,
+            "has_live_transcription": self.has_live_transcription,
             "current_period_start": self.current_period_start.isoformat() if self.current_period_start else None,
             "current_period_end": self.current_period_end.isoformat() if self.current_period_end else None,
             "cancel_at_period_end": self.cancel_at_period_end,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
+
+
+class SubscriptionTier:
+    """Subscription tier constants and configuration."""
+    FREE = 'free'
+    PRO = 'pro'
+    BUSINESS = 'business'
+    
+    TIERS = {
+        FREE: {
+            'name': 'Free',
+            'price_monthly': 0,
+            'currency': 'gbp',
+            'hours_per_month': 5,
+            'live_transcription': False,
+            'features': [
+                'Final-only transcription',
+                '5 hours/month',
+                'AI-powered summaries',
+                'Action item extraction',
+            ]
+        },
+        PRO: {
+            'name': 'Pro',
+            'price_monthly': 1500,
+            'currency': 'gbp',
+            'hours_per_month': -1,
+            'live_transcription': False,
+            'features': [
+                'Final-only transcription',
+                'Unlimited hours',
+                'AI-powered summaries',
+                'Action item extraction',
+                'Export to PDF/DOCX',
+                'Priority processing',
+            ]
+        },
+        BUSINESS: {
+            'name': 'Business',
+            'price_monthly': 2500,
+            'currency': 'gbp',
+            'hours_per_month': -1,
+            'live_transcription': True,
+            'features': [
+                'Live transcription updates (15-20s)',
+                'Unlimited hours',
+                'AI-powered summaries',
+                'Action item extraction',
+                'Export to PDF/DOCX',
+                'Priority processing',
+                'Calendar integrations',
+                'Team collaboration',
+            ]
+        }
+    }
+    
+    @classmethod
+    def get_tier_config(cls, tier: str) -> dict:
+        """Get configuration for a tier."""
+        return cls.TIERS.get(tier, cls.TIERS[cls.FREE])
+    
+    @classmethod
+    def has_live_transcription(cls, tier: str) -> bool:
+        """Check if tier includes live transcription."""
+        return cls.TIERS.get(tier, {}).get('live_transcription', False)

@@ -1,8 +1,11 @@
+import logging
 from flask import Blueprint, render_template, abort
 from flask_login import login_required, current_user
 from jinja2 import TemplateNotFound
-from models.core_models import Customer, Subscription
+from models.core_models import Customer, Subscription, SubscriptionTier
 from models import db
+
+logger = logging.getLogger(__name__)
 
 ui_bp = Blueprint('ui', __name__, url_prefix='/ui', template_folder='../templates')
 
@@ -20,85 +23,104 @@ def admin_flags():
     except TemplateNotFound:
         abort(404)
 
+
+def _get_pricing_plans_with_stripe():
+    """Get pricing plans with Stripe price IDs from the database or API."""
+    from services.stripe_service import stripe_svc
+    
+    stripe_products = []
+    try:
+        stripe_products = stripe_svc.get_products_with_prices()
+    except Exception as e:
+        logger.warning(f"Could not fetch Stripe products: {e}")
+    
+    stripe_prices = {p['tier']: p for p in stripe_products}
+    
+    pricing_plans = [
+        {
+            'id': 'free',
+            'name': 'Free',
+            'price': 0,
+            'currency': 'GBP',
+            'billing_period': 'forever',
+            'price_id': None,
+            'tier': 'free',
+            'features': SubscriptionTier.TIERS['free']['features'],
+            'recommended': False
+        },
+        {
+            'id': 'pro',
+            'name': 'Pro',
+            'price': 15,
+            'currency': 'GBP',
+            'billing_period': 'month',
+            'price_id': stripe_prices.get('pro', {}).get('price_id'),
+            'tier': 'pro',
+            'features': SubscriptionTier.TIERS['pro']['features'],
+            'recommended': True
+        },
+        {
+            'id': 'business',
+            'name': 'Business',
+            'price': 25,
+            'currency': 'GBP',
+            'billing_period': 'month',
+            'price_id': stripe_prices.get('business', {}).get('price_id'),
+            'tier': 'business',
+            'features': SubscriptionTier.TIERS['business']['features'],
+            'recommended': False
+        }
+    ]
+    
+    for plan in pricing_plans:
+        stripe_data = stripe_prices.get(plan['tier'])
+        if stripe_data:
+            plan['price'] = stripe_data['amount'] / 100
+            plan['currency'] = stripe_data['currency'].upper()
+    
+    return pricing_plans
+
+
 @ui_bp.route('/billing')
 @login_required
 def billing():
     try:
-        pricing_plans = [
-            {
-                'id': 'starter',
-                'name': 'Starter',
-                'price': 0,
-                'billing_period': 'forever',
-                'price_id': None,
-                'features': [
-                    'Up to 5 meetings per month',
-                    'Real-time transcription',
-                    'Basic speaker identification',
-                    'Download transcripts',
-                    '7 days of history'
-                ],
-                'recommended': False
-            },
-            {
-                'id': 'pro',
-                'name': 'Pro',
-                'price': 12,
-                'currency': 'GBP',
-                'billing_period': 'month',
-                'price_id': 'price_1SP46vLIJSqSqVnkHDu6LfRt',
-                'features': [
-                    'Unlimited meetings',
-                    'Advanced AI insights',
-                    'Multi-speaker diarization',
-                    'Task extraction & tracking',
-                    'Calendar integration',
-                    'Unlimited storage',
-                    'Priority support'
-                ],
-                'recommended': True
-            },
-            {
-                'id': 'team',
-                'name': 'Team',
-                'price': 30,
-                'currency': 'GBP',
-                'billing_period': 'month',
-                'price_id': 'price_1SP4ArLIJSqSqVnksFm2zFmp',
-                'features': [
-                    'Everything in Pro',
-                    'Team workspaces',
-                    'Shared meeting library',
-                    'Custom integrations',
-                    'Advanced analytics',
-                    'SSO & SAML',
-                    'Dedicated support'
-                ],
-                'recommended': False
-            }
-        ]
+        pricing_plans = _get_pricing_plans_with_stripe()
         
         subscription_status = None
+        current_tier = 'free'
         customer = db.session.query(Customer).filter_by(user_id=str(current_user.id)).first()
         
         if customer:
-            active_subscription = db.session.query(Subscription).filter_by(
-                customer_id=customer.id,
-                status='active'
+            active_subscription = db.session.query(Subscription).filter(
+                Subscription.customer_id == customer.id,
+                Subscription.status.in_(['active', 'trialing'])
             ).first()
             
             if active_subscription:
+                current_tier = active_subscription.tier or 'free'
                 subscription_status = {
                     'status': active_subscription.status,
+                    'tier': current_tier,
+                    'tier_name': SubscriptionTier.TIERS.get(current_tier, {}).get('name', 'Free'),
+                    'has_live_transcription': active_subscription.has_live_transcription,
                     'current_period_end': active_subscription.current_period_end,
                     'cancel_at_period_end': active_subscription.cancel_at_period_end
                 }
+        
+        for plan in pricing_plans:
+            if plan['tier'] == current_tier:
+                plan['is_current'] = True
+                plan['price_id'] = None
+            else:
+                plan['is_current'] = False
         
         return render_template(
             'billing.html',
             title='Billing',
             pricing_plans=pricing_plans,
             subscription_status=subscription_status,
+            current_tier=current_tier,
             user_id=str(current_user.id)
         )
     except TemplateNotFound:

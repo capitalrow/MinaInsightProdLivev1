@@ -1,7 +1,49 @@
 console.log('🚀 Billing.js loaded!');
 
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.content : '';
+}
+
+function showNotification(message, type = 'info') {
+    if (window.showToast) {
+        window.showToast(message, type);
+        return;
+    }
+    const colors = { success: '#10b981', error: '#ef4444', info: '#6366f1' };
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; padding: 16px 24px;
+        background: ${colors[type] || colors.info}; color: white;
+        border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        z-index: 9999; animation: slideIn 0.3s ease-out;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateX(100%)';
+        notification.style.transition = 'all 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
+}
+
+function checkUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success') === 'true') {
+        showNotification('Subscription activated! Welcome to your new plan.', 'success');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    if (params.get('canceled') === 'true') {
+        showNotification('Checkout was canceled. Try again when ready.', 'info');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎬 DOM Content Loaded - Billing page ready');
+    
+    checkUrlParams();
     
     const container = document.querySelector('[data-user-id]');
     const userId = container ? container.getAttribute('data-user-id') : null;
@@ -32,6 +74,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
                     },
                     body: JSON.stringify({
                         user_id: userId,
@@ -81,6 +124,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
                     },
                     body: JSON.stringify({
                         user_id: userId
