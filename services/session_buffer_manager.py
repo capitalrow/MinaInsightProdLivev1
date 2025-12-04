@@ -27,12 +27,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class BufferConfig:
-    """Configuration for session buffering"""
+    """Configuration for session buffering - Phase 3 optimized for <2s latency"""
     max_buffer_ms: int = 30000  # 30 seconds max buffer
     max_bytes: int = 5 * 1024 * 1024  # 5MB per session
-    min_flush_ms: int = 1000  # Minimum 1s between flushes
-    max_flush_ms: int = 8000  # Maximum 8s before forced flush
-    overlap_ms: int = 500  # 500ms overlap for context
+    min_flush_ms: int = 1500  # Minimum 1.5s between flushes (Phase 3: reduced from 1s)
+    max_flush_ms: int = 2500  # Maximum 2.5s before forced flush (Phase 3: reduced from 8s)
+    overlap_ms: int = 300  # 300ms overlap for context (Phase 3: reduced from 500ms)
     idle_timeout_ms: int = 15000  # 15s idle timeout
     vad_mode: int = 2  # WebRTC VAD aggressiveness (0-3)
     target_sample_rate: int = 16000  # Normalize to 16kHz
