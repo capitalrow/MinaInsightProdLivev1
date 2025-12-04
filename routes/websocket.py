@@ -173,35 +173,54 @@ def on_audio_chunk(data):
     if not chunk:
         return
 
-    # Append to full buffer for the eventual final pass
-    _BUFFERS[session_id].extend(chunk)
+    # Check if this is accumulated audio (full recording so far, not incremental chunk)
+    is_accumulated = (data or {}).get("is_accumulated", False)
     
-    # COST OPTIMIZATION: Accumulate new chunks for incremental transcription
-    _PENDING_CHUNKS[session_id].extend(chunk)
+    if is_accumulated:
+        # STREAMING MODE: Frontend sends cumulative audio with valid WebM headers
+        # Replace buffer entirely (don't extend, as this IS the full audio)
+        _BUFFERS[session_id] = bytearray(chunk)
+        
+        # Rate-limit interim requests (2 second minimum between API calls)
+        now = _now_ms()
+        if (now - _LAST_EMIT_AT.get(session_id, 0)) < _MIN_MS_BETWEEN_INTERIM:
+            emit("ack", {"ok": True})
+            return
+        
+        _LAST_EMIT_AT[session_id] = now
+        
+        # Transcribe the full accumulated audio (it has proper headers)
+        audio_to_transcribe = chunk
+        logger.info(f"[ws] 🚀 Streaming mode: transcribing {len(audio_to_transcribe)} bytes (full accumulated audio)")
+    else:
+        # LEGACY/INCREMENTAL MODE: Append to buffer for eventual final pass
+        _BUFFERS[session_id].extend(chunk)
+        
+        # COST OPTIMIZATION: Accumulate new chunks for incremental transcription
+        _PENDING_CHUNKS[session_id].extend(chunk)
 
-    # Only process if we have enough new audio data (cost optimization)
-    pending_size = len(_PENDING_CHUNKS[session_id])
-    if pending_size < _MIN_CHUNK_BYTES:
-        emit("ack", {"ok": True})
-        return
-    
-    # Rate-limit interim requests (2 second minimum between API calls)
-    now = _now_ms()
-    if (now - _LAST_EMIT_AT.get(session_id, 0)) < _MIN_MS_BETWEEN_INTERIM:
-        emit("ack", {"ok": True})
-        return
+        # Only process if we have enough new audio data (cost optimization)
+        pending_size = len(_PENDING_CHUNKS[session_id])
+        if pending_size < _MIN_CHUNK_BYTES:
+            emit("ack", {"ok": True})
+            return
+        
+        # Rate-limit interim requests (2 second minimum between API calls)
+        now = _now_ms()
+        if (now - _LAST_EMIT_AT.get(session_id, 0)) < _MIN_MS_BETWEEN_INTERIM:
+            emit("ack", {"ok": True})
+            return
 
-    _LAST_EMIT_AT[session_id] = now
+        _LAST_EMIT_AT[session_id] = now
 
-    # COST OPTIMIZATION: Only transcribe NEW audio, not the full buffer!
-    # This prevents quadratic API usage (was re-transcribing entire recording each time)
-    new_audio_bytes = bytes(_PENDING_CHUNKS[session_id])
-    _PENDING_CHUNKS[session_id] = bytearray()  # Clear pending after taking
-    
-    logger.info(f"[ws] 💰 Cost-optimized: transcribing {len(new_audio_bytes)} new bytes (not {len(_BUFFERS[session_id])} total)")
+        # COST OPTIMIZATION: Only transcribe NEW audio, not the full buffer!
+        audio_to_transcribe = bytes(_PENDING_CHUNKS[session_id])
+        _PENDING_CHUNKS[session_id] = bytearray()  # Clear pending after taking
+        
+        logger.info(f"[ws] 💰 Cost-optimized: transcribing {len(audio_to_transcribe)} new bytes (not {len(_BUFFERS[session_id])} total)")
     
     try:
-        text = transcribe_bytes(new_audio_bytes, mime_hint=mime_type)
+        text = transcribe_bytes(audio_to_transcribe, mime_hint=mime_type)
     except QuotaExhaustedError as e:
         # GRACEFUL DEGRADATION: Quota exhausted - notify user with friendly message
         logger.warning(f"[ws] 🚫 Quota exhausted: {e}")
@@ -212,15 +231,17 @@ def on_audio_chunk(data):
             "action": "Your transcript will update when the service resumes.",
             "session_id": session_id
         })
-        # Store pending audio for later processing
-        _PENDING_CHUNKS[session_id].extend(new_audio_bytes)
+        # Store pending audio for later processing (only for non-accumulated mode)
+        if not is_accumulated:
+            _PENDING_CHUNKS[session_id].extend(audio_to_transcribe)
         emit("ack", {"ok": True, "quota_paused": True})
         return
     except Exception as e:
         logger.warning(f"[ws] interim transcription error: {e}")
         emit("socket_error", {"message": "Transcription temporarily unavailable. Recording continues."})
-        # Keep the audio for retry
-        _PENDING_CHUNKS[session_id].extend(new_audio_bytes)
+        # Keep the audio for retry (only for non-accumulated mode)
+        if not is_accumulated:
+            _PENDING_CHUNKS[session_id].extend(audio_to_transcribe)
         return
 
     text = (text or "").strip()

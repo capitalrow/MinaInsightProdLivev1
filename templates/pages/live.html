@@ -1809,18 +1809,24 @@ recordButton.addEventListener('click', async () => {
                 voiceChunksProcessed++;
                 
                 if (useStreamingMode) {
-                    // STREAMING MODE: Send audio chunks during recording for real-time transcription
+                    // STREAMING MODE: Send accumulated audio for real-time transcription
+                    // IMPORTANT: We must send the FULL accumulated blob (all chunks so far)
+                    // because individual chunks after the first don't have WebM headers
+                    // and aren't valid standalone audio files for Whisper API
                     if (shouldSendChunk()) {
-                        e.data.arrayBuffer().then((buf) => {
+                        // Create blob from ALL chunks so far (includes proper WebM header from first chunk)
+                        const accumulatedBlob = new Blob(chunks, { type: mimeType });
+                        accumulatedBlob.arrayBuffer().then((buf) => {
                             const audioArray = Array.from(new Uint8Array(buf));
                             socket.emit('audio_chunk', {
                                 session_id: String(sessionId),
                                 audio_data: audioArray,
                                 chunk_index: voiceChunksProcessed,
                                 timestamp: Date.now(),
+                                is_accumulated: true,  // Flag indicating this is cumulative audio
                                 settings: { mimeType: mimeType }
                             });
-                            console.log(`📤 Streaming chunk ${voiceChunksProcessed} (${e.data.size} bytes) for real-time transcription`);
+                            console.log(`📤 Streaming accumulated audio (${accumulatedBlob.size} bytes, ${voiceChunksProcessed} chunks) for real-time transcription`);
                         });
                     } else {
                         console.log(`⏭️ Skipping silent chunk ${voiceChunksProcessed}`);
