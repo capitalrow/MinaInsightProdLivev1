@@ -4,7 +4,7 @@ import stripe
 import logging
 from stripe import InvalidRequestError
 from typing import Optional
-from models.core_models import Customer, Subscription
+from models.core_models import Customer, Subscription, SubscriptionTier
 from models import db
 
 logger = logging.getLogger(__name__)
@@ -101,24 +101,119 @@ class StripeService:
         customer_id = data.get("customer")
         cust = db.session.query(Customer).filter_by(stripe_customer_id=customer_id).first()
         if not cust: return
-        # link subscription if provided
         sub_id = data.get("subscription")
         if sub_id:
-            self._upsert_subscription(cust, sub_id, "active")
+            stripe_sub = stripe.Subscription.retrieve(sub_id)
+            price_id = None
+            product_id = None
+            if stripe_sub.get("items", {}).get("data"):
+                item = stripe_sub["items"]["data"][0]
+                price_id = item.get("price", {}).get("id")
+                product_id = item.get("price", {}).get("product")
+            self._upsert_subscription(cust, sub_id, "active", price_id, product_id)
 
     def handle_subscription_change(self, data: dict):
-        customer_id = data.get("customer"); status = data.get("status"); sub_id = data.get("id")
+        customer_id = data.get("customer")
+        status = data.get("status")
+        sub_id = data.get("id")
         cust = db.session.query(Customer).filter_by(stripe_customer_id=customer_id).first()
         if not cust or not sub_id: return
-        self._upsert_subscription(cust, sub_id, status or "active")
+        
+        price_id = None
+        product_id = None
+        items = data.get("items", {}).get("data", [])
+        if items:
+            price_id = items[0].get("price", {}).get("id")
+            product_id = items[0].get("price", {}).get("product")
+        
+        self._upsert_subscription(cust, sub_id, status or "active", price_id, product_id)
 
-    def _upsert_subscription(self, cust: Customer, sub_id: str, status: str):
+    def _upsert_subscription(self, cust: Customer, sub_id: str, status: str,
+                              price_id: Optional[str] = None, product_id: Optional[str] = None):
+        tier = self._determine_tier(price_id, product_id)
+        
         s = db.session.query(Subscription).filter_by(stripe_subscription_id=sub_id).first()
         if not s:
-            s = Subscription(customer_id=cust.id, stripe_subscription_id=sub_id, status=status)
+            s = Subscription(
+                customer_id=cust.id,
+                stripe_subscription_id=sub_id,
+                stripe_price_id=price_id,
+                stripe_product_id=product_id,
+                tier=tier,
+                status=status
+            )
             db.session.add(s)
         else:
             s.status = status
+            s.tier = tier
+            if price_id:
+                s.stripe_price_id = price_id
+            if product_id:
+                s.stripe_product_id = product_id
+        
         db.session.commit()
+        logger.info(f"Subscription {sub_id} updated: tier={tier}, status={status}")
+    
+    def _determine_tier(self, price_id: Optional[str], product_id: Optional[str]) -> str:
+        """Determine subscription tier from Stripe product/price."""
+        if not price_id and not product_id:
+            return SubscriptionTier.FREE
+        
+        try:
+            if product_id:
+                product = stripe.Product.retrieve(product_id)
+                if hasattr(product, 'metadata') and product.metadata:
+                    tier = product.metadata.get('tier')
+                    if tier in [SubscriptionTier.PRO, SubscriptionTier.BUSINESS]:
+                        return tier
+                
+                name_lower = (product.name or '').lower()
+                if 'business' in name_lower:
+                    return SubscriptionTier.BUSINESS
+                elif 'pro' in name_lower:
+                    return SubscriptionTier.PRO
+            
+            if price_id:
+                price = stripe.Price.retrieve(price_id)
+                amount = price.unit_amount or 0
+                if amount >= 2500:
+                    return SubscriptionTier.BUSINESS
+                elif amount >= 1500:
+                    return SubscriptionTier.PRO
+                    
+        except Exception as e:
+            logger.error(f"Error determining tier: {e}")
+        
+        return SubscriptionTier.PRO
+    
+    def get_products_with_prices(self) -> list:
+        """Get all active products with their prices for the pricing page."""
+        try:
+            products = stripe.Product.list(active=True, limit=10)
+            result = []
+            
+            for product in products.data:
+                tier = product.metadata.get('tier') if product.metadata else None
+                if tier not in [SubscriptionTier.PRO, SubscriptionTier.BUSINESS]:
+                    continue
+                
+                prices = stripe.Price.list(product=product.id, active=True, limit=5)
+                
+                for price in prices.data:
+                    result.append({
+                        'product_id': product.id,
+                        'product_name': product.name,
+                        'description': product.description,
+                        'tier': tier,
+                        'price_id': price.id,
+                        'amount': price.unit_amount,
+                        'currency': price.currency,
+                        'interval': price.recurring.interval if price.recurring else 'one_time',
+                    })
+            
+            return sorted(result, key=lambda x: x['amount'])
+        except Exception as e:
+            logger.error(f"Error fetching products: {e}")
+            return []
 
 stripe_svc = StripeService()
