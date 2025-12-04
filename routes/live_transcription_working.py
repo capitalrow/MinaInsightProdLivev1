@@ -10,12 +10,16 @@ from werkzeug.utils import secure_filename
 import os
 import tempfile
 import time
+import logging
 from datetime import datetime
 from openai import OpenAI
 import json
 
 # Import socketio instance
 from app import socketio
+from services.subscription_service import subscription_service
+
+logger = logging.getLogger(__name__)
 
 # Create blueprint
 live_transcription_bp = Blueprint('live_transcription_working', __name__)
@@ -39,11 +43,19 @@ def transcribe_chunk_streaming():
     """
     CRITICAL: The main transcription endpoint that actually works
     Processes audio chunks and returns real transcription results
+    
+    TIER GATING:
+    - Free/Pro: Only process final chunks (is_final=true), queue others
+    - Business: Process all chunks with live streaming
     """
     
     # Handle OPTIONS request for CORS
     if request.method == 'OPTIONS':
         return jsonify({'message': 'CORS preflight successful'}), 200
+    
+    # Check user's tier for live streaming access
+    has_live = subscription_service.has_live_transcription(current_user.id)
+    tier = subscription_service.get_user_tier(current_user.id)
     
     # Handle GET request for testing
     if request.method == 'GET':
@@ -52,7 +64,9 @@ def transcribe_chunk_streaming():
             'methods': ['POST', 'GET', 'OPTIONS'],
             'openai_configured': openai_client is not None,
             'endpoint': '/api/transcribe_chunk_streaming',
-            'status': 'ready'
+            'status': 'ready',
+            'tier': tier,
+            'live_streaming_enabled': has_live
         })
     
     start_time = time.time()
@@ -69,6 +83,21 @@ def transcribe_chunk_streaming():
         session_id = request.form.get('session_id', session_id)
         chunk_id = request.form.get('chunk_id', chunk_id)
         is_final = request.form.get('is_final', 'false').lower() == 'true'
+        
+        # TIER GATING: Non-Business users only get final transcription
+        if not has_live and not is_final:
+            logger.info(f"[TIER] Non-Business user {current_user.id} (tier={tier}) - queueing chunk for final processing")
+            return jsonify({
+                'text': '',
+                'confidence': 0,
+                'processing_time': 0,
+                'chunk_id': chunk_id,
+                'session_id': session_id,
+                'type': 'queued',
+                'message': 'Live streaming requires Business plan. Audio queued for final transcription.',
+                'tier': tier,
+                'live_streaming_enabled': False
+            })
         
         # Check if OpenAI is available
         if not openai_client:
@@ -295,6 +324,28 @@ def transcription_health():
             'error': str(e),
             'timestamp': datetime.utcnow().isoformat()
         }), 500
+
+# Tier status endpoint for frontend
+@live_transcription_bp.route('/api/transcription/tier-status', methods=['GET'])
+@login_required
+def transcription_tier_status():
+    """Check user's subscription tier and live streaming access"""
+    from models.core_models import SubscriptionTier
+    
+    tier = subscription_service.get_user_tier(current_user.id)
+    has_live = subscription_service.has_live_transcription(current_user.id)
+    
+    # Get tier config directly from SubscriptionTier.TIERS using the tier string
+    tier_config = SubscriptionTier.TIERS.get(tier, SubscriptionTier.TIERS.get('free', {}))
+    
+    return jsonify({
+        'tier': tier,
+        'tier_name': tier_config.get('name', 'Free'),
+        'has_live_transcription': has_live,
+        'hours_per_month': tier_config.get('hours_per_month'),
+        'features': tier_config.get('features', []),
+        'upgrade_url': '/ui/billing' if not has_live else None
+    })
 
 # Test endpoint for debugging
 @live_transcription_bp.route('/api/transcription/test', methods=['GET', 'POST'])
