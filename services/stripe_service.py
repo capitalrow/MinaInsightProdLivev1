@@ -48,7 +48,7 @@ class StripeService:
         return "http://localhost:5000"
     
     def _ensure_customer(self, user_id: str) -> Customer:
-        cust = Customer.query.filter_by(user_id=user_id).first()
+        cust = db.session.query(Customer).filter_by(user_id=user_id).first()
         
         # Check if existing customer ID is valid in current mode (test/live)
         if cust and cust.stripe_customer_id:
@@ -99,7 +99,7 @@ class StripeService:
 
     def handle_checkout_completed(self, data: dict):
         customer_id = data.get("customer")
-        cust = Customer.query.filter_by(stripe_customer_id=customer_id).first()
+        cust = db.session.query(Customer).filter_by(stripe_customer_id=customer_id).first()
         if not cust: return
         # link subscription if provided
         sub_id = data.get("subscription")
@@ -108,12 +108,12 @@ class StripeService:
 
     def handle_subscription_change(self, data: dict):
         customer_id = data.get("customer"); status = data.get("status"); sub_id = data.get("id")
-        cust = Customer.query.filter_by(stripe_customer_id=customer_id).first()
+        cust = db.session.query(Customer).filter_by(stripe_customer_id=customer_id).first()
         if not cust or not sub_id: return
         self._upsert_subscription(cust, sub_id, status or "active")
 
     def _upsert_subscription(self, cust: Customer, sub_id: str, status: str):
-        s = Subscription.query.filter_by(stripe_subscription_id=sub_id).first()
+        s = db.session.query(Subscription).filter_by(stripe_subscription_id=sub_id).first()
         if not s:
             s = Subscription(customer_id=cust.id, stripe_subscription_id=sub_id, status=status)
             db.session.add(s)

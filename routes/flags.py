@@ -38,7 +38,7 @@ def validate_flag_key(key: str) -> bool:
 @login_required
 def list_flags():
     try:
-        flag_list = FeatureFlag.query.order_by(FeatureFlag.key).all()
+        flag_list = db.session.query(FeatureFlag).order_by(FeatureFlag.key).all()
         return jsonify({"flags": [f.to_dict() for f in flag_list], "success": True})
     except Exception as e:
         return jsonify({"error": str(e), "success": False}), 500
@@ -61,7 +61,7 @@ def upsert_flag():
         if note and len(note) > 255:
             return jsonify({"error": "Note must be 255 characters or less.", "success": False}), 400
         
-        flag = FeatureFlag.query.filter_by(key=key).first()
+        flag = db.session.query(FeatureFlag).filter_by(key=key).first()
         
         if not flag:
             action = "create"
@@ -103,7 +103,7 @@ def toggle_flag(key: str):
         abort(403, "Admin access required")
     
     try:
-        flag = FeatureFlag.query.filter_by(key=key).first()
+        flag = db.session.query(FeatureFlag).filter_by(key=key).first()
         if not flag:
             return jsonify({"error": "Flag not found", "success": False}), 404
         
@@ -138,7 +138,7 @@ def delete_flag(key: str):
         abort(403, "Admin access required")
     
     try:
-        flag = FeatureFlag.query.filter_by(key=key).first()
+        flag = db.session.query(FeatureFlag).filter_by(key=key).first()
         if not flag:
             return jsonify({"error": "Flag not found", "success": False}), 404
         
@@ -168,7 +168,7 @@ def delete_flag(key: str):
 @login_required
 def get_flag_history(key: str):
     try:
-        audit_logs = FlagAuditLog.query.filter_by(flag_key=key).order_by(FlagAuditLog.created_at.desc()).limit(100).all()
+        audit_logs = db.session.query(FlagAuditLog).filter_by(flag_key=key).order_by(FlagAuditLog.created_at.desc()).limit(100).all()
         return jsonify({"history": [log.to_dict() for log in audit_logs], "success": True})
     except Exception as e:
         return jsonify({"error": str(e), "success": False}), 500

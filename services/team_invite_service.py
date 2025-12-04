@@ -43,11 +43,11 @@ def create_and_send_invite(
     if not _is_valid_email(invitee_email):
         return {'success': False, 'error': 'Invalid email address'}
     
-    existing_user = User.query.filter_by(email=invitee_email).first()
+    existing_user = db.session.query(User).filter_by(email=invitee_email).first()
     if existing_user and existing_user.workspace_id == workspace.id:
         return {'success': False, 'error': 'User is already a member of this workspace'}
     
-    existing_invite = TeamInvite.query.filter_by(
+    existing_invite = db.session.query(TeamInvite).filter_by(
         email=invitee_email,
         workspace_id=workspace.id,
         status='pending'
@@ -120,7 +120,7 @@ def accept_invite(token: str, user: User) -> Dict:
     Returns:
         Dict with success status and workspace details
     """
-    invite = TeamInvite.query.filter_by(token=token).first()
+    invite = db.session.query(TeamInvite).filter_by(token=token).first()
     
     if not invite:
         return {'success': False, 'error': 'Invalid invitation'}
@@ -167,7 +167,7 @@ def validate_invite_token(token: str) -> Dict:
     Returns:
         Dict with validity status and invite details
     """
-    invite = TeamInvite.query.filter_by(token=token).first()
+    invite = db.session.query(TeamInvite).filter_by(token=token).first()
     
     if not invite:
         return {'valid': False, 'error': 'Invalid invitation'}
@@ -189,7 +189,7 @@ def validate_invite_token(token: str) -> Dict:
 
 def get_pending_invites_for_workspace(workspace_id: int) -> List[Dict]:
     """Get all pending invites for a workspace."""
-    invites = TeamInvite.query.filter_by(
+    invites = db.session.query(TeamInvite).filter_by(
         workspace_id=workspace_id,
         status='pending'
     ).all()
@@ -199,7 +199,7 @@ def get_pending_invites_for_workspace(workspace_id: int) -> List[Dict]:
 
 def cancel_invite(invite_id: int, user: User) -> Dict:
     """Cancel a pending invitation."""
-    invite = TeamInvite.query.get(invite_id)
+    invite = db.session.get(TeamInvite, invite_id)
     
     if not invite:
         return {'success': False, 'error': 'Invitation not found'}

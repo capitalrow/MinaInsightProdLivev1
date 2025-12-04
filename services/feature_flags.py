@@ -9,7 +9,7 @@ class _Flags:
     _cache = None
     def get(self, key: str, default: bool=False) -> bool:
         if self._cache is None:
-            self._cache = {f.key: f.enabled for f in FeatureFlag.query.all()}
+            self._cache = {f.key: f.enabled for f in db.session.query(FeatureFlag).all()}
         return self._cache.get(key, default)
     def invalidate_cache(self):
         self._cache = None

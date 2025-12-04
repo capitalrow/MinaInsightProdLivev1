@@ -60,25 +60,25 @@ def step_1():
             workspace_name = f"{current_user.username}'s Workspace"
         
         try:
+            import secrets as secrets_module
             base_slug = Workspace.generate_slug(workspace_name)
             
             if current_user.workspace:
                 current_user.workspace.name = workspace_name
                 new_slug = base_slug
-                existing = Workspace.query.filter(
+                existing = db.session.query(Workspace).filter(
                     Workspace.slug == new_slug,
                     Workspace.id != current_user.workspace.id
                 ).first()
                 if existing:
-                    import secrets
-                    new_slug = f"{base_slug}-{secrets.token_hex(4)}"
+                    new_slug = f"{base_slug}-{secrets_module.token_hex(4)}"
                 current_user.workspace.slug = new_slug
+                logger.info(f"Updated existing workspace: {current_user.workspace.name} (slug: {current_user.workspace.slug})")
             else:
                 slug = base_slug
-                existing = Workspace.query.filter_by(slug=slug).first()
+                existing = db.session.query(Workspace).filter_by(slug=slug).first()
                 if existing:
-                    import secrets
-                    slug = f"{slug}-{secrets.token_hex(4)}"
+                    slug = f"{slug}-{secrets_module.token_hex(4)}"
                 
                 workspace = Workspace(
                     name=workspace_name,
@@ -91,6 +91,7 @@ def step_1():
                 db.session.flush()
                 
                 current_user.workspace_id = workspace.id
+                logger.info(f"Created new workspace: {workspace.name} (slug: {workspace.slug})")
             
             prefs = get_user_preferences()
             prefs['role'] = role
@@ -99,12 +100,13 @@ def step_1():
             
             current_user.onboarding_step = 2
             db.session.commit()
+            logger.info(f"Onboarding step 1 completed for user {current_user.id}")
             
             return redirect(url_for('onboarding.step_2'))
             
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Onboarding step 1 error: {e}")
+            logger.error(f"Onboarding step 1 error for user {current_user.id}: {e}", exc_info=True)
             flash('Something went wrong. Please try again.', 'error')
     
     return render_template('onboarding/step_1.html', step=1, total_steps=4)
@@ -208,9 +210,9 @@ def step_4():
         
         next_action = request.form.get('next_action', 'dashboard')
         if next_action == 'start_meeting':
-            return redirect(url_for('session.new'))
+            return redirect(url_for('pages.live'))
         elif next_action == 'explore_tasks':
-            return redirect(url_for('tasks.index'))
+            return redirect(url_for('dashboard.tasks'))
         else:
             return redirect(url_for('dashboard.index'))
     

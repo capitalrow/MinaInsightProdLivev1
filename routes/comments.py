@@ -16,5 +16,5 @@ def add_comment():
 
 @comments_bp.get("/by-segment/<int:segment_id>")
 def list_comments(segment_id: int):
-    cs = Comment.query.filter_by(segment_id=segment_id).order_by(Comment.created_at.asc()).all()
+    cs = db.session.query(Comment).filter_by(segment_id=segment_id).order_by(Comment.created_at.asc()).all()
     return jsonify([c.to_dict() for c in cs])

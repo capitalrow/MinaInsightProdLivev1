@@ -36,7 +36,7 @@ def pre_flight_check():
         # Get workspace information
         workspace_info = None
         if current_user.workspace_id:
-            workspace = Workspace.query.get(current_user.workspace_id)
+            workspace = db.session.get(Workspace, current_user.workspace_id)
             if workspace:
                 workspace_info = {
                     'id': workspace.id,
@@ -47,7 +47,7 @@ def pre_flight_check():
                 }
         
         # Check recent sessions for this user
-        recent_sessions = Session.query.filter_by(user_id=current_user.id).order_by(Session.started_at.desc()).limit(5).all()
+        recent_sessions = db.session.query(Session).filter_by(user_id=current_user.id).order_by(Session.started_at.desc()).limit(5).all()
         session_data = []
         for session in recent_sessions:
             session_data.append({
@@ -64,10 +64,10 @@ def pre_flight_check():
             })
         
         # Check meetings for this user
-        recent_meetings = Meeting.query.filter_by(organizer_id=current_user.id).order_by(Meeting.created_at.desc()).limit(5).all()
+        recent_meetings = db.session.query(Meeting).filter_by(organizer_id=current_user.id).order_by(Meeting.created_at.desc()).limit(5).all()
         meeting_data = []
         for meeting in recent_meetings:
-            task_count = Task.query.filter_by(meeting_id=meeting.id).count()
+            task_count = db.session.query(Task).filter_by(meeting_id=meeting.id).count()
             meeting_data.append({
                 'id': meeting.id,
                 'title': meeting.title,
@@ -97,12 +97,12 @@ def pre_flight_check():
         
         # Calculate stats
         stats = {
-            'total_sessions': Session.query.filter_by(user_id=current_user.id).count(),
-            'total_meetings': Meeting.query.filter_by(organizer_id=current_user.id).count(),
-            'total_tasks': Task.query.filter_by(created_by_id=current_user.id).count(),
+            'total_sessions': db.session.query(Session).filter_by(user_id=current_user.id).count(),
+            'total_meetings': db.session.query(Meeting).filter_by(organizer_id=current_user.id).count(),
+            'total_tasks': db.session.query(Task).filter_by(created_by_id=current_user.id).count(),
             'orphaned_tasks': orphaned_tasks,
-            'sessions_with_workspace': Session.query.filter_by(user_id=current_user.id).filter(Session.workspace_id.isnot(None)).count(),
-            'sessions_with_meeting': Session.query.filter_by(user_id=current_user.id).filter(Session.meeting_id.isnot(None)).count()
+            'sessions_with_workspace': db.session.query(Session).filter_by(user_id=current_user.id).filter(Session.workspace_id.isnot(None)).count(),
+            'sessions_with_meeting': db.session.query(Session).filter_by(user_id=current_user.id).filter(Session.meeting_id.isnot(None)).count()
         }
         
         # Jinja2 template with proper escaping
@@ -385,7 +385,7 @@ def api_status():
     try:
         workspace = None
         if current_user.workspace_id:
-            workspace = Workspace.query.get(current_user.workspace_id)
+            workspace = db.session.get(Workspace, current_user.workspace_id)
         
         return jsonify({
             'ready': current_user.workspace_id is not None,
@@ -400,9 +400,9 @@ def api_status():
                 'is_active': workspace.is_active
             } if workspace else None,
             'stats': {
-                'total_sessions': Session.query.filter_by(user_id=current_user.id).count(),
-                'total_meetings': Meeting.query.filter_by(organizer_id=current_user.id).count(),
-                'total_tasks': Task.query.filter_by(created_by_id=current_user.id).count()
+                'total_sessions': db.session.query(Session).filter_by(user_id=current_user.id).count(),
+                'total_meetings': db.session.query(Meeting).filter_by(organizer_id=current_user.id).count(),
+                'total_tasks': db.session.query(Task).filter_by(created_by_id=current_user.id).count()
             }
         })
     except Exception as e:
