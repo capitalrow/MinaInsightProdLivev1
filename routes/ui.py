@@ -125,3 +125,16 @@ def billing():
         )
     except TemplateNotFound:
         abort(404)
+
+
+@ui_bp.route('/usage-monitoring')
+@login_required
+def usage_monitoring():
+    """Usage monitoring dashboard for transcription costs and API usage."""
+    try:
+        return render_template(
+            'dashboard/usage_monitoring.html',
+            title='Usage Monitoring'
+        )
+    except TemplateNotFound:
+        abort(404)
