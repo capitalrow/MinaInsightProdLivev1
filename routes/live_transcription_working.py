@@ -162,9 +162,36 @@ def transcribe_chunk_streaming():
                     'type': 'error'
                 }), 413
         
+        # PHASE 2: Optimize audio payload before API call
+        original_audio_bytes = audio_file.read()
+        audio_file.seek(0)
+        
+        try:
+            from services.audio_payload_optimizer import optimize_for_whisper
+            optimized_audio, opt_stats = optimize_for_whisper(original_audio_bytes)
+            
+            if opt_stats.get('skipped'):
+                logger.debug(f"[LIVE-API] 🔇 Chunk {chunk_id} skipped (silence detected)")
+                return jsonify({
+                    'text': '',
+                    'confidence': 0,
+                    'processing_time': time.time() - start_time,
+                    'chunk_id': chunk_id,
+                    'type': 'silence',
+                    'message': 'No speech detected in audio chunk'
+                })
+            
+            if opt_stats.get('compression_ratio', 0) > 0:
+                logger.info(f"[LIVE-API] 📉 Audio optimized: {opt_stats['compression_ratio']:.1f}% smaller")
+            
+            audio_to_process = optimized_audio if len(optimized_audio) > 0 else original_audio_bytes
+        except Exception as opt_error:
+            logger.warning(f"[LIVE-API] ⚠️ Audio optimization failed, using original: {opt_error}")
+            audio_to_process = original_audio_bytes
+        
         # Create temporary file for OpenAI processing
         with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-            audio_file.save(temp_file.name)
+            temp_file.write(audio_to_process)
             temp_file_path = temp_file.name
         
         try:
@@ -344,6 +371,24 @@ def transcribe_chunk_streaming():
                 'chunk_id': chunk_id,
                 'type': 'error'
             }), 500
+
+@live_transcription_bp.route('/api/transcription/optimization-stats', methods=['GET'])
+@login_required
+def transcription_optimization_stats():
+    """Get audio optimization statistics (Phase 2)"""
+    try:
+        from services.audio_payload_optimizer import get_optimization_stats
+        stats = get_optimization_stats()
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @live_transcription_bp.route('/api/transcription/health', methods=['GET'])
 def transcription_health():
