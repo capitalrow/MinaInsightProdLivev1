@@ -243,6 +243,20 @@ def get_user_usage(user_id: str) -> Dict[str, Any]:
         total_cost = 0.0
         api_calls = 0
     
+    latency_stats = db.session.query(
+        db.func.avg(TranscriptionUsage.api_latency_ms).label('avg_latency'),
+        db.func.count(TranscriptionUsage.id).label('total'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, 1), else_=0)).label('success')
+    ).filter(
+        TranscriptionUsage.user_id == user_id,
+        TranscriptionUsage.billing_period_start == period_start
+    ).first()
+    
+    avg_latency = latency_stats.avg_latency or 0
+    total_requests = latency_stats.total or 0
+    success_count = latency_stats.success or 0
+    success_rate = (success_count / total_requests * 100) if total_requests > 0 else 100
+    
     if hours_limit == -1:
         percent_used = 0.0
         hours_remaining = float('inf')
@@ -252,6 +266,9 @@ def get_user_usage(user_id: str) -> Dict[str, Any]:
         hours_remaining = max(0, hours_limit - hours_used)
         limit_reached = hours_used >= hours_limit
     
+    total_minutes = hours_used * 60
+    total_cost_gbp = total_cost * 0.79
+    
     return {
         'user_id': user_id,
         'tier': tier,
@@ -260,11 +277,16 @@ def get_user_usage(user_id: str) -> Dict[str, Any]:
         'billing_period_end': period_end.isoformat(),
         'hours_used': round(hours_used, 2),
         'hours_limit': hours_limit if hours_limit != -1 else 'unlimited',
+        'hours_per_month': hours_limit if hours_limit != -1 else 999,
         'hours_remaining': round(hours_remaining, 2) if hours_remaining != float('inf') else 'unlimited',
         'percent_used': round(percent_used, 1),
         'limit_reached': limit_reached,
         'total_cost_usd': round(total_cost, 4),
-        'api_calls': api_calls
+        'total_cost': round(total_cost_gbp, 2),
+        'total_minutes': round(total_minutes, 1),
+        'api_calls': api_calls,
+        'success_rate': round(success_rate, 1),
+        'avg_latency_ms': round(avg_latency, 0)
     }
 
 
@@ -288,6 +310,7 @@ def check_usage_limit(user_id: str) -> Tuple[bool, Dict[str, Any]]:
 def get_usage_alerts(user_id: str) -> list:
     """
     Get usage alerts for a user (80%, 90%, 100% thresholds).
+    Returns alerts in format expected by dashboard.
     """
     usage = get_user_usage(user_id)
     alerts = []
@@ -296,26 +319,38 @@ def get_usage_alerts(user_id: str) -> list:
         return alerts
     
     percent = usage['percent_used']
+    cost = usage.get('total_cost', 0)
     
     if percent >= 100:
         alerts.append({
-            'level': 'error',
+            'type': 'error',
+            'title': 'Usage Limit Reached',
             'message': f"You've reached your {usage['hours_limit']} hour monthly limit. Upgrade to continue transcribing.",
             'percent': percent,
             'action': 'upgrade'
         })
     elif percent >= 90:
         alerts.append({
-            'level': 'warning',
-            'message': f"You've used {percent:.0f}% of your monthly transcription limit.",
+            'type': 'warning',
+            'title': 'Approaching Limit',
+            'message': f"You've used {percent:.0f}% of your monthly transcription limit ({usage['hours_used']:.1f} of {usage['hours_limit']} hours).",
             'percent': percent,
             'action': 'consider_upgrade'
         })
     elif percent >= 80:
         alerts.append({
-            'level': 'info',
+            'type': 'info',
+            'title': 'Usage Update',
             'message': f"You've used {percent:.0f}% of your monthly transcription limit.",
             'percent': percent,
+            'action': None
+        })
+    
+    if cost > 10:
+        alerts.append({
+            'type': 'warning',
+            'title': 'Cost Alert',
+            'message': f"Estimated transcription cost this month: £{cost:.2f}",
             'action': None
         })
     

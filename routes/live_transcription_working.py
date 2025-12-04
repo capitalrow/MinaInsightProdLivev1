@@ -540,3 +540,48 @@ def get_admin_usage_stats():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@live_transcription_bp.route('/api/transcription/fallback-stats', methods=['GET'])
+@login_required
+def get_fallback_stats():
+    """Get local Whisper fallback statistics."""
+    try:
+        from services.whisper_api import get_fallback_stats
+        
+        stats = get_fallback_stats()
+        
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+    except Exception as e:
+        logger.error(f"Failed to get fallback stats: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@live_transcription_bp.route('/api/transcription/preload-fallback', methods=['POST'])
+@login_required
+def preload_fallback_model():
+    """Preload local Whisper model for faster fallback."""
+    try:
+        if not getattr(current_user, 'is_admin', False):
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        from services.whisper_api import preload_local_whisper
+        
+        success = preload_local_whisper()
+        
+        return jsonify({
+            'success': success,
+            'message': 'Model preload started' if success else 'Preload not available'
+        })
+    except Exception as e:
+        logger.error(f"Failed to preload fallback: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
