@@ -1167,6 +1167,87 @@
     }, 2500);
   }
   
+  // CROWN+ Real-time Updates for Background Processing
+  // Refreshes page when insights become ready
+  (function() {
+    const SESSION_ID = '{{ session.external_id }}';
+    const currentStatus = '{{ session.post_transcription_status }}';
+    
+    // Only set up listeners if insights are still processing
+    if (currentStatus === 'processing' || !currentStatus) {
+      console.log('[Session Refined] Insights still processing, setting up real-time updates...');
+      
+      // Connect to Socket.IO for real-time updates
+      if (typeof io !== 'undefined') {
+        const socket = io({
+          path: '/socket.io',
+          transports: ['websocket', 'polling'],
+          reconnection: true
+        });
+        
+        socket.on('connect', () => {
+          console.log('[Session Refined] Connected for real-time updates');
+        });
+        
+        // Listen for insights completion
+        socket.on('insights_generate', (data) => {
+          if (data.session_id === SESSION_ID && data.status === 'completed') {
+            console.log('[Session Refined] Insights ready! Refreshing page...');
+            showInsightsReadyNotification();
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          }
+        });
+        
+        // Also listen for post_transcription_reveal as fallback
+        socket.on('post_transcription_reveal', (data) => {
+          if (data.session_id === SESSION_ID) {
+            console.log('[Session Refined] Post-transcription complete! Refreshing...');
+            window.location.reload();
+          }
+        });
+      }
+      
+      // Fallback: Poll for updates if WebSocket not available
+      let pollAttempts = 0;
+      const maxPolls = 12; // 2 minutes max (10s interval)
+      
+      const pollForUpdates = setInterval(() => {
+        pollAttempts++;
+        if (pollAttempts >= maxPolls) {
+          clearInterval(pollForUpdates);
+          console.log('[Session Refined] Max poll attempts reached, stopping polling');
+          return;
+        }
+        
+        fetch(`/api/sessions/${SESSION_ID}/status`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.post_transcription_status === 'success' || data.post_transcription_status === 'failed') {
+              console.log('[Session Refined] Status changed to:', data.post_transcription_status);
+              clearInterval(pollForUpdates);
+              showInsightsReadyNotification();
+              setTimeout(() => window.location.reload(), 1000);
+            }
+          })
+          .catch(e => console.log('[Session Refined] Poll error:', e));
+      }, 10000); // Poll every 10 seconds
+    }
+    
+    function showInsightsReadyNotification() {
+      const toast = document.createElement('div');
+      toast.className = 'share-toast';
+      toast.innerHTML = `
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        Insights ready! Refreshing...
+      `;
+      document.body.appendChild(toast);
+    }
+  })();
+  
   // CROWN+ Graceful Loading State Timeout Handler
   // Converts perpetual spinners to helpful empty states after 8 seconds
   (function() {
