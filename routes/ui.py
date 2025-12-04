@@ -79,10 +79,10 @@ def billing():
         ]
         
         subscription_status = None
-        customer = Customer.query.filter_by(user_id=str(current_user.id)).first()
+        customer = db.session.query(Customer).filter_by(user_id=str(current_user.id)).first()
         
         if customer:
-            active_subscription = Subscription.query.filter_by(
+            active_subscription = db.session.query(Subscription).filter_by(
                 customer_id=customer.id,
                 status='active'
             ).first()
