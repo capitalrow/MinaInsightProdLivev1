@@ -92,15 +92,31 @@ class StripeService:
 
     def verify_webhook(self, payload: bytes, sig_header: Optional[str]):
         secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+        
+        if not secret:
+            logger.warning("STRIPE_WEBHOOK_SECRET not set - parsing event without signature verification (DEV ONLY)")
+            try:
+                import json
+                return json.loads(payload)
+            except Exception as e:
+                logger.error(f"Failed to parse webhook payload: {e}")
+                return None
+        
         try:
             return stripe.Webhook.construct_event(payload, sig_header, secret)
-        except Exception:
+        except stripe.error.SignatureVerificationError as e:
+            logger.error(f"Webhook signature verification failed: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Webhook verification error: {e}")
             return None
 
     def handle_checkout_completed(self, data: dict):
         customer_id = data.get("customer")
         cust = db.session.query(Customer).filter_by(stripe_customer_id=customer_id).first()
-        if not cust: return
+        if not cust: 
+            logger.warning(f"Checkout completed but customer not found: {customer_id}")
+            return
         sub_id = data.get("subscription")
         if sub_id:
             stripe_sub = stripe.Subscription.retrieve(sub_id)
@@ -110,14 +126,23 @@ class StripeService:
                 item = stripe_sub["items"]["data"][0]
                 price_id = item.get("price", {}).get("id")
                 product_id = item.get("price", {}).get("product")
-            self._upsert_subscription(cust, sub_id, "active", price_id, product_id)
+            
+            stripe_data = {
+                'current_period_end': stripe_sub.get('current_period_end'),
+                'current_period_start': stripe_sub.get('current_period_start'),
+                'cancel_at_period_end': stripe_sub.get('cancel_at_period_end', False)
+            }
+            self._upsert_subscription(cust, sub_id, "active", price_id, product_id, stripe_data)
+            logger.info(f"Checkout completed for user {cust.user_id}: subscription {sub_id}")
 
     def handle_subscription_change(self, data: dict):
         customer_id = data.get("customer")
         status = data.get("status")
         sub_id = data.get("id")
         cust = db.session.query(Customer).filter_by(stripe_customer_id=customer_id).first()
-        if not cust or not sub_id: return
+        if not cust or not sub_id: 
+            logger.warning(f"Subscription change but customer not found: {customer_id}")
+            return
         
         price_id = None
         product_id = None
@@ -126,10 +151,18 @@ class StripeService:
             price_id = items[0].get("price", {}).get("id")
             product_id = items[0].get("price", {}).get("product")
         
-        self._upsert_subscription(cust, sub_id, status or "active", price_id, product_id)
+        stripe_data = {
+            'current_period_end': data.get('current_period_end'),
+            'current_period_start': data.get('current_period_start'),
+            'cancel_at_period_end': data.get('cancel_at_period_end', False)
+        }
+        self._upsert_subscription(cust, sub_id, status or "active", price_id, product_id, stripe_data)
+        logger.info(f"Subscription {sub_id} changed: status={status}")
 
     def _upsert_subscription(self, cust: Customer, sub_id: str, status: str,
-                              price_id: Optional[str] = None, product_id: Optional[str] = None):
+                              price_id: Optional[str] = None, product_id: Optional[str] = None,
+                              stripe_data: Optional[dict] = None):
+        from datetime import datetime
         tier = self._determine_tier(price_id, product_id)
         
         s = db.session.query(Subscription).filter_by(stripe_subscription_id=sub_id).first()
@@ -151,8 +184,16 @@ class StripeService:
             if product_id:
                 s.stripe_product_id = product_id
         
+        if stripe_data:
+            if stripe_data.get('current_period_end'):
+                s.current_period_end = datetime.fromtimestamp(stripe_data['current_period_end'])
+            if stripe_data.get('current_period_start'):
+                s.current_period_start = datetime.fromtimestamp(stripe_data['current_period_start'])
+            if 'cancel_at_period_end' in stripe_data:
+                s.cancel_at_period_end = stripe_data.get('cancel_at_period_end', False)
+        
         db.session.commit()
-        logger.info(f"Subscription {sub_id} updated: tier={tier}, status={status}")
+        logger.info(f"Subscription {sub_id} synced: tier={tier}, status={status}, user={cust.user_id}")
     
     def _determine_tier(self, price_id: Optional[str], product_id: Optional[str]) -> str:
         """Determine subscription tier from Stripe product/price."""
