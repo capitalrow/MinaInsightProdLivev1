@@ -52,7 +52,7 @@ class VoiceActivityDetector:
         self.sample_rate = sample_rate
         self.vad = None
         
-        if VAD_AVAILABLE:
+        if VAD_AVAILABLE and webrtcvad is not None:
             try:
                 self.vad = webrtcvad.Vad(self.aggressiveness)
                 logger.info(f"✅ WebRTC VAD initialized (aggressiveness={self.aggressiveness})")
@@ -116,7 +116,7 @@ class VoiceActivityDetector:
             for i in range(total_frames):
                 frame = pcm_data[i * bytes_per_frame:(i + 1) * bytes_per_frame]
                 try:
-                    if self.vad.is_speech(frame, sample_rate):
+                    if self.vad is not None and self.vad.is_speech(frame, sample_rate):
                         speech_frames += 1
                 except Exception:
                     continue
