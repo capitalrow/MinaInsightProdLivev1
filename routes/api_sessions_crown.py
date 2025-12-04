@@ -177,6 +177,37 @@ def get_sessions_header():
         return jsonify({'error': str(e)}), 500
 
 
+@api_sessions_crown_bp.route('/<session_id>/status', methods=['GET'])
+@login_required
+def get_session_status(session_id: str):
+    """
+    GET /api/sessions/<session_id>/status
+    
+    Lightweight endpoint for polling session processing status.
+    Used by session view page to detect when insights become ready.
+    """
+    try:
+        session = db.session.scalar(
+            select(Session)
+            .where(Session.external_id == session_id)
+            .where(Session.workspace_id == current_user.workspace_id)
+        )
+        
+        if not session:
+            return jsonify({'error': 'Session not found'}), 404
+        
+        return jsonify({
+            'session_id': session.external_id,
+            'status': session.status,
+            'post_transcription_status': session.post_transcription_status,
+            'has_meeting': session.meeting is not None
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_session_status: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
 @api_sessions_crown_bp.route('', methods=['GET'])
 @api_sessions_crown_bp.route('/', methods=['GET'])
 @login_required

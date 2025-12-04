@@ -105,13 +105,19 @@
       if ($("btnStop"))  $("btnStop").disabled = true;
       dlog("MediaRecorder stopped");
 
-      // 2) NEW: finalize the session safely (no crash if endpoint missing)
+      // 2) Show quick saving indicator
       console.log("🛑 Stop pressed, SESSION_EXTERNAL_ID:", SESSION_EXTERNAL_ID);
-      await finalizeSessionSafe(SESSION_EXTERNAL_ID);
+      showQuickSaveIndicator();
 
-      // 3) CROWN+: Show processing shimmer and wait for post_transcription_reveal event
-      console.log("✨ Showing processing shimmer...");
-      showProcessingShimmer();
+      // 3) Finalize session and redirect immediately (industry-standard approach)
+      // Insights will continue processing in background - user sees transcript immediately
+      const success = await finalizeSessionSafe(SESSION_EXTERNAL_ID);
+      
+      // 4) Redirect to session view immediately - don't wait for insights
+      console.log("🚀 Redirecting to transcript view immediately...");
+      if (SESSION_EXTERNAL_ID) {
+        window.location.href = `/sessions/${SESSION_EXTERNAL_ID}/refined`;
+      }
     };
 
     // Chunk every 3s (unchanged)
@@ -215,7 +221,7 @@
     if (!externalId) {
       console.warn("⚠️ No external session id found; skipping finalize.");
       dlog("⚠️ No external session id found; skipping finalize.");
-      return;
+      return false;
     }
 
     // Small debounce to let server finish last chunk processing
@@ -252,21 +258,77 @@
           const retryErrorText = await retry.text();
           console.error(`❌ finalize retry failed: ${retry.status} - ${retryErrorText}`);
           dlog(`❌ finalize retry failed: ${retry.status}`);
+          return false;
         } else {
           const retryData = await retry.json();
           console.log("✅ finalize retry succeeded:", retryData);
           dlog("✅ finalize retry succeeded.");
+          return true;
         }
       } else {
         const data = await res.json();
         console.log("✅ session finalized:", data);
         dlog("✅ session finalized.");
+        return true;
       }
     } catch (e) {
       console.error("❌ finalize error:", e);
       dlog("❌ finalize error: " + e.message);
       // Do not throw; we never want to break navigation
+      return false;
     }
+  }
+  
+  // === Quick Save Indicator (replaces long processing shimmer) ==============
+  function showQuickSaveIndicator() {
+    // Prevent duplicate overlays
+    const existing = document.getElementById('save-indicator');
+    if (existing) return;
+    
+    const indicator = document.createElement('div');
+    indicator.id = 'save-indicator';
+    indicator.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      backdrop-filter: blur(10px);
+      padding: 24px 40px;
+      border-radius: 16px;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      animation: fadeIn 0.2s ease-out;
+    `;
+    
+    indicator.innerHTML = `
+      <div style="
+        width: 24px;
+        height: 24px;
+        border: 3px solid rgba(99, 102, 241, 0.3);
+        border-top-color: #6366f1;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      "></div>
+      <span style="
+        color: white;
+        font-size: 16px;
+        font-weight: 500;
+      ">Saving your recording...</span>
+    `;
+    
+    // Add spin animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(indicator);
   }
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
