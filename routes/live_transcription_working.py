@@ -375,13 +375,18 @@ def transcribe_chunk_streaming():
 @live_transcription_bp.route('/api/transcription/optimization-stats', methods=['GET'])
 @login_required
 def transcription_optimization_stats():
-    """Get audio optimization statistics (Phase 2)"""
+    """Get audio optimization and VAD statistics (Phase 2)"""
     try:
         from services.audio_payload_optimizer import get_optimization_stats
-        stats = get_optimization_stats()
+        from services.voice_activity_detector import get_vad_stats
+        
+        opt_stats = get_optimization_stats()
+        vad_stats = get_vad_stats()
+        
         return jsonify({
             'success': True,
-            'stats': stats,
+            'optimization': opt_stats,
+            'vad': vad_stats,
             'timestamp': datetime.utcnow().isoformat()
         })
     except Exception as e:

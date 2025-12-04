@@ -242,9 +242,22 @@ class AudioPayloadOptimizer:
         return resampled.tobytes()
     
     def _quick_vad_check(self, pcm_data: bytes, threshold_db: float = -40) -> bool:
-        """Quick Voice Activity Detection check."""
+        """
+        Voice Activity Detection using WebRTC VAD with energy fallback.
+        """
         if len(pcm_data) < 320:
             return False
+        
+        try:
+            from services.voice_activity_detector import detect_speech
+            has_speech, details = detect_speech(pcm_data, WHISPER_OPTIMAL_SAMPLE_RATE)
+            
+            if details.get('method') in ('webrtc_vad', 'energy_zcr'):
+                logger.debug(f"🎤 VAD result: speech={has_speech}, details={details}")
+            
+            return has_speech
+        except Exception as e:
+            logger.warning(f"⚠️ WebRTC VAD failed, using basic check: {e}")
         
         samples = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32)
         
