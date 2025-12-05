@@ -246,6 +246,16 @@ class MultiTabSync {
         if (window.location.pathname.includes('/tasks')) {
             if (window.taskBootstrap) {
                 const tasks = await window.taskCache.getFilteredTasks(filter);
+                
+                // CROWN⁴.9 FIX: Prevent render loop during initial bootstrap
+                // Skip render if cache is empty but server already rendered tasks
+                const container = document.getElementById('tasks-list-container');
+                const serverRenderedCards = container?.querySelectorAll('.task-card')?.length || 0;
+                if ((!tasks || tasks.length === 0) && serverRenderedCards > 0) {
+                    console.log(`[MultiTabSync] Skipping filter render - cache empty but ${serverRenderedCards} server cards exist`);
+                    return;
+                }
+                
                 await window.taskBootstrap.renderTasks(tasks);
             }
         }
