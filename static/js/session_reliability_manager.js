@@ -4,7 +4,14 @@
  */
 
 class SessionReliabilityManager {
+    static _instance = null;
+    static _initialized = false;
+    
     constructor() {
+        if (SessionReliabilityManager._instance) {
+            return SessionReliabilityManager._instance;
+        }
+        
         this.isActive = false;
         this.sessionState = {
             id: null,
@@ -52,10 +59,20 @@ class SessionReliabilityManager {
             coveragePercentage: 100
         };
         
+        this.healthMonitorInterval = null;
+        this.heartbeatInterval = null;
+        
         this.setupReliabilityMonitoring();
+        
+        SessionReliabilityManager._instance = this;
     }
     
     initialize() {
+        if (SessionReliabilityManager._initialized) {
+            console.log('🛡️ Session Reliability Manager already initialized');
+            return true;
+        }
+        
         console.log('🛡️ Initializing Session Reliability Manager');
         
         this.startHealthMonitoring();
@@ -63,6 +80,7 @@ class SessionReliabilityManager {
         this.setupGapDetection();
         this.setupQualityAssurance();
         this.isActive = true;
+        SessionReliabilityManager._initialized = true;
         
         console.log('✅ Session reliability manager active');
         return true;
@@ -88,6 +106,16 @@ class SessionReliabilityManager {
     }
     
     startHealthMonitoring() {
+        // Clear any existing intervals to prevent duplicates
+        if (this.healthMonitorInterval) {
+            clearInterval(this.healthMonitorInterval);
+            this.healthMonitorInterval = null;
+        }
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+        
         // Continuous health monitoring
         this.healthMonitorInterval = setInterval(() => {
             this.performHealthCheck();

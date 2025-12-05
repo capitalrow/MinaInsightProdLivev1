@@ -1,0 +1,16 @@
+{
+  "timestamp": "2025-12-02T17:39:52.619824",
+  "summary": {
+    "total_metrics": 0,
+    "passed": 0,
+    "failed": 0,
+    "details": {}
+  },
+  "metrics": {},
+  "thresholds": {
+    "semantic_search_cosine": 0.8,
+    "meeting_grouping_accuracy": 0.95,
+    "predictive_precision": 0.7,
+    "impact_score_correlation": 0.85
+  }
+}

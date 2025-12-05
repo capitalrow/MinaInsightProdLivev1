@@ -10,12 +10,17 @@ from werkzeug.utils import secure_filename
 import os
 import tempfile
 import time
+import logging
 from datetime import datetime
 from openai import OpenAI
 import json
 
 # Import socketio instance
 from app import socketio
+from services.subscription_service import subscription_service
+from services import openai_whisper_client
+
+logger = logging.getLogger(__name__)
 
 # Create blueprint
 live_transcription_bp = Blueprint('live_transcription_working', __name__)
@@ -39,11 +44,19 @@ def transcribe_chunk_streaming():
     """
     CRITICAL: The main transcription endpoint that actually works
     Processes audio chunks and returns real transcription results
+    
+    TIER GATING:
+    - Free/Pro: Only process final chunks (is_final=true), queue others
+    - Business: Process all chunks with live streaming
     """
     
     # Handle OPTIONS request for CORS
     if request.method == 'OPTIONS':
         return jsonify({'message': 'CORS preflight successful'}), 200
+    
+    # Check user's tier for live streaming access
+    has_live = subscription_service.has_live_transcription(current_user.id)
+    tier = subscription_service.get_user_tier(current_user.id)
     
     # Handle GET request for testing
     if request.method == 'GET':
@@ -52,7 +65,9 @@ def transcribe_chunk_streaming():
             'methods': ['POST', 'GET', 'OPTIONS'],
             'openai_configured': openai_client is not None,
             'endpoint': '/api/transcribe_chunk_streaming',
-            'status': 'ready'
+            'status': 'ready',
+            'tier': tier,
+            'live_streaming_enabled': has_live
         })
     
     start_time = time.time()
@@ -60,6 +75,12 @@ def transcribe_chunk_streaming():
     # Initialize variables early to avoid LSP errors
     chunk_id = '1'
     session_id = f'session_{int(time.time())}'
+    
+    # Set usage tracking context for cost monitoring
+    openai_whisper_client.set_tracking_context(
+        user_id=str(current_user.id),
+        session_id=session_id
+    )
     
     try:
         print(f"[LIVE-API] 🎵 Received transcription request")
@@ -69,6 +90,21 @@ def transcribe_chunk_streaming():
         session_id = request.form.get('session_id', session_id)
         chunk_id = request.form.get('chunk_id', chunk_id)
         is_final = request.form.get('is_final', 'false').lower() == 'true'
+        
+        # TIER GATING: Non-Business users only get final transcription
+        if not has_live and not is_final:
+            logger.info(f"[TIER] Non-Business user {current_user.id} (tier={tier}) - queueing chunk for final processing")
+            return jsonify({
+                'text': '',
+                'confidence': 0,
+                'processing_time': 0,
+                'chunk_id': chunk_id,
+                'session_id': session_id,
+                'type': 'queued',
+                'message': 'Live streaming requires Business plan. Audio queued for final transcription.',
+                'tier': tier,
+                'live_streaming_enabled': False
+            })
         
         # Check if OpenAI is available
         if not openai_client:
@@ -126,9 +162,36 @@ def transcribe_chunk_streaming():
                     'type': 'error'
                 }), 413
         
+        # PHASE 2: Optimize audio payload before API call
+        original_audio_bytes = audio_file.read()
+        audio_file.seek(0)
+        
+        try:
+            from services.audio_payload_optimizer import optimize_for_whisper
+            optimized_audio, opt_stats = optimize_for_whisper(original_audio_bytes)
+            
+            if opt_stats.get('skipped'):
+                logger.debug(f"[LIVE-API] 🔇 Chunk {chunk_id} skipped (silence detected)")
+                return jsonify({
+                    'text': '',
+                    'confidence': 0,
+                    'processing_time': time.time() - start_time,
+                    'chunk_id': chunk_id,
+                    'type': 'silence',
+                    'message': 'No speech detected in audio chunk'
+                })
+            
+            if opt_stats.get('compression_ratio', 0) > 0:
+                logger.info(f"[LIVE-API] 📉 Audio optimized: {opt_stats['compression_ratio']:.1f}% smaller")
+            
+            audio_to_process = optimized_audio if len(optimized_audio) > 0 else original_audio_bytes
+        except Exception as opt_error:
+            logger.warning(f"[LIVE-API] ⚠️ Audio optimization failed, using original: {opt_error}")
+            audio_to_process = original_audio_bytes
+        
         # Create temporary file for OpenAI processing
         with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-            audio_file.save(temp_file.name)
+            temp_file.write(audio_to_process)
             temp_file_path = temp_file.name
         
         try:
@@ -164,6 +227,31 @@ def transcribe_chunk_streaming():
                 confidence = 0.5 if text else 0.0
             
             processing_time = time.time() - start_time
+            
+            # PHASE 2: Track API usage for cost monitoring
+            try:
+                from services.usage_tracking_service import track_transcription
+                
+                # Get file size for tracking
+                audio_file.seek(0, 2)  # Seek to end
+                audio_size = audio_file.tell()
+                audio_file.seek(0)  # Reset position
+                
+                track_transcription(
+                    user_id=str(current_user.id),
+                    audio_bytes=b'',  # We already processed it, use size instead
+                    session_id=session_id,
+                    transcription_type='final' if is_final else 'interim',
+                    model_used='whisper-1',
+                    api_latency_ms=int(processing_time * 1000),
+                    was_cached=False,
+                    error_occurred=False,
+                    mime_type='audio/wav',
+                    actual_duration=getattr(transcription, 'duration', None)
+                )
+                logger.debug(f"📊 Usage tracked for user {current_user.id}: {processing_time:.2f}s latency")
+            except Exception as tracking_error:
+                logger.warning(f"⚠️ Usage tracking failed (non-blocking): {tracking_error}")
             
             print(f"[LIVE-API] ✅ Chunk {chunk_id} transcribed successfully:")
 
@@ -235,6 +323,24 @@ def transcribe_chunk_streaming():
         
         print(f"[LIVE-API] ❌ Transcription error for chunk {chunk_id}: {error_msg}")
         
+        # PHASE 2: Track failed transcription for cost monitoring
+        try:
+            from services.usage_tracking_service import track_transcription
+            track_transcription(
+                user_id=str(current_user.id),
+                audio_bytes=b'',
+                session_id=session_id,
+                transcription_type='final' if request.form.get('is_final', 'false').lower() == 'true' else 'interim',
+                model_used='whisper-1',
+                api_latency_ms=int(processing_time * 1000),
+                was_cached=False,
+                error_occurred=True,
+                error_message=error_msg[:500],
+                mime_type='audio/wav'
+            )
+        except Exception as tracking_error:
+            logger.warning(f"⚠️ Error tracking failed: {tracking_error}")
+        
         # Handle specific OpenAI errors
         if "rate_limit" in error_msg.lower():
             return jsonify({
@@ -266,6 +372,29 @@ def transcribe_chunk_streaming():
                 'type': 'error'
             }), 500
 
+@live_transcription_bp.route('/api/transcription/optimization-stats', methods=['GET'])
+@login_required
+def transcription_optimization_stats():
+    """Get audio optimization and VAD statistics (Phase 2)"""
+    try:
+        from services.audio_payload_optimizer import get_optimization_stats
+        from services.voice_activity_detector import get_vad_stats
+        
+        opt_stats = get_optimization_stats()
+        vad_stats = get_vad_stats()
+        
+        return jsonify({
+            'success': True,
+            'optimization': opt_stats,
+            'vad': vad_stats,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @live_transcription_bp.route('/api/transcription/health', methods=['GET'])
 def transcription_health():
     """Health check for transcription service"""
@@ -296,6 +425,28 @@ def transcription_health():
             'timestamp': datetime.utcnow().isoformat()
         }), 500
 
+# Tier status endpoint for frontend
+@live_transcription_bp.route('/api/transcription/tier-status', methods=['GET'])
+@login_required
+def transcription_tier_status():
+    """Check user's subscription tier and live streaming access"""
+    from models.core_models import SubscriptionTier
+    
+    tier = subscription_service.get_user_tier(current_user.id)
+    has_live = subscription_service.has_live_transcription(current_user.id)
+    
+    # Get tier config directly from SubscriptionTier.TIERS using the tier string
+    tier_config = SubscriptionTier.TIERS.get(tier, SubscriptionTier.TIERS.get('free', {}))
+    
+    return jsonify({
+        'tier': tier,
+        'tier_name': tier_config.get('name', 'Free'),
+        'has_live_transcription': has_live,
+        'hours_per_month': tier_config.get('hours_per_month'),
+        'features': tier_config.get('features', []),
+        'upgrade_url': '/ui/billing' if not has_live else None
+    })
+
 # Test endpoint for debugging
 @live_transcription_bp.route('/api/transcription/test', methods=['GET', 'POST'])
 def transcription_test():
@@ -315,3 +466,122 @@ def transcription_test():
             'files': list(request.files.keys()),
             'openai_ready': openai_client is not None
         })
+
+
+# ============================================================================
+# PHASE 2: Usage Tracking API Endpoints
+# ============================================================================
+
+@live_transcription_bp.route('/api/transcription/usage', methods=['GET'])
+@login_required
+def get_user_transcription_usage():
+    """Get current user's transcription usage for the billing period."""
+    try:
+        from services.usage_tracking_service import get_user_usage, get_usage_alerts
+        
+        usage = get_user_usage(str(current_user.id))
+        alerts = get_usage_alerts(str(current_user.id))
+        
+        return jsonify({
+            'success': True,
+            'usage': usage,
+            'alerts': alerts
+        })
+    except Exception as e:
+        logger.error(f"Failed to get usage: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@live_transcription_bp.route('/api/transcription/usage/check', methods=['GET'])
+@login_required
+def check_transcription_quota():
+    """Check if user has remaining transcription quota."""
+    try:
+        from services.usage_tracking_service import check_usage_limit
+        
+        can_transcribe, usage_info = check_usage_limit(str(current_user.id))
+        
+        return jsonify({
+            'success': True,
+            'can_transcribe': can_transcribe,
+            'usage': usage_info
+        })
+    except Exception as e:
+        logger.error(f"Failed to check quota: {e}")
+        return jsonify({
+            'success': False,
+            'can_transcribe': True,
+            'error': str(e)
+        }), 500
+
+
+@live_transcription_bp.route('/api/admin/transcription/usage-stats', methods=['GET'])
+@login_required
+def get_admin_usage_stats():
+    """Get aggregate usage statistics for admin dashboard."""
+    try:
+        if not getattr(current_user, 'is_admin', False):
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        from services.usage_tracking_service import get_admin_usage_stats
+        
+        stats = get_admin_usage_stats()
+        
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+    except Exception as e:
+        logger.error(f"Failed to get admin stats: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@live_transcription_bp.route('/api/transcription/fallback-stats', methods=['GET'])
+@login_required
+def get_fallback_stats():
+    """Get local Whisper fallback statistics."""
+    try:
+        from services.whisper_api import get_fallback_stats
+        
+        stats = get_fallback_stats()
+        
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+    except Exception as e:
+        logger.error(f"Failed to get fallback stats: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@live_transcription_bp.route('/api/transcription/preload-fallback', methods=['POST'])
+@login_required
+def preload_fallback_model():
+    """Preload local Whisper model for faster fallback."""
+    try:
+        if not getattr(current_user, 'is_admin', False):
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        from services.whisper_api import preload_local_whisper
+        
+        success = preload_local_whisper()
+        
+        return jsonify({
+            'success': success,
+            'message': 'Model preload started' if success else 'Preload not available'
+        })
+    except Exception as e:
+        logger.error(f"Failed to preload fallback: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

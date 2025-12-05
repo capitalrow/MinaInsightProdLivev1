@@ -59,3 +59,8 @@ nest-asyncio
 playwright
 eventlet
 python-dateutil
+oauthlib
+google-api-python-client
+google-auth
+sendgrid
+faster-whisper

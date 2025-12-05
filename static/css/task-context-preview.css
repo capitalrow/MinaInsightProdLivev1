@@ -5,7 +5,7 @@
 
 .context-preview-tooltip {
     position: fixed;
-    z-index: 10000;
+    z-index: var(--z-modal, 1050);
     max-width: 400px;
     min-width: 300px;
     background: rgba(20, 20, 30, 0.95);

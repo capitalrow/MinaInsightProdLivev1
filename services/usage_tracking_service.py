@@ -1,0 +1,558 @@
+"""
+Usage Tracking Service for Mina - Phase 2 Cost Optimization
+
+Tracks transcription API usage per user/session for:
+- Cost monitoring and alerts
+- Tier limit enforcement (Free: 5 hours/month)
+- Usage analytics and reporting
+"""
+import logging
+import time
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, Tuple
+from calendar import monthrange
+
+from models import db
+from models.core_models import TranscriptionUsage, UsageSummary, SubscriptionTier
+
+logger = logging.getLogger(__name__)
+
+WHISPER_COST_PER_MINUTE_USD = 0.006
+
+
+def get_billing_period(user_id: str, subscription_start: Optional[datetime] = None) -> Tuple[datetime, datetime]:
+    """
+    Get the current billing period for a user.
+    If subscription_start is provided, uses that as the anchor.
+    Otherwise, uses the 1st of the current month.
+    """
+    now = datetime.utcnow()
+    
+    if subscription_start:
+        day_of_month = min(subscription_start.day, 28)
+        if now.day >= day_of_month:
+            period_start = now.replace(day=day_of_month, hour=0, minute=0, second=0, microsecond=0)
+            next_month = now.month + 1 if now.month < 12 else 1
+            next_year = now.year if now.month < 12 else now.year + 1
+            max_day = monthrange(next_year, next_month)[1]
+            period_end = datetime(next_year, next_month, min(day_of_month, max_day), 0, 0, 0)
+        else:
+            prev_month = now.month - 1 if now.month > 1 else 12
+            prev_year = now.year if now.month > 1 else now.year - 1
+            max_day = monthrange(prev_year, prev_month)[1]
+            period_start = datetime(prev_year, prev_month, min(day_of_month, max_day), 0, 0, 0)
+            period_end = now.replace(day=day_of_month, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        next_month = now.month + 1 if now.month < 12 else 1
+        next_year = now.year if now.month < 12 else now.year + 1
+        period_end = datetime(next_year, next_month, 1, 0, 0, 0)
+    
+    return period_start, period_end
+
+
+def estimate_audio_duration(audio_bytes: bytes, mime_type: Optional[str] = None) -> float:
+    """
+    Estimate audio duration from bytes.
+    Uses heuristics based on typical compression ratios.
+    
+    Returns duration in seconds.
+    """
+    if not audio_bytes:
+        return 0.0
+    
+    size_bytes = len(audio_bytes)
+    mime = (mime_type or "").lower()
+    
+    if "webm" in mime or "opus" in mime:
+        bytes_per_second = 6000
+    elif "mp3" in mime or "mpeg" in mime:
+        bytes_per_second = 16000
+    elif "ogg" in mime:
+        bytes_per_second = 8000
+    elif "wav" in mime:
+        bytes_per_second = 32000
+    elif "flac" in mime:
+        bytes_per_second = 50000
+    else:
+        bytes_per_second = 16000
+    
+    duration = size_bytes / bytes_per_second
+    return max(0.1, duration)
+
+
+def calculate_cost(duration_seconds: float) -> float:
+    """Calculate cost in USD for audio duration."""
+    duration_minutes = duration_seconds / 60.0
+    return duration_minutes * WHISPER_COST_PER_MINUTE_USD
+
+
+def track_transcription(
+    user_id: str,
+    audio_bytes: bytes,
+    session_id: Optional[str] = None,
+    transcription_type: str = 'final',
+    model_used: str = 'whisper-1',
+    api_latency_ms: Optional[int] = None,
+    was_cached: bool = False,
+    error_occurred: bool = False,
+    error_message: Optional[str] = None,
+    mime_type: Optional[str] = None,
+    actual_duration: Optional[float] = None
+) -> TranscriptionUsage:
+    """
+    Track a transcription API call.
+    
+    Args:
+        user_id: User who made the request
+        audio_bytes: Raw audio data
+        session_id: Optional meeting session ID
+        transcription_type: 'interim' or 'final'
+        model_used: Whisper model name
+        api_latency_ms: API response time in milliseconds
+        was_cached: Whether result was served from cache
+        error_occurred: Whether an error occurred
+        error_message: Error details if any
+        mime_type: Audio MIME type for duration estimation
+        actual_duration: Actual audio duration if known
+    
+    Returns:
+        TranscriptionUsage record
+    """
+    if actual_duration is not None:
+        duration_seconds = actual_duration
+    else:
+        duration_seconds = estimate_audio_duration(audio_bytes, mime_type)
+    
+    cost_usd = 0.0 if was_cached or error_occurred else calculate_cost(duration_seconds)
+    
+    period_start, _ = get_billing_period(user_id)
+    
+    usage = TranscriptionUsage(
+        user_id=user_id,
+        session_id=session_id,
+        audio_duration_seconds=duration_seconds,
+        audio_size_bytes=len(audio_bytes) if audio_bytes else 0,
+        model_used=model_used,
+        api_latency_ms=api_latency_ms,
+        cost_usd=cost_usd,
+        transcription_type=transcription_type,
+        was_cached=was_cached,
+        error_occurred=error_occurred,
+        error_message=error_message[:512] if error_message else None,
+        billing_period_start=period_start
+    )
+    
+    try:
+        db.session.add(usage)
+        db.session.commit()
+        
+        update_usage_summary(user_id, period_start)
+        
+        logger.debug(f"📊 Tracked usage: user={user_id}, duration={duration_seconds:.1f}s, cost=${cost_usd:.4f}")
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Failed to track usage: {e}")
+    
+    return usage
+
+
+def update_usage_summary(user_id: str, period_start: datetime) -> Optional[UsageSummary]:
+    """
+    Update or create the usage summary for a billing period.
+    """
+    from services.subscription_service import get_user_tier
+    
+    try:
+        tier = get_user_tier(user_id)
+        tier_config = SubscriptionTier.get_tier_config(tier)
+        hours_limit = tier_config.get('hours_per_month', 5)
+        if hours_limit == -1:
+            hours_limit = None
+        
+        period_end = period_start + timedelta(days=32)
+        period_end = period_end.replace(day=1)
+        
+        summary = UsageSummary.query.filter_by(
+            user_id=user_id,
+            billing_period_start=period_start
+        ).first()
+        
+        if not summary:
+            summary = UsageSummary(
+                user_id=user_id,
+                billing_period_start=period_start,
+                billing_period_end=period_end,
+                tier=tier,
+                hours_limit=hours_limit
+            )
+            db.session.add(summary)
+        
+        totals = db.session.query(
+            db.func.sum(TranscriptionUsage.audio_duration_seconds).label('total_seconds'),
+            db.func.sum(TranscriptionUsage.cost_usd).label('total_cost'),
+            db.func.count(TranscriptionUsage.id).label('total_calls')
+        ).filter(
+            TranscriptionUsage.user_id == user_id,
+            TranscriptionUsage.billing_period_start == period_start,
+            TranscriptionUsage.was_cached == False,
+            TranscriptionUsage.error_occurred == False
+        ).first()
+        
+        summary.total_audio_seconds = totals.total_seconds or 0.0
+        summary.total_api_calls = totals.total_calls or 0
+        summary.total_cost_usd = totals.total_cost or 0.0
+        summary.hours_used = summary.total_audio_seconds / 3600.0
+        summary.tier = tier
+        summary.hours_limit = hours_limit
+        
+        db.session.commit()
+        
+        return summary
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Failed to update usage summary: {e}")
+        return None
+
+
+def get_user_usage(user_id: str) -> Dict[str, Any]:
+    """
+    Get current usage for a user in the current billing period.
+    """
+    from services.subscription_service import get_user_tier
+    
+    period_start, period_end = get_billing_period(user_id)
+    
+    summary = UsageSummary.query.filter_by(
+        user_id=user_id,
+        billing_period_start=period_start
+    ).first()
+    
+    tier = get_user_tier(user_id)
+    tier_config = SubscriptionTier.get_tier_config(tier)
+    hours_limit = tier_config.get('hours_per_month', 5)
+    
+    if summary:
+        hours_used = summary.hours_used
+        total_cost = summary.total_cost_usd
+        api_calls = summary.total_api_calls
+    else:
+        hours_used = 0.0
+        total_cost = 0.0
+        api_calls = 0
+    
+    latency_stats = db.session.query(
+        db.func.avg(TranscriptionUsage.api_latency_ms).label('avg_latency'),
+        db.func.count(TranscriptionUsage.id).label('total'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, 1), else_=0)).label('success')
+    ).filter(
+        TranscriptionUsage.user_id == user_id,
+        TranscriptionUsage.billing_period_start == period_start
+    ).first()
+    
+    avg_latency = latency_stats.avg_latency or 0
+    total_requests = latency_stats.total or 0
+    success_count = latency_stats.success or 0
+    success_rate = (success_count / total_requests * 100) if total_requests > 0 else 100
+    
+    if hours_limit == -1:
+        percent_used = 0.0
+        hours_remaining = float('inf')
+        limit_reached = False
+    else:
+        percent_used = (hours_used / hours_limit * 100) if hours_limit > 0 else 0
+        hours_remaining = max(0, hours_limit - hours_used)
+        limit_reached = hours_used >= hours_limit
+    
+    total_minutes = hours_used * 60
+    total_cost_gbp = total_cost * 0.79
+    
+    return {
+        'user_id': user_id,
+        'tier': tier,
+        'tier_name': tier_config.get('name', 'Free'),
+        'billing_period_start': period_start.isoformat(),
+        'billing_period_end': period_end.isoformat(),
+        'hours_used': round(hours_used, 2),
+        'hours_limit': hours_limit if hours_limit != -1 else 'unlimited',
+        'hours_per_month': hours_limit if hours_limit != -1 else 999,
+        'hours_remaining': round(hours_remaining, 2) if hours_remaining != float('inf') else 'unlimited',
+        'percent_used': round(percent_used, 1),
+        'limit_reached': limit_reached,
+        'total_cost_usd': round(total_cost, 4),
+        'total_cost': round(total_cost_gbp, 2),
+        'total_minutes': round(total_minutes, 1),
+        'api_calls': api_calls,
+        'success_rate': round(success_rate, 1),
+        'avg_latency_ms': round(avg_latency, 0)
+    }
+
+
+def check_usage_limit(user_id: str) -> Tuple[bool, Dict[str, Any]]:
+    """
+    Check if user has remaining usage quota.
+    
+    Returns:
+        Tuple of (can_transcribe: bool, usage_info: dict)
+    """
+    usage = get_user_usage(user_id)
+    
+    if usage['hours_limit'] == 'unlimited':
+        return True, usage
+    
+    can_transcribe = not usage['limit_reached']
+    
+    return can_transcribe, usage
+
+
+def get_usage_alerts(user_id: str) -> list:
+    """
+    Get usage alerts for a user (80%, 90%, 100% thresholds).
+    Returns alerts in format expected by dashboard.
+    """
+    usage = get_user_usage(user_id)
+    alerts = []
+    
+    if usage['hours_limit'] == 'unlimited':
+        return alerts
+    
+    percent = usage['percent_used']
+    cost = usage.get('total_cost', 0)
+    
+    if percent >= 100:
+        alerts.append({
+            'type': 'error',
+            'title': 'Usage Limit Reached',
+            'message': f"You've reached your {usage['hours_limit']} hour monthly limit. Upgrade to continue transcribing.",
+            'percent': percent,
+            'action': 'upgrade'
+        })
+    elif percent >= 90:
+        alerts.append({
+            'type': 'warning',
+            'title': 'Approaching Limit',
+            'message': f"You've used {percent:.0f}% of your monthly transcription limit ({usage['hours_used']:.1f} of {usage['hours_limit']} hours).",
+            'percent': percent,
+            'action': 'consider_upgrade'
+        })
+    elif percent >= 80:
+        alerts.append({
+            'type': 'info',
+            'title': 'Usage Update',
+            'message': f"You've used {percent:.0f}% of your monthly transcription limit.",
+            'percent': percent,
+            'action': None
+        })
+    
+    if cost > 10:
+        alerts.append({
+            'type': 'warning',
+            'title': 'Cost Alert',
+            'message': f"Estimated transcription cost this month: £{cost:.2f}",
+            'action': None
+        })
+    
+    return alerts
+
+
+def get_admin_usage_stats() -> Dict[str, Any]:
+    """
+    Get aggregate usage statistics for admin dashboard.
+    """
+    now = datetime.utcnow()
+    period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    monthly_totals = db.session.query(
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, TranscriptionUsage.audio_duration_seconds), else_=0)).label('total_seconds'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, TranscriptionUsage.cost_usd), else_=0)).label('total_cost'),
+        db.func.count(TranscriptionUsage.id).label('total_calls'),
+        db.func.count(db.func.distinct(TranscriptionUsage.user_id)).label('unique_users'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, 1), else_=0)).label('success_calls')
+    ).filter(
+        TranscriptionUsage.billing_period_start == period_start
+    ).first()
+    
+    daily_totals = db.session.query(
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, TranscriptionUsage.audio_duration_seconds), else_=0)).label('total_seconds'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, TranscriptionUsage.cost_usd), else_=0)).label('total_cost'),
+        db.func.count(TranscriptionUsage.id).label('total_calls'),
+        db.func.sum(db.case((TranscriptionUsage.error_occurred == False, 1), else_=0)).label('success_calls')
+    ).filter(
+        TranscriptionUsage.created_at >= today_start
+    ).first()
+    
+    success_calls = monthly_totals.success_calls or 0
+    total_calls = monthly_totals.total_calls or 0
+    error_count = total_calls - success_calls
+    
+    avg_latency = db.session.query(
+        db.func.avg(TranscriptionUsage.api_latency_ms)
+    ).filter(
+        TranscriptionUsage.billing_period_start == period_start,
+        TranscriptionUsage.api_latency_ms.isnot(None)
+    ).scalar()
+    
+    total_cost_gbp = (monthly_totals.total_cost or 0) * 0.79
+    today_cost_gbp = (daily_totals.total_cost or 0) * 0.79
+    
+    return {
+        'period': 'current_month',
+        'period_start': period_start.isoformat(),
+        'monthly': {
+            'total_hours': round((monthly_totals.total_seconds or 0) / 3600, 2),
+            'total_minutes': round((monthly_totals.total_seconds or 0) / 60, 1),
+            'total_cost_usd': round(monthly_totals.total_cost or 0, 2),
+            'total_cost_gbp': round(total_cost_gbp, 2),
+            'total_api_calls': monthly_totals.total_calls or 0,
+            'unique_users': monthly_totals.unique_users or 0
+        },
+        'today': {
+            'total_hours': round((daily_totals.total_seconds or 0) / 3600, 2),
+            'total_minutes': round((daily_totals.total_seconds or 0) / 60, 1),
+            'total_cost_usd': round(daily_totals.total_cost or 0, 4),
+            'total_cost_gbp': round(today_cost_gbp, 4),
+            'total_api_calls': daily_totals.total_calls or 0
+        },
+        'errors': {
+            'monthly_error_count': error_count,
+            'success_rate': round((success_calls / max(1, total_calls)) * 100, 1)
+        },
+        'performance': {
+            'avg_latency_ms': round(avg_latency or 0, 0)
+        }
+    }
+
+
+def get_per_user_stats(limit: int = 20) -> list:
+    """
+    Get per-user usage statistics for admin dashboard.
+    Returns top users by usage in the current billing period.
+    """
+    from services.subscription_service import get_user_tier
+    
+    now = datetime.utcnow()
+    period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    try:
+        user_stats = db.session.query(
+            TranscriptionUsage.user_id,
+            db.func.sum(TranscriptionUsage.audio_duration_seconds).label('total_seconds'),
+            db.func.sum(TranscriptionUsage.cost_usd).label('total_cost'),
+            db.func.count(TranscriptionUsage.id).label('total_calls'),
+            db.func.avg(TranscriptionUsage.api_latency_ms).label('avg_latency'),
+            db.func.sum(db.case((TranscriptionUsage.error_occurred == True, 1), else_=0)).label('error_count')
+        ).filter(
+            TranscriptionUsage.billing_period_start == period_start
+        ).group_by(
+            TranscriptionUsage.user_id
+        ).order_by(
+            db.desc('total_seconds')
+        ).limit(limit).all()
+        
+        results = []
+        for stat in user_stats:
+            tier = get_user_tier(stat.user_id)
+            tier_config = SubscriptionTier.get_tier_config(tier)
+            hours_limit = tier_config.get('hours_per_month', 5)
+            hours_used = (stat.total_seconds or 0) / 3600
+            
+            if hours_limit == -1:
+                percent_used = 0
+            else:
+                percent_used = (hours_used / hours_limit * 100) if hours_limit > 0 else 0
+            
+            success_count = (stat.total_calls or 0) - (stat.error_count or 0)
+            success_rate = (success_count / max(1, stat.total_calls or 1)) * 100
+            
+            results.append({
+                'user_id': stat.user_id,
+                'tier': tier,
+                'tier_name': tier_config.get('name', 'Free'),
+                'hours_used': round(hours_used, 2),
+                'hours_limit': hours_limit if hours_limit != -1 else 'unlimited',
+                'percent_used': round(percent_used, 1),
+                'total_cost_usd': round(stat.total_cost or 0, 4),
+                'total_cost_gbp': round((stat.total_cost or 0) * 0.79, 2),
+                'api_calls': stat.total_calls or 0,
+                'avg_latency_ms': round(stat.avg_latency or 0, 0),
+                'success_rate': round(success_rate, 1),
+                'error_count': stat.error_count or 0
+            })
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to get per-user stats: {e}")
+        return []
+
+
+def can_use_streaming(user_id: str) -> Tuple[bool, str]:
+    """
+    Check if user can use real-time streaming transcription (Business tier only).
+    
+    Returns:
+        Tuple of (can_stream: bool, reason: str)
+    """
+    tier = get_user_tier(user_id)
+    
+    if tier == SubscriptionTier.BUSINESS:
+        return True, "Business tier - streaming enabled"
+    elif tier == SubscriptionTier.PRO:
+        return False, "Streaming requires Business tier. Upgrade to unlock real-time transcription."
+    else:
+        return False, "Streaming requires Business tier. Upgrade to unlock real-time transcription."
+
+
+def enforce_usage_limits(user_id: str) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+    """
+    Enforce usage limits before allowing transcription.
+    
+    Returns:
+        Tuple of (allowed: bool, error_message: Optional[str], usage_info: Dict)
+    """
+    can_transcribe, usage = check_usage_limit(user_id)
+    
+    if not can_transcribe:
+        tier = usage.get('tier', SubscriptionTier.FREE)
+        hours_limit = usage.get('hours_limit', 5)
+        
+        if tier == SubscriptionTier.FREE:
+            error_msg = f"You've reached your {hours_limit} hour monthly limit on the Free plan. Upgrade to Pro for unlimited transcription."
+        else:
+            error_msg = f"You've reached your monthly transcription limit ({hours_limit} hours). Please contact support or wait for the next billing period."
+        
+        return False, error_msg, usage
+    
+    return True, None, usage
+
+
+def get_enforcement_status(user_id: str) -> Dict[str, Any]:
+    """
+    Get complete enforcement status for a user.
+    
+    Returns comprehensive status including:
+    - can_transcribe: Whether user can make transcription requests
+    - can_stream: Whether user can use streaming (Business only)
+    - usage_info: Current usage statistics
+    - alerts: Any active usage alerts
+    """
+    can_transcribe, usage = check_usage_limit(user_id)
+    can_stream, stream_reason = can_use_streaming(user_id)
+    alerts = get_usage_alerts(user_id)
+    
+    return {
+        'can_transcribe': can_transcribe,
+        'can_stream': can_stream,
+        'stream_reason': stream_reason,
+        'usage': usage,
+        'alerts': alerts,
+        'tier': usage.get('tier', SubscriptionTier.FREE),
+        'tier_name': usage.get('tier_name', 'Free'),
+        'hours_used': usage.get('hours_used', 0),
+        'hours_limit': usage.get('hours_limit', 5),
+        'percent_used': usage.get('percent_used', 0)
+    }

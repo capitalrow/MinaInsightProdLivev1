@@ -77,6 +77,28 @@
     }
 }
 
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+}
+
 .recorder-status {
     display: inline-flex;
     align-items: center;
@@ -1492,6 +1514,74 @@ socket.on('disconnect', () => {
     console.log('Socket.IO disconnected');
 });
 
+// Tier status - check if user has live transcription access
+let userTierStatus = { tier: 'free', has_live_transcription: false };
+
+async function checkTierStatus() {
+    try {
+        const response = await fetch('/api/transcription/tier-status');
+        if (response.ok) {
+            userTierStatus = await response.json();
+            console.log('User tier status:', userTierStatus);
+            
+            // Show upgrade banner for non-Business users
+            if (!userTierStatus.has_live_transcription) {
+                showTierBanner();
+            }
+        }
+    } catch (e) {
+        console.warn('Could not check tier status:', e);
+    }
+}
+
+function showTierBanner() {
+    const banner = document.createElement('div');
+    banner.id = 'tier-upgrade-banner';
+    banner.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(139, 92, 246, 0.95));
+        color: white;
+        padding: 14px 24px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        z-index: 1000;
+        box-shadow: 0 8px 32px rgba(99, 102, 241, 0.4);
+        animation: slideUp 0.4s ease-out;
+        max-width: 90%;
+    `;
+    banner.innerHTML = `
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+        <span><strong>${userTierStatus.tier_name || 'Free'} Plan:</strong> Transcript available after recording stops. Upgrade for live updates!</span>
+        <a href="/ui/billing" style="background: white; color: #6366f1; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-weight: 600; white-space: nowrap;">
+            Upgrade Now
+        </a>
+        <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; padding: 4px;">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    `;
+    document.body.appendChild(banner);
+    
+    // Auto-hide after 15 seconds
+    setTimeout(() => {
+        if (document.getElementById('tier-upgrade-banner')) {
+            banner.style.animation = 'slideDown 0.4s ease-out forwards';
+            setTimeout(() => banner.remove(), 400);
+        }
+    }, 15000);
+}
+
+// Check tier on page load
+checkTierStatus();
+
 let currentInterimSegment = null;
 let lastSpeaker = null;
 
@@ -1563,6 +1653,52 @@ socket.on('final_transcript', (data) => {
     }
 });
 
+// GRACEFUL DEGRADATION: Handle quota exhaustion with user-friendly message
+socket.on('quota_warning', (data) => {
+    console.warn('⚠️ Quota warning:', data.message);
+    
+    // Show non-intrusive notification
+    const notification = document.createElement('div');
+    notification.className = 'quota-notification';
+    notification.innerHTML = `
+        <div style="
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+            z-index: 10000;
+            max-width: 350px;
+            font-size: 14px;
+            animation: slideIn 0.3s ease-out;
+        ">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <span style="font-size: 20px;">⏸️</span>
+                <strong>Live transcription paused</strong>
+            </div>
+            <p style="margin: 0; opacity: 0.9;">${data.message}</p>
+            <p style="margin: 8px 0 0 0; font-size: 12px; opacity: 0.8;">
+                ${data.action} Resuming in ${data.retry_in_seconds}s...
+            </p>
+        </div>
+    `;
+    document.body.appendChild(notification);
+    
+    // Remove notification after a few seconds
+    setTimeout(() => {
+        notification.remove();
+    }, Math.min(data.retry_in_seconds * 1000, 10000));
+});
+
+// Handle socket errors gracefully
+socket.on('socket_error', (data) => {
+    console.warn('⚠️ Socket error:', data.message);
+    // Don't interrupt recording, just log
+});
+
 function updateTimer() {
     if (!startTime) return;
     const elapsed = Date.now() - startTime;
@@ -1593,6 +1729,55 @@ recordButton.addEventListener('click', async () => {
                 } 
             });
             
+            // COST OPTIMIZATION: Set up Voice Activity Detection (VAD) with continuous monitoring
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 512;
+            analyser.smoothingTimeConstant = 0.3;  // Faster response for speech detection
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+            
+            // VAD configuration
+            const VAD_THRESHOLD = 0.015;  // RMS threshold for voice activity
+            const VAD_HYSTERESIS_MS = 1000;  // Continue sending for 1s after last voice
+            let silentChunksSkipped = 0;
+            let voiceChunksProcessed = 0;
+            let voiceDetectedInChunk = false;  // Track if voice was detected in current chunk
+            let lastVoiceTime = 0;  // Time of last voice detection
+            let vadMonitorId = null;
+            
+            // Continuous VAD monitoring (runs every 100ms during recording)
+            function startVADMonitor() {
+                vadMonitorId = setInterval(() => {
+                    const dataArray = new Float32Array(analyser.frequencyBinCount);
+                    analyser.getFloatTimeDomainData(dataArray);
+                    
+                    // Calculate RMS (root mean square) for volume level
+                    let sum = 0;
+                    for (let i = 0; i < dataArray.length; i++) {
+                        sum += dataArray[i] * dataArray[i];
+                    }
+                    const rms = Math.sqrt(sum / dataArray.length);
+                    
+                    if (rms > VAD_THRESHOLD) {
+                        voiceDetectedInChunk = true;
+                        lastVoiceTime = Date.now();
+                    }
+                }, 100);  // Check every 100ms
+            }
+            
+            // Check if we should send this chunk (voice detected OR within hysteresis window)
+            function shouldSendChunk() {
+                const now = Date.now();
+                const inHysteresisWindow = (now - lastVoiceTime) < VAD_HYSTERESIS_MS;
+                const shouldSend = voiceDetectedInChunk || inHysteresisWindow;
+                
+                // Reset for next chunk
+                voiceDetectedInChunk = false;
+                
+                return shouldSend;
+            }
+            
             let mimeType = 'audio/webm;codecs=opus';
             if (!MediaRecorder.isTypeSupported(mimeType)) {
                 if (MediaRecorder.isTypeSupported('audio/webm')) {
@@ -1606,47 +1791,126 @@ recordButton.addEventListener('click', async () => {
             
             console.log('Using MIME type:', mimeType || 'browser default');
             
+            // Determine transcription mode based on tier
+            const useStreamingMode = userTierStatus.has_live_transcription === true;
+            const STREAMING_CHUNK_MS = 2500;  // Phase 3: 2.5s chunks for real-time transcription
+            
+            if (useStreamingMode) {
+                console.log('🚀 Streaming mode: Real-time transcription enabled (Business tier)');
+            } else {
+                console.log('💰 Final-only mode: Audio buffered locally, transcribed on stop (most accurate & cost-effective)');
+            }
+            
             mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
             
             mediaRecorder.ondataavailable = (e) => {
                 if (!e.data.size) return;
                 chunks.push(e.data);
+                voiceChunksProcessed++;
                 
-                e.data.arrayBuffer().then((buf) => {
-                    const audioArray = Array.from(new Uint8Array(buf));
-                    socket.emit('audio_chunk', {
-                        session_id: String(sessionId),
-                        audio_data: audioArray,
-                        settings: {
-                            mimeType: mimeType
-                        }
-                    });
-                });
+                if (useStreamingMode) {
+                    // STREAMING MODE: Send accumulated audio for real-time transcription
+                    // IMPORTANT: We must send the FULL accumulated blob (all chunks so far)
+                    // because individual chunks after the first don't have WebM headers
+                    // and aren't valid standalone audio files for Whisper API
+                    if (shouldSendChunk()) {
+                        // Create blob from ALL chunks so far (includes proper WebM header from first chunk)
+                        const accumulatedBlob = new Blob(chunks, { type: mimeType });
+                        accumulatedBlob.arrayBuffer().then((buf) => {
+                            const audioArray = Array.from(new Uint8Array(buf));
+                            socket.emit('audio_chunk', {
+                                session_id: String(sessionId),
+                                audio_data: audioArray,
+                                chunk_index: voiceChunksProcessed,
+                                timestamp: Date.now(),
+                                is_accumulated: true,  // Flag indicating this is cumulative audio
+                                settings: { mimeType: mimeType }
+                            });
+                            console.log(`📤 Streaming accumulated audio (${accumulatedBlob.size} bytes, ${voiceChunksProcessed} chunks) for real-time transcription`);
+                        });
+                    } else {
+                        console.log(`⏭️ Skipping silent chunk ${voiceChunksProcessed}`);
+                    }
+                } else {
+                    // FINAL-ONLY MODE: Just buffer audio locally, don't send during recording
+                    console.log(`📦 Buffering chunk ${voiceChunksProcessed} (${e.data.size} bytes) - will transcribe on stop`);
+                }
             };
             
             mediaRecorder.onstart = () => {
-                console.log('MediaRecorder started');
+                if (useStreamingMode) {
+                    console.log('🚀 MediaRecorder started with real-time streaming');
+                } else {
+                    console.log('MediaRecorder started with cost optimization');
+                }
+                console.log('💰 VAD monitor started - tracking voice activity');
+                startVADMonitor();  // Start continuous VAD monitoring
                 socket.emit('join_session', { session_id: String(sessionId) });
             };
             
             mediaRecorder.onstop = () => {
                 console.log('MediaRecorder stopped');
+                
+                // Stop VAD monitor and close audio context
+                if (vadMonitorId) clearInterval(vadMonitorId);
+                audioContext.close();
+                
                 const fullBlob = new Blob(chunks, { type: mimeType });
+                const audioDurationSec = Math.round((Date.now() - startTime) / 1000);
                 chunks = [];
                 
-                showProcessingShimmer();
-                
-                fullBlob.arrayBuffer().then((buf) => {
-                    socket.emit('finalize_session', {
-                        session_id: String(sessionId),
-                        settings: {
-                            mimeType: mimeType
-                        }
+                if (useStreamingMode) {
+                    // STREAMING MODE: Audio was already sent in chunks, just finalize
+                    console.log(`🚀 Streaming mode: ${voiceChunksProcessed} chunks sent during recording`);
+                    console.log(`🎤 Finalizing session (${audioDurationSec}s total)...`);
+                    
+                    // Send any remaining audio and finalize
+                    fullBlob.arrayBuffer().then((buf) => {
+                        const audioArray = Array.from(new Uint8Array(buf));
+                        socket.emit('finalize_session', {
+                            session_id: String(sessionId),
+                            audio_data: audioArray,
+                            settings: { mimeType: mimeType },
+                            streaming_mode: true
+                        });
+                        console.log('📤 Session finalized');
                     });
-                });
+                } else {
+                    // FINAL-ONLY MODE: Send full audio now
+                    console.log(`📦 Final-only mode: ${voiceChunksProcessed} chunks buffered locally`);
+                    console.log(`🎤 Sending ${fullBlob.size} bytes (${audioDurationSec}s) for transcription...`);
+                    
+                    // Update transcript area to show transcribing state
+                    transcriptContent.innerHTML = `
+                        <div class="transcript-empty" id="transcribing-indicator">
+                            <svg class="transcript-empty-icon" style="animation: shimmerSpin 1s linear infinite;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="40" stroke-dashoffset="10"/>
+                            </svg>
+                            <p class="transcript-empty-title" style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Transcribing your recording...</p>
+                            <p class="transcript-empty-text">This usually takes just a few seconds</p>
+                        </div>
+                    `;
+                    
+                    fullBlob.arrayBuffer().then((buf) => {
+                        const audioArray = Array.from(new Uint8Array(buf));
+                        socket.emit('finalize_session', {
+                            session_id: String(sessionId),
+                            audio_data: audioArray,
+                            settings: { mimeType: mimeType }
+                        });
+                        console.log('📤 Full audio sent for transcription');
+                    });
+                }
             };
             
-            mediaRecorder.start(1000);
+            // Start recording with appropriate mode
+            if (useStreamingMode) {
+                // STREAMING MODE: Use timeslice to capture chunks during recording
+                mediaRecorder.start(STREAMING_CHUNK_MS);
+            } else {
+                // FINAL-ONLY MODE: No timeslice - record continuously and process on stop
+                mediaRecorder.start();
+            }
             
             isRecording = true;
             startTime = Date.now();
@@ -1664,7 +1928,30 @@ recordButton.addEventListener('click', async () => {
             quickActionsCard.style.display = 'block';
             quickActionsCard.classList.add('revealed');
             
-            transcriptContent.innerHTML = '';
+            // Show recording indicator in transcript area (different message for streaming mode)
+            if (useStreamingMode) {
+                transcriptContent.innerHTML = `
+                    <div class="transcript-empty" id="recording-indicator">
+                        <svg class="transcript-empty-icon" style="animation: recordingPulse 1.5s ease-in-out infinite;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                            <circle cx="12" cy="12" r="4" fill="currentColor"/>
+                        </svg>
+                        <p class="transcript-empty-title" style="background: linear-gradient(135deg, #10b981, #059669); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Live transcription active</p>
+                        <p class="transcript-empty-text">Your transcript will appear in real-time as you speak</p>
+                    </div>
+                `;
+            } else {
+                transcriptContent.innerHTML = `
+                    <div class="transcript-empty" id="recording-indicator">
+                        <svg class="transcript-empty-icon" style="animation: recordingPulse 1.5s ease-in-out infinite;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                            <circle cx="12" cy="12" r="4" fill="currentColor"/>
+                        </svg>
+                        <p class="transcript-empty-title" style="color: #ef4444;">Recording in progress</p>
+                        <p class="transcript-empty-text">Your transcript will appear when you stop recording</p>
+                    </div>
+                `;
+            }
             
             animateWaveform();
             
@@ -1870,6 +2157,63 @@ const CROWN_STAGES = {
     'session_finalized': { progress: 95, message: 'Finalizing session...' },
     'dashboard_refresh': { progress: 100, message: 'Complete!' }
 };
+
+// Quick save indicator for immediate redirect UX (industry-standard approach)
+function showQuickSaveIndicator() {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'quick-save-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        animation: fadeIn 0.2s ease-out;
+    `;
+    
+    overlay.innerHTML = `
+        <div style="
+            background: rgba(30, 30, 40, 0.95);
+            padding: 32px 48px;
+            border-radius: 16px;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        ">
+            <div style="
+                width: 28px;
+                height: 28px;
+                border: 3px solid rgba(99, 102, 241, 0.3);
+                border-top-color: #6366f1;
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            "></div>
+            <span style="
+                color: white;
+                font-size: 18px;
+                font-weight: 500;
+            ">Saving your recording...</span>
+        </div>
+    `;
+    
+    // Add required animations
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(overlay);
+}
 
 function showProcessingShimmer() {
     const shimmer = document.getElementById('processing-shimmer');

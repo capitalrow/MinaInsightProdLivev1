@@ -14,6 +14,31 @@
   --reveal-animation: fadeInUp 0.6s ease-out;
 }
 
+/* Loading Spinner for Processing State */
+.loading-spinner-small {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Processing Banner Pulsing Effect */
+.smart-banner[data-insights-pending="true"] {
+  animation: subtle-pulse 2s ease-in-out infinite;
+  border-left: 3px solid var(--color-primary);
+}
+
+@keyframes subtle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
 /* Main Container */
 .refined-workspace {
   width: 100%;
@@ -618,14 +643,26 @@
     </button>
   </div>
   
-  <!-- Smart Banner -->
-  <div class="smart-banner">
+  <!-- Smart Banner - Context-aware based on processing state -->
+  {% if insights_pending %}
+  <div class="smart-banner" id="smart-banner" data-insights-pending="true">
+    <div class="smart-banner-icon">
+      <div class="loading-spinner-small"></div>
+    </div>
+    <div class="smart-banner-text">
+      <div class="smart-banner-title">Processing your meeting...</div>
+      <div>Your transcript is ready. AI insights are being generated (usually 5-15 seconds).</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="smart-banner" id="smart-banner" data-insights-pending="false">
     <div class="smart-banner-icon">🎯</div>
     <div class="smart-banner-text">
       <div class="smart-banner-title">Mina has generated your meeting insights</div>
       <div>Explore your transcript, highlights, analytics, and action items below.</div>
     </div>
   </div>
+  {% endif %}
   
   <!-- Tab Navigation - Mobile-First Design -->
   <nav class="tab-navigation" role="tablist">
@@ -1166,6 +1203,91 @@
       setTimeout(() => toast.remove(), 250);
     }, 2500);
   }
+  
+  // CROWN+ Real-time Updates for Background Processing
+  // Refreshes page when insights become ready
+  (function() {
+    const SESSION_ID = '{{ session.external_id }}';
+    const currentStatus = '{{ session.post_transcription_status }}';
+    const insightsPending = {{ 'true' if insights_pending else 'false' }};
+    const segmentsSource = '{{ segments_source }}';
+    
+    console.log('[Session Refined] State:', { currentStatus, insightsPending, segmentsSource });
+    
+    // Only set up listeners if insights are still processing OR we're using live segments
+    if (insightsPending || currentStatus === 'processing' || !currentStatus) {
+      console.log('[Session Refined] Insights still processing, setting up real-time updates...');
+      
+      // Connect to Socket.IO for real-time updates
+      if (typeof io !== 'undefined') {
+        const socket = io({
+          path: '/socket.io',
+          transports: ['websocket', 'polling'],
+          reconnection: true
+        });
+        
+        socket.on('connect', () => {
+          console.log('[Session Refined] Connected for real-time updates');
+        });
+        
+        // Listen for insights completion
+        socket.on('insights_generate', (data) => {
+          if (data.session_id === SESSION_ID && data.status === 'completed') {
+            console.log('[Session Refined] Insights ready! Refreshing page...');
+            showInsightsReadyNotification();
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          }
+        });
+        
+        // Also listen for post_transcription_reveal as fallback
+        socket.on('post_transcription_reveal', (data) => {
+          if (data.session_id === SESSION_ID) {
+            console.log('[Session Refined] Post-transcription complete! Refreshing...');
+            window.location.reload();
+          }
+        });
+      }
+      
+      // Fallback: Poll for updates if WebSocket not available
+      let pollAttempts = 0;
+      const maxPolls = 12; // 2 minutes max (10s interval)
+      
+      const pollForUpdates = setInterval(() => {
+        pollAttempts++;
+        if (pollAttempts >= maxPolls) {
+          clearInterval(pollForUpdates);
+          console.log('[Session Refined] Max poll attempts reached, stopping polling');
+          return;
+        }
+        
+        fetch(`/api/sessions/${SESSION_ID}/status`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.post_transcription_status === 'success' || data.post_transcription_status === 'failed') {
+              console.log('[Session Refined] Status changed to:', data.post_transcription_status);
+              clearInterval(pollForUpdates);
+              showInsightsReadyNotification();
+              setTimeout(() => window.location.reload(), 1000);
+            }
+          })
+          .catch(e => console.log('[Session Refined] Poll error:', e));
+      }, 10000); // Poll every 10 seconds
+    }
+    
+    function showInsightsReadyNotification() {
+      const toast = document.createElement('div');
+      toast.className = 'share-toast';
+      toast.innerHTML = `
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        Insights ready! Refreshing...
+      `;
+      document.body.appendChild(toast);
+    }
+  })();
   
   // CROWN+ Graceful Loading State Timeout Handler
   // Converts perpetual spinners to helpful empty states after 8 seconds

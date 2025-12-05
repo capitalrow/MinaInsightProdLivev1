@@ -1175,6 +1175,54 @@ class TaskCache {
     }
 
     /**
+     * Clean up stale temp tasks that were never reconciled
+     * Called during initialization to prevent orphaned temp tasks from persisting
+     * ENTERPRISE-GRADE: Removes tasks older than maxAge OR with sync_status 'confirmed'
+     * @param {number} maxAgeMs - Maximum age in milliseconds (default: 24 hours)
+     * @returns {Promise<{removed: number, kept: number}>}
+     */
+    async cleanupStaleTempTasks(maxAgeMs = 24 * 60 * 60 * 1000) {
+        await this.init();
+        
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['temp_tasks'], 'readwrite');
+            const store = transaction.objectStore('temp_tasks');
+            const request = store.getAll();
+            
+            let removed = 0;
+            let kept = 0;
+            
+            request.onsuccess = () => {
+                const tempTasks = request.result || [];
+                const now = Date.now();
+                
+                for (const task of tempTasks) {
+                    const createdAt = new Date(task.created_at).getTime();
+                    const age = now - createdAt;
+                    const isStale = age > maxAgeMs;
+                    const isConfirmed = task.sync_status === 'confirmed';
+                    
+                    if (isStale || isConfirmed) {
+                        store.delete(task.id);
+                        removed++;
+                        console.log(`🗑️ [Cleanup] Removed stale temp task ${task.id} (age: ${Math.round(age / 1000 / 60)}min, status: ${task.sync_status})`);
+                    } else {
+                        kept++;
+                    }
+                }
+            };
+            
+            transaction.oncomplete = () => {
+                if (removed > 0) {
+                    console.log(`✅ [Cleanup] Cleaned up ${removed} stale temp tasks, kept ${kept}`);
+                }
+                resolve({ removed, kept });
+            };
+            transaction.onerror = () => reject(transaction.error);
+        });
+    }
+
+    /**
      * Delete task from cache (handles both temp and real IDs)
      * @param {number|string} taskId - Numeric ID or temp string ID
      * @returns {Promise<void>}

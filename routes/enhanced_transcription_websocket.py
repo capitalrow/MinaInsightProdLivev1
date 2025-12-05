@@ -28,8 +28,44 @@ from app import socketio
 
 # Import advanced buffer management and services
 from services.session_buffer_manager import buffer_registry, BufferConfig, SessionBufferManager
+from services.streaming_transcription_service import streaming_transcription_service, TranscriptionChunk
+from services.usage_tracking_service import enforce_usage_limits, can_use_streaming, get_enforcement_status
 
 logger = logging.getLogger(__name__)
+
+# Phase 3: Direct transcription using streaming service for faster delivery
+def _transcribe_direct(session_id: str, audio_data: bytes, metadata: Dict, processing_state: Dict) -> Optional[Dict]:
+    """Direct transcription using streaming service for <2s latency (Phase 3)"""
+    try:
+        chunk = TranscriptionChunk(
+            chunk_id=int(time.time() * 1000),
+            session_id=session_id,
+            audio_data=audio_data,
+            timestamp=time.time(),
+            duration_ms=metadata.get('duration_ms', 2500),
+            sequence=processing_state.get('sequence', 0),
+            is_final=False
+        )
+        
+        processing_state['sequence'] = processing_state.get('sequence', 0) + 1
+        
+        result = streaming_transcription_service.process_chunk(chunk)
+        
+        if result and result.text:
+            return {
+                'success': True,
+                'text': result.text,
+                'confidence': result.confidence,
+                'is_final': result.is_interim == False,
+                'chunk_id': str(result.chunk_id),
+                'processing_time': result.latency_ms,
+                'audio_quality': 'high' if result.confidence > 0.8 else 'medium',
+                'speech_ratio': metadata.get('speech_ratio', 0.5)
+            }
+        return None
+    except Exception as e:
+        logger.error(f"Direct transcription failed: {e}")
+        return None
 
 def _background_processor(session_id: str, buffer_manager: SessionBufferManager):
     """Enhanced background worker with event-driven processing and dynamic backoff"""
@@ -159,16 +195,22 @@ def _process_enhanced_transcription_request(
     metadata: Dict,
     processing_state: Dict
 ) -> bool:
-    """Process transcription request with comprehensive enhancements"""
+    """Process transcription request with comprehensive enhancements (Phase 3: direct transcription)"""
     try:
-        # Enhanced payload preparation
-        enhanced_payload = _prepare_enhanced_payload(session_id, audio_data, metadata, processing_state)
-        
-        # Make API request with circuit breaker pattern
-        response = _make_resilient_api_request(enhanced_payload, processing_state)
+        # Phase 3: Try direct transcription first for lower latency
+        response = _transcribe_direct(session_id, audio_data, metadata, processing_state)
         
         if response and response.get('success'):
             # Advanced result processing
+            _process_enhanced_transcription_result(session_id, response, processing_state)
+            logger.debug(f"✅ Direct transcription succeeded in {response.get('processing_time', 0):.0f}ms")
+            return True
+        
+        # Fallback to API request if direct fails
+        enhanced_payload = _prepare_enhanced_payload(session_id, audio_data, metadata, processing_state)
+        response = _make_resilient_api_request(enhanced_payload, processing_state)
+        
+        if response and response.get('success'):
             _process_enhanced_transcription_result(session_id, response, processing_state)
             return True
         else:
@@ -259,11 +301,35 @@ def _make_resilient_api_request(payload: Dict, processing_state: Dict) -> Option
     return None
 
 def _process_enhanced_transcription_result(session_id: str, result: Dict, processing_state: Dict):
-    """Process transcription result with advanced enhancements"""
+    """Process transcription result with advanced enhancements (Phase 3: latency tracking)"""
     try:
         text = result.get('text', '').strip()
         confidence = result.get('confidence', 0.0)
         is_final = result.get('is_final', False)
+        processing_time = result.get('processing_time', 0)
+        
+        # Phase 3: Track and emit latency metrics
+        processing_state.setdefault('latency_samples', [])
+        if processing_time > 0:
+            processing_state['latency_samples'].append(processing_time)
+            if len(processing_state['latency_samples']) > 100:
+                processing_state['latency_samples'] = processing_state['latency_samples'][-100:]
+            
+            avg_latency = sum(processing_state['latency_samples']) / len(processing_state['latency_samples'])
+            samples = sorted(processing_state['latency_samples'])
+            p95_idx = int(len(samples) * 0.95)
+            p95_latency = samples[min(p95_idx, len(samples) - 1)]
+            
+            if len(processing_state['latency_samples']) % 5 == 0:
+                socketio.emit('latency_metrics', {
+                    'session_id': session_id,
+                    'current_latency_ms': processing_time,
+                    'avg_latency_ms': round(avg_latency, 1),
+                    'p95_latency_ms': round(p95_latency, 1),
+                    'target_latency_ms': 2000,
+                    'meets_target': avg_latency < 2000,
+                    'sample_count': len(processing_state['latency_samples'])
+                }, room=session_id, namespace='/transcription')
         
         # Enhanced confidence filtering
         min_confidence = processing_state.get('confidence_threshold', 0.6)
@@ -384,9 +450,9 @@ def _calculate_throughput_score(metrics: Dict) -> float:
 enhanced_active_sessions = {}
 enhanced_buffer_config = BufferConfig(
     max_buffer_ms=25000,      # Reduced for lower latency
-    min_flush_ms=1500,        # Faster minimum flush
-    max_flush_ms=6000,        # Faster maximum flush
-    overlap_ms=750,           # More overlap for context
+    min_flush_ms=1500,        # Faster minimum flush (Phase 3: unchanged)
+    max_flush_ms=2500,        # Phase 3: Reduced from 6000 to 2500 for <2s latency
+    overlap_ms=300,           # Phase 3: Reduced from 750 to 300 for faster processing
     enable_vad=True,
     enable_quality_gating=True,
     min_energy_threshold=0.005,  # More sensitive threshold
@@ -420,8 +486,47 @@ def on_enhanced_connect():
 def on_start_enhanced_session(data):
     """Start enhanced transcription session with advanced features"""
     try:
+        from flask_login import current_user
+        from flask import session as flask_session
+        
         session_id = str(uuid.uuid4())
         client_id = flask_socketio.request.sid
+        
+        # Phase 3 Security Fix: Get authenticated user from server-side session
+        # NEVER trust client-supplied user_id for enforcement
+        user_id = None
+        
+        # Try Flask-Login current_user first
+        try:
+            if current_user and current_user.is_authenticated:
+                user_id = str(current_user.id)
+                logger.debug(f"🔐 Using authenticated user: {user_id}")
+        except Exception:
+            pass
+        
+        # Fallback to Flask session user_id
+        if not user_id:
+            user_id = flask_session.get('user_id')
+        
+        # Final fallback to anonymous (will be subject to Free tier limits)
+        if not user_id:
+            user_id = 'anonymous'
+            logger.debug(f"⚠️ Anonymous user - applying Free tier limits")
+        
+        # Phase 3: Enforce usage limits before starting session (server-verified user)
+        allowed, error_msg, usage_info = enforce_usage_limits(user_id)
+        if not allowed:
+            logger.warning(f"⛔ Usage limit reached for authenticated user {user_id}")
+            emit('enhanced_error', {
+                'code': 'USAGE_LIMIT_EXCEEDED',
+                'message': error_msg,
+                'usage': usage_info,
+                'action': 'upgrade'
+            })
+            return
+        
+        # Check streaming permission for real-time features (server-verified user)
+        can_stream, stream_reason = can_use_streaming(user_id)
         
         # Create enhanced buffer manager
         buffer_manager = buffer_registry.get_or_create_session(session_id)
@@ -430,10 +535,12 @@ def on_start_enhanced_session(data):
         session_config = {
             'language': data.get('language', 'en'),
             'quality_mode': data.get('quality_mode', 'balanced'),  # high, balanced, fast
-            'enable_real_time_processing': data.get('enable_real_time_processing', True),
+            'enable_real_time_processing': can_stream,  # Only Business tier
             'confidence_threshold': data.get('confidence_threshold', 0.7),
             'enable_context_awareness': data.get('enable_context_awareness', True),
-            'audio_enhancement': data.get('audio_enhancement', True)
+            'audio_enhancement': data.get('audio_enhancement', True),
+            'streaming_enabled': can_stream,
+            'user_id': user_id
         }
         
         # Store enhanced session info
@@ -472,7 +579,18 @@ def on_start_enhanced_session(data):
                 'max_audio_length': enhanced_buffer_config.max_buffer_ms,
                 'min_processing_interval': enhanced_buffer_config.min_flush_ms,
                 'vad_enabled': enhanced_buffer_config.enable_vad,
-                'quality_gating': enhanced_buffer_config.enable_quality_gating
+                'quality_gating': enhanced_buffer_config.enable_quality_gating,
+                'streaming_enabled': can_stream
+            },
+            'usage': {
+                'hours_used': usage_info.get('hours_used', 0),
+                'hours_limit': usage_info.get('hours_limit', 5),
+                'percent_used': usage_info.get('percent_used', 0),
+                'tier': usage_info.get('tier', 'free')
+            },
+            'streaming': {
+                'enabled': can_stream,
+                'reason': stream_reason
             }
         })
         

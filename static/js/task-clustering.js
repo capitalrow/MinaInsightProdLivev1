@@ -8,12 +8,14 @@ class TaskClusteringManager {
         this.enabled = false;
         this.clusters = [];
         this.viewMode = 'list'; // 'list' or 'clusters'
+        this.toggleButtonAdded = false;
         this.init();
     }
 
     init() {
-        // Add cluster toggle button to UI
-        this.addClusterToggle();
+        // REFACTORED: Do NOT add cluster toggle by default
+        // The toggle button is now in the header actions area (tasks.html)
+        // and will call enableClustering() when clicked
         
         // Listen for task updates
         window.addEventListener('tasks:updated', () => {
@@ -22,29 +24,25 @@ class TaskClusteringManager {
             }
         });
 
-        console.log('🔗 CROWN⁴.5 TaskClusteringManager initialized');
-    }
-
-    addClusterToggle() {
-        const filtersContainer = document.querySelector('.task-filters');
-        if (!filtersContainer) return;
-
-        const toggleButton = document.createElement('button');
-        toggleButton.className = 'filter-tab cluster-toggle';
-        toggleButton.innerHTML = '🔗 Group Similar';
-        toggleButton.title = 'Group tasks by similarity';
-        
-        toggleButton.addEventListener('click', () => {
+        // Listen for external clustering toggle requests
+        document.addEventListener('clustering:toggle', () => {
             this.toggleClustering();
         });
 
-        filtersContainer.appendChild(toggleButton);
+        console.log('🔗 CROWN⁴.5 TaskClusteringManager initialized (toggle button NOT auto-added)');
     }
+
+    // REMOVED: addClusterToggle() - no longer auto-adds button to filter tabs
+    // The button is now explicitly placed in header-actions in tasks.html
 
     async toggleClustering() {
         this.enabled = !this.enabled;
         
-        const toggleBtn = document.querySelector('.cluster-toggle');
+        // Update body class for CSS targeting
+        document.body.classList.toggle('clustering-active', this.enabled);
+        
+        // Update any toggle button that might exist
+        const toggleBtn = document.querySelector('.btn-cluster-toggle, .cluster-toggle');
         if (toggleBtn) {
             toggleBtn.classList.toggle('active', this.enabled);
         }

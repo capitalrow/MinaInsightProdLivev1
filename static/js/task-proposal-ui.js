@@ -353,6 +353,13 @@ class TaskProposalUI {
         this.renderProposal(task);
     }
 
+    renderProposal(task) {
+        const content = this.modal.querySelector('.ai-proposals-content');
+        if (!content) {
+            console.error('[TaskProposalUI] Cannot find .ai-proposals-content container');
+            return;
+        }
+
         const proposalCard = document.createElement('div');
         const confidence = typeof task.confidence === 'number'
             ? task.confidence
@@ -362,7 +369,12 @@ class TaskProposalUI {
             ? (confidencePercent >= 85 ? 'proposal-glow-strong' : confidencePercent >= 60 ? 'proposal-glow-medium' : 'proposal-glow-low')
             : '';
 
-        proposalCard.className = `task-card ai-proposal proposal-enter ${glowClass}`.trim();
+        const meetingSource = task.meeting_title 
+            ? `<div class="task-meeting-source"><span class="meeting-icon">📅</span> ${this.escapeHtml(task.meeting_title)}</div>` 
+            : '';
+
+        proposalCard.className = `task-card ai-proposal ai-proposal-card proposal-enter ${glowClass}`.trim();
+        proposalCard.dataset.proposalId = task.proposal_id;
         if (confidencePercent !== null) {
             proposalCard.dataset.confidence = confidencePercent;
         }
@@ -411,10 +423,10 @@ class TaskProposalUI {
             </div>
         `;
 
-        content.appendChild(card);
+        content.appendChild(proposalCard);
         
         requestAnimationFrame(() => {
-            card.classList.add('visible');
+            proposalCard.classList.add('visible');
         });
 
         this.updateFooter();
@@ -546,108 +558,77 @@ class TaskProposalUI {
         button.disabled = true;
         const btnText = button.querySelector('.btn-text');
         const btnIcon = button.querySelector('.btn-icon');
+        const originalText = btnText ? btnText.textContent : 'Accept';
         if (btnText) btnText.textContent = 'Creating...';
         if (btnIcon) btnIcon.classList.add('animate-spin');
         
-        const rejectBtn = card.querySelector('.btn-reject-proposal');
+        const rejectBtn = card ? card.querySelector('.btn-reject-proposal') : null;
         if (rejectBtn) rejectBtn.disabled = true;
 
         try {
-            // Check if this is a new proposal (no taskId)
-            const proposalData = button.dataset.proposal;
+            const taskData = {
+                title: proposal.title,
+                description: proposal.description || '',
+                priority: proposal.priority || 'medium',
+                category: proposal.category || '',
+                status: 'todo',
+                meeting_id: proposal.meeting_id || this.meetingId,
+                source: 'task_nlp:proposed'
+            };
+
             let result;
-            let payload;
 
-            if (taskId) {
-                // Existing task - just accept
-                const response = await fetch(`/api/tasks/${taskId}/accept`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                result = await response.json();
-            } else if (proposalData) {
-                // New proposal - create task
-                const proposal = JSON.parse(proposalData);
-                payload = {
-                    title: proposal.title,
-                    description: proposal.description || '',
-                    priority: proposal.priority || 'medium',
-                    category: proposal.category || '',
-                    status: 'todo',
-                    meeting_id: this.getCurrentMeetingId(),
-                    source: 'task_nlp:proposed'
-                };
-
-                const dedupeResult = await this._checkDuplicate(payload);
-                payload.origin_hash = dedupeResult?.origin_hash || await this._generateOriginHash(payload);
-
-                if (dedupeResult?.is_duplicate && dedupeResult.existing_task) {
-                    this._highlightDuplicate(card, dedupeResult.existing_task, dedupeResult.confidence);
-                    button.textContent = originalText;
-                    button.disabled = false;
-                    return;
-                }
-
-                if (this.taskUI?.createTask) {
-                    const optimisticTask = await this.taskUI.createTask(payload);
-                    result = { success: true, task: optimisticTask };
-                    this._morphProposalToTask(card, optimisticTask, payload.origin_hash);
-                } else {
-                    const response = await fetch('/api/tasks', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    result = await response.json();
-                }
+            if (this.taskUI?.createTask) {
+                const optimisticTask = await this.taskUI.createTask(taskData);
+                result = { success: true, task: optimisticTask };
             } else {
-                throw new Error('No task ID or proposal data');
-            }
-            
-            const response = await fetch('/api/tasks/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(taskData)
-            });
+                const response = await fetch('/api/tasks/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(taskData)
+                });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                if (errorData.duplicate) {
-                    console.log('[TaskProposalUI] Task already exists (server dedupe)');
-                    this.acceptedProposalIds.add(proposalId);
-                    this.markCardAsAccepted(card, proposal.title);
-                    return;
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    if (errorData.duplicate) {
+                        console.log('[TaskProposalUI] Task already exists (server dedupe)');
+                        this.acceptedProposalIds.add(proposalId);
+                        this.markCardAsAccepted(card, proposal.title);
+                        return;
+                    }
+                    throw new Error(errorData.error || 'Failed to create task');
                 }
-                throw new Error(errorData.error || 'Failed to create task');
+
+                result = await response.json();
             }
 
-            const data = await response.json();
-            this.acceptedProposalIds.add(proposalId);
-            
-            this.markCardAsAccepted(card, proposal.title);
+            if (result.success || result.task) {
+                this.acceptedProposalIds.add(proposalId);
+                this.markCardAsAccepted(card, proposal.title);
 
-                // Show toast notification
                 if (window.ToastNotifications) {
                     window.ToastNotifications.show('Task added successfully', 'success');
+                } else if (window.toast) {
+                    window.toast.success('Task added successfully');
                 }
 
-                if (result.task?.id) {
-                    this.acceptedProposals.set(result.task.id, { card, originHash: payload?.origin_hash });
+                if (result.task?.id && this.acceptedProposals) {
+                    this.acceptedProposals.set(result.task.id, { card, proposal });
                 }
+
+                this.refreshTaskList();
+                this.updateFooter();
+                this.checkAllAccepted();
             } else {
-                throw new Error(result.message || 'Failed to accept proposal');
+                throw new Error(result.message || result.error || 'Failed to accept proposal');
             }
-
-            this.refreshTaskList();
-            this.updateFooter();
-            this.checkAllAccepted();
 
         } catch (error) {
             console.error('[TaskProposalUI] Accept error:', error);
             
             this.processingProposalIds.delete(proposalId);
             button.disabled = false;
-            if (btnText) btnText.textContent = 'Accept';
+            if (btnText) btnText.textContent = originalText;
             if (btnIcon) btnIcon.classList.remove('animate-spin');
             if (rejectBtn) rejectBtn.disabled = false;
             

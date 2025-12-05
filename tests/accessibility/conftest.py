@@ -11,18 +11,18 @@ from typing import Optional, List
 @pytest.fixture
 def axe_builder(page: Page):
     """Create an AxeBuilder instance for accessibility testing."""
-    # Inject axe-core into the page
-    page.add_script_tag(url="https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.8.2/axe.min.js")
     
     def run_axe_scan(context=None, options=None):
         """Run axe accessibility scan on the current page."""
         axe_options = options or {}
         axe_context = context or {"include": [["html"]]}
         
-        # Run axe.run() and return results
+        page.add_script_tag(url="https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.8.2/axe.min.js")
+        page.wait_for_function("typeof axe !== 'undefined'", timeout=10000)
+        
         results = page.evaluate("""
-            (params) => {
-                return axe.run(params.context, params.options);
+            async (params) => {
+                return await axe.run(params.context, params.options);
             }
         """, {"context": axe_context, "options": axe_options})
         

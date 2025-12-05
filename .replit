@@ -2,7 +2,7 @@ modules = ["python-3.11", "python3", "nodejs-20", "postgresql-16"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["alsa-lib", "at-spi2-atk", "atk", "bc", "cairo", "cargo", "dbus", "ffmpeg", "ffmpeg-full", "freetype", "gitFull", "glib", "glibcLocales", "gnupg", "iana-etc", "jq", "k6", "libgbm", "libiconv", "libxcrypt", "libxkbcommon", "mesa", "nspr", "nss", "openssl", "pango", "pkg-config", "playwright-driver", "postgresql", "rustc", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXfixes", "xorg.libxcb", "xsimd"]
+packages = ["alsa-lib", "at-spi2-atk", "atk", "bc", "cairo", "cargo", "cups", "dbus", "ffmpeg", "ffmpeg-full", "freetype", "gitFull", "glib", "glibcLocales", "gnupg", "iana-etc", "jq", "k6", "libgbm", "libiconv", "libxcrypt", "libxkbcommon", "mesa", "nspr", "nss", "openssl", "pango", "pkg-config", "playwright-driver", "postgresql", "rustc", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "xorg.libXrender", "xorg.libxcb", "xsimd"]
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -31,7 +31,7 @@ args = "gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app"
 waitForPort = 5000
 
 [agent]
-integrations = ["flask_stripe:1.0.0", "google-calendar:1.0.0", "sendgrid:1.0.0"]
+integrations = ["flask_stripe:1.0.0", "google-calendar:1.0.0", "sendgrid:1.0.0", "stripe:1.0.0"]
 
 [[ports]]
 localPort = 5000

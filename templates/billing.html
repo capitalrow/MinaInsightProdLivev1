@@ -259,14 +259,27 @@
     <div class="subscription-status-card">
         <div class="subscription-status-content">
             <div class="status-info">
-                <h3>Current Subscription</h3>
+                <h3>{{ subscription_status.tier_name }} Plan</h3>
                 <p>Status: <strong style="color: var(--color-success);">{{ subscription_status.status|title }}</strong></p>
+                {% if subscription_status.has_live_transcription %}
+                <p style="color: var(--color-primary);"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Live transcription updates enabled</p>
+                {% endif %}
                 {% if subscription_status.current_period_end %}
                 <p>Renews on: {{ subscription_status.current_period_end.strftime('%B %d, %Y') }}</p>
                 {% endif %}
             </div>
             <div>
                 <button class="btn btn-outline" id="openPortalBtn">Manage Subscription</button>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="subscription-status-card" style="border-color: var(--glass-border);">
+        <div class="subscription-status-content">
+            <div class="status-info">
+                <h3>Free Plan</h3>
+                <p>You're on the free plan with 5 hours/month of transcription.</p>
+                <p style="color: var(--color-text-tertiary);">Upgrade to unlock unlimited hours and live updates.</p>
             </div>
         </div>
     </div>
@@ -302,15 +315,19 @@
             </ul>
 
             <div class="plan-cta">
-                {% if plan.price_id %}
+                {% if plan.is_current %}
+                <button class="btn btn-ghost w-full" disabled>Current Plan</button>
+                {% elif plan.price_id %}
                 <button 
                     class="btn btn-primary w-full start-checkout-btn" 
                     data-price-id="{{ plan.price_id }}"
                     data-plan-name="{{ plan.name }}">
-                    Get {{ plan.name }}
+                    {% if plan.tier == 'business' %}Upgrade to Business{% else %}Get {{ plan.name }}{% endif %}
                 </button>
+                {% elif plan.tier == 'free' %}
+                <button class="btn btn-ghost w-full" disabled>Free Forever</button>
                 {% else %}
-                <button class="btn btn-ghost w-full" disabled>Current Plan</button>
+                <button class="btn btn-outline w-full" disabled>Coming Soon</button>
                 {% endif %}
             </div>
         </div>

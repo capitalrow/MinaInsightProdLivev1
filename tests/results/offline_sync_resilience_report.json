@@ -1,0 +1,20 @@
+{
+  "sync_latency": {
+    "valid": false,
+    "reason": "No sync measurements"
+  },
+  "conflict_resolution": {
+    "valid": false,
+    "reason": "No conflict tests"
+  },
+  "data_integrity": {
+    "valid": false,
+    "reason": "No integrity tests"
+  },
+  "metrics": {
+    "sync_latency_ms": [],
+    "conflict_resolution_success": [],
+    "offline_queue_integrity": [],
+    "data_integrity_checks": []
+  }
+}

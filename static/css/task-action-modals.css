@@ -8,6 +8,7 @@
    SHARED MODAL OVERLAY & CONTAINER
    =================================== */
 
+.task-modal-overlay,
 .task-assignee-modal-overlay,
 .task-labels-modal-overlay,
 .task-duplicate-modal-overlay,
@@ -23,19 +24,33 @@
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 10000;
+    z-index: var(--z-modal-backdrop, 1040);
     opacity: 0;
     transition: opacity 0.2s ease;
 }
 
+.task-modal-overlay.hidden,
+.task-assignee-modal-overlay.hidden,
+.task-labels-modal-overlay.hidden,
+.task-duplicate-modal-overlay.hidden,
+.task-snooze-modal-overlay.hidden,
+.task-merge-modal-overlay.hidden {
+    display: none !important;
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.task-modal-overlay.visible,
 .task-assignee-modal-overlay.visible,
 .task-labels-modal-overlay.visible,
 .task-duplicate-modal-overlay.visible,
 .task-snooze-modal-overlay.visible,
 .task-merge-modal-overlay.visible {
+    display: flex;
     opacity: 1;
 }
 
+.task-modal,
 .task-assignee-modal,
 .task-labels-modal,
 .task-duplicate-modal,
@@ -55,6 +70,10 @@
     transform: scale(0.95);
     transition: transform 0.2s ease;
 }
+
+.task-modal.task-modal-small { max-width: 400px; }
+.task-modal.task-modal-medium { max-width: 580px; }
+.task-modal.task-modal-large { max-width: 800px; }
 
 .task-assignee-modal-overlay.visible .task-assignee-modal,
 .task-labels-modal-overlay.visible .task-labels-modal,

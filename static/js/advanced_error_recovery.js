@@ -4,13 +4,22 @@
  */
 
 class AdvancedErrorRecovery {
+    static _instance = null;
+    static _initialized = false;
+    
     constructor() {
+        if (AdvancedErrorRecovery._instance) {
+            return AdvancedErrorRecovery._instance;
+        }
+        
         this.isActive = false;
         this.errorHistory = [];
         this.recoveryStrategies = new Map();
         this.autoRecoveryEnabled = true;
         this.maxRetryAttempts = 3;
         this.backoffMultiplier = 1.5;
+        this.healthMonitorInterval = null;
+        this.performanceMonitorInterval = null;
         
         this.systemState = {
             audioSystem: 'unknown',
@@ -21,14 +30,22 @@ class AdvancedErrorRecovery {
         
         this.setupRecoveryStrategies();
         this.setupErrorPatterns();
+        
+        AdvancedErrorRecovery._instance = this;
     }
     
     initialize() {
+        if (AdvancedErrorRecovery._initialized) {
+            console.log('🛡️ Advanced Error Recovery System already initialized');
+            return true;
+        }
+        
         console.log('🛡️ Initializing Advanced Error Recovery System');
         
         this.setupGlobalErrorHandlers();
         this.startHealthMonitoring();
         this.isActive = true;
+        AdvancedErrorRecovery._initialized = true;
         
         console.log('✅ Error recovery system active');
         return true;
@@ -181,6 +198,16 @@ class AdvancedErrorRecovery {
     }
     
     startHealthMonitoring() {
+        // Clear any existing intervals to prevent duplicates
+        if (this.healthMonitorInterval) {
+            clearInterval(this.healthMonitorInterval);
+            this.healthMonitorInterval = null;
+        }
+        if (this.performanceMonitorInterval) {
+            clearInterval(this.performanceMonitorInterval);
+            this.performanceMonitorInterval = null;
+        }
+        
         // 🔥 OPTIMIZED: Reduced monitoring frequency to prevent spam
         // Monitor system health every 10 seconds (was 2 seconds)
         this.healthMonitorInterval = setInterval(() => {

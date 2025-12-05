@@ -18,9 +18,12 @@ import logging
 import time
 import json
 import os
-from typing import Dict, Any, Optional, List, Callable
-from dataclasses import dataclass
+from typing import Dict, Any, Optional, List, Callable, Union
+from dataclasses import dataclass, field
 import redis
+from redis import Redis
+from redis.client import PubSub
+from redis.connection import ConnectionPool
 import threading
 from datetime import datetime, timedelta
 import uuid
@@ -36,10 +39,10 @@ class RedisConfig:
     password: Optional[str] = None
     max_connections: int = 20
     socket_keepalive: bool = True
-    socket_keepalive_options: Dict[str, int] = None
+    socket_keepalive_options: Optional[Dict[str, int]] = None
     decode_responses: bool = True
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.socket_keepalive_options is None:
             self.socket_keepalive_options = {
                 'TCP_KEEPIDLE': 600,
@@ -59,16 +62,16 @@ class RedisSocketIOAdapter:
         self.config = config or self._get_config_from_env()
         self.instance_id = f"mina_{uuid.uuid4().hex[:8]}"
         
-        # Redis connections
-        self.redis_pub = None
-        self.redis_sub = None
-        self.redis_state = None
-        self.connection_pool = None
+        # Redis connections - typed as Optional for proper type checking
+        self.redis_pub: Optional[Redis] = None
+        self.redis_sub: Optional[Redis] = None
+        self.redis_state: Optional[Redis] = None
+        self.connection_pool: Optional[ConnectionPool] = None
         
         # Pub/Sub management
-        self.pubsub = None
-        self.pubsub_thread = None
-        self.message_handlers: Dict[str, Callable] = {}
+        self.pubsub: Optional[PubSub] = None
+        self.pubsub_thread: Optional[threading.Thread] = None
+        self.message_handlers: Dict[str, Callable[..., Any]] = {}
         
         # State management
         self.local_rooms: Dict[str, set] = {}  # {room: {client_ids}}
@@ -88,7 +91,17 @@ class RedisSocketIOAdapter:
         logger.info(f"🚀 Redis Socket.IO adapter initialized: instance {self.instance_id}")
     
     def _get_config_from_env(self) -> RedisConfig:
-        """Get Redis configuration from environment variables."""
+        """Get Redis configuration from environment variables.
+        
+        Supports both REDIS_URL format (redis://user:pass@host:port/db or rediss://...)
+        and individual environment variables (REDIS_HOST, REDIS_PORT, etc.).
+        REDIS_URL takes precedence if present.
+        """
+        redis_url = os.environ.get('REDIS_URL')
+        
+        if redis_url:
+            return self._parse_redis_url(redis_url)
+        
         return RedisConfig(
             host=os.environ.get('REDIS_HOST', 'localhost'),
             port=int(os.environ.get('REDIS_PORT', '6379')),
@@ -96,6 +109,41 @@ class RedisSocketIOAdapter:
             password=os.environ.get('REDIS_PASSWORD'),
             max_connections=int(os.environ.get('REDIS_MAX_CONNECTIONS', '20'))
         )
+    
+    def _parse_redis_url(self, url: str) -> RedisConfig:
+        """Parse a Redis URL into RedisConfig.
+        
+        Supports formats:
+        - redis://host:port/db
+        - redis://user:password@host:port/db
+        - rediss://... (TLS)
+        """
+        from urllib.parse import urlparse
+        
+        parsed = urlparse(url)
+        
+        host = parsed.hostname or 'localhost'
+        port = parsed.port or 6379
+        password = parsed.password
+        
+        db = 0
+        if parsed.path and parsed.path != '/':
+            try:
+                db = int(parsed.path.lstrip('/'))
+            except ValueError:
+                db = 0
+        
+        logger.info(f"📡 Parsed Redis URL: host={host}, port={port}, db={db}, ssl={parsed.scheme == 'rediss'}")
+        
+        config = RedisConfig(
+            host=host,
+            port=port,
+            db=db,
+            password=password,
+            max_connections=int(os.environ.get('REDIS_MAX_CONNECTIONS', '20'))
+        )
+        
+        return config
     
     def _initialize_redis(self):
         """Initialize Redis connections with connection pooling."""

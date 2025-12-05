@@ -257,16 +257,43 @@ def get_session_refined(session_identifier):
     
     Automatically navigated to after post_transcription_reveal event.
     
-    IMPORTANT: This view only loads 'final' segments to ensure all tabs
-    analyze the same refined transcript that the AI analyzed.
+    PROGRESSIVE LOADING STRATEGY:
+    1. First try to load 'final' segments (post-processing complete)
+    2. If no final segments, fall back to 'live' segments (immediate display)
+    3. Template will show loading indicator if insights still processing
+    This ensures users see their transcript immediately after redirect.
     """
     # Try external_id first (since redirect uses external_id), then database ID as fallback
-    # Load ONLY final segments for consistency across all tabs
+    # First try 'final' segments (processed transcript)
     session_detail = SessionService.get_session_detail_by_external(session_identifier, kind='final')
+    segments_source = 'final'
     
     # If not found by external_id and identifier is numeric, try database ID
     if not session_detail and session_identifier.isdigit():
         session_detail = SessionService.get_session_detail(int(session_identifier), kind='final')
+    
+    # PROGRESSIVE FALLBACK: If no final segments, try live segments for immediate display
+    if not session_detail or len(session_detail.get('segments', [])) == 0:
+        # Try to get session with live segments
+        live_detail = SessionService.get_session_detail_by_external(session_identifier, kind='live')
+        if not live_detail and session_identifier.isdigit():
+            live_detail = SessionService.get_session_detail(int(session_identifier), kind='live')
+        
+        if live_detail and len(live_detail.get('segments', [])) > 0:
+            session_detail = live_detail
+            segments_source = 'live'
+            logger.info(f"[Refined View] Using live segments for immediate display (finalization pending)")
+    
+    # Final fallback: try loading any segments if both final and live are empty
+    if not session_detail or len(session_detail.get('segments', [])) == 0:
+        all_detail = SessionService.get_session_detail_by_external(session_identifier, kind=None)
+        if not all_detail and session_identifier.isdigit():
+            all_detail = SessionService.get_session_detail(int(session_identifier), kind=None)
+        
+        if all_detail:
+            session_detail = all_detail
+            segments_source = 'all'
+            logger.info(f"[Refined View] Loaded all segments ({len(all_detail.get('segments', []))} total)")
     
     if not session_detail:
         abort(404)
@@ -275,8 +302,11 @@ def get_session_refined(session_identifier):
     session_data = session_detail['session']
     segments = session_detail['segments']
     
+    # Determine if insights are still processing (used by template for loading states)
+    insights_pending = segments_source != 'final'
+    
     # Log what we're working with for debugging
-    logger.info(f"[Refined View] Session {session_identifier}: {len(segments)} final segments loaded")
+    logger.info(f"[Refined View] Session {session_identifier}: {len(segments)} {segments_source} segments loaded (insights_pending={insights_pending})")
     
     # Get summary/insights data
     summary_data = None
@@ -333,7 +363,9 @@ def get_session_refined(session_identifier):
         summary=summary_data,
         analytics=analytics_data,
         tasks=tasks_data,
-        event_timeline=event_timeline
+        event_timeline=event_timeline,
+        insights_pending=insights_pending,
+        segments_source=segments_source
     )
 
 

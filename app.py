@@ -13,7 +13,6 @@ from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
-import redis
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
@@ -233,7 +232,7 @@ socketio = SocketIO(
     socketio_logger=False,
     max_http_buffer_size=int(os.getenv("SIO_MAX_HTTP_BUFFER", str(10 * 1024 * 1024))),  # 10 MB per message
     allow_upgrades=True,  # Allow WebSocket upgrades
-    transports=['websocket', 'polling']  # WebSocket first, polling fallback
+    transports=['websocket', 'polling'],  # WebSocket first, polling fallback
 )
 
 def create_app() -> Flask:
@@ -292,37 +291,21 @@ def create_app() -> Flask:
     # reverse proxy (Replit)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
     
-    # Configure Redis-backed server-side sessions (CRITICAL: keeps cookies under 4KB)
-    # Industry standard: Store only session ID in cookie (~50 bytes), all data in Redis
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+    # Configure filesystem-backed server-side sessions
+    # Store session data on filesystem to avoid cookie size limits (4KB max)
     is_production = os.getenv("FLASK_ENV") == "production" or os.getenv("REPLIT_DEPLOYMENT")
     
     try:
-        from redis.backoff import ExponentialBackoff
-        from redis.retry import Retry
-        from redis.exceptions import BusyLoadingError, ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
+        import tempfile
+        session_dir = os.path.join(tempfile.gettempdir(), "mina_sessions")
+        os.makedirs(session_dir, exist_ok=True)
         
-        # Configure Redis client with connection retry for resilience
-        retry = Retry(ExponentialBackoff(), 3)
-        redis_client = redis.from_url(
-            redis_url,
-            retry=retry,
-            retry_on_error=[BusyLoadingError, RedisConnectionError, RedisTimeoutError],
-            socket_connect_timeout=5,
-            socket_keepalive=True,
-            health_check_interval=30
-        )
-        
-        # Test Redis connection before configuring sessions
-        redis_client.ping()
-        
-        # Configure Flask-Session with Redis
-        app.config["SESSION_TYPE"] = "redis"
+        app.config["SESSION_TYPE"] = "filesystem"
+        app.config["SESSION_FILE_DIR"] = session_dir
+        app.config["SESSION_FILE_THRESHOLD"] = 500  # Max 500 sessions before cleanup
         app.config["SESSION_PERMANENT"] = False
         app.config["SESSION_USE_SIGNER"] = True  # Cryptographically sign session IDs
-        app.config["SESSION_KEY_PREFIX"] = "mina_session:"
-        app.config["SESSION_REDIS"] = redis_client
-        app.config["SESSION_COOKIE_NAME"] = "mina_sid"  # Distinct cookie name
+        app.config["SESSION_COOKIE_NAME"] = "mina_sid"
         
         # Session cookie security (environment-aware)
         app.config["SESSION_COOKIE_SECURE"] = is_production  # HTTPS only in production
@@ -330,44 +313,16 @@ def create_app() -> Flask:
         app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
         app.config["PERMANENT_SESSION_LIFETIME"] = 28800  # 8 hours
         
-        # Initialize Flask-Session with Redis backend
         Session(app)
-        app.logger.info(f"✅ Redis-backed server-side sessions configured: {redis_url} (secure={is_production})")
-        
+        app.logger.info(f"✅ Filesystem-backed sessions configured: {session_dir}")
     except Exception as e:
-        app.logger.error(f"❌ Failed to configure Redis sessions: {e}")
-        app.logger.warning("⚠️ Falling back to filesystem-backed sessions (production-safe fallback)")
-        
-        # Production-safe fallback: Use filesystem sessions instead of cookies
-        # This avoids cookie size limits while maintaining some persistence
-        try:
-            import tempfile
-            session_dir = os.path.join(tempfile.gettempdir(), "mina_sessions")
-            os.makedirs(session_dir, exist_ok=True)
-            
-            app.config["SESSION_TYPE"] = "filesystem"
-            app.config["SESSION_FILE_DIR"] = session_dir
-            app.config["SESSION_FILE_THRESHOLD"] = 500  # Max 500 sessions before cleanup
-            app.config["SESSION_PERMANENT"] = False
-            app.config["SESSION_USE_SIGNER"] = True
-            app.config["SESSION_COOKIE_NAME"] = "mina_sid_fs"
-            
-            # Environment-aware security settings
-            app.config["SESSION_COOKIE_SECURE"] = is_production
-            app.config["SESSION_COOKIE_HTTPONLY"] = True
-            app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-            app.config["PERMANENT_SESSION_LIFETIME"] = 1800  # 30 minutes (shorter for fallback)
-            
-            Session(app)
-            app.logger.info(f"✅ Filesystem-backed sessions configured: {session_dir}")
-        except Exception as fallback_error:
-            app.logger.error(f"❌ Filesystem session fallback failed: {fallback_error}")
-            # Last resort: Use cookie sessions with size monitoring
-            app.config["SESSION_COOKIE_SECURE"] = is_production
-            app.config["SESSION_COOKIE_HTTPONLY"] = True
-            app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-            app.config["PERMANENT_SESSION_LIFETIME"] = 900  # 15 minutes (very short)
-            app.logger.warning("⚠️ Using cookie-based sessions - CRITICAL: may hit size limits!")
+        app.logger.error(f"❌ Filesystem session setup failed: {e}")
+        # Fallback: Use cookie sessions with size monitoring
+        app.config["SESSION_COOKIE_SECURE"] = is_production
+        app.config["SESSION_COOKIE_HTTPONLY"] = True
+        app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+        app.config["PERMANENT_SESSION_LIFETIME"] = 900  # 15 minutes
+        app.logger.warning("⚠️ Using cookie-based sessions - may hit size limits!")
     
     # Initialize CSRF protection  
     csrf = CSRFProtect(app)
@@ -378,15 +333,12 @@ def create_app() -> Flask:
     # Store CSRF protect for blueprint access
     app.extensions['csrf'] = csrf
 
-    # Configure Flask-Limiter for production-grade rate limiting
-    # Use Redis if available, fallback to memory storage
-    redis_url = os.environ.get("REDIS_URL")
-    storage_uri = redis_url if redis_url else "memory://"
-    
+    # Configure Flask-Limiter for rate limiting with in-memory storage
+    # Memory storage works well for single-server deployments
     limiter = Limiter(
         get_remote_address,
         app=app,
-        storage_uri=storage_uri,
+        storage_uri="memory://",
         default_limits=["100 per minute", "1000 per hour"],
         strategy="fixed-window",
         headers_enabled=True,  # Include X-RateLimit-* headers in responses
@@ -395,9 +347,7 @@ def create_app() -> Flask:
     
     # Make limiter available via extensions (proper Flask pattern)
     app.extensions['limiter'] = limiter
-    
-    storage_type = "Redis" if redis_url else "Memory"
-    app.logger.info(f"✅ Flask-Limiter configured ({storage_type} backend): 100/min, 1000/hour per IP")
+    app.logger.info("✅ Flask-Limiter configured (Memory backend): 100/min, 1000/hour per IP")
 
     # gzip (optional)
     try:
@@ -696,11 +646,25 @@ def create_app() -> Flask:
         app.logger.warning(f"Failed to register auth routes: {e}")
     
     try:
+        from routes.google_auth import google_auth_bp
+        app.register_blueprint(google_auth_bp)
+        app.logger.info("Google OAuth routes registered")
+    except Exception as e:
+        app.logger.warning(f"Failed to register Google OAuth routes: {e}")
+    
+    try:
         from routes.dashboard import dashboard_bp
         app.register_blueprint(dashboard_bp)
         app.logger.info("Dashboard routes registered")
     except Exception as e:
         app.logger.warning(f"Failed to register dashboard routes: {e}")
+    
+    try:
+        from routes.onboarding import onboarding_bp
+        app.register_blueprint(onboarding_bp)
+        app.logger.info("Onboarding routes registered")
+    except Exception as e:
+        app.logger.warning(f"Failed to register onboarding routes: {e}")
     
     # Register sessions blueprint for refined view and session management
     try:
@@ -1159,19 +1123,6 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.error(f"❌ Failed to start background task manager: {e}")
     
-    # Initialize Redis connection manager with failover support
-    try:
-        from services.redis_failover import init_redis_manager
-        
-        redis_url = os.getenv('REDIS_URL')
-        if redis_url:
-            redis_manager = init_redis_manager(redis_url)
-            app.logger.info("✅ Redis connection manager initialized with failover support")
-        else:
-            app.logger.info("ℹ️  No REDIS_URL configured - using in-memory fallback for caching")
-    except Exception as e:
-        app.logger.error(f"❌ Failed to initialize Redis manager: {e}")
-    
     # Run startup validation and mark as complete
     try:
         from utils.startup_validation import run_startup_validation
@@ -1189,6 +1140,44 @@ def create_app() -> Flask:
             
     except Exception as e:
         app.logger.warning(f"Startup validation skipped: {e}")
+    
+    # Phase 3: Prewarm AI services for faster first transcription
+    try:
+        import threading
+        
+        def _prewarm_ai_services():
+            """Background prewarm of AI services for lower latency on first request"""
+            try:
+                # Prewarm streaming transcription service (OpenAI client)
+                from services.streaming_transcription_service import streaming_transcription_service
+                streaming_transcription_service.prewarm()
+                app.logger.info("✅ Streaming transcription service prewarmed")
+            except Exception as e:
+                app.logger.warning(f"⚠️ Streaming transcription prewarm failed (non-critical): {e}")
+            
+            try:
+                # Prewarm local Whisper service if available
+                from services.local_whisper_service import local_whisper_service
+                local_whisper_service.prewarm()
+                app.logger.info("✅ Local Whisper service prewarmed")
+            except Exception as e:
+                app.logger.debug(f"Local Whisper prewarm skipped: {e}")
+            
+            try:
+                # Prewarm OpenAI client for insights generation
+                import openai
+                client = openai.OpenAI()
+                _ = client.models.list()
+                app.logger.info("✅ OpenAI client prewarmed")
+            except Exception as e:
+                app.logger.debug(f"OpenAI client prewarm skipped: {e}")
+        
+        # Run prewarm in background to not block startup
+        prewarm_thread = threading.Thread(target=_prewarm_ai_services, daemon=True)
+        prewarm_thread.start()
+        app.logger.info("🔥 AI service prewarm initiated in background")
+    except Exception as e:
+        app.logger.warning(f"AI prewarm initialization failed (non-critical): {e}")
     
     app.logger.info("✅ Mina app ready for traffic")
     return app
