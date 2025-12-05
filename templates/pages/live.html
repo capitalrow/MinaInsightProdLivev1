@@ -1624,6 +1624,53 @@ checkTierStatus();
 
 let currentInterimSegment = null;
 let lastSpeaker = null;
+let displayedTranscript = '';  // Track what's been shown to avoid duplication
+let lastNewText = '';  // Track last delta received
+
+// CLIENT-SIDE DEDUPLICATION: Normalize text for comparison
+function normalizeForComparison(text) {
+    return text.toLowerCase()
+        .replace(/[^\w\s]/g, ' ')  // Remove punctuation
+        .replace(/\s+/g, ' ')      // Normalize whitespace
+        .trim();
+}
+
+// Check if new text is already present in displayed transcript
+function isTextAlreadyDisplayed(newText) {
+    if (!newText || !displayedTranscript) return false;
+    
+    const normalizedNew = normalizeForComparison(newText);
+    const normalizedDisplayed = normalizeForComparison(displayedTranscript);
+    
+    // Check if this exact text is already at the end of displayed transcript
+    if (normalizedDisplayed.endsWith(normalizedNew)) {
+        console.log('[Dedup] Text already at end of transcript, skipping');
+        return true;
+    }
+    
+    // Check for high similarity (might be repeated with minor variations)
+    const newWords = normalizedNew.split(' ').filter(w => w.length > 2);
+    const displayedWords = normalizedDisplayed.split(' ').filter(w => w.length > 2);
+    
+    if (newWords.length < 3) return false;  // Too short to check
+    
+    // Check if all new words are in the last N words of displayed
+    const recentWords = displayedWords.slice(-Math.min(50, displayedWords.length));
+    const recentSet = new Set(recentWords);
+    
+    let matchCount = 0;
+    for (const word of newWords) {
+        if (recentSet.has(word)) matchCount++;
+    }
+    
+    const matchRatio = matchCount / newWords.length;
+    if (matchRatio > 0.85) {
+        console.log(`[Dedup] High word overlap (${(matchRatio * 100).toFixed(0)}%), likely duplicate`);
+        return true;
+    }
+    
+    return false;
+}
 
 socket.on('transcription_result', (data) => {
     if (transcriptContent.querySelector('.transcript-empty')) {
@@ -1638,6 +1685,9 @@ socket.on('transcription_result', (data) => {
             currentInterimSegment.remove();
             currentInterimSegment = null;
         }
+        
+        // For final transcripts, replace the displayed transcript entirely
+        displayedTranscript = data.text || '';
         
         const lastSegment = transcriptContent.querySelector('.transcript-segment:last-child');
         const lastSegmentSpeaker = lastSegment?.querySelector('.transcript-speaker')?.textContent;
@@ -1660,6 +1710,36 @@ socket.on('transcription_result', (data) => {
         
         lastSpeaker = speakerName;
     } else {
+        // INTERIM (live streaming) mode
+        // In differential mode, we receive cumulative text but need to display smartly
+        let textToDisplay = data.text || '';
+        
+        // For differential streaming, the server sends full cumulative text
+        // But we also receive new_text which is just the delta
+        if (data.is_differential && data.new_text) {
+            // If we have delta text, use client-side dedup as backup
+            const deltaText = data.new_text;
+            
+            // Check if this delta is already displayed
+            if (isTextAlreadyDisplayed(deltaText)) {
+                console.log('[Dedup] Skipping duplicate delta:', deltaText.substring(0, 30) + '...');
+                return;  // Skip this update
+            }
+            
+            // Track what we've shown
+            if (displayedTranscript) {
+                displayedTranscript += ' ' + deltaText;
+            } else {
+                displayedTranscript = deltaText;
+            }
+            
+            textToDisplay = displayedTranscript;
+            lastNewText = deltaText;
+        } else {
+            // Non-differential mode or no delta - display cumulative text directly
+            displayedTranscript = textToDisplay;
+        }
+        
         if (!currentInterimSegment || lastSpeaker !== speakerName) {
             if (currentInterimSegment) {
                 currentInterimSegment.remove();
@@ -1669,14 +1749,14 @@ socket.on('transcription_result', (data) => {
             currentInterimSegment.className = 'transcript-segment interim';
             currentInterimSegment.innerHTML = `
                 <div class="transcript-speaker">${speakerName}</div>
-                <div class="transcript-text">${data.text}</div>
+                <div class="transcript-text">${textToDisplay}</div>
                 <div class="transcript-timestamp">${timestamp} <span class="interim-indicator">●</span></div>
             `;
             transcriptContent.appendChild(currentInterimSegment);
             lastSpeaker = speakerName;
         } else {
             const textEl = currentInterimSegment.querySelector('.transcript-text');
-            textEl.textContent = data.text;
+            textEl.textContent = textToDisplay;
             currentInterimSegment.querySelector('.transcript-timestamp').innerHTML = `${timestamp} <span class="interim-indicator">●</span>`;
         }
     }

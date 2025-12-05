@@ -63,47 +63,166 @@ def _decode_b64(b64: Optional[str]) -> bytes:
     except (binascii.Error, ValueError) as e:
         raise ValueError(f"base64 decode failed: {e}")
 
+def _normalize_word(word: str) -> str:
+    """Normalize a word for comparison: lowercase, strip punctuation."""
+    import re
+    # Remove all punctuation and convert to lowercase
+    return re.sub(r'[^\w\s]', '', word.lower()).strip()
+
+def _normalize_text(text: str) -> str:
+    """Normalize text for comparison."""
+    import re
+    # Remove punctuation and extra whitespace, lowercase
+    text = re.sub(r'[^\w\s]', ' ', text.lower())
+    return ' '.join(text.split())
+
 def _extract_text_delta(previous_text: str, new_text: str) -> str:
     """
     Extract only the NEW words from new_text that don't overlap with previous_text.
-    Uses word-level overlap detection for accurate delta extraction.
+    Uses fuzzy word-level matching with normalization to handle:
+    - Punctuation differences ("So tomorrow" vs "So, tomorrow")
+    - Minor transcription variations
+    - Overlapping audio windows
+    
+    Returns: Only the genuinely new text that wasn't in the previous transcription.
     """
-    if not previous_text:
-        return new_text
-    if not new_text:
+    if not previous_text or not previous_text.strip():
+        return new_text.strip() if new_text else ""
+    if not new_text or not new_text.strip():
         return ""
     
-    prev_words = previous_text.lower().split()
-    new_words = new_text.lower().split()
-    original_new_words = new_text.split()  # Preserve original case
-    
-    if not prev_words or not new_words:
-        return new_text
-    
-    # Find the longest overlap between end of previous and start of new
-    # This handles cases where transcription includes some context from previous audio
-    max_overlap = min(len(prev_words), len(new_words))
-    overlap_length = 0
-    
-    for i in range(1, max_overlap + 1):
-        # Check if first i words of new match last i words of previous
-        if prev_words[-i:] == new_words[:i]:
-            overlap_length = i
-    
-    # Return only the truly new words (after overlap)
-    if overlap_length > 0 and overlap_length < len(original_new_words):
-        delta_words = original_new_words[overlap_length:]
-        return " ".join(delta_words)
-    elif overlap_length >= len(original_new_words):
-        # Complete overlap - no new content
+    # Get original words with case preserved
+    original_new_words = new_text.split()
+    if not original_new_words:
         return ""
-    else:
-        # No overlap found - return new text (this could be a continuation)
-        # But check if new_text is a suffix expansion of previous
-        if new_text.lower().startswith(previous_text.lower()[:50]):
-            # New text starts similarly - extract the suffix
-            return new_text[len(previous_text):].strip()
-        return new_text
+    
+    # Normalize for comparison
+    prev_normalized = _normalize_text(previous_text)
+    new_normalized = _normalize_text(new_text)
+    
+    prev_words_normalized = prev_normalized.split()
+    new_words_normalized = new_normalized.split()
+    
+    if not prev_words_normalized or not new_words_normalized:
+        return new_text.strip()
+    
+    # Strategy 1: Find longest suffix-prefix overlap (most common case)
+    # Check if beginning of new_text overlaps with end of previous_text
+    best_overlap = 0
+    max_check = min(len(prev_words_normalized), len(new_words_normalized))
+    
+    for overlap_len in range(1, max_check + 1):
+        # Compare last N words of previous with first N words of new
+        prev_suffix = prev_words_normalized[-overlap_len:]
+        new_prefix = new_words_normalized[:overlap_len]
+        
+        # Check for exact match after normalization
+        if prev_suffix == new_prefix:
+            best_overlap = overlap_len
+    
+    if best_overlap > 0:
+        # Found overlap - return only the new content after the overlap
+        if best_overlap >= len(original_new_words):
+            # Complete overlap - nothing new
+            logger.debug(f"[delta] Complete overlap ({best_overlap} words) - no new content")
+            return ""
+        delta = " ".join(original_new_words[best_overlap:])
+        logger.debug(f"[delta] Found {best_overlap}-word overlap, delta: '{delta[:50]}...'")
+        return delta
+    
+    # Strategy 2: Check if new_text is an extension of previous_text
+    # (handles case where transcription just got longer with same prefix)
+    if new_normalized.startswith(prev_normalized):
+        # New text extends previous - extract only the new suffix
+        # Find where the extension begins in original text
+        prev_word_count = len(prev_words_normalized)
+        if prev_word_count < len(original_new_words):
+            delta = " ".join(original_new_words[prev_word_count:])
+            logger.debug(f"[delta] Extension detected, delta: '{delta[:50]}...'")
+            return delta
+        return ""
+    
+    # Strategy 3: Find partial overlap using sequence matching
+    # Useful when there's a middle overlap or transcription variations
+    from difflib import SequenceMatcher
+    
+    # Use SequenceMatcher to find common subsequences
+    matcher = SequenceMatcher(None, prev_words_normalized, new_words_normalized)
+    
+    # Find matching blocks
+    matching_blocks = matcher.get_matching_blocks()
+    
+    # Look for a match that starts at the end of previous and beginning of new
+    for block in matching_blocks:
+        prev_start, new_start, length = block.a, block.b, block.size
+        if length == 0:
+            continue
+            
+        # If there's a match at the start of new_text (overlapping content)
+        if new_start == 0 and length >= 3:  # Require at least 3 matching words
+            # Check if this match connects to near the end of previous
+            if prev_start >= len(prev_words_normalized) - length - 5:  # Allow some slack
+                # This is overlap - skip these words
+                skip_count = length
+                if skip_count < len(original_new_words):
+                    delta = " ".join(original_new_words[skip_count:])
+                    logger.debug(f"[delta] Sequence match found ({length} words), delta: '{delta[:50]}...'")
+                    return delta
+                return ""
+    
+    # Strategy 4: Check for significant content overlap using similarity ratio
+    # If the texts are very similar, it's likely repeated content
+    similarity = matcher.ratio()
+    if similarity > 0.8:  # Very similar - likely duplicate
+        # Find truly new content by looking for words not in previous
+        prev_word_set = set(prev_words_normalized)
+        new_words = []
+        consecutive_new = 0
+        start_collecting = False
+        
+        for i, (norm_word, orig_word) in enumerate(zip(new_words_normalized, original_new_words)):
+            if norm_word not in prev_word_set:
+                consecutive_new += 1
+                if consecutive_new >= 2:  # Start collecting after 2 consecutive new words
+                    start_collecting = True
+            else:
+                consecutive_new = 0
+            
+            if start_collecting:
+                new_words.append(orig_word)
+        
+        if new_words:
+            delta = " ".join(new_words)
+            logger.debug(f"[delta] High similarity ({similarity:.2f}), extracted unique: '{delta[:50]}...'")
+            return delta
+        
+        logger.debug(f"[delta] High similarity ({similarity:.2f}) - treating as duplicate")
+        return ""
+    
+    # If no overlap detected and similarity is low, this is genuinely new content
+    # (could be a different topic or significant pause in speech)
+    if similarity < 0.3:
+        logger.debug(f"[delta] Low similarity ({similarity:.2f}) - treating as new content")
+        return new_text.strip()
+    
+    # Middle ground: Some similarity but not complete overlap
+    # Try to find where new content begins using the last matching block
+    last_match_in_new = 0
+    for block in matching_blocks:
+        if block.size > 0:
+            end_in_new = block.b + block.size
+            if end_in_new > last_match_in_new:
+                last_match_in_new = end_in_new
+    
+    if last_match_in_new > 0 and last_match_in_new < len(original_new_words):
+        delta = " ".join(original_new_words[last_match_in_new:])
+        if delta:
+            logger.debug(f"[delta] Partial match, delta starts at word {last_match_in_new}: '{delta[:50]}...'")
+            return delta
+    
+    # Fallback: Return empty if we can't determine (safer than duplicating)
+    logger.debug(f"[delta] Could not determine delta (similarity: {similarity:.2f}) - returning empty")
+    return ""
 
 @socketio.on("join_session")
 def on_join_session(data):
