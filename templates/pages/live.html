@@ -518,6 +518,42 @@
     max-width: 280px;
 }
 
+.listening-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--radius-lg);
+    margin-top: var(--space-4);
+}
+
+.listening-pulse {
+    width: 12px;
+    height: 12px;
+    background: var(--color-primary);
+    border-radius: 50%;
+    animation: listeningPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes listeningPulse {
+    0%, 100% { 
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% { 
+        transform: scale(1.3);
+        opacity: 0.6;
+    }
+}
+
+.listening-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-primary);
+    font-weight: var(--font-weight-medium);
+}
+
 .sidebar {
     display: flex;
     flex-direction: column;
@@ -1361,6 +1397,10 @@ body.processing-active .global-footer {
                             <p class="transcript-empty-title">Ready to transcribe</p>
                             <p class="transcript-empty-text">Press the record button to start capturing your conversation in real-time</p>
                         </div>
+                        <div id="listening-indicator" class="listening-indicator" style="display: none;">
+                            <div class="listening-pulse"></div>
+                            <span class="listening-text">Listening for speech...</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1794,11 +1834,21 @@ recordButton.addEventListener('click', async () => {
             // Determine transcription mode based on tier
             const useStreamingMode = userTierStatus.has_live_transcription === true;
             const STREAMING_CHUNK_MS = 2500;  // Phase 3: 2.5s chunks for real-time transcription
+            const SLIDING_WINDOW_CHUNKS = 3;  // Keep last 3 chunks (~7.5s) for consistent latency
             
             if (useStreamingMode) {
-                console.log('🚀 Streaming mode: Real-time transcription enabled (Business tier)');
+                console.log('🚀 Differential streaming mode: Real-time transcription enabled (Business tier)');
+                console.log(`   Window size: ${SLIDING_WINDOW_CHUNKS} chunks (~${SLIDING_WINDOW_CHUNKS * 2.5}s)`);
             } else {
                 console.log('💰 Final-only mode: Audio buffered locally, transcribed on stop (most accurate & cost-effective)');
+            }
+            
+            // Show/hide listening indicator
+            function showListeningIndicator(show) {
+                const indicator = document.getElementById('listening-indicator');
+                if (indicator) {
+                    indicator.style.display = show ? 'flex' : 'none';
+                }
             }
             
             mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
@@ -1809,27 +1859,38 @@ recordButton.addEventListener('click', async () => {
                 voiceChunksProcessed++;
                 
                 if (useStreamingMode) {
-                    // STREAMING MODE: Send accumulated audio for real-time transcription
-                    // IMPORTANT: We must send the FULL accumulated blob (all chunks so far)
-                    // because individual chunks after the first don't have WebM headers
-                    // and aren't valid standalone audio files for Whisper API
+                    // DIFFERENTIAL STREAMING MODE: Use sliding window for consistent <2s latency
                     if (shouldSendChunk()) {
-                        // Create blob from ALL chunks so far (includes proper WebM header from first chunk)
-                        const accumulatedBlob = new Blob(chunks, { type: mimeType });
-                        accumulatedBlob.arrayBuffer().then((buf) => {
+                        showListeningIndicator(false);
+                        
+                        // Create sliding window: first chunk (header) + last N chunks
+                        let windowChunks;
+                        if (chunks.length <= SLIDING_WINDOW_CHUNKS) {
+                            // Not enough chunks yet, use all
+                            windowChunks = chunks;
+                        } else {
+                            // Sliding window: always include first chunk (WebM header) + last N-1 chunks
+                            windowChunks = [chunks[0], ...chunks.slice(-(SLIDING_WINDOW_CHUNKS - 1))];
+                        }
+                        
+                        const windowBlob = new Blob(windowChunks, { type: mimeType });
+                        windowBlob.arrayBuffer().then((buf) => {
                             const audioArray = Array.from(new Uint8Array(buf));
                             socket.emit('audio_chunk', {
                                 session_id: String(sessionId),
                                 audio_data: audioArray,
                                 chunk_index: voiceChunksProcessed,
+                                total_chunks: chunks.length,
+                                window_size: windowChunks.length,
                                 timestamp: Date.now(),
-                                is_accumulated: true,  // Flag indicating this is cumulative audio
+                                is_differential: true,  // Flag for differential streaming
                                 settings: { mimeType: mimeType }
                             });
-                            console.log(`📤 Streaming accumulated audio (${accumulatedBlob.size} bytes, ${voiceChunksProcessed} chunks) for real-time transcription`);
+                            console.log(`⚡ Differential: window ${windowBlob.size/1024|0}KB (${windowChunks.length}/${chunks.length} chunks)`);
                         });
                     } else {
-                        console.log(`⏭️ Skipping silent chunk ${voiceChunksProcessed}`);
+                        showListeningIndicator(true);
+                        console.log(`👂 Listening... (chunk ${voiceChunksProcessed} silent)`);
                     }
                 } else {
                     // FINAL-ONLY MODE: Just buffer audio locally, don't send during recording
