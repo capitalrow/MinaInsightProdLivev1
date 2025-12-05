@@ -22,6 +22,13 @@ class TaskBootstrap {
         // CROWN⁴.6: Singleton TaskGrouping instance
         this.taskGrouping = null;
         this.groupingThreshold = 4; // Enable grouping for 4+ tasks (lowered for testing)
+        
+        // CROWN⁴.9 FIX: Render lock and debounce to prevent render loops
+        this._renderInProgress = false;
+        this._renderDebounceTimer = null;
+        this._lastRenderTime = 0;
+        this._renderDebounceMs = 100; // Minimum 100ms between renders
+        this._pendingRenderArgs = null;
     }
 
     /**
@@ -525,40 +532,105 @@ class TaskBootstrap {
 
     /**
      * Render tasks to DOM
+     * CROWN⁴.9 FIX: Debounced and locked to prevent render loops
      * @param {Array} tasks
      * @param {Object} options - { fromCache: boolean }
      * @returns {Promise<void>}
      */
     async renderTasks(tasks, options = {}) {
-        console.log(`🔧 [TaskBootstrap] renderTasks() called with ${tasks?.length || 0} tasks`);
+        const now = Date.now();
+        const taskCount = tasks?.length || 0;
         
-        // CROWN⁴.6: Hydrate TaskStateStore FIRST - single source of truth
-        if (tasks && Array.isArray(tasks) && tasks.length > 0 && window.taskStateStore) {
-            const source = options.fromCache ? 'cache' : 'server';
-            window.taskStateStore.hydrate(tasks, source);
-            console.log(`[TaskBootstrap] Hydrated TaskStateStore from ${source}`);
+        console.log(`🔧 [TaskBootstrap] renderTasks() called with ${taskCount} tasks`);
+        
+        // CROWN⁴.9 FIX: Prevent render loops with lock and debounce
+        if (this._renderInProgress) {
+            console.log(`🔒 [TaskBootstrap] Render already in progress, queueing (${taskCount} tasks)`);
+            this._pendingRenderArgs = { tasks, options };
+            return;
         }
         
+        // Debounce rapid successive calls (within 100ms)
+        const timeSinceLastRender = now - this._lastRenderTime;
+        if (timeSinceLastRender < this._renderDebounceMs && this._lastRenderTime > 0) {
+            console.log(`⏱️ [TaskBootstrap] Debouncing render (${timeSinceLastRender}ms since last)`);
+            
+            // Clear existing debounce timer
+            if (this._renderDebounceTimer) {
+                clearTimeout(this._renderDebounceTimer);
+            }
+            
+            // Store pending args and schedule delayed render
+            this._pendingRenderArgs = { tasks, options };
+            this._renderDebounceTimer = setTimeout(() => {
+                this._renderDebounceTimer = null;
+                if (this._pendingRenderArgs) {
+                    const pending = this._pendingRenderArgs;
+                    this._pendingRenderArgs = null;
+                    this.renderTasks(pending.tasks, pending.options);
+                }
+            }, this._renderDebounceMs - timeSinceLastRender);
+            return;
+        }
+        
+        // Acquire lock
+        this._renderInProgress = true;
+        this._lastRenderTime = now;
+        
+        try {
+            await this._doRenderTasks(tasks, options);
+        } finally {
+            // Release lock
+            this._renderInProgress = false;
+            
+            // Process pending render if any
+            if (this._pendingRenderArgs) {
+                const pending = this._pendingRenderArgs;
+                this._pendingRenderArgs = null;
+                console.log(`📋 [TaskBootstrap] Processing pending render (${pending.tasks?.length || 0} tasks)`);
+                // Use setTimeout to avoid stack overflow
+                setTimeout(() => this.renderTasks(pending.tasks, pending.options), 10);
+            }
+        }
+    }
+    
+    /**
+     * Internal render implementation
+     * @private
+     */
+    async _doRenderTasks(tasks, options = {}) {
         const container = document.getElementById('tasks-list-container');
         
         if (!container) {
             console.warn('⚠️ Tasks container not found, skipping render');
             return;
         }
+        
+        // CROWN⁴.9 FIX: Check existing content FIRST before any processing
+        const existingCards = container.querySelectorAll('.task-card').length;
 
         // CROWN⁴.5: Determine state based on task count
         if (!tasks || tasks.length === 0) {
-            console.log('🔧 [TaskBootstrap] No tasks to render, checking server content');
-            // SAFETY: Only show empty state if we have NO server-rendered content
-            const hasServerContent = container.querySelectorAll('.task-card').length > 0;
+            console.log(`🔧 [TaskBootstrap] No tasks to render (existing cards: ${existingCards})`);
             
-            if (!hasServerContent) {
-                this.showEmptyState();
-                container.innerHTML = '';
-            } else {
-                console.warn('⚠️ Keeping server-rendered content (fallback protection)');
+            // CROWN⁴.9 FIX: Never replace existing content with empty state
+            // This prevents flicker when cache returns empty during bootstrap
+            if (existingCards > 0) {
+                console.warn(`⚠️ [TaskBootstrap] Skipping empty render - ${existingCards} cards already exist`);
+                return;
             }
+            
+            // Only show empty state if truly no content exists
+            this.showEmptyState();
+            container.innerHTML = '';
             return;
+        }
+        
+        // CROWN⁴.6: Hydrate TaskStateStore FIRST - single source of truth
+        if (tasks && Array.isArray(tasks) && tasks.length > 0 && window.taskStateStore) {
+            const source = options.fromCache ? 'cache' : 'server';
+            window.taskStateStore.hydrate(tasks, source);
+            console.log(`[TaskBootstrap] Hydrated TaskStateStore from ${source}`);
         }
 
         // Log sample task to verify data structure

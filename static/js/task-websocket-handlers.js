@@ -708,7 +708,16 @@ class TaskWebSocketHandlers {
         
         if (window.taskBootstrap) {
             const tasks = await window.taskCache.getFilteredTasks(data.filter);
-            await window.taskBootstrap.renderTasks(tasks);
+            
+            // CROWN⁴.9 FIX: Prevent render loop during initial bootstrap
+            // Skip render if cache is empty but server already rendered tasks
+            const container = document.getElementById('tasks-list-container');
+            const serverRenderedCards = container?.querySelectorAll('.task-card')?.length || 0;
+            if ((!tasks || tasks.length === 0) && serverRenderedCards > 0) {
+                console.log(`[WebSocketHandlers] Skipping filter render - cache empty but ${serverRenderedCards} server cards exist`);
+            } else {
+                await window.taskBootstrap.renderTasks(tasks);
+            }
         }
         
         if (window.multiTabSync) {
