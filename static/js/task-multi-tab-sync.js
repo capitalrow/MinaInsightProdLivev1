@@ -232,10 +232,25 @@ class MultiTabSync {
     }
 
     /**
+     * CROWN⁴.9: Check if hydration is ready
+     * @returns {boolean}
+     */
+    _isHydrationReady() {
+        return window.taskHydrationReady || 
+               (window.taskBootstrap?.isHydrationReady?.() ?? false);
+    }
+    
+    /**
      * Handle filter changed in another tab
      * @param {Object} filter
      */
     async _handleFilterChanged(filter) {
+        // CROWN⁴.9: Block filter operations until hydration is complete
+        if (!this._isHydrationReady()) {
+            console.log('[MultiTabSync] _handleFilterChanged blocked - hydration not ready');
+            return;
+        }
+        
         // Save view state
         await window.taskCache.setViewState('tasks_page', {
             ...await window.taskCache.getViewState('tasks_page'),
