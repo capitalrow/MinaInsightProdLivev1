@@ -29,6 +29,66 @@ class TaskBootstrap {
         this._lastRenderTime = 0;
         this._renderDebounceMs = 100; // Minimum 100ms between renders
         this._pendingRenderArgs = null;
+        
+        // CROWN⁴.9 HYDRATION GATE: Industry-standard SSR hydration pattern
+        // Blocks ALL empty renders until first successful hydration completes
+        // This prevents flicker during initialization when multiple systems
+        // (cache, WebSocket, BroadcastSync, MultiTabSync) race to render
+        this._hydrationReady = false;
+        this._hydrationStartTime = null;
+        this._ssrCardCount = 0; // Count of server-rendered cards on page load
+        this._firstRenderComplete = false;
+        this._deferredRenderQueue = []; // Queue for renders before hydration
+        
+        // Expose hydration state globally for other modules to check
+        window.taskHydrationReady = false;
+    }
+    
+    /**
+     * CROWN⁴.9: Check if hydration is complete
+     * Other modules should check this before triggering renders
+     * @returns {boolean}
+     */
+    isHydrationReady() {
+        return this._hydrationReady;
+    }
+    
+    /**
+     * CROWN⁴.9: Mark hydration as complete and process deferred renders
+     * Called after first successful render with actual task data
+     */
+    _markHydrationComplete() {
+        if (this._hydrationReady) return; // Already done
+        
+        this._hydrationReady = true;
+        window.taskHydrationReady = true;
+        this._firstRenderComplete = true;
+        
+        const hydrationTime = this._hydrationStartTime 
+            ? Date.now() - this._hydrationStartTime 
+            : 0;
+        
+        console.log(`✅ [TaskBootstrap] Hydration complete in ${hydrationTime}ms`);
+        
+        // Emit hydration complete event for other modules
+        document.dispatchEvent(new CustomEvent('tasks:hydrated', {
+            detail: { 
+                timestamp: Date.now(),
+                hydrationTime,
+                taskCount: this._ssrCardCount
+            }
+        }));
+        
+        // Process any deferred renders (take only the last one - latest wins)
+        if (this._deferredRenderQueue.length > 0) {
+            const lastRender = this._deferredRenderQueue[this._deferredRenderQueue.length - 1];
+            this._deferredRenderQueue = [];
+            console.log(`📋 [TaskBootstrap] Processing deferred render (${lastRender.tasks?.length || 0} tasks)`);
+            // Only process if it has actual tasks
+            if (lastRender.tasks && lastRender.tasks.length > 0) {
+                this._doRenderTasks(lastRender.tasks, lastRender.options);
+            }
+        }
     }
 
     /**
@@ -167,17 +227,25 @@ class TaskBootstrap {
     /**
      * Bootstrap tasks page with cache-first loading
      * Target: <200ms first paint
+     * CROWN⁴.9: Implements hydration gate pattern for flicker-free initialization
      * @returns {Promise<Object>} Bootstrap results
      */
     async bootstrap() {
-        console.log('🚀 Starting CROWN⁴.6 cache-first bootstrap...');
+        console.log('🚀 Starting CROWN⁴.9 cache-first bootstrap with hydration gate...');
         this.perf.cache_load_start = performance.now();
+        
+        // CROWN⁴.9: Start hydration timing
+        this._hydrationStartTime = Date.now();
 
         // CROWN⁴.8 FIX: Check if server already rendered tasks BEFORE any DOM manipulation
         // This prevents the flicker caused by cache clearing server content
         const container = document.getElementById('tasks-list-container');
         const serverRenderedTasks = container?.querySelectorAll('.task-card') || [];
         const hasServerContent = serverRenderedTasks.length > 0;
+        
+        // CROWN⁴.9: Capture SSR card count for hydration gate
+        this._ssrCardCount = serverRenderedTasks.length;
+        console.log(`📊 [HydrationGate] SSR card count captured: ${this._ssrCardCount}`);
         
         if (hasServerContent) {
             console.log(`✅ [Bootstrap] Server rendered ${serverRenderedTasks.length} tasks - skipping cache DOM swap`);
@@ -194,6 +262,10 @@ class TaskBootstrap {
                 window.taskStateStore.hydrate(serverTasks, 'server');
             }
             
+            // CROWN⁴.9: Mark hydration as complete IMMEDIATELY for SSR content
+            // Server-rendered content is already the "hydrated" state
+            this._markHydrationComplete();
+            
             // Background: sync cache to IndexedDB without touching DOM
             this.syncInBackground();
             this.initialized = true;
@@ -204,7 +276,8 @@ class TaskBootstrap {
                     detail: {
                         cached_tasks: serverRenderedTasks.length,
                         first_paint_ms: performance.now() - this.perf.cache_load_start,
-                        source: 'server'
+                        source: 'server',
+                        hydrationReady: true
                     }
                 }));
             });
@@ -532,7 +605,8 @@ class TaskBootstrap {
 
     /**
      * Render tasks to DOM
-     * CROWN⁴.9 FIX: Debounced and locked to prevent render loops
+     * CROWN⁴.9: Industry-standard hydration gate pattern
+     * Blocks empty renders until hydration is complete to prevent flicker
      * @param {Array} tasks
      * @param {Object} options - { fromCache: boolean }
      * @returns {Promise<void>}
@@ -540,37 +614,56 @@ class TaskBootstrap {
     async renderTasks(tasks, options = {}) {
         const now = Date.now();
         const taskCount = tasks?.length || 0;
+        const container = document.getElementById('tasks-list-container');
+        const existingCards = container?.querySelectorAll('.task-card')?.length || 0;
         
-        console.log(`🔧 [TaskBootstrap] renderTasks() called with ${taskCount} tasks`);
+        console.log(`🔧 [TaskBootstrap] renderTasks() called with ${taskCount} tasks (SSR cards: ${existingCards}, hydrationReady: ${this._hydrationReady})`);
         
-        // CROWN⁴.9 FIX: Prevent render loops with lock and debounce
+        // CROWN⁴.9 HYDRATION GATE: Core protection against flicker
+        // Before hydration is ready, BLOCK all empty renders if SSR content exists
+        if (!this._hydrationReady) {
+            // Empty render with SSR content = DEFER (don't execute)
+            if (taskCount === 0 && existingCards > 0) {
+                console.log(`🚫 [HydrationGate] BLOCKED empty render - SSR has ${existingCards} cards, hydration not ready`);
+                // Queue it but don't process until hydration completes
+                this._deferredRenderQueue.push({ tasks, options });
+                return;
+            }
+            
+            // Non-empty render = This IS the hydration, allow it through
+            if (taskCount > 0) {
+                console.log(`✅ [HydrationGate] Allowing render with ${taskCount} tasks - this will complete hydration`);
+            }
+        }
+        
+        // CROWN⁴.9 FIX: Prevent render loops with lock
         if (this._renderInProgress) {
             console.log(`🔒 [TaskBootstrap] Render already in progress, queueing (${taskCount} tasks)`);
             this._pendingRenderArgs = { tasks, options };
             return;
         }
         
-        // Debounce rapid successive calls (within 100ms)
-        const timeSinceLastRender = now - this._lastRenderTime;
-        if (timeSinceLastRender < this._renderDebounceMs && this._lastRenderTime > 0) {
-            console.log(`⏱️ [TaskBootstrap] Debouncing render (${timeSinceLastRender}ms since last)`);
-            
-            // Clear existing debounce timer
-            if (this._renderDebounceTimer) {
-                clearTimeout(this._renderDebounceTimer);
-            }
-            
-            // Store pending args and schedule delayed render
-            this._pendingRenderArgs = { tasks, options };
-            this._renderDebounceTimer = setTimeout(() => {
-                this._renderDebounceTimer = null;
-                if (this._pendingRenderArgs) {
-                    const pending = this._pendingRenderArgs;
-                    this._pendingRenderArgs = null;
-                    this.renderTasks(pending.tasks, pending.options);
+        // Debounce rapid successive calls (within 100ms) - but only AFTER hydration
+        if (this._hydrationReady) {
+            const timeSinceLastRender = now - this._lastRenderTime;
+            if (timeSinceLastRender < this._renderDebounceMs && this._lastRenderTime > 0) {
+                console.log(`⏱️ [TaskBootstrap] Debouncing render (${timeSinceLastRender}ms since last)`);
+                
+                if (this._renderDebounceTimer) {
+                    clearTimeout(this._renderDebounceTimer);
                 }
-            }, this._renderDebounceMs - timeSinceLastRender);
-            return;
+                
+                this._pendingRenderArgs = { tasks, options };
+                this._renderDebounceTimer = setTimeout(() => {
+                    this._renderDebounceTimer = null;
+                    if (this._pendingRenderArgs) {
+                        const pending = this._pendingRenderArgs;
+                        this._pendingRenderArgs = null;
+                        this.renderTasks(pending.tasks, pending.options);
+                    }
+                }, this._renderDebounceMs - timeSinceLastRender);
+                return;
+            }
         }
         
         // Acquire lock
@@ -579,16 +672,20 @@ class TaskBootstrap {
         
         try {
             await this._doRenderTasks(tasks, options);
+            
+            // CROWN⁴.9: Mark hydration complete after first successful render with tasks
+            if (!this._hydrationReady && taskCount > 0) {
+                this._markHydrationComplete();
+            }
         } finally {
             // Release lock
             this._renderInProgress = false;
             
-            // Process pending render if any
-            if (this._pendingRenderArgs) {
+            // Process pending render if any (only after hydration)
+            if (this._pendingRenderArgs && this._hydrationReady) {
                 const pending = this._pendingRenderArgs;
                 this._pendingRenderArgs = null;
                 console.log(`📋 [TaskBootstrap] Processing pending render (${pending.tasks?.length || 0} tasks)`);
-                // Use setTimeout to avoid stack overflow
                 setTimeout(() => this.renderTasks(pending.tasks, pending.options), 10);
             }
         }

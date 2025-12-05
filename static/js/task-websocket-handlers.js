@@ -691,6 +691,15 @@ class TaskWebSocketHandlers {
     }
 
     /**
+     * CROWN⁴.9: Check if hydration is ready
+     * @returns {boolean}
+     */
+    _isHydrationReady() {
+        return window.taskHydrationReady || 
+               (window.taskBootstrap?.isHydrationReady?.() ?? false);
+    }
+    
+    /**
      * Handle filter changed
      * @param {Object} data
      */
@@ -699,6 +708,12 @@ class TaskWebSocketHandlers {
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
             console.log('⏭️ Skipping stale filter_changed event');
+            return;
+        }
+        
+        // CROWN⁴.9: Block filter operations until hydration is complete
+        if (!this._isHydrationReady()) {
+            console.log('[WebSocketHandlers] _handleFilterChanged blocked - hydration not ready');
             return;
         }
         
