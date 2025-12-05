@@ -232,6 +232,18 @@ class TaskSearchSort {
         if (this.cache?.getAllTasks && window.taskBootstrap?.renderTasks) {
             const allTasks = await this.cache.getAllTasks();
             const nonDeleted = allTasks.filter(task => !task.deleted_at);
+            
+            // CROWN⁴.9 FIX: Prevent render loop during initial bootstrap
+            // When cache is empty but server already rendered task cards, skip cache-based render
+            // This prevents the loop: renderTasks(0) → broadcasts → applyFiltersAndSort → repeat
+            const serverRenderedCards = this.tasksContainer?.querySelectorAll('.task-card')?.length || 0;
+            if (nonDeleted.length === 0 && serverRenderedCards > 0) {
+                console.log(`[TaskSearchSort] Skipping cache render - cache empty but ${serverRenderedCards} server cards exist`);
+                // Update counts from server-rendered DOM instead
+                this.updateCounts(serverRenderedCards, serverRenderedCards);
+                return;
+            }
+            
             const filteredTasks = this.filterTasksData(nonDeleted);
             const sortedTasks = this.sortTaskData(filteredTasks, this.currentSort);
 
