@@ -707,20 +707,14 @@ class TaskBootstrap {
             return;
         }
         
-        // CROWN⁴.11: Post-hydration settling phase
-        // During settling, use longer debounce to let data sources stabilize
-        if (this._hydrationReady && this._hydrationCompleteTime > 0) {
-            const timeSinceHydration = now - this._hydrationCompleteTime;
-            const isSettling = timeSinceHydration < this._postHydrationSettlingMs;
-            const effectiveDebounce = isSettling ? this._postHydrationSettlingMs : this._renderDebounceMs;
-            
+        // CROWN⁴.11: Debounce only background syncs, never user-initiated filter renders
+        // User actions (filter/tab clicks) should always render immediately
+        const isUserAction = options.isFilterChange || options.isUserAction;
+        
+        if (this._hydrationReady && !isUserAction) {
             const timeSinceLastRender = now - this._lastRenderTime;
-            if (timeSinceLastRender < effectiveDebounce && this._lastRenderTime > 0) {
-                if (isSettling) {
-                    console.log(`⏳ [TaskBootstrap] Settling phase - deferring render (${timeSinceHydration}ms since hydration)`);
-                } else {
-                    console.log(`⏱️ [TaskBootstrap] Debouncing render (${timeSinceLastRender}ms since last)`);
-                }
+            if (timeSinceLastRender < this._renderDebounceMs && this._lastRenderTime > 0) {
+                console.log(`⏱️ [TaskBootstrap] Debouncing background render (${timeSinceLastRender}ms since last)`);
                 
                 if (this._renderDebounceTimer) {
                     clearTimeout(this._renderDebounceTimer);
@@ -734,7 +728,7 @@ class TaskBootstrap {
                         this._pendingRenderArgs = null;
                         this.renderTasks(pending.tasks, pending.options);
                     }
-                }, effectiveDebounce - timeSinceLastRender);
+                }, this._renderDebounceMs - timeSinceLastRender);
                 return;
             }
         }
