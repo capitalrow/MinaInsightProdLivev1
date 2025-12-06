@@ -52,6 +52,41 @@ class TaskBootstrap {
         
         // Expose hydration state globally for other modules to check
         window.taskHydrationReady = false;
+        
+        // CROWN⁴.12: Priority-based render scheduler
+        // Routes all renders through a central scheduler that enforces priority ordering
+        // and validates context to prevent stale payloads from overwriting user intent
+        this.renderScheduler = null;
+        this._renderRequestSeq = 0;
+        this._initRenderScheduler();
+    }
+    
+    /**
+     * CROWN⁴.12: Initialize the render scheduler
+     * The scheduler controls all render requests with priority-based ordering
+     */
+    _initRenderScheduler() {
+        if (typeof TaskRenderScheduler === 'undefined') {
+            console.warn('⚠️ [TaskBootstrap] TaskRenderScheduler not loaded, using direct rendering');
+            return;
+        }
+        
+        this.renderScheduler = new TaskRenderScheduler({
+            onRender: (tasks, options) => this._executeRender(tasks, options)
+        });
+        
+        // Listen for context changes from filter/search
+        document.addEventListener('task:view-context-changed', (e) => {
+            if (this.renderScheduler && e.detail) {
+                this.renderScheduler.updateContext({
+                    filter: e.detail.filter || 'active',
+                    search: e.detail.search || '',
+                    sort: e.detail.sort || { field: 'created_at', direction: 'desc' }
+                });
+            }
+        });
+        
+        console.log('📋 [TaskBootstrap] RenderScheduler integrated');
     }
     
     /**
@@ -106,7 +141,13 @@ class TaskBootstrap {
             ? Date.now() - this._hydrationStartTime 
             : 0;
         
-        console.log(`✅ [TaskBootstrap] Hydration complete in ${hydrationTime}ms (settling for ${this._postHydrationSettlingMs}ms)`);
+        console.log(`✅ [TaskBootstrap] Hydration complete in ${hydrationTime}ms`);
+        
+        // CROWN⁴.12: Enable the render scheduler now that hydration is complete
+        if (this.renderScheduler) {
+            this.renderScheduler.enable();
+            console.log('📋 [TaskBootstrap] RenderScheduler enabled after hydration');
+        }
         
         // CROWN⁴.10: Add tasks-hydrated class to container to disable future animations
         // This prevents CSS animation replay during re-renders/reconciliation
@@ -659,40 +700,79 @@ class TaskBootstrap {
 
     /**
      * Render tasks to DOM
-     * CROWN⁴.9: Industry-standard hydration gate pattern
-     * Blocks empty renders until hydration is complete to prevent flicker
+     * CROWN⁴.12: Routes through priority-based RenderScheduler
+     * CROWN⁴.9: Hydration gate protects against flicker during initialization
      * @param {Array} tasks
-     * @param {Object} options - { fromCache: boolean }
+     * @param {Object} options - { fromCache, source, isFilterChange, isUserAction }
      * @returns {Promise<void>}
      */
     async renderTasks(tasks, options = {}) {
-        const now = Date.now();
         const taskCount = tasks?.length || 0;
         const container = document.getElementById('tasks-list-container');
         const existingCards = container?.querySelectorAll('.task-card')?.length || 0;
         
-        console.log(`🔧 [TaskBootstrap] renderTasks() called with ${taskCount} tasks (SSR cards: ${existingCards}, hydrationReady: ${this._hydrationReady})`);
+        // Determine source and priority flags
+        const source = options.source || (options.fromCache ? 'cache' : 'api');
+        const isUserAction = options.isFilterChange || options.isUserAction || false;
         
-        // CROWN⁴.9 HYDRATION GATE: Core protection against flicker
-        // Before hydration is ready, BLOCK all empty renders if SSR content exists
+        console.log(`🔧 [TaskBootstrap] renderTasks() called with ${taskCount} tasks (source: ${source}, SSR: ${existingCards}, hydrationReady: ${this._hydrationReady})`);
+        
+        // CROWN⁴.9 HYDRATION GATE: Before hydration, handle specially
         if (!this._hydrationReady) {
-            // Empty render with SSR content = DEFER (don't execute)
+            // Empty render with SSR content = DEFER
             if (taskCount === 0 && existingCards > 0) {
-                console.log(`🚫 [HydrationGate] BLOCKED empty render - SSR has ${existingCards} cards, hydration not ready`);
-                // Queue it but don't process until hydration completes
+                console.log(`🚫 [HydrationGate] BLOCKED empty render - SSR has ${existingCards} cards`);
                 this._deferredRenderQueue.push({ tasks, options });
                 return;
             }
             
-            // Non-empty render = This IS the hydration, allow it through
+            // Non-empty render = This IS the hydration, execute directly
             if (taskCount > 0) {
-                console.log(`✅ [HydrationGate] Allowing render with ${taskCount} tasks - this will complete hydration`);
+                console.log(`✅ [HydrationGate] Allowing render with ${taskCount} tasks - completing hydration`);
+                await this._executeRender(tasks, { ...options, source, isSchedulerApproved: true });
+                return;
             }
         }
         
-        // CROWN⁴.10 FIX: Skip render if payload hash matches last render
-        // This is the key fix for flickering - prevents redundant DOM replacements
-        // that re-trigger CSS animations when task data hasn't actually changed
+        // CROWN⁴.12: Route through scheduler if available
+        if (this.renderScheduler) {
+            // Get current context from scheduler or infer from options
+            const currentContext = this.renderScheduler.getContext();
+            
+            this._renderRequestSeq++;
+            this.renderScheduler.enqueueRender({
+                tasks,
+                source,
+                filterContext: options.filterContext || currentContext.filter,
+                searchQuery: options.searchQuery || currentContext.search,
+                sortConfig: options.sortConfig || currentContext.sort,
+                version: this._renderRequestSeq,
+                fromCache: options.fromCache || false,
+                isUserAction
+            });
+            return;
+        }
+        
+        // Fallback: direct render if no scheduler
+        await this._executeRender(tasks, options);
+    }
+    
+    /**
+     * CROWN⁴.12: Execute render (called by scheduler or directly during hydration)
+     * @param {Array} tasks
+     * @param {Object} options
+     */
+    async _executeRender(tasks, options = {}) {
+        const taskCount = tasks?.length || 0;
+        const now = Date.now();
+        
+        // Skip if scheduler didn't approve (safety check)
+        if (this._hydrationReady && this.renderScheduler && !options.isSchedulerApproved) {
+            console.log(`⚠️ [TaskBootstrap] Render bypassed scheduler - blocking`);
+            return;
+        }
+        
+        // CROWN⁴.10: Skip if payload unchanged
         const payloadHash = this._computeRenderPayloadHash(tasks);
         if (this._hydrationReady && payloadHash === this._lastRenderPayloadHash) {
             this._renderHashSkipCount++;
@@ -700,55 +780,25 @@ class TaskBootstrap {
             return;
         }
         
-        // CROWN⁴.9 FIX: Prevent render loops with lock
+        // Prevent concurrent renders
         if (this._renderInProgress) {
-            console.log(`🔒 [TaskBootstrap] Render already in progress, queueing (${taskCount} tasks)`);
+            console.log(`🔒 [TaskBootstrap] Render in progress, queueing`);
             this._pendingRenderArgs = { tasks, options };
             return;
         }
         
-        // CROWN⁴.11: Debounce only background syncs, never user-initiated filter renders
-        // User actions (filter/tab clicks) should always render immediately
-        const isUserAction = options.isFilterChange || options.isUserAction;
-        
-        if (this._hydrationReady && !isUserAction) {
-            const timeSinceLastRender = now - this._lastRenderTime;
-            if (timeSinceLastRender < this._renderDebounceMs && this._lastRenderTime > 0) {
-                console.log(`⏱️ [TaskBootstrap] Debouncing background render (${timeSinceLastRender}ms since last)`);
-                
-                if (this._renderDebounceTimer) {
-                    clearTimeout(this._renderDebounceTimer);
-                }
-                
-                this._pendingRenderArgs = { tasks, options };
-                this._renderDebounceTimer = setTimeout(() => {
-                    this._renderDebounceTimer = null;
-                    if (this._pendingRenderArgs) {
-                        const pending = this._pendingRenderArgs;
-                        this._pendingRenderArgs = null;
-                        this.renderTasks(pending.tasks, pending.options);
-                    }
-                }, this._renderDebounceMs - timeSinceLastRender);
-                return;
-            }
-        }
-        
-        // Acquire lock
         this._renderInProgress = true;
         this._lastRenderTime = now;
         
         try {
             await this._doRenderTasks(tasks, options);
-            
-            // CROWN⁴.10: Update payload hash after successful render
             this._lastRenderPayloadHash = payloadHash;
             
-            // CROWN⁴.9: Mark hydration complete after first successful render with tasks
+            // Mark hydration complete after first successful render with tasks
             if (!this._hydrationReady && taskCount > 0) {
                 this._markHydrationComplete();
             }
         } finally {
-            // Release lock
             this._renderInProgress = false;
             
             // Process pending render if any (only after hydration)
