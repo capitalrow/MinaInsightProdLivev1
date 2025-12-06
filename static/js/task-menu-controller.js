@@ -34,6 +34,72 @@ class TaskMenuController {
         
         console.log('[TaskMenuController] Initialized successfully - ready to handle actions');
     }
+
+    /**
+     * DIAGNOSTIC HELPER - Comprehensive state logging for debugging menu actions
+     * Captures WebSocket state, cache availability, optimisticUI state, and user context
+     */
+    _logDiagnostics(action, taskId, extra = {}) {
+        const wsManager = window.wsManager;
+        const wsConnected = wsManager?.sockets?.tasks?.connected || false;
+        const wsState = wsManager?.sockets?.tasks?.readyState || 'unknown';
+        
+        const diagnostics = {
+            timestamp: new Date().toISOString(),
+            action,
+            taskId,
+            taskIdType: typeof taskId,
+            
+            // WebSocket state
+            wsConnected,
+            wsState,
+            wsManagerExists: !!wsManager,
+            
+            // OptimisticUI state
+            optimisticUIExists: !!window.optimisticUI,
+            optimisticUIMethods: window.optimisticUI ? Object.keys(window.optimisticUI).filter(k => typeof window.optimisticUI[k] === 'function') : [],
+            
+            // Cache state
+            cacheExists: !!window.optimisticUI?.cache,
+            taskCacheExists: !!window.taskCache,
+            
+            // User context
+            userId: window.CURRENT_USER_ID || null,
+            workspaceId: window.WORKSPACE_ID || null,
+            sessionId: window.CURRENT_SESSION_ID || null,
+            
+            // Dependencies
+            dependenciesReady: this.dependenciesReady,
+            orchestratorReady: !!window.tasksOrchestrator?.initialized,
+            
+            // Extra context
+            ...extra
+        };
+        
+        console.log(`[TaskMenuController] 🔍 DIAGNOSTICS for ${action}:`, diagnostics);
+        return diagnostics;
+    }
+
+    /**
+     * DIAGNOSTIC: Log operation result for tracking
+     */
+    _logResult(action, taskId, success, result = null, error = null) {
+        const logData = {
+            timestamp: new Date().toISOString(),
+            action,
+            taskId,
+            success,
+            result: result ? (typeof result === 'object' ? JSON.stringify(result).substring(0, 200) : result) : null,
+            error: error ? (error.message || String(error)) : null
+        };
+        
+        if (success) {
+            console.log(`[TaskMenuController] ✅ ${action} SUCCEEDED:`, logData);
+        } else {
+            console.error(`[TaskMenuController] ❌ ${action} FAILED:`, logData);
+        }
+        return logData;
+    }
     
     /**
      * ROBUST TOAST - Always works, even without toast module
@@ -153,9 +219,11 @@ class TaskMenuController {
 
     /**
      * 2. EDIT TITLE - Inline title editing with optimistic UI
+     * DIAGNOSTIC: Enhanced logging to trace persistence issues
      */
     async handleEdit(taskId) {
         console.log(`[TaskMenuController] Editing title for task ${taskId}`);
+        this._logDiagnostics('edit-title', taskId);
         
         const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
         if (!taskCard) {
@@ -217,12 +285,27 @@ class TaskMenuController {
                 input.remove();
                 titleEl.style.display = '';
 
-                // Use OptimisticUI system (not raw fetch!)
-                await window.optimisticUI.updateTask(taskId, { title: newTitle });
+                console.log(`[TaskMenuController] 📤 Saving title change: "${currentTitle}" -> "${newTitle}"`);
                 
-                // Toast handled by OptimisticUI system
+                // Use OptimisticUI system (not raw fetch!)
+                if (window.optimisticUI?.updateTask) {
+                    const result = await window.optimisticUI.updateTask(taskId, { title: newTitle });
+                    console.log(`[TaskMenuController] ✅ Title update result:`, result);
+                } else {
+                    // HTTP fallback
+                    console.warn(`[TaskMenuController] ⚠️ optimisticUI.updateTask not available, using HTTP fallback`);
+                    const response = await fetch(`/api/tasks/${taskId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ title: newTitle })
+                    });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    window.toast?.success('Title updated');
+                }
             } catch (error) {
                 // Rollback on error
+                console.error(`[TaskMenuController] ❌ Title update failed:`, error);
                 titleEl.textContent = currentTitle;
                 window.toast?.error('Failed to update title');
             }
@@ -243,22 +326,152 @@ class TaskMenuController {
     /**
      * 3. TOGGLE STATUS - Mark complete/incomplete with checkbox animation
      * Uses the same toggleTaskStatus() method as direct checkbox clicks for consistent animations
+     * DIAGNOSTIC: Enhanced logging to trace persistence issues
+     * 
+     * CRITICAL FIX: If optimisticUI.toggleTaskStatus silently aborts (cache miss), 
+     * we MUST fall back to HTTP to ensure persistence. This matches checkbox behavior.
      */
     async handleToggleStatus(taskId) {
         console.log(`[TaskMenuController] Toggling status for task ${taskId}`);
         
-        // Use the same optimistic UI toggle method as checkbox clicks
-        // This ensures consistent animation (confetti) and visual feedback
+        // DIAGNOSTIC: Log full system state before action
+        const diagnostics = this._logDiagnostics('toggle-status', taskId);
+        
+        const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+        
+        // STEP 1: Pre-fetch task from cache, API, or DOM to ensure we have it
+        let task = null;
+        if (window.optimisticUI?.cache?.getTask) {
+            try {
+                task = await window.optimisticUI.cache.getTask(taskId);
+                if (task) {
+                    console.log(`[TaskMenuController] 🔍 Task found in cache:`, {
+                        id: task.id,
+                        status: task.status,
+                        title: task.title?.substring(0, 30)
+                    });
+                }
+            } catch (e) {
+                console.warn(`[TaskMenuController] 🔍 Cache lookup failed:`, e);
+            }
+        }
+        
+        // If not in cache, try fetchTask which includes API fallback
+        if (!task) {
+            console.log(`[TaskMenuController] 🔍 Task not in cache, trying fetchTask...`);
+            task = await this.fetchTask(taskId);
+        }
+        
+        // Extract from DOM as last resort
+        if (!task && taskCard) {
+            console.log(`[TaskMenuController] 🔍 Extracting task from DOM...`);
+            task = {
+                id: taskId,
+                status: taskCard.dataset.status || 'todo',
+                title: taskCard.querySelector('.task-title')?.textContent?.trim() || 'Unknown'
+            };
+        }
+        
+        if (!task) {
+            console.error(`[TaskMenuController] ❌ Task ${taskId} not found anywhere - cannot toggle`);
+            window.toast?.error('Task not found');
+            return;
+        }
+        
+        const currentStatus = task.status || 'todo';
+        const newStatus = currentStatus === 'completed' ? 'todo' : 'completed';
+        console.log(`[TaskMenuController] 📤 Toggling: ${currentStatus} -> ${newStatus}`);
+        
+        // STEP 2: Try optimisticUI first, but VERIFY it actually worked
+        let toggleSucceeded = false;
+        
         if (window.optimisticUI?.toggleTaskStatus) {
             try {
-                await window.optimisticUI.toggleTaskStatus(taskId);
+                console.log(`[TaskMenuController] 📤 Calling optimisticUI.toggleTaskStatus(${taskId})`);
+                const result = await window.optimisticUI.toggleTaskStatus(taskId);
+                
+                // CRITICAL: Verify the result - if undefined/null, the toggle silently aborted
+                if (result === undefined || result === null) {
+                    console.warn(`[TaskMenuController] ⚠️ optimisticUI.toggleTaskStatus returned ${result} - likely cache miss, will use HTTP fallback`);
+                    toggleSucceeded = false;
+                } else {
+                    this._logResult('toggle-status', taskId, true, result);
+                    toggleSucceeded = true;
+                    
+                    // Verify the change persisted to cache
+                    if (window.optimisticUI?.cache?.getTask) {
+                        const verifyTask = await window.optimisticUI.cache.getTask(taskId);
+                        console.log(`[TaskMenuController] 🔍 Post-toggle verification:`, verifyTask ? {
+                            id: verifyTask.id,
+                            status: verifyTask.status,
+                            updated_at: verifyTask.updated_at
+                        } : 'NOT FOUND - may need HTTP fallback');
+                        
+                        // If verification fails, the toggle didn't persist
+                        if (!verifyTask || verifyTask.status !== newStatus) {
+                            console.warn(`[TaskMenuController] ⚠️ Cache verification failed - status mismatch, will use HTTP fallback`);
+                            toggleSucceeded = false;
+                        }
+                    }
+                }
             } catch (error) {
-                console.error('[TaskMenuController] Failed to toggle status:', error);
+                this._logResult('toggle-status', taskId, false, null, error);
+                console.error('[TaskMenuController] optimisticUI.toggleTaskStatus failed:', error);
+                toggleSucceeded = false;
+            }
+        }
+        
+        // STEP 3: HTTP Fallback - ALWAYS run if optimistic path didn't succeed
+        if (!toggleSucceeded) {
+            console.log(`[TaskMenuController] 📤 Using HTTP fallback for toggle: ${currentStatus} -> ${newStatus}`);
+            
+            try {
+                const response = await fetch(`/api/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ 
+                        status: newStatus,
+                        completed_at: newStatus === 'completed' ? new Date().toISOString() : null
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                this._logResult('toggle-status-http', taskId, true, data);
+                
+                // Update DOM
+                if (taskCard) {
+                    taskCard.dataset.status = newStatus;
+                    const checkbox = taskCard.querySelector('.task-checkbox');
+                    if (checkbox) checkbox.checked = newStatus === 'completed';
+                    if (newStatus === 'completed') {
+                        taskCard.classList.add('completed');
+                    } else {
+                        taskCard.classList.remove('completed');
+                    }
+                }
+                
+                // Update cache if available
+                if (window.optimisticUI?.cache?.saveTask && task) {
+                    await window.optimisticUI.cache.saveTask({
+                        ...task,
+                        status: newStatus,
+                        completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
+                        updated_at: new Date().toISOString()
+                    });
+                    console.log(`[TaskMenuController] ✅ Cache updated via HTTP fallback`);
+                }
+                
+                window.toast?.success(`Task marked as ${newStatus}`);
+            } catch (error) {
+                this._logResult('toggle-status-http', taskId, false, null, error);
                 window.toast?.error('Failed to update status');
             }
-        } else {
-            // Fallback if optimisticUI not available
-            window.toast?.error('Task system not ready');
         }
     }
 
@@ -273,12 +486,19 @@ class TaskMenuController {
 
     /**
      * 4. PRIORITY - Change priority with mobile sheet or desktop popover
+     * DIAGNOSTIC: Enhanced logging to trace persistence issues
      */
     async handlePriority(taskId) {
         console.log(`[TaskMenuController] Changing priority for task ${taskId}`);
+        this._logDiagnostics('priority', taskId);
         
         const task = await this.fetchTask(taskId);
-        if (!task) return;
+        if (!task) {
+            console.error(`[TaskMenuController] ❌ Task ${taskId} not found for priority change`);
+            this.showToast('Task not found', 'error');
+            return;
+        }
+        console.log(`[TaskMenuController] 🔍 Current task priority: ${task.priority}`);
 
         try {
             const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
@@ -326,16 +546,21 @@ class TaskMenuController {
             }
 
             // Use OptimisticUI system
+            console.log(`[TaskMenuController] 📤 Updating priority: ${currentPriority} -> ${newPriority}`);
             if (window.optimisticUI?.updateTask) {
-                await window.optimisticUI.updateTask(taskId, { priority: newPriority });
+                const result = await window.optimisticUI.updateTask(taskId, { priority: newPriority });
+                this._logResult('priority', taskId, true, result);
             } else {
                 // Direct API fallback
+                console.warn(`[TaskMenuController] ⚠️ optimisticUI.updateTask not available, using HTTP fallback`);
                 const response = await fetch(`/api/tasks/${taskId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify({ priority: newPriority })
                 });
                 if (!response.ok) throw new Error('API call failed');
+                this._logResult('priority-http', taskId, true);
                 this.showToast('Priority updated', 'success');
             }
             
@@ -942,15 +1167,19 @@ class TaskMenuController {
 
     /**
      * 12. ARCHIVE - Archive task with confirmation (with browser fallback)
+     * DIAGNOSTIC: Enhanced logging to trace persistence issues
      */
     async handleArchive(taskId) {
         console.log(`[TaskMenuController] Archiving task ${taskId}`);
+        this._logDiagnostics('archive', taskId);
         
         const task = await this.fetchTask(taskId);
         if (!task) {
+            console.error(`[TaskMenuController] ❌ Task ${taskId} not found for archive`);
             this.showToast('Task not found. Please refresh the page.', 'error');
             return;
         }
+        console.log(`[TaskMenuController] 🔍 Task to archive:`, { id: task.id, title: task.title?.substring(0, 30), status: task.status });
 
         try {
             let confirmed = false;
@@ -982,19 +1211,37 @@ class TaskMenuController {
             }
 
             // Use OptimisticUI archiveTask or direct API
+            let archiveSucceeded = false;
+            
             if (window.optimisticUI?.archiveTask) {
-                await window.optimisticUI.archiveTask(taskId);
-            } else {
-                // Direct API fallback - archive = set status to completed
+                try {
+                    console.log(`[TaskMenuController] 📤 Calling optimisticUI.archiveTask(${taskId})`);
+                    const result = await window.optimisticUI.archiveTask(taskId);
+                    if (result !== undefined && result !== null) {
+                        this._logResult('archive', taskId, true, result);
+                        archiveSucceeded = true;
+                    } else {
+                        console.warn(`[TaskMenuController] ⚠️ optimisticUI.archiveTask returned ${result}, using HTTP fallback`);
+                    }
+                } catch (e) {
+                    console.error(`[TaskMenuController] ❌ optimisticUI.archiveTask failed:`, e);
+                }
+            }
+            
+            // HTTP fallback if optimistic failed
+            if (!archiveSucceeded) {
+                console.log(`[TaskMenuController] 📤 Using HTTP fallback for archive`);
                 const response = await fetch(`/api/tasks/${taskId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify({ 
                         status: 'completed',
                         completed_at: new Date().toISOString()
                     })
                 });
                 if (!response.ok) throw new Error('API call failed');
+                this._logResult('archive-http', taskId, true);
                 
                 // Remove from DOM
                 if (taskCard) {
@@ -1018,9 +1265,11 @@ class TaskMenuController {
     /**
      * 13. DELETE - Permanently delete task with confirmation (with browser fallback)
      * Handles both temp tasks (local only) and server-synced tasks
+     * DIAGNOSTIC: Enhanced logging to trace persistence issues
      */
     async handleDelete(taskId) {
         console.log(`[TaskMenuController] Deleting task ${taskId}`);
+        this._logDiagnostics('delete', taskId);
         
         const isTempTask = String(taskId).startsWith('temp_');
         
@@ -1087,15 +1336,33 @@ class TaskMenuController {
             }
             
             // For synced tasks, use OptimisticUI deleteTask (soft delete with undo window)
+            let deleteSucceeded = false;
+            
             if (window.optimisticUI?.deleteTask) {
-                await window.optimisticUI.deleteTask(taskId);
-            } else {
-                // Direct API fallback
+                try {
+                    console.log(`[TaskMenuController] 📤 Calling optimisticUI.deleteTask(${taskId})`);
+                    const result = await window.optimisticUI.deleteTask(taskId);
+                    if (result !== undefined) {
+                        this._logResult('delete', taskId, true, result);
+                        deleteSucceeded = true;
+                    } else {
+                        console.warn(`[TaskMenuController] ⚠️ optimisticUI.deleteTask returned undefined, using HTTP fallback`);
+                    }
+                } catch (e) {
+                    console.error(`[TaskMenuController] ❌ optimisticUI.deleteTask failed:`, e);
+                }
+            }
+            
+            // HTTP fallback if optimistic failed
+            if (!deleteSucceeded) {
+                console.log(`[TaskMenuController] 📤 Using HTTP fallback for delete`);
                 const response = await fetch(`/api/tasks/${taskId}`, {
                     method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin'
                 });
                 if (!response.ok) throw new Error('API call failed');
+                this._logResult('delete-http', taskId, true);
                 
                 // Remove from DOM manually
                 if (taskCard) {
