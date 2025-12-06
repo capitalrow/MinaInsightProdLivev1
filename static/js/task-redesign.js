@@ -265,6 +265,11 @@
       
       e.preventDefault();
       
+      // CROWN⁴.12: Set user action lock to prevent background state restores
+      if (window.taskSearchSort?._setUserActionLock) {
+          window.taskSearchSort._setUserActionLock();
+      }
+      
       document.querySelectorAll('.filter-tab').forEach(tab => {
         tab.classList.remove('active');
       });
@@ -334,7 +339,8 @@
     initMobileTapExpansion();
     initViewToggles();
     initCheckboxHandlers();
-    initFilterTabs();
+    // CROWN⁴.12: Removed initFilterTabs() - now handled by task-page-master-init.js + TaskSearchSort
+    // initFilterTabs();
     updateTaskCounts();
     
     const observer = new MutationObserver(function(mutations) {
