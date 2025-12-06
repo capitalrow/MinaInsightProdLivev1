@@ -163,8 +163,11 @@ class TaskMenuController {
             return;
         }
 
-        const titleEl = taskCard.querySelector('.task-title-text');
+        // Support both .task-title (h3) and legacy .task-title-text
+        const titleEl = taskCard.querySelector('.task-title') || taskCard.querySelector('.task-title-text');
         if (!titleEl) {
+            console.error('[TaskMenuController] Cannot find title element. Classes found:', 
+                Array.from(taskCard.querySelectorAll('*')).map(el => el.className).filter(Boolean).join(', '));
             window.toast?.error('Cannot find task title');
             return;
         }
