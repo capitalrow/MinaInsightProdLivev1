@@ -276,6 +276,20 @@ class TaskSearchSort {
             return;
         }
         
+        // CROWN⁴.12: Build sort config for scheduler context
+        const sortConfig = this.mapSortKeyToConfig(this.currentSort) || { field: 'created_at', direction: 'desc' };
+        
+        // CROWN⁴.12: Dispatch context change BEFORE rendering
+        // This updates the scheduler's context so it can reject stale payloads
+        document.dispatchEvent(new CustomEvent('task:view-context-changed', {
+            detail: {
+                filter: this.currentFilter,
+                search: this.searchQuery,
+                sort: sortConfig
+            }
+        }));
+        console.log(`📋 [TaskSearchSort] Context changed: filter=${this.currentFilter}, search="${this.searchQuery}"`);
+        
         // Prefer ledger-backed cache rendering when available
         if (this.cache?.getAllTasks && window.taskBootstrap?.renderTasks) {
             const allTasks = await this.cache.getAllTasks();
@@ -295,7 +309,15 @@ class TaskSearchSort {
             const filteredTasks = this.filterTasksData(nonDeleted);
             const sortedTasks = this.sortTaskData(filteredTasks, this.currentSort);
 
-            await window.taskBootstrap.renderTasks(sortedTasks, { fromCache: true, isFilterChange: true });
+            // CROWN⁴.12: Pass full context metadata for scheduler routing
+            await window.taskBootstrap.renderTasks(sortedTasks, { 
+                fromCache: true, 
+                isFilterChange: true,
+                source: 'filter_change',
+                filterContext: this.currentFilter,
+                searchQuery: this.searchQuery,
+                sortConfig: sortConfig
+            });
             this.updateCounts(sortedTasks.length, nonDeleted.length);
             await this.persistViewState();
             return;
