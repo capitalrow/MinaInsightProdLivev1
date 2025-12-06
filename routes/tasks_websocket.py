@@ -178,7 +178,8 @@ def register_tasks_namespace(socketio):
             # Read-only events don't require user_id (bootstrap, sync, filter, refresh)
             READ_ONLY_EVENTS = {
                 'tasks_bootstrap', 'tasks_ws_subscribe', 'tasks_refresh',
-                'tasks_idle_sync', 'filter_apply', 'task_link:jump_to_span'
+                'tasks_idle_sync', 'filter_apply', 'task_link:jump_to_span',
+                'subscribe_tasks', 'prefetch', 'task_prefetch'  # CROWN⁴.10: Add prefetch and subscribe events
             }
             is_read_only = event_type in READ_ONLY_EVENTS
             
