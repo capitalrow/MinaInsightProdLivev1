@@ -27,8 +27,13 @@ class TaskBootstrap {
         this._renderInProgress = false;
         this._renderDebounceTimer = null;
         this._lastRenderTime = 0;
-        this._renderDebounceMs = 100; // Minimum 100ms between renders
+        this._renderDebounceMs = 250; // Minimum 250ms between renders (increased for stability)
         this._pendingRenderArgs = null;
+        
+        // CROWN⁴.11 FIX: Post-hydration settling phase
+        // After hydration, wait for data sources to stabilize before accepting new renders
+        this._postHydrationSettlingMs = 500; // 500ms settling period
+        this._hydrationCompleteTime = 0;
         
         // CROWN⁴.10 FIX: Payload hash comparison to prevent redundant renders
         // Stores hash of last rendered task list to skip identical payloads
@@ -95,12 +100,13 @@ class TaskBootstrap {
         this._hydrationReady = true;
         window.taskHydrationReady = true;
         this._firstRenderComplete = true;
+        this._hydrationCompleteTime = Date.now(); // CROWN⁴.11: Track for settling phase
         
         const hydrationTime = this._hydrationStartTime 
             ? Date.now() - this._hydrationStartTime 
             : 0;
         
-        console.log(`✅ [TaskBootstrap] Hydration complete in ${hydrationTime}ms`);
+        console.log(`✅ [TaskBootstrap] Hydration complete in ${hydrationTime}ms (settling for ${this._postHydrationSettlingMs}ms)`);
         
         // CROWN⁴.10: Add tasks-hydrated class to container to disable future animations
         // This prevents CSS animation replay during re-renders/reconciliation
@@ -701,11 +707,20 @@ class TaskBootstrap {
             return;
         }
         
-        // Debounce rapid successive calls (within 100ms) - but only AFTER hydration
-        if (this._hydrationReady) {
+        // CROWN⁴.11: Post-hydration settling phase
+        // During settling, use longer debounce to let data sources stabilize
+        if (this._hydrationReady && this._hydrationCompleteTime > 0) {
+            const timeSinceHydration = now - this._hydrationCompleteTime;
+            const isSettling = timeSinceHydration < this._postHydrationSettlingMs;
+            const effectiveDebounce = isSettling ? this._postHydrationSettlingMs : this._renderDebounceMs;
+            
             const timeSinceLastRender = now - this._lastRenderTime;
-            if (timeSinceLastRender < this._renderDebounceMs && this._lastRenderTime > 0) {
-                console.log(`⏱️ [TaskBootstrap] Debouncing render (${timeSinceLastRender}ms since last)`);
+            if (timeSinceLastRender < effectiveDebounce && this._lastRenderTime > 0) {
+                if (isSettling) {
+                    console.log(`⏳ [TaskBootstrap] Settling phase - deferring render (${timeSinceHydration}ms since hydration)`);
+                } else {
+                    console.log(`⏱️ [TaskBootstrap] Debouncing render (${timeSinceLastRender}ms since last)`);
+                }
                 
                 if (this._renderDebounceTimer) {
                     clearTimeout(this._renderDebounceTimer);
@@ -719,7 +734,7 @@ class TaskBootstrap {
                         this._pendingRenderArgs = null;
                         this.renderTasks(pending.tasks, pending.options);
                     }
-                }, this._renderDebounceMs - timeSinceLastRender);
+                }, effectiveDebounce - timeSinceLastRender);
                 return;
             }
         }
