@@ -295,7 +295,7 @@ class TaskSearchSort {
             const filteredTasks = this.filterTasksData(nonDeleted);
             const sortedTasks = this.sortTaskData(filteredTasks, this.currentSort);
 
-            await window.taskBootstrap.renderTasks(sortedTasks, { fromCache: true });
+            await window.taskBootstrap.renderTasks(sortedTasks, { fromCache: true, isFilterChange: true });
             this.updateCounts(sortedTasks.length, nonDeleted.length);
             await this.persistViewState();
             return;

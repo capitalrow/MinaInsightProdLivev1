@@ -271,7 +271,7 @@ class MultiTabSync {
                     return;
                 }
                 
-                await window.taskBootstrap.renderTasks(tasks);
+                await window.taskBootstrap.renderTasks(tasks, { isFilterChange: true });
             }
         }
     }
