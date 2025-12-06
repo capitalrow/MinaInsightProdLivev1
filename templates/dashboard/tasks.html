@@ -228,8 +228,9 @@
     <div id="meeting-heatmap-container"></div>
 
     <!-- Task List Container (CROWN⁴.5 Required Structure) -->
-    <!-- CROWN⁴.6: Hidden initially, skeleton shows first, then this replaces it -->
-    <div id="tasks-list-container" class="tasks-list-container" style="display: none;">
+    <!-- CROWN⁴.7 PERFORMANCE FIX: Show SSR content immediately for <200ms first paint -->
+    <!-- If tasks exist, display:flex immediately (no JS needed). Otherwise hidden until cache loads -->
+    <div id="tasks-list-container" class="tasks-list-container" style="{% if tasks and tasks|length > 0 %}display: flex;{% else %}display: none;{% endif %}">
         {% if tasks and tasks|length > 0 %}
             {% for task in tasks %}
             {{ task_card(task) }}
@@ -290,8 +291,8 @@
     </div>
 
     <!-- Loading State (CROWN⁴.5 Skeleton Loaders) -->
-    <!-- CROWN⁴.6: Visible by default to prevent spinner→blank→skeleton flash -->
-    <div id="tasks-loading-state" class="tasks-loading-state">
+    <!-- CROWN⁴.7 PERFORMANCE FIX: Hide skeleton when SSR content exists for instant first paint -->
+    <div id="tasks-loading-state" class="tasks-loading-state" {% if tasks and tasks|length > 0 %}style="display: none;"{% endif %}>
         <div class="task-skeleton">
             <div class="skeleton-checkbox"></div>
             <div class="skeleton-content">
