@@ -553,7 +553,15 @@ class OptimisticUI {
                     const status = (t.status || '').toLowerCase();
                     return status !== 'completed' && status !== 'cancelled';
                 });
-                await window.taskBootstrap.renderTasks(activeTasks, { fromCache: true });
+                const ctx = window.taskBootstrap._getCurrentViewContext?.() || { filter: 'active', search: '', sort: { field: 'created_at', direction: 'desc' } };
+                await window.taskBootstrap.renderTasks(activeTasks, { 
+                    fromCache: true, 
+                    source: 'optimistic',
+                    isUserAction: true,
+                    filterContext: ctx.filter,
+                    searchQuery: ctx.search,
+                    sortConfig: ctx.sort
+                });
             }
         }
 

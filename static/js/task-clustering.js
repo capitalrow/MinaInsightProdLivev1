@@ -306,7 +306,15 @@ class TaskClusteringManager {
         
         // Re-render flat list (renderTasks automatically updates counters via _updateCountersFromDOM)
         if (window.taskBootstrap) {
-            await window.taskBootstrap.renderTasks(filteredTasks);
+            const ctx = window.taskBootstrap._getCurrentViewContext?.() || { filter: activeFilter, search: '', sort: { field: 'created_at', direction: 'desc' } };
+            await window.taskBootstrap.renderTasks(filteredTasks, { 
+                fromCache: true, 
+                source: 'filter_change',
+                isUserAction: true,
+                filterContext: ctx.filter,
+                searchQuery: ctx.search,
+                sortConfig: ctx.sort
+            });
         }
         
         // Restore selection state after view switches back

@@ -90,6 +90,38 @@ class TaskBootstrap {
     }
     
     /**
+     * CROWN⁴.12: Get current view context for render requests
+     * Retrieves filter/search/sort state from scheduler or TaskSearchSort
+     * @returns {Object} { filter, search, sort } - always returns normalized objects
+     */
+    _getCurrentViewContext() {
+        const defaultSort = { field: 'created_at', direction: 'desc' };
+        const defaultContext = { filter: 'active', search: '', sort: defaultSort };
+        
+        // Priority 1: Get from scheduler if available
+        if (this.renderScheduler) {
+            const ctx = this.renderScheduler.getContext();
+            return {
+                filter: ctx.filter || 'active',
+                search: ctx.search || '',
+                sort: (ctx.sort && ctx.sort.field) ? ctx.sort : defaultSort
+            };
+        }
+        
+        // Priority 2: Get from TaskSearchSort if available
+        if (window.taskSearchSort) {
+            const sortConfig = window.taskSearchSort.mapSortKeyToConfig?.(window.taskSearchSort.currentSort);
+            return {
+                filter: window.taskSearchSort.currentFilter || 'active',
+                search: window.taskSearchSort.searchQuery || '',
+                sort: (sortConfig && sortConfig.field) ? sortConfig : defaultSort
+            };
+        }
+        
+        return defaultContext;
+    }
+    
+    /**
      * CROWN⁴.9: Check if hydration is complete
      * Other modules should check this before triggering renders
      * @returns {boolean}
@@ -400,7 +432,14 @@ class TaskBootstrap {
             }
 
             // Step 3: Render UI immediately (target: <200ms total)
-            await this.renderTasks(cachedTasks, { fromCache: true });
+            const cacheContext = this._getCurrentViewContext();
+            await this.renderTasks(cachedTasks, { 
+                fromCache: true, 
+                source: 'cache',
+                filterContext: cacheContext.filter,
+                searchQuery: cacheContext.search,
+                sortConfig: cacheContext.sort
+            });
             this.perf.first_paint = performance.now();
             
             const firstPaintTime = this.perf.first_paint - this.perf.cache_load_start;
@@ -1441,7 +1480,14 @@ class TaskBootstrap {
             // Merge: temp tasks first (show at top as "Syncing"), then server tasks
             const mergedTasks = [...tempTasks, ...serverTasks];
             
-            await this.renderTasks(mergedTasks, { fromCache: false });
+            const apiContext = this._getCurrentViewContext();
+            await this.renderTasks(mergedTasks, { 
+                fromCache: false, 
+                source: 'api',
+                filterContext: apiContext.filter,
+                searchQuery: apiContext.search,
+                sortConfig: apiContext.sort
+            });
             this.needsReconciliation = false;
 
             // Emit sync success event
@@ -1563,7 +1609,14 @@ class TaskBootstrap {
                 }
             }
 
-            await this.renderTasks(tasks, { fromCache: false });
+            const fallbackContext = this._getCurrentViewContext();
+            await this.renderTasks(tasks, { 
+                fromCache: false, 
+                source: 'api',
+                filterContext: fallbackContext.filter,
+                searchQuery: fallbackContext.search,
+                sortConfig: fallbackContext.sort
+            });
             
             // CROWN⁴.6: Emit bootstrap complete event using double-rAF for fallback path
             requestAnimationFrame(() => {

@@ -272,11 +272,13 @@ class MultiTabSync {
                 }
                 
                 // CROWN⁴.12: Pass sync metadata - lower priority than user actions
+                const sortConfig = window.taskBootstrap._getCurrentViewContext?.()?.sort || { field: 'created_at', direction: 'desc' };
                 await window.taskBootstrap.renderTasks(tasks, { 
                     isFilterChange: false,
                     source: 'websocket', // Cross-tab sync has same priority as WebSocket
                     filterContext: filter.filter || filter.status || 'active',
                     searchQuery: filter.search || '',
+                    sortConfig: sortConfig,
                     fromMultiTab: true
                 });
             }
