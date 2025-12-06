@@ -271,7 +271,14 @@ class MultiTabSync {
                     return;
                 }
                 
-                await window.taskBootstrap.renderTasks(tasks, { isFilterChange: true });
+                // CROWN⁴.12: Pass sync metadata - lower priority than user actions
+                await window.taskBootstrap.renderTasks(tasks, { 
+                    isFilterChange: false,
+                    source: 'websocket', // Cross-tab sync has same priority as WebSocket
+                    filterContext: filter.filter || filter.status || 'active',
+                    searchQuery: filter.search || '',
+                    fromMultiTab: true
+                });
             }
         }
     }
