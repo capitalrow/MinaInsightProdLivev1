@@ -1635,12 +1635,20 @@ class TaskBootstrap {
 // Export class for orchestrator
 window.TaskBootstrap = TaskBootstrap;
 
-// Auto-instantiate if taskCache is ready
-if (window.taskCache && window.taskCache.ready) {
-    window.taskBootstrap = new TaskBootstrap();
-    console.log('🚀 CROWN⁴.5 TaskBootstrap loaded (auto-instantiated)');
+// CROWN⁴.10 SINGLETON GUARD: Prevent double instantiation
+// Uses a dedicated flag that is checked BEFORE instance creation
+// This prevents race conditions between auto-instantiate and orchestrator
+if (!window.__minaTaskBootstrapInstantiated) {
+    // Auto-instantiate if taskCache is ready
+    if (window.taskCache && window.taskCache.ready) {
+        window.__minaTaskBootstrapInstantiated = true; // Set flag FIRST to prevent races
+        window.taskBootstrap = new TaskBootstrap();
+        console.log('🚀 CROWN⁴.5 TaskBootstrap loaded (auto-instantiated, singleton)');
+    } else {
+        console.log('🚀 CROWN⁴.5 TaskBootstrap class loaded (orchestrator will instantiate)');
+    }
 } else {
-    console.log('🚀 CROWN⁴.5 TaskBootstrap class loaded (orchestrator will instantiate)');
+    console.warn('⚠️ [TaskBootstrap] BLOCKED duplicate instantiation attempt (singleton guard)');
 }
 
 // ========================================

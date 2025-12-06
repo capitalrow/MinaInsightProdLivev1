@@ -165,40 +165,69 @@ class TasksPageOrchestrator {
     }
 
     async _ensureTaskBootstrap() {
+        // CROWN⁴.10 SINGLETON GUARD: Check both instance AND instantiation flag
         if (window.taskBootstrap) {
             this.modules.taskBootstrap = window.taskBootstrap;
             console.log('[Orchestrator] ✅ TaskBootstrap already exists');
             return;
         }
         
+        // Check singleton guard flag to prevent race conditions
+        if (window.__minaTaskBootstrapInstantiated) {
+            console.warn('[Orchestrator] ⚠️ TaskBootstrap instantiation flag set but instance missing - waiting...');
+            // Brief wait for instance to become available
+            await new Promise(resolve => setTimeout(resolve, 50));
+            if (window.taskBootstrap) {
+                this.modules.taskBootstrap = window.taskBootstrap;
+                console.log('[Orchestrator] ✅ TaskBootstrap available after wait');
+                return;
+            }
+        }
+        
         if (typeof TaskBootstrap !== 'undefined') {
+            window.__minaTaskBootstrapInstantiated = true; // Set flag FIRST
             window.taskBootstrap = new TaskBootstrap();
             this.modules.taskBootstrap = window.taskBootstrap;
-            console.log('[Orchestrator] ✅ TaskBootstrap created');
+            console.log('[Orchestrator] ✅ TaskBootstrap created (singleton)');
         } else if (typeof window.TaskBootstrap !== 'undefined') {
+            window.__minaTaskBootstrapInstantiated = true; // Set flag FIRST
             window.taskBootstrap = new window.TaskBootstrap();
             this.modules.taskBootstrap = window.taskBootstrap;
-            console.log('[Orchestrator] ✅ TaskBootstrap created (from window.TaskBootstrap)');
+            console.log('[Orchestrator] ✅ TaskBootstrap created from window.TaskBootstrap (singleton)');
         } else {
             console.warn('[Orchestrator] ⚠️ TaskBootstrap class not available');
         }
     }
 
     async _ensureOptimisticUI() {
+        // CROWN⁴.10 SINGLETON GUARD: Check both instance AND instantiation flag
         if (window.optimisticUI) {
             this.modules.optimisticUI = window.optimisticUI;
             console.log('[Orchestrator] ✅ OptimisticUI already exists');
             return;
         }
         
+        // Check singleton guard flag to prevent race conditions
+        if (window.__minaOptimisticUIInstantiated) {
+            console.warn('[Orchestrator] ⚠️ OptimisticUI instantiation flag set but instance missing - waiting...');
+            await new Promise(resolve => setTimeout(resolve, 50));
+            if (window.optimisticUI) {
+                this.modules.optimisticUI = window.optimisticUI;
+                console.log('[Orchestrator] ✅ OptimisticUI available after wait');
+                return;
+            }
+        }
+        
         if (typeof OptimisticUI !== 'undefined') {
+            window.__minaOptimisticUIInstantiated = true;
             window.optimisticUI = new OptimisticUI();
             this.modules.optimisticUI = window.optimisticUI;
-            console.log('[Orchestrator] ✅ OptimisticUI created');
+            console.log('[Orchestrator] ✅ OptimisticUI created (singleton)');
         } else if (typeof window.OptimisticUI !== 'undefined') {
+            window.__minaOptimisticUIInstantiated = true;
             window.optimisticUI = new window.OptimisticUI();
             this.modules.optimisticUI = window.optimisticUI;
-            console.log('[Orchestrator] ✅ OptimisticUI created (from window.OptimisticUI)');
+            console.log('[Orchestrator] ✅ OptimisticUI created from window.OptimisticUI (singleton)');
         } else {
             console.warn('[Orchestrator] ⚠️ OptimisticUI class not available');
         }

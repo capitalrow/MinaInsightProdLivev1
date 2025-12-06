@@ -361,8 +361,19 @@ class MultiTabSync {
     }
 }
 
-// Export singleton
-window.multiTabSync = new MultiTabSync();
+// Export class for orchestrator
+window.MultiTabSync = MultiTabSync;
+
+// CROWN⁴.10 SINGLETON GUARD: Prevent double instantiation
+if (!window.__minaMultiTabSyncInstantiated && !window.multiTabSync) {
+    window.__minaMultiTabSyncInstantiated = true;
+    window.multiTabSync = new MultiTabSync();
+    console.log('🔗 CROWN⁴.5 MultiTabSync loaded (singleton)');
+} else if (window.multiTabSync) {
+    console.log('🔗 CROWN⁴.5 MultiTabSync already exists');
+} else {
+    console.warn('⚠️ [MultiTabSync] BLOCKED duplicate instantiation attempt');
+}
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
@@ -370,5 +381,3 @@ window.addEventListener('beforeunload', () => {
         window.multiTabSync.close();
     }
 });
-
-console.log('🔗 CROWN⁴.5 MultiTabSync loaded');
