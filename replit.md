@@ -36,6 +36,14 @@ The application utilizes a layered architecture with Flask as the web framework 
 - **Archive Functionality**: Meeting archival with metadata tracking, event logging, WebSocket broadcasts, toast notifications with undo, restore capability with audit trail.
 - **AI-Powered Insight Reminders**: Predictive AI reminders using GPT-4o-mini to analyze meeting patterns and tasks, real-time WebSocket delivery, smart fallback, toast notifications with action buttons, analyzes overdue tasks/missing follow-ups/recurring patterns, confidence scoring, workspace isolation.
 - **CROWN⁴.5 Tasks Page**: Enterprise-grade task management with offline-first architecture, event-sequenced updates, sub-200ms first paint. Includes `PredictiveEngine`, `QuietStateManager`, `Deduper`, `CognitiveSynchronizer`, `TemporalRecoveryEngine`, and `LedgerCompactor`. Core CRUD events fully implemented with multi-tab sync and optimistic UI. Mobile gestures and AI Partner Nudges are integrated.
+- **CROWN⁴.13 Task Performance Optimizations** (December 2025): Industry-leading task management matching Todoist/Asana/Linear standards:
+  - **SSR-First Architecture**: Server-rendered task cards visible immediately without JavaScript blocking
+  - **Sub-200ms First Paint**: Browser FCP measurement with budget validation and noisy warnings for violations
+  - **Flicker-Free Tab Switching**: `_isInitialLoad` flag prevents IndexedDB hydration from overwriting default 'active' filter on page load
+  - **Neutral Visibility Control**: CSS `:not(.is-visible)` selector hides archived tasks on SSR while allowing layout modes to control display values
+  - **3-Second User Action Lock**: Prevents background state restores from overwriting user filter clicks
+  - **FCP Budget Validation**: `performance:budget_exceeded` custom event for monitoring integration (Sentry-compatible)
+  - **Complete Feature Verification**: All 13 menu actions, drag-drop reordering, inline editing, keyboard shortcuts (N, Cmd+K, /, ?, S, Escape, Up/Down, Cmd+Enter), multi-tab sync via BroadcastChannel
 - **Phase 3: Low-Latency Transcription Pipeline** (December 2025): Optimized for <2s transcription delivery targeting Otter.ai parity. Features include:
   - `StreamingTranscriptionService` with 2.5s chunk duration, 300ms overlap, 3 parallel workers
   - Direct transcription integration bypassing internal HTTP for reduced latency
