@@ -35,11 +35,17 @@ class TaskSearchSort {
         // CROWN⁴.12: User action lock prevents background restores from overwriting user clicks
         this._userActionTimestamp = 0;
         this._userActionLockDuration = 3000; // 3 seconds lock after user clicks
+        
+        // CROWN⁴.13: Skip initial load hydration to prevent flicker
+        // Always start with 'active' filter, only hydrate on visibility changes
+        this._isInitialLoad = true;
 
         this.init();
-        this.hydrateFromViewState();
+        // CROWN⁴.13: Don't hydrate on initial load - use default 'active' filter
+        // This prevents persisted 'archived' state from overwriting the default
+        // Hydration only happens on visibility change (tab switch back)
         this.registerCrossTabSync();
-        console.log('[TaskSearchSort] Initialized with default filter: active');
+        console.log('[TaskSearchSort] Initialized with default filter: active (skipping initial hydration)');
     }
     
     /**
@@ -128,6 +134,10 @@ class TaskSearchSort {
             console.log('[TaskSearchSort] Hydration complete - enabling filter operations');
             this._hydrationReady = true;
             
+            // CROWN⁴.13 FIX: Clear initial load flag after bootstrap completes
+            // This allows IndexedDB hydration on subsequent visibility changes
+            this._isInitialLoad = false;
+            
             // Apply any deferred filter
             if (this._deferredFilterApply) {
                 this._deferredFilterApply = false;
@@ -193,9 +203,17 @@ class TaskSearchSort {
     /**
      * Load persisted view state from IndexedDB and reapply locally
      * CROWN⁴.12: Respects user action lock to prevent overwriting user clicks
+     * CROWN⁴.13: Skips initial load to prevent flicker
      */
     async hydrateFromViewState() {
         if (!this.cache?.getViewState) return;
+        
+        // CROWN⁴.13: Skip hydration on initial page load
+        // Always use default 'active' filter on fresh load
+        if (this._isInitialLoad) {
+            console.log('[TaskSearchSort] Skipping hydration on initial load - using default filter');
+            return;
+        }
         
         // CROWN⁴.12: Skip hydration if user recently clicked a filter tab
         if (this._isUserActionLocked()) {
@@ -288,6 +306,8 @@ class TaskSearchSort {
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
                 // Idle callback keeps main thread free when returning to tab
+                // CROWN⁴.13: _isInitialLoad is cleared in tasks:hydrated, so hydration
+                // only happens after bootstrap completes (not on first load)
                 const resync = () => this.hydrateFromViewState();
                 if ('requestIdleCallback' in window) {
                     window.requestIdleCallback(resync, { timeout: 1000 });
@@ -408,12 +428,15 @@ class TaskSearchSort {
         }
 
         // 4. Update DOM visibility
+        // CROWN⁴.13: Use class-based approach to avoid overriding layout-specific display values
         tasks.forEach(task => {
             if (visibleTasks.includes(task)) {
-                task.style.display = '';
+                task.classList.add('is-visible');
+                task.classList.remove('is-hidden');
                 task.style.order = visibleTasks.indexOf(task);
             } else {
-                task.style.display = 'none';
+                task.classList.add('is-hidden');
+                task.classList.remove('is-visible');
             }
         });
 

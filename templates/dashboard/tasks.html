@@ -13,6 +13,13 @@
 .filter-tab{padding:0.5rem 1rem;border-radius:8px;border:none;background:var(--bg-secondary,#f5f5f7);cursor:pointer;transition:all 0.15s}
 .filter-tab.active{background:var(--primary,#6366f1);color:white}
 .tasks-list-container{min-height:200px}
+/* CROWN⁴.13: Hide completed/cancelled tasks by default for flicker-free SSR with Active filter */
+/* The "Active" tab shows todo, in_progress, pending, blocked. "Archived" = completed, cancelled */
+/* JS can override by adding/removing .is-hidden class - doesn't force display value */
+.task-card[data-status="completed"]:not(.is-visible),.task-card[data-status="cancelled"]:not(.is-visible){display:none}
+/* CROWN⁴.13: Class-based visibility control - hidden class hides, visible class overrides default hiding */
+.task-card.is-hidden{display:none!important}
+.task-card.is-visible{}
 .task-card{display:flex;align-items:flex-start;padding:1rem;background:var(--card-bg,#fff);border-radius:12px;margin-bottom:0.75rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);transition:transform 0.15s,box-shadow 0.15s}
 .task-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
 .task-checkbox{width:20px;height:20px;border-radius:50%;border:2px solid var(--border,#e0e0e0);margin-right:1rem;cursor:pointer;flex-shrink:0}
