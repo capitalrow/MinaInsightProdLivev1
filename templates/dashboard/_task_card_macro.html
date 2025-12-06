@@ -20,6 +20,8 @@
      data-due-date="{{ task.due_date or '' }}"
      data-labels="{{ task.labels|tojson|escape if task.labels else '[]' }}"
      data-transcript-span="{{ task.transcript_span|tojson|escape if task.transcript_span else '{}' }}"
+     data-updated-at="{{ task.updated_at.isoformat() if task.updated_at else '' }}"
+     data-is-pinned="{{ 'true' if task.is_pinned else 'false' }}"
      role="article"
      aria-label="Task: {{ task.title }}">
     

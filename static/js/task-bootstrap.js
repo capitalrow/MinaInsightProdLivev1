@@ -30,6 +30,11 @@ class TaskBootstrap {
         this._renderDebounceMs = 100; // Minimum 100ms between renders
         this._pendingRenderArgs = null;
         
+        // CROWN⁴.10 FIX: Payload hash comparison to prevent redundant renders
+        // Stores hash of last rendered task list to skip identical payloads
+        this._lastRenderPayloadHash = null;
+        this._renderHashSkipCount = 0; // Telemetry: count of skipped renders
+        
         // CROWN⁴.9 HYDRATION GATE: Industry-standard SSR hydration pattern
         // Blocks ALL empty renders until first successful hydration completes
         // This prevents flicker during initialization when multiple systems
@@ -51,6 +56,33 @@ class TaskBootstrap {
      */
     isHydrationReady() {
         return this._hydrationReady;
+    }
+    
+    /**
+     * CROWN⁴.10: Compute a fast hash of task list for change detection
+     * Uses task IDs + updated_at timestamps for efficient comparison
+     * @param {Array} tasks - Task array
+     * @returns {string} Hash string for comparison
+     */
+    _computeRenderPayloadHash(tasks) {
+        if (!tasks || tasks.length === 0) {
+            return 'empty';
+        }
+        
+        // Fast hash: concatenate id:updated_at for each task
+        // This catches any task addition, removal, or modification
+        const hashParts = tasks.map(t => {
+            const id = t.id || 0;
+            const updated = t.updated_at || t.created_at || '';
+            const status = t.status || '';
+            const pinned = t.is_pinned ? '1' : '0';
+            return `${id}:${updated}:${status}:${pinned}`;
+        });
+        
+        // Sort for deterministic hash (task order might vary)
+        hashParts.sort();
+        
+        return hashParts.join('|');
     }
     
     /**
@@ -253,14 +285,22 @@ class TaskBootstrap {
             this.showTasksList();
             
             // Hydrate TaskStateStore from server DOM without re-rendering
+            const serverTasks = Array.from(serverRenderedTasks).map(card => ({
+                id: card.dataset.taskId,
+                status: card.dataset.status || 'todo',
+                priority: card.dataset.priority || 'medium',
+                updated_at: card.dataset.updatedAt || '',
+                is_pinned: card.dataset.isPinned === 'true'
+            }));
+            
             if (window.taskStateStore) {
-                const serverTasks = Array.from(serverRenderedTasks).map(card => ({
-                    id: card.dataset.taskId,
-                    status: card.dataset.status || 'todo',
-                    priority: card.dataset.priority || 'medium'
-                }));
                 window.taskStateStore.hydrate(serverTasks, 'server');
             }
+            
+            // CROWN⁴.10: Initialize payload hash from SSR content
+            // This ensures subsequent identical payloads are skipped
+            this._lastRenderPayloadHash = this._computeRenderPayloadHash(serverTasks);
+            console.log(`📊 [Bootstrap] SSR payload hash initialized: ${this._lastRenderPayloadHash.substring(0, 50)}...`);
             
             // CROWN⁴.9: Mark hydration as complete IMMEDIATELY for SSR content
             // Server-rendered content is already the "hydrated" state
@@ -636,6 +676,16 @@ class TaskBootstrap {
             }
         }
         
+        // CROWN⁴.10 FIX: Skip render if payload hash matches last render
+        // This is the key fix for flickering - prevents redundant DOM replacements
+        // that re-trigger CSS animations when task data hasn't actually changed
+        const payloadHash = this._computeRenderPayloadHash(tasks);
+        if (this._hydrationReady && payloadHash === this._lastRenderPayloadHash) {
+            this._renderHashSkipCount++;
+            console.log(`🔄 [TaskBootstrap] SKIP redundant render #${this._renderHashSkipCount} - payload unchanged (${taskCount} tasks)`);
+            return;
+        }
+        
         // CROWN⁴.9 FIX: Prevent render loops with lock
         if (this._renderInProgress) {
             console.log(`🔒 [TaskBootstrap] Render already in progress, queueing (${taskCount} tasks)`);
@@ -672,6 +722,9 @@ class TaskBootstrap {
         
         try {
             await this._doRenderTasks(tasks, options);
+            
+            // CROWN⁴.10: Update payload hash after successful render
+            this._lastRenderPayloadHash = payloadHash;
             
             // CROWN⁴.9: Mark hydration complete after first successful render with tasks
             if (!this._hydrationReady && taskCount > 0) {
@@ -916,6 +969,8 @@ class TaskBootstrap {
                  data-status="${status}"
                  data-priority="${priority}"
                  data-assignee-ids="${assigneeIds.join(',')}"
+                 data-updated-at="${task.updated_at || ''}"
+                 data-is-pinned="${task.is_pinned ? 'true' : 'false'}"
                  style="animation-delay: ${index * 0.05}s;">
                 
                 <!-- Checkbox (36x36px click area with 22x22px visual) -->
