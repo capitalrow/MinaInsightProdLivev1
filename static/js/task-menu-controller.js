@@ -174,20 +174,24 @@ class TaskMenuController {
 
         const currentTitle = titleEl.textContent.trim();
         
-        // Create inline input
+        // Create inline input with dark mode compatible styling
         const input = document.createElement('input');
         input.type = 'text';
         input.value = currentTitle;
         input.className = 'task-title-edit-input';
         input.style.cssText = `
             width: 100%;
-            padding: 4px 8px;
-            border: 1px solid var(--color-border-focus, #4a9eff);
-            border-radius: 4px;
+            padding: 6px 10px;
+            border: 2px solid var(--accent-primary, #6366f1);
+            border-radius: 6px;
             font-size: inherit;
             font-family: inherit;
-            background: var(--color-bg-input, #fff);
-            color: var(--color-text-primary, #000);
+            font-weight: 500;
+            background: var(--bg-secondary, hsl(220, 18%, 18%));
+            color: var(--text-primary, hsl(0, 0%, 96%));
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+            caret-color: var(--accent-primary, #6366f1);
         `;
 
         // Replace title with input
