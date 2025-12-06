@@ -102,6 +102,14 @@ class TaskBootstrap {
         
         console.log(`✅ [TaskBootstrap] Hydration complete in ${hydrationTime}ms`);
         
+        // CROWN⁴.10: Add tasks-hydrated class to container to disable future animations
+        // This prevents CSS animation replay during re-renders/reconciliation
+        const container = document.getElementById('tasks-list-container');
+        if (container) {
+            container.classList.add('tasks-hydrated');
+            console.log(`🎨 [TaskBootstrap] Added tasks-hydrated class - animations disabled for future renders`);
+        }
+        
         // Emit hydration complete event for other modules
         document.dispatchEvent(new CustomEvent('tasks:hydrated', {
             detail: { 
