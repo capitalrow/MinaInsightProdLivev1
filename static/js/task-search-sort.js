@@ -31,6 +31,10 @@ class TaskSearchSort {
         // CROWN⁴.9: Track hydration state for deferred operations
         this._hydrationReady = false;
         this._deferredFilterApply = false;
+        
+        // CROWN⁴.12: User action lock prevents background restores from overwriting user clicks
+        this._userActionTimestamp = 0;
+        this._userActionLockDuration = 3000; // 3 seconds lock after user clicks
 
         this.init();
         this.hydrateFromViewState();
@@ -46,6 +50,28 @@ class TaskSearchSort {
         return this._hydrationReady || 
                window.taskHydrationReady || 
                (window.taskBootstrap?.isHydrationReady?.() ?? false);
+    }
+    
+    /**
+     * CROWN⁴.12: Check if user action lock is active
+     * Prevents background state restores from overwriting recent user clicks
+     * @returns {boolean}
+     */
+    _isUserActionLocked() {
+        const elapsed = Date.now() - this._userActionTimestamp;
+        const locked = elapsed < this._userActionLockDuration;
+        if (locked) {
+            console.log(`[TaskSearchSort] User action lock active (${elapsed}ms ago) - blocking background restore`);
+        }
+        return locked;
+    }
+    
+    /**
+     * CROWN⁴.12: Set user action lock when user clicks filter/sort
+     */
+    _setUserActionLock() {
+        this._userActionTimestamp = Date.now();
+        console.log('[TaskSearchSort] User action lock set');
     }
 
     init() {
@@ -166,9 +192,16 @@ class TaskSearchSort {
 
     /**
      * Load persisted view state from IndexedDB and reapply locally
+     * CROWN⁴.12: Respects user action lock to prevent overwriting user clicks
      */
     async hydrateFromViewState() {
         if (!this.cache?.getViewState) return;
+        
+        // CROWN⁴.12: Skip hydration if user recently clicked a filter tab
+        if (this._isUserActionLocked()) {
+            console.log('[TaskSearchSort] Skipping hydration - user action lock active');
+            return;
+        }
 
         try {
             const viewState = await this.cache.getViewState(this.viewStateKey);
@@ -206,6 +239,8 @@ class TaskSearchSort {
         if (this.broadcast?.on) {
             this.broadcast.on(this.broadcast.EVENTS.FILTER_APPLY, async (payload) => {
                 if (!payload) return;
+                // CROWN⁴.12: Skip if user recently clicked a filter
+                if (this._isUserActionLocked()) return;
                 this.isApplyingRemoteState = true;
                 if (payload.filter) {
                     this.currentFilter = payload.filter;
@@ -217,6 +252,8 @@ class TaskSearchSort {
 
             this.broadcast.on(this.broadcast.EVENTS.SEARCH_QUERY, async (payload) => {
                 if (!payload?.query) return;
+                // CROWN⁴.12: Skip if user recently clicked a filter
+                if (this._isUserActionLocked()) return;
                 this.isApplyingRemoteState = true;
                 this.searchQuery = payload.query.toLowerCase();
                 if (this.searchInput) this.searchInput.value = payload.query;
@@ -227,6 +264,8 @@ class TaskSearchSort {
 
             this.broadcast.on(this.broadcast.EVENTS.UI_STATE_SYNC, async (payload) => {
                 if (!payload) return;
+                // CROWN⁴.12: Skip if user recently clicked a filter
+                if (this._isUserActionLocked()) return;
                 this.isApplyingRemoteState = true;
                 if (payload.search !== undefined) {
                     this.searchQuery = payload.search?.toLowerCase() || '';
