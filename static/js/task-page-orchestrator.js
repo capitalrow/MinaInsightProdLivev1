@@ -459,20 +459,27 @@ class TasksPageOrchestrator {
     }
 }
 
-// Create orchestrator instance
-window.tasksOrchestrator = new TasksPageOrchestrator();
+// CROWN⁴.10 SINGLETON GUARD: Prevent duplicate orchestrator instantiation
+if (!window.__tasksOrchestratorInstantiated) {
+    window.__tasksOrchestratorInstantiated = true;
+    
+    // Create orchestrator instance
+    window.tasksOrchestrator = new TasksPageOrchestrator();
 
-// CROWN⁴.6 PERFORMANCE FIX: Defer initialization to allow skeleton to paint first
-// Using double-rAF pattern to ensure browser has painted the skeleton before heavy work
-// This enables <200ms first paint target
-console.log('[Orchestrator] TasksPageOrchestrator loaded - deferring init for skeleton paint');
+    // CROWN⁴.6 PERFORMANCE FIX: Defer initialization to allow skeleton to paint first
+    // Using double-rAF pattern to ensure browser has painted the skeleton before heavy work
+    // This enables <200ms first paint target
+    console.log('[Orchestrator] TasksPageOrchestrator loaded - deferring init for skeleton paint');
 
-window.tasksReady = new Promise((resolve) => {
-    // Double requestAnimationFrame: ensures browser has painted at least once
-    requestAnimationFrame(() => {
+    window.tasksReady = new Promise((resolve) => {
+        // Double requestAnimationFrame: ensures browser has painted at least once
         requestAnimationFrame(() => {
-            console.log('[Orchestrator] Skeleton painted, starting module initialization...');
-            window.tasksOrchestrator.init().then(resolve).catch(resolve);
+            requestAnimationFrame(() => {
+                console.log('[Orchestrator] Skeleton painted, starting module initialization...');
+                window.tasksOrchestrator.init().then(resolve).catch(resolve);
+            });
         });
     });
-});
+} else {
+    console.warn('[Orchestrator] ⚠️ BLOCKED duplicate TasksPageOrchestrator instantiation');
+}

@@ -7,10 +7,15 @@
 (function() {
     'use strict';
 
-    if (window.__tasksPageMasterInitialized) {
-        console.log('[MasterInit] Skipping duplicate initialization; already initialized');
+    // CROWN⁴.10 SINGLETON GUARD: Check if already initialized OR initialization in progress
+    // This prevents race conditions when script loads multiple times
+    if (window.__tasksPageMasterInitialized || window.__tasksPageMasterInitStarted) {
+        console.log('[MasterInit] Skipping duplicate initialization; already initialized or in progress');
         return;
     }
+    
+    // Set flag IMMEDIATELY to block any concurrent initialization attempts
+    window.__tasksPageMasterInitStarted = true;
 
     console.log('[MasterInit] ========== Tasks Page Master Initialization STARTING ==========');
     
