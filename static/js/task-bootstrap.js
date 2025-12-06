@@ -22,6 +22,105 @@ class TaskBootstrap {
         // CROWN⁴.6: Singleton TaskGrouping instance
         this.taskGrouping = null;
         this.groupingThreshold = 4; // Enable grouping for 4+ tasks (lowered for testing)
+        
+        // CROWN⁴.9 FIX: Render lock and debounce to prevent render loops
+        this._renderInProgress = false;
+        this._renderDebounceTimer = null;
+        this._lastRenderTime = 0;
+        this._renderDebounceMs = 100; // Minimum 100ms between renders
+        this._pendingRenderArgs = null;
+        
+        // CROWN⁴.10 FIX: Payload hash comparison to prevent redundant renders
+        // Stores hash of last rendered task list to skip identical payloads
+        this._lastRenderPayloadHash = null;
+        this._renderHashSkipCount = 0; // Telemetry: count of skipped renders
+        
+        // CROWN⁴.9 HYDRATION GATE: Industry-standard SSR hydration pattern
+        // Blocks ALL empty renders until first successful hydration completes
+        // This prevents flicker during initialization when multiple systems
+        // (cache, WebSocket, BroadcastSync, MultiTabSync) race to render
+        this._hydrationReady = false;
+        this._hydrationStartTime = null;
+        this._ssrCardCount = 0; // Count of server-rendered cards on page load
+        this._firstRenderComplete = false;
+        this._deferredRenderQueue = []; // Queue for renders before hydration
+        
+        // Expose hydration state globally for other modules to check
+        window.taskHydrationReady = false;
+    }
+    
+    /**
+     * CROWN⁴.9: Check if hydration is complete
+     * Other modules should check this before triggering renders
+     * @returns {boolean}
+     */
+    isHydrationReady() {
+        return this._hydrationReady;
+    }
+    
+    /**
+     * CROWN⁴.10: Compute a fast hash of task list for change detection
+     * Uses task IDs + updated_at timestamps for efficient comparison
+     * @param {Array} tasks - Task array
+     * @returns {string} Hash string for comparison
+     */
+    _computeRenderPayloadHash(tasks) {
+        if (!tasks || tasks.length === 0) {
+            return 'empty';
+        }
+        
+        // Fast hash: concatenate id:updated_at for each task
+        // This catches any task addition, removal, or modification
+        const hashParts = tasks.map(t => {
+            const id = t.id || 0;
+            const updated = t.updated_at || t.created_at || '';
+            const status = t.status || '';
+            const pinned = t.is_pinned ? '1' : '0';
+            return `${id}:${updated}:${status}:${pinned}`;
+        });
+        
+        // Sort for deterministic hash (task order might vary)
+        hashParts.sort();
+        
+        return hashParts.join('|');
+    }
+    
+    /**
+     * CROWN⁴.9: Mark hydration as complete and process deferred renders
+     * Called after first successful render with actual task data
+     */
+    _markHydrationComplete() {
+        if (this._hydrationReady) return; // Already done
+        
+        this._hydrationReady = true;
+        window.taskHydrationReady = true;
+        this._firstRenderComplete = true;
+        
+        const hydrationTime = this._hydrationStartTime 
+            ? Date.now() - this._hydrationStartTime 
+            : 0;
+        
+        console.log(`✅ [TaskBootstrap] Hydration complete in ${hydrationTime}ms`);
+        
+        // Emit hydration complete event for other modules
+        document.dispatchEvent(new CustomEvent('tasks:hydrated', {
+            detail: { 
+                timestamp: Date.now(),
+                hydrationTime,
+                taskCount: this._ssrCardCount
+            }
+        }));
+        
+        // Process any deferred renders (take only the last one - latest wins)
+        if (this._deferredRenderQueue.length > 0) {
+            const lastRender = this._deferredRenderQueue[this._deferredRenderQueue.length - 1];
+            this._deferredRenderQueue = [];
+            console.log(`📋 [TaskBootstrap] Processing deferred render (${lastRender.tasks?.length || 0} tasks)`);
+            // Only process if it has actual tasks
+            if (lastRender.tasks && lastRender.tasks.length > 0) {
+                this._doRenderTasks(lastRender.tasks, lastRender.options);
+            }
+        }
     }
 
     /**
@@ -160,11 +259,15 @@ class TaskBootstrap {
     /**
      * Bootstrap tasks page with cache-first loading
      * Target: <200ms first paint
+     * CROWN⁴.9: Implements hydration gate pattern for flicker-free initialization
      * @returns {Promise<Object>} Bootstrap results
      */
     async bootstrap() {
-        console.log('🚀 Starting CROWN⁴.6 cache-first bootstrap...');
+        console.log('🚀 Starting CROWN⁴.9 cache-first bootstrap with hydration gate...');
         this.perf.cache_load_start = performance.now();
+        
+        // CROWN⁴.9: Start hydration timing
+        this._hydrationStartTime = Date.now();
 
         // CROWN⁴.8 FIX: Check if server already rendered tasks BEFORE any DOM manipulation
         // This prevents the flicker caused by cache clearing server content
@@ -172,20 +275,36 @@ class TaskBootstrap {
         const serverRenderedTasks = container?.querySelectorAll('.task-card') || [];
         const hasServerContent = serverRenderedTasks.length > 0;
         
+        // CROWN⁴.9: Capture SSR card count for hydration gate
+        this._ssrCardCount = serverRenderedTasks.length;
+        console.log(`📊 [HydrationGate] SSR card count captured: ${this._ssrCardCount}`);
+        
         if (hasServerContent) {
             console.log(`✅ [Bootstrap] Server rendered ${serverRenderedTasks.length} tasks - skipping cache DOM swap`);
             this.currentState = 'tasks';
             this.showTasksList();
             
             // Hydrate TaskStateStore from server DOM without re-rendering
+            const serverTasks = Array.from(serverRenderedTasks).map(card => ({
+                id: card.dataset.taskId,
+                status: card.dataset.status || 'todo',
+                priority: card.dataset.priority || 'medium',
+                updated_at: card.dataset.updatedAt || '',
+                is_pinned: card.dataset.isPinned === 'true'
+            }));
+            
             if (window.taskStateStore) {
-                const serverTasks = Array.from(serverRenderedTasks).map(card => ({
-                    id: card.dataset.taskId,
-                    status: card.dataset.status || 'todo',
-                    priority: card.dataset.priority || 'medium'
-                }));
                 window.taskStateStore.hydrate(serverTasks, 'server');
             }
+            
+            // CROWN⁴.10: Initialize payload hash from SSR content
+            // This ensures subsequent identical payloads are skipped
+            this._lastRenderPayloadHash = this._computeRenderPayloadHash(serverTasks);
+            console.log(`📊 [Bootstrap] SSR payload hash initialized: ${this._lastRenderPayloadHash.substring(0, 50)}...`);
+            
+            // CROWN⁴.9: Mark hydration as complete IMMEDIATELY for SSR content
+            // Server-rendered content is already the "hydrated" state
+            this._markHydrationComplete();
             
             // Background: sync cache to IndexedDB without touching DOM
             this.syncInBackground();
@@ -197,7 +316,8 @@ class TaskBootstrap {
                     detail: {
                         cached_tasks: serverRenderedTasks.length,
                         first_paint_ms: performance.now() - this.perf.cache_load_start,
-                        source: 'server'
+                        source: 'server',
+                        hydrationReady: true
                     }
                 }));
             });
@@ -525,40 +645,142 @@ class TaskBootstrap {
 
     /**
      * Render tasks to DOM
+     * CROWN⁴.9: Industry-standard hydration gate pattern
+     * Blocks empty renders until hydration is complete to prevent flicker
      * @param {Array} tasks
      * @param {Object} options - { fromCache: boolean }
      * @returns {Promise<void>}
      */
     async renderTasks(tasks, options = {}) {
-        console.log(`🔧 [TaskBootstrap] renderTasks() called with ${tasks?.length || 0} tasks`);
+        const now = Date.now();
+        const taskCount = tasks?.length || 0;
+        const container = document.getElementById('tasks-list-container');
+        const existingCards = container?.querySelectorAll('.task-card')?.length || 0;
         
-        // CROWN⁴.6: Hydrate TaskStateStore FIRST - single source of truth
-        if (tasks && Array.isArray(tasks) && tasks.length > 0 && window.taskStateStore) {
-            const source = options.fromCache ? 'cache' : 'server';
-            window.taskStateStore.hydrate(tasks, source);
-            console.log(`[TaskBootstrap] Hydrated TaskStateStore from ${source}`);
+        console.log(`🔧 [TaskBootstrap] renderTasks() called with ${taskCount} tasks (SSR cards: ${existingCards}, hydrationReady: ${this._hydrationReady})`);
+        
+        // CROWN⁴.9 HYDRATION GATE: Core protection against flicker
+        // Before hydration is ready, BLOCK all empty renders if SSR content exists
+        if (!this._hydrationReady) {
+            // Empty render with SSR content = DEFER (don't execute)
+            if (taskCount === 0 && existingCards > 0) {
+                console.log(`🚫 [HydrationGate] BLOCKED empty render - SSR has ${existingCards} cards, hydration not ready`);
+                // Queue it but don't process until hydration completes
+                this._deferredRenderQueue.push({ tasks, options });
+                return;
+            }
+            
+            // Non-empty render = This IS the hydration, allow it through
+            if (taskCount > 0) {
+                console.log(`✅ [HydrationGate] Allowing render with ${taskCount} tasks - this will complete hydration`);
+            }
         }
         
+        // CROWN⁴.10 FIX: Skip render if payload hash matches last render
+        // This is the key fix for flickering - prevents redundant DOM replacements
+        // that re-trigger CSS animations when task data hasn't actually changed
+        const payloadHash = this._computeRenderPayloadHash(tasks);
+        if (this._hydrationReady && payloadHash === this._lastRenderPayloadHash) {
+            this._renderHashSkipCount++;
+            console.log(`🔄 [TaskBootstrap] SKIP redundant render #${this._renderHashSkipCount} - payload unchanged (${taskCount} tasks)`);
+            return;
+        }
+        
+        // CROWN⁴.9 FIX: Prevent render loops with lock
+        if (this._renderInProgress) {
+            console.log(`🔒 [TaskBootstrap] Render already in progress, queueing (${taskCount} tasks)`);
+            this._pendingRenderArgs = { tasks, options };
+            return;
+        }
+        
+        // Debounce rapid successive calls (within 100ms) - but only AFTER hydration
+        if (this._hydrationReady) {
+            const timeSinceLastRender = now - this._lastRenderTime;
+            if (timeSinceLastRender < this._renderDebounceMs && this._lastRenderTime > 0) {
+                console.log(`⏱️ [TaskBootstrap] Debouncing render (${timeSinceLastRender}ms since last)`);
+                
+                if (this._renderDebounceTimer) {
+                    clearTimeout(this._renderDebounceTimer);
+                }
+                
+                this._pendingRenderArgs = { tasks, options };
+                this._renderDebounceTimer = setTimeout(() => {
+                    this._renderDebounceTimer = null;
+                    if (this._pendingRenderArgs) {
+                        const pending = this._pendingRenderArgs;
+                        this._pendingRenderArgs = null;
+                        this.renderTasks(pending.tasks, pending.options);
+                    }
+                }, this._renderDebounceMs - timeSinceLastRender);
+                return;
+            }
+        }
+        
+        // Acquire lock
+        this._renderInProgress = true;
+        this._lastRenderTime = now;
+        
+        try {
+            await this._doRenderTasks(tasks, options);
+            
+            // CROWN⁴.10: Update payload hash after successful render
+            this._lastRenderPayloadHash = payloadHash;
+            
+            // CROWN⁴.9: Mark hydration complete after first successful render with tasks
+            if (!this._hydrationReady && taskCount > 0) {
+                this._markHydrationComplete();
+            }
+        } finally {
+            // Release lock
+            this._renderInProgress = false;
+            
+            // Process pending render if any (only after hydration)
+            if (this._pendingRenderArgs && this._hydrationReady) {
+                const pending = this._pendingRenderArgs;
+                this._pendingRenderArgs = null;
+                console.log(`📋 [TaskBootstrap] Processing pending render (${pending.tasks?.length || 0} tasks)`);
+                setTimeout(() => this.renderTasks(pending.tasks, pending.options), 10);
+            }
+        }
+    }
+    
+    /**
+     * Internal render implementation
+     * @private
+     */
+    async _doRenderTasks(tasks, options = {}) {
         const container = document.getElementById('tasks-list-container');
         
         if (!container) {
             console.warn('⚠️ Tasks container not found, skipping render');
             return;
         }
+        
+        // CROWN⁴.9 FIX: Check existing content FIRST before any processing
+        const existingCards = container.querySelectorAll('.task-card').length;
 
         // CROWN⁴.5: Determine state based on task count
         if (!tasks || tasks.length === 0) {
-            console.log('🔧 [TaskBootstrap] No tasks to render, checking server content');
-            // SAFETY: Only show empty state if we have NO server-rendered content
-            const hasServerContent = container.querySelectorAll('.task-card').length > 0;
+            console.log(`🔧 [TaskBootstrap] No tasks to render (existing cards: ${existingCards})`);
             
-            if (!hasServerContent) {
-                this.showEmptyState();
-                container.innerHTML = '';
-            } else {
-                console.warn('⚠️ Keeping server-rendered content (fallback protection)');
+            // CROWN⁴.9 FIX: Never replace existing content with empty state
+            // This prevents flicker when cache returns empty during bootstrap
+            if (existingCards > 0) {
+                console.warn(`⚠️ [TaskBootstrap] Skipping empty render - ${existingCards} cards already exist`);
+                return;
             }
+            
+            // Only show empty state if truly no content exists
+            this.showEmptyState();
+            container.innerHTML = '';
             return;
+        }
+        
+        // CROWN⁴.6: Hydrate TaskStateStore FIRST - single source of truth
+        if (tasks && Array.isArray(tasks) && tasks.length > 0 && window.taskStateStore) {
+            const source = options.fromCache ? 'cache' : 'server';
+            window.taskStateStore.hydrate(tasks, source);
+            console.log(`[TaskBootstrap] Hydrated TaskStateStore from ${source}`);
         }
 
         // Log sample task to verify data structure
@@ -747,6 +969,8 @@ class TaskBootstrap {
                  data-status="${status}"
                  data-priority="${priority}"
                  data-assignee-ids="${assigneeIds.join(',')}"
+                 data-updated-at="${task.updated_at || ''}"
+                 data-is-pinned="${task.is_pinned ? 'true' : 'false'}"
                  style="animation-delay: ${index * 0.05}s;">
                 
                 <!-- Checkbox (36x36px click area with 22x22px visual) -->

@@ -1,6 +1,7 @@
 /**
  * CROWN⁴.5 Task Search & Sort Module
  * Real-time search filtering and multi-criteria sorting
+ * CROWN⁴.9: Respects hydration gate to prevent flicker
  */
 
 class TaskSearchSort {
@@ -26,11 +27,25 @@ class TaskSearchSort {
         this.handleSearchInput = null;
         this.handleSearchClear = null;
         this.handleSortChange = null;
+        
+        // CROWN⁴.9: Track hydration state for deferred operations
+        this._hydrationReady = false;
+        this._deferredFilterApply = false;
 
         this.init();
         this.hydrateFromViewState();
         this.registerCrossTabSync();
         console.log('[TaskSearchSort] Initialized with default filter: active');
+    }
+    
+    /**
+     * CROWN⁴.9: Check if hydration is ready (global or local state)
+     * @returns {boolean}
+     */
+    _isHydrationReady() {
+        return this._hydrationReady || 
+               window.taskHydrationReady || 
+               (window.taskBootstrap?.isHydrationReady?.() ?? false);
     }
 
     init() {
@@ -81,14 +96,35 @@ class TaskSearchSort {
             this.safeApplyFiltersAndSort();
         });
         
+        // CROWN⁴.9: Listen for hydration complete event
+        // This is the ONLY trigger for initial filter application
+        document.addEventListener('tasks:hydrated', () => {
+            console.log('[TaskSearchSort] Hydration complete - enabling filter operations');
+            this._hydrationReady = true;
+            
+            // Apply any deferred filter
+            if (this._deferredFilterApply) {
+                this._deferredFilterApply = false;
+                this.safeApplyFiltersAndSort();
+            }
+        });
+        
         // Apply initial filter after tasks bootstrap completes
-        document.addEventListener('task:bootstrap:complete', () => {
-            this.safeApplyFiltersAndSort();
-            console.log('[TaskSearchSort] Initial filter applied after bootstrap: active (hiding archived tasks)');
+        // CROWN⁴.9: Only proceed if hydration is ready
+        document.addEventListener('task:bootstrap:complete', (e) => {
+            if (e.detail?.hydrationReady || this._isHydrationReady()) {
+                this._hydrationReady = true;
+                this.safeApplyFiltersAndSort();
+                console.log('[TaskSearchSort] Initial filter applied after bootstrap (hydration ready)');
+            } else {
+                console.log('[TaskSearchSort] Bootstrap complete but hydration not ready - deferring filter');
+                this._deferredFilterApply = true;
+            }
         });
         
         // Reapply filter when tasks are mutated (OptimisticUI + WebSocket sync)
         // CRITICAL: Listen on window (not document) because OptimisticUI dispatches on window
+        // CROWN⁴.9: Only apply if hydration is ready
         const taskMutationEvents = [
             'task:created', 
             'task:updated', 
@@ -98,6 +134,11 @@ class TaskSearchSort {
         ];
         taskMutationEvents.forEach(eventName => {
             window.addEventListener(eventName, () => {
+                // Only apply if hydration is ready
+                if (!this._isHydrationReady()) {
+                    console.log(`[TaskSearchSort] Ignoring ${eventName} - hydration not ready`);
+                    return;
+                }
                 // Small delay to ensure DOM update completes
                 requestAnimationFrame(() => {
                     this.safeApplyFiltersAndSort();
@@ -105,14 +146,13 @@ class TaskSearchSort {
             });
         });
         
-        // Apply initial filter immediately if tasks already in DOM (server-rendered)
-        // This ensures filter counts match tab counters on page load
+        // CROWN⁴.9: DON'T apply initial filter immediately
+        // Wait for hydration event instead to prevent flicker
         const initialTasks = this.tasksContainer?.querySelectorAll('.task-card') || [];
         if (initialTasks.length > 0) {
-            console.log(`[TaskSearchSort] Found ${initialTasks.length} server-rendered tasks, applying initial filter`);
-            this.applyFiltersAndSort();
+            console.log(`[TaskSearchSort] Found ${initialTasks.length} server-rendered tasks - waiting for hydration`);
+            // Don't call applyFiltersAndSort here - wait for hydration event
         } else {
-            // If no tasks in DOM yet, the bootstrap:complete event will trigger filtering
             console.log('[TaskSearchSort] No tasks in DOM yet, waiting for bootstrap');
         }
     }
@@ -228,10 +268,30 @@ class TaskSearchSort {
     }
     
     async applyFiltersAndSort() {
+        // CROWN⁴.9: Block filter operations until hydration is complete
+        // This prevents the render loop that causes flickering
+        if (!this._isHydrationReady()) {
+            console.log('[TaskSearchSort] applyFiltersAndSort blocked - hydration not ready');
+            this._deferredFilterApply = true;
+            return;
+        }
+        
         // Prefer ledger-backed cache rendering when available
         if (this.cache?.getAllTasks && window.taskBootstrap?.renderTasks) {
             const allTasks = await this.cache.getAllTasks();
             const nonDeleted = allTasks.filter(task => !task.deleted_at);
+            
+            // CROWN⁴.9 FIX: Prevent render loop during initial bootstrap
+            // When cache is empty but server already rendered task cards, skip cache-based render
+            // This prevents the loop: renderTasks(0) → broadcasts → applyFiltersAndSort → repeat
+            const serverRenderedCards = this.tasksContainer?.querySelectorAll('.task-card')?.length || 0;
+            if (nonDeleted.length === 0 && serverRenderedCards > 0) {
+                console.log(`[TaskSearchSort] Skipping cache render - cache empty but ${serverRenderedCards} server cards exist`);
+                // Update counts from server-rendered DOM instead
+                this.updateCounts(serverRenderedCards, serverRenderedCards);
+                return;
+            }
+            
             const filteredTasks = this.filterTasksData(nonDeleted);
             const sortedTasks = this.sortTaskData(filteredTasks, this.currentSort);
 

@@ -34,6 +34,11 @@ _TRANSCRIBED_POSITION: Dict[str, int] = defaultdict(int)  # bytes already transc
 _PENDING_CHUNKS: Dict[str, bytearray] = defaultdict(bytearray)  # new audio not yet transcribed
 _CUMULATIVE_TRANSCRIPT: Dict[str, str] = defaultdict(str)  # running transcript text
 
+# DIFFERENTIAL STREAMING: Store WebM headers and track transcription state
+_WEBM_HEADERS: Dict[str, bytes] = {}  # First chunk contains WebM header
+_LAST_WINDOW_TRANSCRIPT: Dict[str, str] = {}  # Last transcription result for delta detection
+_DIFFERENTIAL_MODE: Dict[str, bool] = {}  # Track if session is using differential streaming
+
 # Speaker diarization state (per session)
 _SPEAKER_ENGINES: Dict[str, SpeakerDiarizationEngine] = {}
 _MULTI_SPEAKER_SYSTEMS: Dict[str, MultiSpeakerDiarization] = {}
@@ -57,6 +62,167 @@ def _decode_b64(b64: Optional[str]) -> bytes:
         return base64.b64decode(b64, validate=True)
     except (binascii.Error, ValueError) as e:
         raise ValueError(f"base64 decode failed: {e}")
+
+def _normalize_word(word: str) -> str:
+    """Normalize a word for comparison: lowercase, strip punctuation."""
+    import re
+    # Remove all punctuation and convert to lowercase
+    return re.sub(r'[^\w\s]', '', word.lower()).strip()
+
+def _normalize_text(text: str) -> str:
+    """Normalize text for comparison."""
+    import re
+    # Remove punctuation and extra whitespace, lowercase
+    text = re.sub(r'[^\w\s]', ' ', text.lower())
+    return ' '.join(text.split())
+
+def _extract_text_delta(previous_text: str, new_text: str) -> str:
+    """
+    Extract only the NEW words from new_text that don't overlap with previous_text.
+    Uses fuzzy word-level matching with normalization to handle:
+    - Punctuation differences ("So tomorrow" vs "So, tomorrow")
+    - Minor transcription variations
+    - Overlapping audio windows
+    
+    Returns: Only the genuinely new text that wasn't in the previous transcription.
+    """
+    if not previous_text or not previous_text.strip():
+        return new_text.strip() if new_text else ""
+    if not new_text or not new_text.strip():
+        return ""
+    
+    # Get original words with case preserved
+    original_new_words = new_text.split()
+    if not original_new_words:
+        return ""
+    
+    # Normalize for comparison
+    prev_normalized = _normalize_text(previous_text)
+    new_normalized = _normalize_text(new_text)
+    
+    prev_words_normalized = prev_normalized.split()
+    new_words_normalized = new_normalized.split()
+    
+    if not prev_words_normalized or not new_words_normalized:
+        return new_text.strip()
+    
+    # Strategy 1: Find longest suffix-prefix overlap (most common case)
+    # Check if beginning of new_text overlaps with end of previous_text
+    best_overlap = 0
+    max_check = min(len(prev_words_normalized), len(new_words_normalized))
+    
+    for overlap_len in range(1, max_check + 1):
+        # Compare last N words of previous with first N words of new
+        prev_suffix = prev_words_normalized[-overlap_len:]
+        new_prefix = new_words_normalized[:overlap_len]
+        
+        # Check for exact match after normalization
+        if prev_suffix == new_prefix:
+            best_overlap = overlap_len
+    
+    if best_overlap > 0:
+        # Found overlap - return only the new content after the overlap
+        if best_overlap >= len(original_new_words):
+            # Complete overlap - nothing new
+            logger.debug(f"[delta] Complete overlap ({best_overlap} words) - no new content")
+            return ""
+        delta = " ".join(original_new_words[best_overlap:])
+        logger.debug(f"[delta] Found {best_overlap}-word overlap, delta: '{delta[:50]}...'")
+        return delta
+    
+    # Strategy 2: Check if new_text is an extension of previous_text
+    # (handles case where transcription just got longer with same prefix)
+    if new_normalized.startswith(prev_normalized):
+        # New text extends previous - extract only the new suffix
+        # Find where the extension begins in original text
+        prev_word_count = len(prev_words_normalized)
+        if prev_word_count < len(original_new_words):
+            delta = " ".join(original_new_words[prev_word_count:])
+            logger.debug(f"[delta] Extension detected, delta: '{delta[:50]}...'")
+            return delta
+        return ""
+    
+    # Strategy 3: Find partial overlap using sequence matching
+    # Useful when there's a middle overlap or transcription variations
+    from difflib import SequenceMatcher
+    
+    # Use SequenceMatcher to find common subsequences
+    matcher = SequenceMatcher(None, prev_words_normalized, new_words_normalized)
+    
+    # Find matching blocks
+    matching_blocks = matcher.get_matching_blocks()
+    
+    # Look for a match that starts at the end of previous and beginning of new
+    for block in matching_blocks:
+        prev_start, new_start, length = block.a, block.b, block.size
+        if length == 0:
+            continue
+            
+        # If there's a match at the start of new_text (overlapping content)
+        if new_start == 0 and length >= 3:  # Require at least 3 matching words
+            # Check if this match connects to near the end of previous
+            if prev_start >= len(prev_words_normalized) - length - 5:  # Allow some slack
+                # This is overlap - skip these words
+                skip_count = length
+                if skip_count < len(original_new_words):
+                    delta = " ".join(original_new_words[skip_count:])
+                    logger.debug(f"[delta] Sequence match found ({length} words), delta: '{delta[:50]}...'")
+                    return delta
+                return ""
+    
+    # Strategy 4: Check for significant content overlap using similarity ratio
+    # If the texts are very similar, it's likely repeated content
+    similarity = matcher.ratio()
+    if similarity > 0.8:  # Very similar - likely duplicate
+        # Find truly new content by looking for words not in previous
+        prev_word_set = set(prev_words_normalized)
+        new_words = []
+        consecutive_new = 0
+        start_collecting = False
+        
+        for i, (norm_word, orig_word) in enumerate(zip(new_words_normalized, original_new_words)):
+            if norm_word not in prev_word_set:
+                consecutive_new += 1
+                if consecutive_new >= 2:  # Start collecting after 2 consecutive new words
+                    start_collecting = True
+            else:
+                consecutive_new = 0
+            
+            if start_collecting:
+                new_words.append(orig_word)
+        
+        if new_words:
+            delta = " ".join(new_words)
+            logger.debug(f"[delta] High similarity ({similarity:.2f}), extracted unique: '{delta[:50]}...'")
+            return delta
+        
+        logger.debug(f"[delta] High similarity ({similarity:.2f}) - treating as duplicate")
+        return ""
+    
+    # If no overlap detected and similarity is low, this is genuinely new content
+    # (could be a different topic or significant pause in speech)
+    if similarity < 0.3:
+        logger.debug(f"[delta] Low similarity ({similarity:.2f}) - treating as new content")
+        return new_text.strip()
+    
+    # Middle ground: Some similarity but not complete overlap
+    # Try to find where new content begins using the last matching block
+    last_match_in_new = 0
+    for block in matching_blocks:
+        if block.size > 0:
+            end_in_new = block.b + block.size
+            if end_in_new > last_match_in_new:
+                last_match_in_new = end_in_new
+    
+    if last_match_in_new > 0 and last_match_in_new < len(original_new_words):
+        delta = " ".join(original_new_words[last_match_in_new:])
+        if delta:
+            logger.debug(f"[delta] Partial match, delta starts at word {last_match_in_new}: '{delta[:50]}...'")
+            return delta
+    
+    # Fallback: Return empty if we can't determine (safer than duplicating)
+    logger.debug(f"[delta] Could not determine delta (similarity: {similarity:.2f}) - returning empty")
+    return ""
 
 @socketio.on("join_session")
 def on_join_session(data):
@@ -139,8 +305,16 @@ def on_join_session(data):
 @socketio.on("audio_chunk")  
 def on_audio_chunk(data):
     """
-    data: { session_id, audio_data, settings }
-    Frontend sends audio_data as array of bytes from MediaRecorder.
+    data: { session_id, audio_data, settings, is_differential, window_audio }
+    
+    DIFFERENTIAL STREAMING MODE (is_differential=True):
+    - Frontend sends a sliding window of audio (last ~5 seconds)
+    - Backend transcribes the window and extracts only NEW text
+    - Provides consistent <2s latency regardless of recording length
+    
+    ACCUMULATED MODE (is_accumulated=True):
+    - Frontend sends full accumulated audio (legacy mode)
+    - Growing latency as recording lengthens
     """
     session_id = (data or {}).get("session_id")
     if not session_id:
@@ -173,25 +347,45 @@ def on_audio_chunk(data):
     if not chunk:
         return
 
-    # Check if this is accumulated audio (full recording so far, not incremental chunk)
+    # Check streaming mode
+    is_differential = (data or {}).get("is_differential", False)
     is_accumulated = (data or {}).get("is_accumulated", False)
+    now = _now_ms()
     
-    if is_accumulated:
-        # STREAMING MODE: Frontend sends cumulative audio with valid WebM headers
-        # Replace buffer entirely (don't extend, as this IS the full audio)
+    if is_differential:
+        # DIFFERENTIAL STREAMING MODE: Sliding window for consistent latency
+        _DIFFERENTIAL_MODE[session_id] = True
+        
+        # Store full buffer for final transcription
+        _BUFFERS[session_id] = bytearray(chunk)
+        
+        # Rate-limit: 1.5 second minimum for differential mode (faster than accumulated)
+        DIFFERENTIAL_MIN_MS = 1500.0
+        if (now - _LAST_EMIT_AT.get(session_id, 0)) < DIFFERENTIAL_MIN_MS:
+            emit("ack", {"ok": True})
+            return
+        
+        _LAST_EMIT_AT[session_id] = now
+        
+        # Transcribe the sliding window
+        audio_to_transcribe = chunk
+        audio_size_kb = len(chunk) / 1024
+        logger.info(f"[ws] ⚡ Differential mode: transcribing {audio_size_kb:.1f}KB sliding window")
+        
+    elif is_accumulated:
+        # ACCUMULATED MODE: Full audio each time (legacy)
         _BUFFERS[session_id] = bytearray(chunk)
         
         # Rate-limit interim requests (2 second minimum between API calls)
-        now = _now_ms()
         if (now - _LAST_EMIT_AT.get(session_id, 0)) < _MIN_MS_BETWEEN_INTERIM:
             emit("ack", {"ok": True})
             return
         
         _LAST_EMIT_AT[session_id] = now
         
-        # Transcribe the full accumulated audio (it has proper headers)
+        # Transcribe the full accumulated audio
         audio_to_transcribe = chunk
-        logger.info(f"[ws] 🚀 Streaming mode: transcribing {len(audio_to_transcribe)} bytes (full accumulated audio)")
+        logger.info(f"[ws] 🚀 Accumulated mode: transcribing {len(audio_to_transcribe)} bytes")
     else:
         # LEGACY/INCREMENTAL MODE: Append to buffer for eventual final pass
         _BUFFERS[session_id].extend(chunk)
@@ -206,7 +400,6 @@ def on_audio_chunk(data):
             return
         
         # Rate-limit interim requests (2 second minimum between API calls)
-        now = _now_ms()
         if (now - _LAST_EMIT_AT.get(session_id, 0)) < _MIN_MS_BETWEEN_INTERIM:
             emit("ack", {"ok": True})
             return
@@ -246,16 +439,28 @@ def on_audio_chunk(data):
 
     text = (text or "").strip()
     
-    # COST OPTIMIZATION: Append to cumulative transcript
-    if text:
-        if _CUMULATIVE_TRANSCRIPT[session_id]:
-            _CUMULATIVE_TRANSCRIPT[session_id] += " " + text
+    # DIFFERENTIAL MODE: Extract only NEW text using delta detection
+    delta_text = text
+    if is_differential and text:
+        previous_text = _LAST_WINDOW_TRANSCRIPT.get(session_id, "")
+        delta_text = _extract_text_delta(previous_text, text)
+        _LAST_WINDOW_TRANSCRIPT[session_id] = text
+        
+        if delta_text:
+            logger.info(f"[ws] ⚡ Delta extracted: '{delta_text[:50]}...' (from window: '{text[:30]}...')")
         else:
-            _CUMULATIVE_TRANSCRIPT[session_id] = text
+            logger.debug(f"[ws] ⚡ No new text in this window (overlap with previous)")
+    
+    # Update cumulative transcript with DELTA only (or full text for legacy modes)
+    if delta_text:
+        if _CUMULATIVE_TRANSCRIPT[session_id]:
+            _CUMULATIVE_TRANSCRIPT[session_id] += " " + delta_text
+        else:
+            _CUMULATIVE_TRANSCRIPT[session_id] = delta_text
     
     # Enhanced: Process with speaker diarization
     speaker_info = None
-    if text and session_id in _MULTI_SPEAKER_SYSTEMS:
+    if delta_text and session_id in _MULTI_SPEAKER_SYSTEMS:
         try:
             # Convert audio bytes to numpy array for speaker processing
             import numpy as np
@@ -294,18 +499,19 @@ def on_audio_chunk(data):
     
     # Emit if we have new text (use cumulative transcript for display)
     cumulative = _CUMULATIVE_TRANSCRIPT.get(session_id, "")
-    if text:
-        _LAST_INTERIM_TEXT[session_id] = text
+    if delta_text:
+        _LAST_INTERIM_TEXT[session_id] = delta_text
         
         # Emit enhanced transcription_result with speaker information
-        # COST OPTIMIZATION: Send cumulative transcript for seamless display
+        # For differential mode: new_text is the DELTA only
         result = {
-            "text": cumulative,  # Send full cumulative transcript
-            "new_text": text,    # New text from this chunk
+            "text": cumulative,       # Send full cumulative transcript
+            "new_text": delta_text,   # New text from this chunk (delta for differential mode)
             "is_final": False,
             "confidence": 0.8,  # Default confidence for interim
             "session_id": session_id,
             "timestamp": int(_now_ms()),
+            "is_differential": is_differential,  # Flag for frontend
             "cost_optimized": True  # Flag for debugging
         }
         
@@ -320,6 +526,7 @@ def on_audio_chunk(data):
             })
         
         emit("transcription_result", result)
+        logger.debug(f"[ws] Emitted: '{delta_text[:50]}...' (cumulative: {len(cumulative)} chars)")
 
     emit("ack", {"ok": True})
 

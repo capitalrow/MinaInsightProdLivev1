@@ -232,10 +232,25 @@ class MultiTabSync {
     }
 
     /**
+     * CROWN⁴.9: Check if hydration is ready
+     * @returns {boolean}
+     */
+    _isHydrationReady() {
+        return window.taskHydrationReady || 
+               (window.taskBootstrap?.isHydrationReady?.() ?? false);
+    }
+    
+    /**
      * Handle filter changed in another tab
      * @param {Object} filter
      */
     async _handleFilterChanged(filter) {
+        // CROWN⁴.9: Block filter operations until hydration is complete
+        if (!this._isHydrationReady()) {
+            console.log('[MultiTabSync] _handleFilterChanged blocked - hydration not ready');
+            return;
+        }
+        
         // Save view state
         await window.taskCache.setViewState('tasks_page', {
             ...await window.taskCache.getViewState('tasks_page'),
@@ -246,6 +261,16 @@ class MultiTabSync {
         if (window.location.pathname.includes('/tasks')) {
             if (window.taskBootstrap) {
                 const tasks = await window.taskCache.getFilteredTasks(filter);
+                
+                // CROWN⁴.9 FIX: Prevent render loop during initial bootstrap
+                // Skip render if cache is empty but server already rendered tasks
+                const container = document.getElementById('tasks-list-container');
+                const serverRenderedCards = container?.querySelectorAll('.task-card')?.length || 0;
+                if ((!tasks || tasks.length === 0) && serverRenderedCards > 0) {
+                    console.log(`[MultiTabSync] Skipping filter render - cache empty but ${serverRenderedCards} server cards exist`);
+                    return;
+                }
+                
                 await window.taskBootstrap.renderTasks(tasks);
             }
         }

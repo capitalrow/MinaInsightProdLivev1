@@ -691,6 +691,15 @@ class TaskWebSocketHandlers {
     }
 
     /**
+     * CROWN⁴.9: Check if hydration is ready
+     * @returns {boolean}
+     */
+    _isHydrationReady() {
+        return window.taskHydrationReady || 
+               (window.taskBootstrap?.isHydrationReady?.() ?? false);
+    }
+    
+    /**
      * Handle filter changed
      * @param {Object} data
      */
@@ -702,13 +711,28 @@ class TaskWebSocketHandlers {
             return;
         }
         
+        // CROWN⁴.9: Block filter operations until hydration is complete
+        if (!this._isHydrationReady()) {
+            console.log('[WebSocketHandlers] _handleFilterChanged blocked - hydration not ready');
+            return;
+        }
+        
         console.log('🔍 Filter changed:', data.filter);
         
         await window.taskCache.setViewState('tasks_page', data.filter);
         
         if (window.taskBootstrap) {
             const tasks = await window.taskCache.getFilteredTasks(data.filter);
-            await window.taskBootstrap.renderTasks(tasks);
+            
+            // CROWN⁴.9 FIX: Prevent render loop during initial bootstrap
+            // Skip render if cache is empty but server already rendered tasks
+            const container = document.getElementById('tasks-list-container');
+            const serverRenderedCards = container?.querySelectorAll('.task-card')?.length || 0;
+            if ((!tasks || tasks.length === 0) && serverRenderedCards > 0) {
+                console.log(`[WebSocketHandlers] Skipping filter render - cache empty but ${serverRenderedCards} server cards exist`);
+            } else {
+                await window.taskBootstrap.renderTasks(tasks);
+            }
         }
         
         if (window.multiTabSync) {
