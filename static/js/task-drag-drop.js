@@ -306,7 +306,15 @@ class TaskDragDrop {
             activeTasks.sort((a, b) => (a.position || 0) - (b.position || 0));
             
             if (window.taskBootstrap) {
-                await window.taskBootstrap.renderTasks(activeTasks, { fromCache: true });
+                const ctx = window.taskBootstrap._getCurrentViewContext?.() || { filter: 'active', search: '', sort: { field: 'created_at', direction: 'desc' } };
+                await window.taskBootstrap.renderTasks(activeTasks, { 
+                    fromCache: true, 
+                    source: 'optimistic',
+                    isUserAction: true,
+                    filterContext: ctx.filter,
+                    searchQuery: ctx.search,
+                    sortConfig: ctx.sort
+                });
             }
             
         } catch (error) {
