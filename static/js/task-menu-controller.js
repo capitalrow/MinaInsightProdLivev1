@@ -444,7 +444,15 @@ class TaskMenuController {
                 }
             }
             
-            window.toast?.error('Failed to update status. Please try again.');
+            // CROWN⁴.9 Phase 9: Use error handler with retry
+            const retryFn = () => this.handleToggleStatus(taskId);
+            if (window.taskErrorHandler) {
+                window.dispatchEvent(new CustomEvent('task:operation-failed', {
+                    detail: { taskId, action: 'toggle-status', error, retryFn }
+                }));
+            } else {
+                window.toast?.error('Failed to update status. Please try again.');
+            }
         }
     }
 
@@ -1239,7 +1247,16 @@ class TaskMenuController {
                 taskCard.style.opacity = '';
                 taskCard.style.pointerEvents = '';
             }
-            this.showToast('Failed to archive task', 'error');
+            
+            // CROWN⁴.9 Phase 9: Use error handler with retry
+            const retryFn = () => this.handleArchive(taskId);
+            if (window.taskErrorHandler) {
+                window.dispatchEvent(new CustomEvent('task:operation-failed', {
+                    detail: { taskId, action: 'archive', error, retryFn }
+                }));
+            } else {
+                this.showToast('Failed to archive task', 'error');
+            }
         }
     }
 
@@ -1355,13 +1372,22 @@ class TaskMenuController {
             console.log('[TaskMenuController] Delete successful');
         } catch (error) {
             console.error('[TaskMenuController] Delete failed with error:', error);
-            this.showToast('Failed to delete task', 'error');
             
             // Rollback UI changes
             const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
             if (taskCard) {
                 taskCard.style.opacity = '';
                 taskCard.style.pointerEvents = '';
+            }
+            
+            // CROWN⁴.9 Phase 9: Use error handler with retry
+            const retryFn = () => this.handleDelete(taskId);
+            if (window.taskErrorHandler) {
+                window.dispatchEvent(new CustomEvent('task:operation-failed', {
+                    detail: { taskId, action: 'delete', error, retryFn }
+                }));
+            } else {
+                this.showToast('Failed to delete task', 'error');
             }
         }
     }
