@@ -169,17 +169,23 @@ class TaskActionHandlers {
 
     /**
      * PHASE 3.4: Handle snooze task action
-     * Opens TaskSnoozeModal and updates snoozed_until via PATCH API
+     * Opens TaskSnoozeModal and updates snoozed_until via OptimisticUI/PATCH API
      */
     async handleSnoozeTask(taskId) {
         try {
             console.log(`[TaskActionHandlers] Opening snooze modal for task ${taskId}`);
 
-            // Fetch current task data
+            // Fetch current task data to get existing snoozed_until
             const task = await this.fetchTask(taskId);
             if (!task) return;
 
-            // Open snooze modal
+            // Open snooze modal with current snoozed_until value
+            if (!window.taskSnoozeModal) {
+                console.error('[TaskActionHandlers] TaskSnoozeModal not available');
+                window.toast?.error('Snooze modal not available');
+                return;
+            }
+
             const snoozeUntil = await window.taskSnoozeModal.show(task.snoozed_until);
             
             if (snoozeUntil === null) {
@@ -187,11 +193,38 @@ class TaskActionHandlers {
                 return;
             }
 
-            // Update task via PATCH API
-            await this.updateTask(taskId, { snoozed_until: snoozeUntil });
+            // Update task via OptimisticUI or PATCH API
+            const updates = { snoozed_until: snoozeUntil };
 
-            const snoozeDate = new Date(snoozeUntil).toLocaleString();
-            window.toast?.success(`Task snoozed until ${snoozeDate}`);
+            if (window.optimisticUI && typeof window.optimisticUI.updateTask === 'function') {
+                await window.optimisticUI.updateTask(taskId, updates);
+                console.log(`[TaskActionHandlers] ✅ Task ${taskId} snoozed via optimisticUI`);
+            } else {
+                await this.updateTask(taskId, updates);
+                console.log(`[TaskActionHandlers] ✅ Task ${taskId} snoozed via PATCH API`);
+            }
+
+            // Format the snooze date for user feedback
+            const snoozeDate = new Date(snoozeUntil);
+            const formattedDate = snoozeDate.toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+
+            window.toast?.success(`Task snoozed until ${formattedDate}`);
+
+            // Refresh task list to update visibility
+            if (window.taskSearchSort?.refresh) {
+                window.taskSearchSort.refresh();
+            }
+
+            // Telemetry
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('task_snoozed', 1, { taskId, snoozeUntil });
+            }
         } catch (error) {
             console.error('[TaskActionHandlers] Error handling snooze task:', error);
             window.toast?.error('Failed to snooze task');
