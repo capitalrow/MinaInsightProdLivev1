@@ -343,15 +343,26 @@
     const emptyState = document.getElementById('tasks-empty-state');
     const allDoneState = document.getElementById('tasks-all-done-state');
     const noResultsState = document.getElementById('tasks-no-results-state');
+    const archivedEmptyState = document.getElementById('tasks-archived-empty-state');
     const listContainer = document.getElementById('tasks-list-container');
     
     const hasVisibleTasks = visibleTasks.length > 0;
+    const allTasks = document.querySelectorAll('.task-card');
+    const hasAnyTasks = allTasks.length > 0;
+    const completedTasks = document.querySelectorAll('.task-card[data-status="completed"], .task-card[data-status="cancelled"], .task-card.completed');
+    const hasCompletedTasks = completedTasks.length > 0;
     
-    if (emptyState) emptyState.classList.toggle('hidden', hasVisibleTasks);
+    if (emptyState) {
+      const showMainEmpty = !hasAnyTasks;
+      emptyState.classList.toggle('hidden', !showMainEmpty);
+    }
     if (allDoneState) {
-      const showAllDone = !hasVisibleTasks && filter === 'active' && 
-                          document.querySelectorAll('.task-card.completed').length > 0;
+      const showAllDone = !hasVisibleTasks && filter === 'active' && hasCompletedTasks && hasAnyTasks;
       allDoneState.classList.toggle('hidden', !showAllDone);
+    }
+    if (archivedEmptyState) {
+      const showArchivedEmpty = !hasVisibleTasks && filter === 'archived' && !hasCompletedTasks && hasAnyTasks;
+      archivedEmptyState.classList.toggle('hidden', !showArchivedEmpty);
     }
     if (listContainer) listContainer.style.display = hasVisibleTasks ? '' : 'none';
   }
@@ -389,6 +400,31 @@
     console.log('[TaskRedesign] Mobile FAB initialized');
   }
   
+  function initFilterResetButtons() {
+    document.querySelectorAll('.filter-reset-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const targetFilter = btn.dataset.filter || 'active';
+        
+        // Update filter tabs
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+          tab.classList.toggle('active', tab.dataset.filter === targetFilter);
+          tab.setAttribute('aria-selected', tab.dataset.filter === targetFilter ? 'true' : 'false');
+        });
+        
+        // Apply filter
+        applyFilter(targetFilter);
+        
+        // Also trigger TaskSearchSort if available
+        if (window.taskSearchSort && typeof window.taskSearchSort.setFilter === 'function') {
+          window.taskSearchSort.setFilter(targetFilter);
+        }
+      });
+    });
+    
+    console.log('[TaskRedesign] Filter reset buttons initialized');
+  }
+  
   function init() {
     console.log('[TaskRedesign] Initializing...');
     
@@ -396,6 +432,7 @@
     initViewToggles();
     initCheckboxHandlers();
     initMobileFAB();
+    initFilterResetButtons();
     // CROWN⁴.12: Removed initFilterTabs() - now handled by task-page-master-init.js + TaskSearchSort
     // initFilterTabs();
     updateTaskCounts();
