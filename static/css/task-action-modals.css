@@ -69,6 +69,8 @@
     flex-direction: column;
     transform: scale(0.95);
     transition: transform 0.2s ease;
+    z-index: var(--z-modal, 1050);
+    position: relative;
 }
 
 .task-modal.task-modal-small { max-width: 400px; }

@@ -148,6 +148,7 @@ class TaskSnoozeModal {
         const presets = this.modal.querySelectorAll('.task-snooze-preset');
         presets.forEach(btn => btn.classList.remove('active'));
 
+        this.modal.classList.remove('hidden');
         this.modal.style.display = 'flex';
         requestAnimationFrame(() => {
             this.modal.classList.add('visible');

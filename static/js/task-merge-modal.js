@@ -130,6 +130,7 @@ class TaskMergeModal {
         preview.style.display = 'none';
         confirmBtn.disabled = true;
 
+        this.modal.classList.remove('hidden');
         this.modal.style.display = 'flex';
         requestAnimationFrame(() => {
             this.modal.classList.add('visible');
