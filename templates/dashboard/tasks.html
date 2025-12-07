@@ -61,9 +61,15 @@
 {% endblock %}
 
 {% block content %}
-<div class="container tasks-container">
+<!-- Skip to main content link for keyboard users -->
+<a href="#tasks-list-container" class="skip-to-content sr-only-focusable">Skip to task list</a>
+
+<!-- ARIA Live Region for dynamic announcements -->
+<div id="task-list-live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+<div class="container tasks-container" role="main" aria-label="Tasks page">
     <!-- PHASE 2: Consolidated Command Bar - Row 1: Header with inline filters -->
-    <div class="tasks-header-consolidated">
+    <div class="tasks-header-consolidated" role="banner">
         <div class="header-left">
             <h1 class="tasks-title">Action Items</h1>
             <!-- CROWN⁴.6: Stress Indicator (inline) -->
@@ -74,18 +80,18 @@
         </div>
         
         <!-- Inline Filters (moved from separate row) -->
-        <div class="task-filters-inline">
-            <button class="filter-tab" data-filter="all">
+        <div class="task-filters-inline" role="tablist" aria-label="Task filters">
+            <button class="filter-tab" data-filter="all" role="tab" aria-selected="false" aria-controls="tasks-list-container" id="filter-all-tab">
                 All
-                <span class="filter-counter filter-counter-all" data-counter="all">{{ tasks|length if tasks else 0 }}</span>
+                <span class="filter-counter filter-counter-all" data-counter="all" aria-label="{{ tasks|length if tasks else 0 }} total tasks">{{ tasks|length if tasks else 0 }}</span>
             </button>
-            <button class="filter-tab active" data-filter="active">
+            <button class="filter-tab active" data-filter="active" role="tab" aria-selected="true" aria-controls="tasks-list-container" id="filter-active-tab">
                 Active
-                <span class="filter-counter filter-counter-active" data-counter="active">{{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }}</span>
+                <span class="filter-counter filter-counter-active" data-counter="active" aria-label="{{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }} active tasks">{{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }}</span>
             </button>
-            <button class="filter-tab" data-filter="archived">
+            <button class="filter-tab" data-filter="archived" role="tab" aria-selected="false" aria-controls="tasks-list-container" id="filter-archived-tab">
                 Archived
-                <span class="filter-counter filter-counter-archived" data-counter="archived">{% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}{% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}{{ completed_count + cancelled_count }}</span>
+                <span class="filter-counter filter-counter-archived" data-counter="archived" aria-label="{% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}{% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}{{ completed_count + cancelled_count }} archived tasks">{% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}{% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}{{ completed_count + cancelled_count }}</span>
             </button>
         </div>
         
