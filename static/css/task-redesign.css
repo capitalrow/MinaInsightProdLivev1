@@ -3365,3 +3365,760 @@ a:focus-visible {
 /* ========================================
  * END OF PHASE 5: MOBILE-FIRST LAYOUT
  * ======================================== */
+
+/* ========================================
+ * PHASE 6: MICRO-INTERACTIONS
+ * Satisfying animations that add delight
+ * ======================================== */
+
+/* ----------------------------------------
+ * COMPLETION ANIMATION - Satisfying Check
+ * ---------------------------------------- */
+
+/* Checkbox bounce effect when checked */
+@keyframes checkBounce {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(0.85);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  75% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Checkmark draw animation */
+@keyframes checkmarkDraw {
+  0% {
+    stroke-dashoffset: 14;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Enhanced checkbox with animation */
+.task-checkbox:checked {
+  animation: checkBounce 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Celebrating completion - card pulse */
+.task-card.celebrating-completion {
+  animation: celebratePulse 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes celebratePulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  30% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+/* Success glow on checkbox after completion */
+.task-checkbox:checked::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.2);
+  animation: successGlow 0.5s ease-out forwards;
+  z-index: -1;
+}
+
+@keyframes successGlow {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+/* ----------------------------------------
+ * CARD EXIT ANIMATIONS
+ * ---------------------------------------- */
+
+/* Smooth fade out when completing/archiving */
+@keyframes cardFadeOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(20px) scale(0.95);
+  }
+}
+
+.task-card.exiting {
+  animation: cardFadeOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+/* Delete animation - slide left with red tint */
+@keyframes cardDelete {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+    background: var(--task-bg-card);
+  }
+  50% {
+    background: rgba(239, 68, 68, 0.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+}
+
+.task-card.deleting {
+  animation: cardDelete 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+/* Archive animation - fade with slight shrink */
+@keyframes cardArchive {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
+    height: 0;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+.task-card.archiving {
+  animation: cardArchive 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ----------------------------------------
+ * UNDO REVERSAL ANIMATION
+ * ---------------------------------------- */
+
+@keyframes undoRestore {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px) scale(0.95);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.task-card.undoing-completion {
+  animation: undoRestore 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Reset transform after undo animation completes (class should be removed via JS animationend) */
+.task-card:not(.undoing-completion):not(.exiting):not(.deleting):not(.archiving):not(.entering) {
+  transform: none;
+}
+
+/* Flash effect to highlight restored task */
+.task-card.restored {
+  animation: restoreFlash 0.6s ease-out;
+}
+
+@keyframes restoreFlash {
+  0% {
+    background: rgba(99, 102, 241, 0.2);
+  }
+  100% {
+    background: var(--task-bg-card);
+  }
+}
+
+/* ----------------------------------------
+ * HOVER MICRO-ANIMATIONS
+ * ---------------------------------------- */
+
+/* Priority dot pulse on high priority */
+.priority-dot.priority-urgent {
+  animation: urgentPulse 2s ease-in-out infinite;
+}
+
+@keyframes urgentPulse {
+  0%, 100% {
+    box-shadow: 0 0 6px var(--priority-urgent);
+  }
+  50% {
+    box-shadow: 0 0 12px var(--priority-urgent), 0 0 20px rgba(239, 68, 68, 0.3);
+  }
+}
+
+/* Button hover lift effect */
+#new-task-btn,
+.btn-primary,
+.mobile-fab {
+  transition: 
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#new-task-btn:hover,
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+#new-task-btn:active,
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+}
+
+/* Filter tab smooth transitions */
+.filter-tab {
+  transition: 
+    background 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-tab:hover:not(.active) {
+  transform: translateY(-1px);
+}
+
+.filter-tab:active {
+  transform: translateY(0);
+}
+
+/* Menu item hover slide */
+.task-menu-item {
+  transition: 
+    background 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    padding-left 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.task-menu-item:hover {
+  padding-left: calc(var(--task-space-3) + 4px);
+}
+
+/* ----------------------------------------
+ * LOADING STATE ANIMATIONS
+ * ---------------------------------------- */
+
+/* Spinner for async operations */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.task-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--task-border-subtle);
+  border-top-color: var(--task-accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Card loading state - subtle shimmer */
+.task-card.loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.task-card.loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.03),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+  border-radius: inherit;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Button loading state - preserves dimensions, shows spinner */
+.btn-loading {
+  position: relative !important;
+  pointer-events: none;
+  cursor: wait;
+}
+
+/* Hide text visually using opacity - keeps accessible for screen readers */
+.btn-loading > *,
+.btn-loading .btn-text,
+.btn-loading svg:not(.btn-loading-spinner) {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* Restore opacity when loading ends (class removal restores visibility) */
+button:not(.btn-loading) > *,
+button:not(.btn-loading) .btn-text,
+button:not(.btn-loading) svg {
+  opacity: 1;
+}
+
+/* Announce loading state to assistive tech */
+.btn-loading[aria-busy="true"] {
+  /* State already announced via aria-busy */
+}
+
+.btn-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  z-index: 1;
+}
+
+/* Secondary/outline button loading - darker spinner */
+.btn-secondary.btn-loading::after,
+.btn-outline.btn-loading::after {
+  border-color: rgba(99, 102, 241, 0.3);
+  border-top-color: var(--task-accent-primary);
+}
+
+/* ----------------------------------------
+ * CARD ENTRY ANIMATIONS
+ * ---------------------------------------- */
+
+/* Staggered entry for new tasks */
+@keyframes slideInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.task-card.entering {
+  animation: slideInUp 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* New task highlight */
+.task-card.just-created {
+  animation: newTaskGlow 0.8s ease-out;
+}
+
+@keyframes newTaskGlow {
+  0% {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+}
+
+/* ----------------------------------------
+ * FOCUS TRANSITIONS
+ * ---------------------------------------- */
+
+/* Smooth focus ring appearance */
+.task-card,
+.task-checkbox,
+.task-menu-trigger,
+.filter-tab,
+#new-task-btn,
+.btn-primary,
+.search-input {
+  transition-property: box-shadow, border-color, background, transform, opacity;
+  transition-duration: 0.15s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced focus states */
+.task-card:focus-within {
+  box-shadow: var(--task-shadow-focus), var(--task-shadow-sm);
+}
+
+/* ----------------------------------------
+ * TOAST ANIMATIONS
+ * ---------------------------------------- */
+
+@keyframes toastSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+}
+
+/* Undo toast styles - explicit opacity states */
+.completion-undo-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--task-bg-elevated);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-lg);
+  padding: var(--task-space-3) var(--task-space-4);
+  box-shadow: var(--task-shadow-lg);
+  z-index: 1001;
+  opacity: 0 !important;
+  visibility: hidden;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.3s;
+}
+
+.completion-undo-toast.visible {
+  opacity: 1 !important;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.undo-toast-content {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+}
+
+.undo-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--task-accent-success);
+  border-radius: 50%;
+  color: white;
+  font-size: var(--task-font-sm);
+}
+
+.undo-message {
+  color: var(--task-text-primary);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+}
+
+.undo-button {
+  padding: var(--task-space-2) var(--task-space-3);
+  background: transparent;
+  border: 1px solid var(--task-accent-primary);
+  border-radius: var(--task-radius-md);
+  color: var(--task-accent-primary);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.undo-button:hover {
+  background: var(--task-accent-primary);
+  color: white;
+}
+
+/* Milestone toast - explicit opacity states */
+.milestone-toast,
+.all-done-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  background: var(--task-bg-elevated);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-xl);
+  padding: var(--task-space-6);
+  box-shadow: var(--task-shadow-lg);
+  z-index: 1002;
+  opacity: 0 !important;
+  visibility: hidden;
+  text-align: center;
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.4s;
+}
+
+.milestone-toast.visible,
+.all-done-toast.visible {
+  opacity: 1 !important;
+  visibility: visible;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.milestone-message,
+.all-done-message {
+  font-size: var(--task-font-lg);
+  font-weight: var(--task-weight-bold);
+  color: var(--task-text-primary);
+  margin-bottom: var(--task-space-2);
+}
+
+.milestone-subtext,
+.all-done-subtext {
+  font-size: var(--task-font-sm);
+  color: var(--task-text-tertiary);
+}
+
+.all-done-icon {
+  font-size: 48px;
+  margin-bottom: var(--task-space-3);
+}
+
+/* ----------------------------------------
+ * RECOMMENDATION CARD ANIMATION
+ * ---------------------------------------- */
+
+.recommendation-card {
+  position: fixed;
+  bottom: 100px;
+  right: 24px;
+  width: 320px;
+  max-width: calc(100vw - 48px);
+  background: var(--task-bg-elevated);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-xl);
+  box-shadow: var(--task-shadow-lg);
+  z-index: 1000;
+  opacity: 0 !important;
+  visibility: hidden;
+  transform: translateY(20px) scale(0.95);
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.3s;
+}
+
+.recommendation-card.visible {
+  opacity: 1 !important;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+.recommendation-header {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-4);
+  border-bottom: 1px solid var(--task-border-subtle);
+}
+
+.recommendation-header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: var(--task-font-base);
+  font-weight: var(--task-weight-semibold);
+  color: var(--task-text-primary);
+}
+
+.recommendation-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  font-size: var(--task-font-lg);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.recommendation-close:hover {
+  background: var(--task-bg-card-hover);
+  color: var(--task-text-primary);
+}
+
+.recommendation-list {
+  padding: var(--task-space-2);
+}
+
+.recommendation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--task-space-3);
+  padding: var(--task-space-3);
+  border-radius: var(--task-radius-md);
+  transition: background 0.15s ease;
+}
+
+.recommendation-item:hover {
+  background: var(--task-bg-card-hover);
+}
+
+.recommendation-task-title {
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  color: var(--task-text-primary);
+  margin-bottom: var(--task-space-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.recommendation-task-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  font-size: var(--task-font-xs);
+  color: var(--task-text-tertiary);
+}
+
+.recommendation-action {
+  padding: var(--task-space-2) var(--task-space-3);
+  background: var(--task-accent-primary);
+  border: none;
+  border-radius: var(--task-radius-md);
+  color: white;
+  font-size: var(--task-font-xs);
+  font-weight: var(--task-weight-semibold);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.recommendation-action:hover {
+  background: var(--task-accent-primary-hover);
+  transform: translateY(-1px);
+}
+
+/* ----------------------------------------
+ * PREFERS-REDUCED-MOTION SUPPORT
+ * Disable animations for accessibility
+ * ---------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .task-checkbox:checked {
+    animation: none;
+  }
+  
+  .task-card.celebrating-completion,
+  .task-card.exiting,
+  .task-card.deleting,
+  .task-card.archiving,
+  .task-card.entering,
+  .task-card.just-created {
+    animation: none;
+  }
+  
+  .priority-dot.priority-urgent {
+    animation: none;
+    box-shadow: 0 0 6px var(--priority-urgent);
+  }
+  
+  .task-loading-spinner {
+    animation: none;
+    border-top-color: var(--task-accent-primary);
+  }
+  
+  .task-card.loading::after {
+    animation: none;
+  }
+  
+  /* Button loading spinner - show static state */
+  .btn-loading::after {
+    animation: none;
+    border-color: rgba(255, 255, 255, 0.5);
+    border-top-color: white;
+  }
+  
+  /* Instant state changes instead of transitions */
+  .completion-undo-toast,
+  .milestone-toast,
+  .all-done-toast,
+  .recommendation-card {
+    transition: none !important;
+  }
+  
+  .completion-undo-toast.visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translateX(-50%) translateY(0);
+  }
+  
+  .milestone-toast.visible,
+  .all-done-toast.visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translate(-50%, -50%);
+  }
+  
+  .recommendation-card.visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ========================================
+ * END OF PHASE 6: MICRO-INTERACTIONS
+ * ======================================== */
