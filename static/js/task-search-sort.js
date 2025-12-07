@@ -587,9 +587,23 @@ class TaskSearchSort {
         const sortConfig = this.mapSortKeyToConfig(sortKey);
         if (!sortConfig) return tasks;
 
-        const sortable = [...tasks];
+        let sortable = [...tasks];
         if (window.taskBootstrap?.sortTasks) {
-            return window.taskBootstrap.sortTasks(sortable, sortConfig);
+            sortable = window.taskBootstrap.sortTasks(sortable, sortConfig);
+        }
+
+        // CROWN⁴.15 FIX: Sort completed tasks to bottom in 'all' view
+        // This ensures consistent visual hierarchy - active tasks first
+        // Guard: Handle both data objects (t.status) and DOM nodes (t.dataset?.status)
+        if (this.currentFilter === 'all') {
+            const getStatus = (t) => t.status || t.dataset?.status || 'todo';
+            const isCompleted = (t) => {
+                const status = getStatus(t);
+                return status === 'completed' || status === 'cancelled';
+            };
+            const activeTasks = sortable.filter(t => !isCompleted(t));
+            const completedTasks = sortable.filter(t => isCompleted(t));
+            sortable = [...activeTasks, ...completedTasks];
         }
 
         return sortable;

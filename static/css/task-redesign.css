@@ -5715,11 +5715,12 @@ button:not(.btn-loading) svg {
  * ======================================== */
 
 /* 1. MOBILE TASK TEXT VISIBILITY - Show 3 lines on mobile */
+/* CROWN⁴.15 FIX: Use !important to override earlier single-line rule (line 3074) */
 @media (max-width: 640px) {
   .task-title {
-    -webkit-line-clamp: 3;
-    font-size: 15px;
-    line-height: 1.45;
+    -webkit-line-clamp: 3 !important;
+    font-size: 15px !important;
+    line-height: 1.45 !important;
   }
   
   /* Increase card padding for better touch targets */
@@ -5735,24 +5736,25 @@ button:not(.btn-loading) svg {
 }
 
 /* 2. PRIORITY VISUAL HIERARCHY - Color-coded left border */
+/* CROWN⁴.15 FIX: Use !important to override PHASE 1 border shorthand (line 1789) */
 .task-card {
-  border-left: 3px solid transparent;
+  border-left: 3px solid transparent !important;
 }
 
 .task-card[data-priority="urgent"] {
-  border-left-color: var(--priority-urgent);
+  border-left-color: var(--priority-urgent) !important;
 }
 
 .task-card[data-priority="high"] {
-  border-left-color: var(--priority-high);
+  border-left-color: var(--priority-high) !important;
 }
 
 .task-card[data-priority="medium"] {
-  border-left-color: var(--priority-medium);
+  border-left-color: var(--priority-medium) !important;
 }
 
 .task-card[data-priority="low"] {
-  border-left-color: var(--priority-low);
+  border-left-color: var(--priority-low) !important;
 }
 
 /* Completed tasks have subtle border */

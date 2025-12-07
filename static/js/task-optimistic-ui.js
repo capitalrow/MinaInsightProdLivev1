@@ -266,6 +266,10 @@ class OptimisticUI {
                 detail: { taskId: tempId, task: optimisticTask }
             }));
             
+            // CROWN⁴.15: Update TaskStateStore for counter synchronization
+            // Temp tasks tracked separately - pass isTemp=true
+            window.taskStateStore?.upsertTask(optimisticTask, true);
+            
             // Step 3: Queue event and offline operation via OfflineQueueManager
             await this.cache.addEvent({
                 event_type: 'task_create',
@@ -349,6 +353,10 @@ class OptimisticUI {
             window.dispatchEvent(new CustomEvent('task:updated', {
                 detail: { taskId, updates, task: optimisticTask }
             }));
+            
+            // CROWN⁴.15: Update TaskStateStore for counter synchronization
+            // This handles status changes (active<->archived) and completion
+            window.taskStateStore?.upsertTask(optimisticTask);
             
             // Step 3: Queue event via OfflineQueueManager
             await this.cache.addEvent({
@@ -434,6 +442,10 @@ class OptimisticUI {
             window.dispatchEvent(new CustomEvent('task:deleted', {
                 detail: { taskId, task: updatedTask }
             }));
+            
+            // CROWN⁴.15: Update TaskStateStore for counter synchronization
+            // Remove from store so counters update immediately
+            window.taskStateStore?.removeTask(taskId);
             
             // Step 3: Queue event via OfflineQueueManager
             await this.cache.addEvent({
