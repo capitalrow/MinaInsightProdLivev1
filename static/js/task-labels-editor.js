@@ -122,6 +122,7 @@ class TaskLabelsEditor {
         loading.style.display = 'flex';
         suggestions.style.display = 'none';
 
+        this.modal.classList.remove('hidden');
         this.modal.style.display = 'flex';
         requestAnimationFrame(() => {
             this.modal.classList.add('visible');

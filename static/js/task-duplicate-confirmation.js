@@ -101,6 +101,7 @@ class TaskDuplicateConfirmation {
     async show(task) {
         this.populatePreview(task);
 
+        this.modal.classList.remove('hidden');
         this.modal.style.display = 'flex';
         requestAnimationFrame(() => {
             this.modal.classList.add('visible');
