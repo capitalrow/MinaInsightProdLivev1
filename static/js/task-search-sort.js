@@ -251,55 +251,109 @@ class TaskSearchSort {
     }
 
     /**
+     * CROWN⁴.14: Check if in settling period (1.5s after hydration)
+     * @private
+     */
+    _isInSettlingPeriod() {
+        if (!this._hydrationReady) return true; // Before hydration = always settling
+        const settlingMs = 1500; // 1.5 second settling period
+        const elapsed = Date.now() - (window.taskBootstrap?._hydrationCompleteTime || 0);
+        return elapsed < settlingMs;
+    }
+    
+    /**
      * Register BroadcastChannel + idle visibility sync
+     * CROWN⁴.14: Added initial load and settling period guards to prevent echo loops
      */
     registerCrossTabSync() {
         if (this.broadcast?.on) {
             this.broadcast.on(this.broadcast.EVENTS.FILTER_APPLY, async (payload) => {
                 if (!payload) return;
+                // CROWN⁴.14: Block during initial load
+                if (this._isInitialLoad) {
+                    console.log('[TaskSearchSort] FILTER_APPLY blocked - initial load');
+                    return;
+                }
+                // CROWN⁴.14: Block during settling period
+                if (this._isInSettlingPeriod()) {
+                    console.log('[TaskSearchSort] FILTER_APPLY blocked - settling period');
+                    return;
+                }
                 // CROWN⁴.12: Skip if user recently clicked a filter
                 if (this._isUserActionLocked()) return;
+                
                 this.isApplyingRemoteState = true;
-                if (payload.filter) {
-                    this.currentFilter = payload.filter;
-                    this.setActiveFilterTab(payload.filter);
+                try {
+                    if (payload.filter) {
+                        this.currentFilter = payload.filter;
+                        this.setActiveFilterTab(payload.filter);
+                    }
+                    await this.applyFiltersAndSort();
+                } finally {
+                    this.isApplyingRemoteState = false;
                 }
-                await this.applyFiltersAndSort();
-                this.isApplyingRemoteState = false;
             });
 
             this.broadcast.on(this.broadcast.EVENTS.SEARCH_QUERY, async (payload) => {
                 if (!payload?.query) return;
+                // CROWN⁴.14: Block during initial load
+                if (this._isInitialLoad) {
+                    console.log('[TaskSearchSort] SEARCH_QUERY blocked - initial load');
+                    return;
+                }
+                // CROWN⁴.14: Block during settling period
+                if (this._isInSettlingPeriod()) {
+                    console.log('[TaskSearchSort] SEARCH_QUERY blocked - settling period');
+                    return;
+                }
                 // CROWN⁴.12: Skip if user recently clicked a filter
                 if (this._isUserActionLocked()) return;
+                
                 this.isApplyingRemoteState = true;
-                this.searchQuery = payload.query.toLowerCase();
-                if (this.searchInput) this.searchInput.value = payload.query;
-                this.updateClearButton();
-                await this.applyFiltersAndSort();
-                this.isApplyingRemoteState = false;
+                try {
+                    this.searchQuery = payload.query.toLowerCase();
+                    if (this.searchInput) this.searchInput.value = payload.query;
+                    this.updateClearButton();
+                    await this.applyFiltersAndSort();
+                } finally {
+                    this.isApplyingRemoteState = false;
+                }
             });
 
             this.broadcast.on(this.broadcast.EVENTS.UI_STATE_SYNC, async (payload) => {
                 if (!payload) return;
+                // CROWN⁴.14: Block during initial load
+                if (this._isInitialLoad) {
+                    console.log('[TaskSearchSort] UI_STATE_SYNC blocked - initial load');
+                    return;
+                }
+                // CROWN⁴.14: Block during settling period
+                if (this._isInSettlingPeriod()) {
+                    console.log('[TaskSearchSort] UI_STATE_SYNC blocked - settling period');
+                    return;
+                }
                 // CROWN⁴.12: Skip if user recently clicked a filter
                 if (this._isUserActionLocked()) return;
+                
                 this.isApplyingRemoteState = true;
-                if (payload.search !== undefined) {
-                    this.searchQuery = payload.search?.toLowerCase() || '';
-                    if (this.searchInput) this.searchInput.value = payload.search || '';
-                    this.updateClearButton();
+                try {
+                    if (payload.search !== undefined) {
+                        this.searchQuery = payload.search?.toLowerCase() || '';
+                        if (this.searchInput) this.searchInput.value = payload.search || '';
+                        this.updateClearButton();
+                    }
+                    if (payload.filter) {
+                        this.currentFilter = payload.filter;
+                        this.setActiveFilterTab(payload.filter);
+                    }
+                    if (payload.sort) {
+                        this.currentSort = this.mapSortConfigToKey(payload.sort);
+                        if (this.sortSelect) this.sortSelect.value = this.currentSort;
+                    }
+                    await this.applyFiltersAndSort();
+                } finally {
+                    this.isApplyingRemoteState = false;
                 }
-                if (payload.filter) {
-                    this.currentFilter = payload.filter;
-                    this.setActiveFilterTab(payload.filter);
-                }
-                if (payload.sort) {
-                    this.currentSort = this.mapSortConfigToKey(payload.sort);
-                    if (this.sortSelect) this.sortSelect.value = this.currentSort;
-                }
-                await this.applyFiltersAndSort();
-                this.isApplyingRemoteState = false;
             });
         }
 
@@ -540,15 +594,34 @@ class TaskSearchSort {
     }
 
     broadcastState(viewState) {
-        if (this.broadcast?.broadcast) {
-            this.broadcast.broadcast(this.broadcast.EVENTS.FILTER_APPLY, viewState);
-            this.broadcast.broadcast(this.broadcast.EVENTS.SEARCH_QUERY, { query: this.searchQuery });
-            this.broadcast.broadcast(this.broadcast.EVENTS.UI_STATE_SYNC, viewState);
+        // CROWN⁴.14: Debounce broadcasts to prevent rapid-fire events during initialization
+        if (this._broadcastDebounceTimer) {
+            clearTimeout(this._broadcastDebounceTimer);
         }
+        
+        // CROWN⁴.14: Skip broadcasts during initial load or settling period
+        if (this._isInitialLoad || this._isInSettlingPeriod()) {
+            console.log('[TaskSearchSort] Broadcast skipped - initial load or settling');
+            return;
+        }
+        
+        // CROWN⁴.14: Skip if applying remote state (prevents echo loop)
+        if (this.isApplyingRemoteState) {
+            console.log('[TaskSearchSort] Broadcast skipped - applying remote state');
+            return;
+        }
+        
+        this._broadcastDebounceTimer = setTimeout(() => {
+            if (this.broadcast?.broadcast) {
+                this.broadcast.broadcast(this.broadcast.EVENTS.FILTER_APPLY, viewState);
+                this.broadcast.broadcast(this.broadcast.EVENTS.SEARCH_QUERY, { query: this.searchQuery });
+                this.broadcast.broadcast(this.broadcast.EVENTS.UI_STATE_SYNC, viewState);
+            }
 
-        if (window.multiTabSync?.broadcastFilterChanged) {
-            window.multiTabSync.broadcastFilterChanged(viewState);
-        }
+            if (window.multiTabSync?.broadcastFilterChanged) {
+                window.multiTabSync.broadcastFilterChanged(viewState);
+            }
+        }, 300); // 300ms debounce
     }
 
     setActiveFilterTab(filter) {
