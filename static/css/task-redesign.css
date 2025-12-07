@@ -30,11 +30,11 @@
   --touch-target-min: 48px;
   --touch-target-comfortable: 56px;
 
-  /* Typography */
-  --task-font-xs: 11px;
-  --task-font-sm: 13px;
-  --task-font-base: 15px;
-  --task-font-lg: 17px;
+  /* Typography - WCAG AA compliant sizes */
+  --task-font-xs: 12px;
+  --task-font-sm: 14px;
+  --task-font-base: 16px;
+  --task-font-lg: 18px;
   --task-font-xl: 20px;
   --task-font-2xl: 24px;
 
@@ -1754,6 +1754,123 @@ body.clustering-active .cluster-view-container {
   background: var(--task-bg-card-hover);
   border-color: var(--task-border-hover);
   color: var(--task-text-primary);
+}
+
+/* ========================================
+ * PHASE 1: CONTRAST & TYPOGRAPHY OVERRIDES
+ * Remove glassmorphism, ensure WCAG AA 4.5:1 contrast
+ * ======================================== */
+
+/* Override glass effects from tasks.css with solid backgrounds */
+.task-filters,
+.search-sort-toolbar,
+.task-item-enhanced,
+.task-card,
+.connection-banner,
+.priority-header {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Solid background overrides for better readability */
+.task-filters {
+  background: var(--task-bg-card) !important;
+  border: 1px solid var(--task-border-default) !important;
+}
+
+.search-sort-toolbar {
+  background: var(--task-bg-card) !important;
+  border: 1px solid var(--task-border-default) !important;
+}
+
+.task-item-enhanced,
+.task-card {
+  background: var(--task-bg-card) !important;
+  border: 1px solid var(--task-border-subtle) !important;
+}
+
+.task-item-enhanced:hover,
+.task-card:hover {
+  background: var(--task-bg-card-hover) !important;
+  border-color: var(--task-border-hover) !important;
+}
+
+/* Ensure task title uses 16px with high contrast */
+.task-title,
+.task-item-enhanced .task-title {
+  font-size: var(--task-font-base) !important;
+  color: var(--task-text-primary) !important;
+  font-weight: var(--task-weight-medium) !important;
+}
+
+/* Secondary text contrast - WCAG AA 4.5:1 */
+.task-meta,
+.task-metadata-row,
+.meta-text,
+.tasks-subtitle {
+  color: var(--task-text-secondary) !important;
+  font-size: var(--task-font-sm) !important;
+}
+
+/* Ensure filter tabs have proper contrast */
+.filter-tab {
+  color: var(--task-text-secondary) !important;
+  font-size: var(--task-font-sm) !important;
+}
+
+.filter-tab:hover {
+  color: var(--task-text-primary) !important;
+}
+
+.filter-tab.active {
+  color: white !important;
+  background: var(--task-accent-primary) !important;
+}
+
+/* Priority header - solid backgrounds */
+.priority-header {
+  background: var(--task-bg-elevated) !important;
+  border: 1px solid var(--task-border-subtle) !important;
+}
+
+.priority-header.priority-high {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+
+.priority-header.priority-medium {
+  background: rgba(251, 191, 36, 0.1) !important;
+  border-color: rgba(251, 191, 36, 0.25) !important;
+}
+
+.priority-header.priority-low {
+  background: rgba(156, 163, 175, 0.1) !important;
+  border-color: rgba(156, 163, 175, 0.2) !important;
+}
+
+/* Search input - solid background */
+.search-input {
+  background: var(--task-bg-input) !important;
+  border: 1px solid var(--task-border-default) !important;
+  color: var(--task-text-primary) !important;
+  font-size: var(--task-font-sm) !important;
+}
+
+.search-input::placeholder {
+  color: var(--task-text-tertiary) !important;
+}
+
+/* Sort select - solid background */
+.sort-select {
+  background: var(--task-bg-input) !important;
+  border: 1px solid var(--task-border-default) !important;
+  color: var(--task-text-primary) !important;
+}
+
+/* Ensure body has proper background */
+body,
+.tasks-container {
+  background-color: var(--task-bg-page) !important;
 }
 
 /* ========================================
