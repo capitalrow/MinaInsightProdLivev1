@@ -144,8 +144,10 @@ class TaskSearchSort {
         };
 
         // Delegated sort selector handler
+        // CROWN⁴.17: Set user action lock on sort change
         this.handleSortChange = (e) => {
             if (e.target.id !== 'task-sort-select') return;
+            this._setUserActionLock();
             this.currentSort = e.target.value;
             this.safeApplyFiltersAndSort();
             document.dispatchEvent(new CustomEvent('task:sort', { detail: { sort: this.currentSort } }));
@@ -156,7 +158,10 @@ class TaskSearchSort {
         document.addEventListener('change', this.handleSortChange);
         
         // Listen for filter tab changes
+        // CROWN⁴.17: Set user action lock when filter tab is clicked
+        // This prevents background state restores from overwriting user's filter choice
         document.addEventListener('filterChanged', (e) => {
+            this._setUserActionLock();
             this.currentFilter = e.detail.filter;
             this.safeApplyFiltersAndSort();
         });
