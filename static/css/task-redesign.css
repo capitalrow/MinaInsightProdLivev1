@@ -2862,3 +2862,506 @@ a:focus-visible {
 /* ========================================
  * END OF PHASE 4: ACCESSIBILITY
  * ======================================== */
+
+/* ========================================
+ * PHASE 5: MOBILE-FIRST LAYOUT
+ * ======================================== */
+
+/* ----------------------------------------
+ * FLOATING ACTION BUTTON (FAB)
+ * ---------------------------------------- */
+
+.mobile-fab {
+  display: none; /* Hidden by default on desktop */
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  right: 24px;
+  z-index: 100;
+  
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  
+  background: var(--task-accent-primary);
+  color: white;
+  
+  box-shadow: 
+    0 4px 12px rgba(99, 102, 241, 0.4),
+    0 0 0 0 rgba(99, 102, 241, 0);
+  
+  cursor: pointer;
+  transition: all var(--task-transition-base);
+  
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-fab svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.5;
+}
+
+.mobile-fab:hover {
+  background: var(--task-accent-primary-hover);
+  transform: scale(1.05);
+}
+
+.mobile-fab:active {
+  transform: scale(0.95);
+  box-shadow: 
+    0 2px 8px rgba(99, 102, 241, 0.3),
+    0 0 0 0 rgba(99, 102, 241, 0);
+}
+
+.mobile-fab:focus-visible {
+  outline: none;
+  box-shadow: 
+    0 4px 12px rgba(99, 102, 241, 0.4),
+    0 0 0 4px rgba(99, 102, 241, 0.3);
+}
+
+/* FAB ripple animation on press */
+.mobile-fab.fab-pressed {
+  animation: fabPulse 0.3s ease-out;
+}
+
+@keyframes fabPulse {
+  0% {
+    box-shadow: 
+      0 4px 12px rgba(99, 102, 241, 0.4),
+      0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+  100% {
+    box-shadow: 
+      0 4px 12px rgba(99, 102, 241, 0.4),
+      0 0 0 16px rgba(99, 102, 241, 0);
+  }
+}
+
+/* ----------------------------------------
+ * MOBILE BREAKPOINTS (<640px)
+ * ---------------------------------------- */
+
+@media (max-width: 640px) {
+  /* Show FAB on mobile */
+  .mobile-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Hide desktop new task button on mobile - FAB replaces it */
+  .header-actions-compact #new-task-btn,
+  .header-actions #new-task-btn {
+    display: none;
+  }
+  
+  /* Full-width container with minimal padding */
+  .tasks-container {
+    padding: var(--task-space-3);
+    padding-bottom: 100px; /* Space for FAB */
+  }
+  
+  /* Stacked header layout */
+  .tasks-header-consolidated {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--task-space-3);
+  }
+  
+  .header-left {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .tasks-title {
+    font-size: var(--task-font-xl);
+  }
+  
+  /* Scrollable filters */
+  .task-filters-inline {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    gap: var(--task-space-1);
+    padding-bottom: 2px; /* Prevent cut-off */
+  }
+  
+  .task-filters-inline::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .filter-tab {
+    flex-shrink: 0;
+    padding: var(--task-space-2) var(--task-space-3);
+    font-size: var(--task-font-sm);
+  }
+  
+  /* Compact header actions */
+  .header-actions-compact {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--task-space-2);
+  }
+  
+  .view-toggle-group {
+    display: none; /* Hide view toggles on mobile - list view only */
+  }
+  
+  /* Search toolbar - stacked */
+  .search-sort-toolbar-compact {
+    flex-wrap: wrap;
+    gap: var(--task-space-2);
+  }
+  
+  .search-wrapper-compact {
+    order: 1;
+    flex: 1 1 100%;
+  }
+  
+  .toolbar-controls {
+    order: 2;
+    flex: 1;
+  }
+  
+  .toolbar-stats-inline {
+    order: 3;
+    flex-shrink: 0;
+    font-size: var(--task-font-xs);
+  }
+  
+  /* Condensed card layout */
+  .task-card {
+    padding: var(--task-space-3);
+    margin-left: calc(-1 * var(--task-space-3));
+    margin-right: calc(-1 * var(--task-space-3));
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: 1px solid var(--task-border-subtle);
+    margin-bottom: 0;
+  }
+  
+  /* First card - rounded top */
+  .tasks-list-container .task-card:first-child {
+    border-top-left-radius: var(--task-radius-lg);
+    border-top-right-radius: var(--task-radius-lg);
+    margin-top: var(--task-space-2);
+  }
+  
+  /* Last card - rounded bottom */
+  .tasks-list-container .task-card:last-child {
+    border-bottom-left-radius: var(--task-radius-lg);
+    border-bottom-right-radius: var(--task-radius-lg);
+    border-bottom: 1px solid var(--task-border-subtle);
+  }
+  
+  /* Smaller checkbox wrapper on mobile */
+  .checkbox-wrapper {
+    width: 44px;
+    height: 44px;
+    margin: calc(-1 * var(--task-space-2));
+    margin-right: var(--task-space-1);
+  }
+  
+  /* Task title - single line on mobile */
+  .task-title {
+    font-size: var(--task-font-sm);
+    -webkit-line-clamp: 1;
+  }
+  
+  /* Always show actions on mobile (no hover) */
+  .task-actions {
+    opacity: 1;
+  }
+  
+  /* Smaller menu trigger on mobile */
+  .task-menu-trigger {
+    width: 44px;
+    height: 44px;
+    margin: calc(-1 * var(--task-space-2));
+  }
+  
+  /* Priority and due date inline */
+  .task-essential-meta {
+    gap: var(--task-space-1);
+  }
+  
+  .priority-dot {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .due-date-compact {
+    font-size: 11px;
+  }
+  
+  /* Hide secondary row content on mobile list view */
+  .task-secondary-row {
+    display: none;
+  }
+  
+  /* Show on expanded card */
+  .task-card.expanded .task-secondary-row {
+    display: flex;
+    max-height: none;
+    opacity: 1;
+    margin-top: var(--task-space-2);
+  }
+  
+  /* Empty states - mobile adjustments */
+  .task-empty-state {
+    padding: var(--task-space-8) var(--task-space-4);
+  }
+  
+  .empty-state-title {
+    font-size: var(--task-font-lg);
+  }
+  
+  .empty-state-description {
+    font-size: var(--task-font-sm);
+  }
+  
+  .empty-state-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .empty-state-primary-btn,
+  .empty-state-secondary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ----------------------------------------
+ * TABLET BREAKPOINTS (640px - 1024px)
+ * ---------------------------------------- */
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .tasks-container {
+    padding: var(--task-space-4);
+  }
+  
+  .tasks-header-consolidated {
+    flex-wrap: wrap;
+  }
+  
+  .task-filters-inline {
+    order: 2;
+    flex: 1 1 100%;
+    margin-top: var(--task-space-2);
+  }
+  
+  /* Show 2-column grid on tablet */
+  .tasks-list-container[data-view="grid"] {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ----------------------------------------
+ * SWIPE GESTURE TRANSFORMS
+ * ---------------------------------------- */
+
+.task-card {
+  position: relative;
+  touch-action: pan-y pinch-zoom;
+  will-change: transform;
+}
+
+/* Swipe container for gesture actions */
+.task-card.swiping {
+  transition: none !important;
+}
+
+.task-card.swipe-complete-threshold {
+  transform: translateX(-80px);
+}
+
+.task-card.swipe-snooze-threshold {
+  transform: translateX(80px);
+}
+
+/* Swipe reset animation */
+.task-card.swipe-reset {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(0);
+}
+
+/* Swipe action backgrounds (revealed behind card) */
+.task-card::before,
+.task-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* Complete action (swipe left reveals right side) */
+.task-card::after {
+  right: -80px;
+  background: linear-gradient(270deg, rgba(34, 197, 94, 0.15), transparent);
+}
+
+/* Snooze action (swipe right reveals left side) */
+.task-card::before {
+  left: -80px;
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.15), transparent);
+}
+
+.task-card.swiping::before,
+.task-card.swiping::after {
+  opacity: 1;
+}
+
+/* ----------------------------------------
+ * BOTTOM SHEET MODAL (Mobile)
+ * ---------------------------------------- */
+
+@media (max-width: 640px) {
+  /* Convert modals to bottom sheets on mobile */
+  .modal-overlay,
+  .task-modal-overlay {
+    align-items: flex-end;
+  }
+  
+  .modal,
+  .task-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 90vh;
+    margin: 0;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: calc(var(--task-space-4) + env(safe-area-inset-bottom, 0px));
+    animation: slideUpModal 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  @keyframes slideUpModal {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  
+  /* Bottom sheet handle indicator */
+  .modal::before,
+  .task-modal::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: var(--task-border-default);
+    border-radius: 2px;
+    margin: 0 auto var(--task-space-4);
+  }
+  
+  .modal-header,
+  .task-modal-header {
+    padding-top: 0;
+  }
+  
+  /* Stack form buttons on mobile */
+  .modal-footer {
+    flex-direction: column-reverse;
+    gap: var(--task-space-2);
+  }
+  
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ----------------------------------------
+ * TOUCH OPTIMIZATIONS
+ * ---------------------------------------- */
+
+@media (pointer: coarse) {
+  /* Larger hit areas for touch */
+  .filter-tab {
+    min-height: 44px;
+  }
+  
+  .sort-select-compact {
+    min-height: 44px;
+    padding: var(--task-space-2) var(--task-space-3);
+  }
+  
+  .meeting-intelligence-toggle-compact {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  /* Prevent text selection during swipe */
+  .task-card {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  
+  /* Remove hover states that don't apply to touch */
+  .task-card:hover {
+    background: var(--task-bg-card);
+    border-color: var(--task-border-subtle);
+  }
+  
+  .task-card:active {
+    background: var(--task-bg-card-hover);
+  }
+}
+
+/* ----------------------------------------
+ * LANDSCAPE MOBILE ADJUSTMENTS
+ * ---------------------------------------- */
+
+@media (max-width: 900px) and (orientation: landscape) {
+  .tasks-container {
+    padding-bottom: 80px;
+  }
+  
+  .mobile-fab {
+    bottom: 16px;
+    right: 16px;
+    width: 48px;
+    height: 48px;
+  }
+  
+  .mobile-fab svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* ----------------------------------------
+ * SAFE AREA INSETS (Notch/Home Indicator)
+ * ---------------------------------------- */
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 640px) {
+    .tasks-container {
+      padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+    }
+    
+    .mobile-fab {
+      bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    }
+  }
+}
+
+/* ========================================
+ * END OF PHASE 5: MOBILE-FIRST LAYOUT
+ * ======================================== */
