@@ -4549,3 +4549,332 @@ button:not(.btn-loading) svg {
 /* ========================================
  * END OF PHASE 7: MEETING-NATIVE EMPTY STATES
  * ======================================== */
+
+/* ========================================
+ * PHASE 8: UNDO SYSTEM
+ * Enhanced toast notifications with undo buttons
+ * for delete, archive, and complete actions
+ * ======================================== */
+
+/* ----------------------------------------
+ * UNDO TOAST CONTAINER - Bottom-center positioning
+ * ---------------------------------------- */
+
+.undo-toast-container {
+  position: fixed;
+  bottom: var(--task-space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: var(--task-space-3);
+  max-width: 420px;
+  width: calc(100% - var(--task-space-8));
+  pointer-events: none;
+}
+
+/* ----------------------------------------
+ * UNDO TOAST - Glassmorphism card with action
+ * ---------------------------------------- */
+
+.undo-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-4);
+  background: rgba(30, 30, 40, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-lg);
+  box-shadow: var(--task-shadow-lg), 0 0 40px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.undo-toast.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.undo-toast.hiding {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+}
+
+/* Toast icon area */
+.undo-toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--task-radius-md);
+  flex-shrink: 0;
+}
+
+.undo-toast-icon.delete {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--task-accent-danger);
+}
+
+.undo-toast-icon.archive {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--task-accent-primary);
+}
+
+.undo-toast-icon.complete {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--task-accent-success);
+}
+
+.undo-toast-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Toast content area */
+.undo-toast-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.undo-toast-title {
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  color: var(--task-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.undo-toast-subtitle {
+  font-size: var(--task-font-xs);
+  color: var(--task-text-tertiary);
+}
+
+/* Toast actions area */
+.undo-toast-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex-shrink: 0;
+}
+
+.undo-toast-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--task-space-2) var(--task-space-4);
+  min-height: 36px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: var(--task-radius-md);
+  color: var(--task-accent-primary-hover);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-semibold);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.undo-toast-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.5);
+  transform: translateY(-1px);
+}
+
+.undo-toast-btn:active {
+  transform: translateY(0);
+}
+
+.undo-toast-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
+}
+
+.undo-toast-btn.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.undo-toast-btn.loading::after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  margin-left: var(--task-space-2);
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: undo-spin 0.6s linear infinite;
+}
+
+@keyframes undo-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Dismiss button */
+.undo-toast-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.undo-toast-dismiss:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--task-text-primary);
+}
+
+/* Progress bar for auto-dismiss */
+.undo-toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--task-accent-primary);
+  border-radius: 0 0 var(--task-radius-lg) var(--task-radius-lg);
+  transition: width linear;
+}
+
+/* ----------------------------------------
+ * UNDO TOAST QUEUE - Stacking multiple toasts
+ * ---------------------------------------- */
+
+.undo-toast-container .undo-toast:nth-child(2) {
+  transform: translateY(0) scale(0.95);
+  opacity: 0.8;
+}
+
+.undo-toast-container .undo-toast:nth-child(3) {
+  transform: translateY(0) scale(0.9);
+  opacity: 0.6;
+}
+
+.undo-toast-container .undo-toast:nth-child(n+4) {
+  display: none;
+}
+
+/* ----------------------------------------
+ * UNDO SUCCESS FEEDBACK
+ * ---------------------------------------- */
+
+.undo-toast.undo-success {
+  border-color: var(--task-accent-success);
+}
+
+.undo-toast.undo-success .undo-toast-icon {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--task-accent-success);
+}
+
+.undo-toast.undo-success .undo-toast-title::before {
+  content: '✓ ';
+}
+
+/* ----------------------------------------
+ * KEYBOARD SHORTCUT HINT
+ * ---------------------------------------- */
+
+.undo-keyboard-hint {
+  display: none;
+  align-items: center;
+  gap: var(--task-space-1);
+  font-size: var(--task-font-xs);
+  color: var(--task-text-muted);
+  margin-left: var(--task-space-2);
+}
+
+.undo-keyboard-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: 3px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 10px;
+  font-weight: var(--task-weight-medium);
+  color: var(--task-text-tertiary);
+}
+
+/* Show keyboard hint on desktop only */
+@media (hover: hover) and (min-width: 768px) {
+  .undo-keyboard-hint {
+    display: flex;
+  }
+}
+
+/* ----------------------------------------
+ * MOBILE ADAPTATIONS
+ * ---------------------------------------- */
+
+@media (max-width: 640px) {
+  .undo-toast-container {
+    bottom: var(--task-space-4);
+    max-width: none;
+    width: calc(100% - var(--task-space-6));
+  }
+  
+  .undo-toast {
+    padding: var(--task-space-3);
+  }
+  
+  .undo-toast-icon {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .undo-toast-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .undo-toast-btn {
+    padding: var(--task-space-2) var(--task-space-3);
+    min-height: 32px;
+    font-size: var(--task-font-xs);
+  }
+}
+
+/* ----------------------------------------
+ * REDUCED MOTION SUPPORT
+ * ---------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .undo-toast {
+    transition: opacity 0.15s ease;
+    transform: none !important;
+  }
+  
+  .undo-toast.visible {
+    transform: none !important;
+  }
+  
+  .undo-toast.hiding {
+    transform: none !important;
+  }
+  
+  .undo-toast-btn.loading::after {
+    animation: none;
+  }
+}
+
+/* ========================================
+ * END OF PHASE 8: UNDO SYSTEM
+ * ======================================== */
