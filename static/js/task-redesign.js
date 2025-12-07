@@ -360,12 +360,42 @@
   // INITIALIZATION
   // ========================================
   
+  // ========================================
+  // MOBILE FAB (Floating Action Button)
+  // ========================================
+  
+  function initMobileFAB() {
+    const fab = document.getElementById('mobile-fab');
+    const newTaskBtn = document.getElementById('new-task-btn');
+    
+    if (!fab) return;
+    
+    fab.addEventListener('click', function(e) {
+      e.preventDefault();
+      fab.classList.add('fab-pressed');
+      setTimeout(() => fab.classList.remove('fab-pressed'), 300);
+      
+      // Trigger the same action as the "New" button
+      if (newTaskBtn) {
+        newTaskBtn.click();
+      } else if (window.TaskModalManager && typeof window.TaskModalManager.openCreateModal === 'function') {
+        window.TaskModalManager.openCreateModal();
+      } else {
+        // Fallback: dispatch custom event
+        document.dispatchEvent(new CustomEvent('task:create-new'));
+      }
+    });
+    
+    console.log('[TaskRedesign] Mobile FAB initialized');
+  }
+  
   function init() {
     console.log('[TaskRedesign] Initializing...');
     
     initTaskCardExpansion();
     initViewToggles();
     initCheckboxHandlers();
+    initMobileFAB();
     // CROWN⁴.12: Removed initFilterTabs() - now handled by task-page-master-init.js + TaskSearchSort
     // initFilterTabs();
     updateTaskCounts();
