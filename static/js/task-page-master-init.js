@@ -797,6 +797,7 @@
         toggle.addEventListener('click', () => {
             isGrouped = !isGrouped;
             toggle.classList.toggle('active', isGrouped);
+            document.body.classList.toggle('meeting-grouping-active', isGrouped);
             
             if (isGrouped) {
                 groupTasksByMeeting();
@@ -927,6 +928,9 @@
     function ungroupTasks() {
         const container = document.getElementById('tasks-list-container');
         if (!container) return;
+        
+        // Remove body class
+        document.body.classList.remove('meeting-grouping-active');
         
         // Remove group headers
         container.querySelectorAll('.meeting-group-header').forEach(h => h.remove());

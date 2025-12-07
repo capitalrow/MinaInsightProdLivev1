@@ -1294,17 +1294,61 @@
 }
 
 /* 5. TARGETED: Hide specific group headers */
-.meeting-group-header,
 .task-group-header,
 .task-group-wrapper,
 .clusters-header {
   display: none !important;
 }
 
+/* Hide meeting group headers by default - shown when mode is active */
+.meeting-group-header {
+  display: none;
+}
+
 /* Show cluster view only when explicitly enabled */
 body.clustering-active .clusters-header,
 body.clustering-active .task-cluster {
   display: block !important;
+}
+
+/* Show meeting group headers when meeting grouping is active */
+body.meeting-grouping-active .meeting-group-header {
+  display: flex !important;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0 0.5rem 0;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(59, 130, 246, 0.08));
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+body.meeting-grouping-active .meeting-group-header.no-meeting {
+  background: linear-gradient(135deg, rgba(156, 163, 175, 0.08), rgba(107, 114, 128, 0.08));
+  border-color: rgba(156, 163, 175, 0.15);
+}
+
+body.meeting-grouping-active .meeting-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+body.meeting-grouping-active .meeting-group-title svg {
+  color: var(--accent-purple, #8b5cf6);
+  opacity: 0.8;
+}
+
+body.meeting-grouping-active .meeting-group-count {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: rgba(139, 92, 246, 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
 }
 
 /* 6. TARGETED: Hide overdue progress bars (specific classes only) */
