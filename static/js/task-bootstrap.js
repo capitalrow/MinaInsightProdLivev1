@@ -887,6 +887,32 @@ class TaskBootstrap {
             return;
         }
         
+        // CROWN⁴.13 FIX: Apply Active filter BEFORE rendering to prevent flicker
+        // This ensures completed/cancelled tasks never appear in Active tab during hydration
+        let filteredTasks = tasks;
+        const currentFilter = options.filterContext || 
+                             window.taskSearchSort?.currentFilter || 
+                             'active'; // Default to 'active' filter
+        
+        if (currentFilter === 'active' && tasks && tasks.length > 0) {
+            const beforeCount = tasks.length;
+            filteredTasks = tasks.filter(task => {
+                const status = task.status || 'todo';
+                return status !== 'completed' && status !== 'cancelled';
+            });
+            const afterCount = filteredTasks.length;
+            if (beforeCount !== afterCount) {
+                console.log(`🔧 [TaskBootstrap] Pre-filtered ${beforeCount - afterCount} archived tasks for Active view`);
+            }
+        } else if (currentFilter === 'archived' && tasks && tasks.length > 0) {
+            filteredTasks = tasks.filter(task => {
+                const status = task.status || 'todo';
+                return status === 'completed' || status === 'cancelled';
+            });
+        }
+        // For 'all' filter, keep all tasks
+        tasks = filteredTasks;
+        
         // CROWN⁴.9 FIX: Check existing content FIRST before any processing
         const existingCards = container.querySelectorAll('.task-card').length;
 
