@@ -225,6 +225,13 @@ class TaskSearchSort {
             const viewState = await this.cache.getViewState(this.viewStateKey);
             if (!viewState) return;
 
+            // CROWN⁴.16: Cancel pending broadcast timer to prevent echo loop
+            if (this._broadcastDebounceTimer) {
+                clearTimeout(this._broadcastDebounceTimer);
+                this._broadcastDebounceTimer = null;
+                console.log('[TaskSearchSort] Cancelled pending broadcast on hydration');
+            }
+            
             this.isApplyingRemoteState = true;
             if (viewState.search) {
                 this.searchQuery = viewState.search.toLowerCase();
@@ -282,6 +289,13 @@ class TaskSearchSort {
                 // CROWN⁴.12: Skip if user recently clicked a filter
                 if (this._isUserActionLocked()) return;
                 
+                // CROWN⁴.16: Cancel pending broadcast timer to prevent echo loop
+                if (this._broadcastDebounceTimer) {
+                    clearTimeout(this._broadcastDebounceTimer);
+                    this._broadcastDebounceTimer = null;
+                    console.log('[TaskSearchSort] Cancelled pending broadcast on remote state receive');
+                }
+                
                 this.isApplyingRemoteState = true;
                 try {
                     if (payload.filter) {
@@ -309,6 +323,13 @@ class TaskSearchSort {
                 // CROWN⁴.12: Skip if user recently clicked a filter
                 if (this._isUserActionLocked()) return;
                 
+                // CROWN⁴.16: Cancel pending broadcast timer to prevent echo loop
+                if (this._broadcastDebounceTimer) {
+                    clearTimeout(this._broadcastDebounceTimer);
+                    this._broadcastDebounceTimer = null;
+                    console.log('[TaskSearchSort] Cancelled pending broadcast on remote state receive');
+                }
+                
                 this.isApplyingRemoteState = true;
                 try {
                     this.searchQuery = payload.query.toLowerCase();
@@ -334,6 +355,13 @@ class TaskSearchSort {
                 }
                 // CROWN⁴.12: Skip if user recently clicked a filter
                 if (this._isUserActionLocked()) return;
+                
+                // CROWN⁴.16: Cancel pending broadcast timer to prevent echo loop
+                if (this._broadcastDebounceTimer) {
+                    clearTimeout(this._broadcastDebounceTimer);
+                    this._broadcastDebounceTimer = null;
+                    console.log('[TaskSearchSort] Cancelled pending broadcast on remote state receive');
+                }
                 
                 this.isApplyingRemoteState = true;
                 try {
