@@ -13,6 +13,13 @@
 .filter-tab{padding:0.5rem 1rem;border-radius:8px;border:none;background:var(--bg-secondary,#f5f5f7);cursor:pointer;transition:all 0.15s}
 .filter-tab.active{background:var(--primary,#6366f1);color:white}
 .tasks-list-container{min-height:200px}
+/* CROWN⁴.13: Hide completed/cancelled tasks by default for flicker-free SSR with Active filter */
+/* The "Active" tab shows todo, in_progress, pending, blocked. "Archived" = completed, cancelled */
+/* JS can override by adding/removing .is-hidden class - doesn't force display value */
+.task-card[data-status="completed"]:not(.is-visible),.task-card[data-status="cancelled"]:not(.is-visible){display:none}
+/* CROWN⁴.13: Class-based visibility control - hidden class hides, visible class overrides default hiding */
+.task-card.is-hidden{display:none!important}
+.task-card.is-visible{}
 .task-card{display:flex;align-items:flex-start;padding:1rem;background:var(--card-bg,#fff);border-radius:12px;margin-bottom:0.75rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);transition:transform 0.15s,box-shadow 0.15s}
 .task-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
 .task-checkbox{width:20px;height:20px;border-radius:50%;border:2px solid var(--border,#e0e0e0);margin-right:1rem;cursor:pointer;flex-shrink:0}
@@ -228,8 +235,9 @@
     <div id="meeting-heatmap-container"></div>
 
     <!-- Task List Container (CROWN⁴.5 Required Structure) -->
-    <!-- CROWN⁴.6: Hidden initially, skeleton shows first, then this replaces it -->
-    <div id="tasks-list-container" class="tasks-list-container" style="display: none;">
+    <!-- CROWN⁴.7 PERFORMANCE FIX: Show SSR content immediately for <200ms first paint -->
+    <!-- If tasks exist, display:flex immediately (no JS needed). Otherwise hidden until cache loads -->
+    <div id="tasks-list-container" class="tasks-list-container" style="{% if tasks and tasks|length > 0 %}display: flex;{% else %}display: none;{% endif %}">
         {% if tasks and tasks|length > 0 %}
             {% for task in tasks %}
             {{ task_card(task) }}
@@ -290,8 +298,8 @@
     </div>
 
     <!-- Loading State (CROWN⁴.5 Skeleton Loaders) -->
-    <!-- CROWN⁴.6: Visible by default to prevent spinner→blank→skeleton flash -->
-    <div id="tasks-loading-state" class="tasks-loading-state">
+    <!-- CROWN⁴.7 PERFORMANCE FIX: Hide skeleton when SSR content exists for instant first paint -->
+    <div id="tasks-loading-state" class="tasks-loading-state" {% if tasks and tasks|length > 0 %}style="display: none;"{% endif %}>
         <div class="task-skeleton">
             <div class="skeleton-checkbox"></div>
             <div class="skeleton-content">
@@ -806,7 +814,8 @@ window.__FIRST_PAINT_START = performance.now();
 <script defer src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/prefetch-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-prefetch-adapter.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-bootstrap.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-render-scheduler.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-bootstrap.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-merge-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}?v=10" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-inline-editing.js') }}" nonce="{{ g.csp_nonce }}"></script>

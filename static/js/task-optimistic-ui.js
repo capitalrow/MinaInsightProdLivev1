@@ -553,7 +553,15 @@ class OptimisticUI {
                     const status = (t.status || '').toLowerCase();
                     return status !== 'completed' && status !== 'cancelled';
                 });
-                await window.taskBootstrap.renderTasks(activeTasks, { fromCache: true });
+                const ctx = window.taskBootstrap._getCurrentViewContext?.() || { filter: 'active', search: '', sort: { field: 'created_at', direction: 'desc' } };
+                await window.taskBootstrap.renderTasks(activeTasks, { 
+                    fromCache: true, 
+                    source: 'optimistic',
+                    isUserAction: true,
+                    filterContext: ctx.filter,
+                    searchQuery: ctx.search,
+                    sortConfig: ctx.sort
+                });
             }
         }
 
@@ -1872,10 +1880,16 @@ class OptimisticUI {
 // Export class for orchestrator
 window.OptimisticUI = OptimisticUI;
 
-// Auto-instantiate if taskCache is ready
-if (window.taskCache && window.taskCache.ready) {
-    window.optimisticUI = new OptimisticUI();
-    console.log('⚡ CROWN⁴.5 OptimisticUI loaded (auto-instantiated)');
+// CROWN⁴.10 SINGLETON GUARD: Prevent double instantiation
+if (!window.__minaOptimisticUIInstantiated) {
+    // Auto-instantiate if taskCache is ready
+    if (window.taskCache && window.taskCache.ready) {
+        window.__minaOptimisticUIInstantiated = true;
+        window.optimisticUI = new OptimisticUI();
+        console.log('⚡ CROWN⁴.5 OptimisticUI loaded (auto-instantiated, singleton)');
+    } else {
+        console.log('⚡ CROWN⁴.5 OptimisticUI class loaded (orchestrator will instantiate)');
+    }
 } else {
-    console.log('⚡ CROWN⁴.5 OptimisticUI class loaded (orchestrator will instantiate)');
+    console.warn('⚠️ [OptimisticUI] BLOCKED duplicate instantiation attempt');
 }

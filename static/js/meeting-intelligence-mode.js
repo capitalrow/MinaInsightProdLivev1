@@ -88,7 +88,15 @@ class MeetingIntelligenceMode {
                     console.log(`[MeetingIntelligenceMode] Found ${cachedTasks.length} tasks in cache, re-rendering...`);
                     // Trigger a re-render from cache
                     if (window.taskBootstrap) {
-                        await window.taskBootstrap.renderTasks(cachedTasks, { fromCache: true });
+                        const ctx = window.taskBootstrap._getCurrentViewContext?.() || { filter: 'active', search: '', sort: { field: 'created_at', direction: 'desc' } };
+                        await window.taskBootstrap.renderTasks(cachedTasks, { 
+                            fromCache: true, 
+                            source: 'cache',
+                            isUserAction: false, // Cache restore, not direct user intent
+                            filterContext: ctx.filter,
+                            searchQuery: ctx.search,
+                            sortConfig: ctx.sort
+                        });
                         // Re-query for task cards after render
                         taskCards = Array.from(container.querySelectorAll('.task-card'));
                     }

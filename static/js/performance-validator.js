@@ -315,6 +315,20 @@ class PerformanceValidator {
             if (this.metrics[metricName].length > 100) {
                 this.metrics[metricName].shift();
             }
+            
+            // CROWN⁴.13: Immediate FCP budget validation with noisy warning
+            if (metricName === 'firstPaint') {
+                const target = this.targets.firstPaint;
+                if (value > target) {
+                    console.warn(`⚠️ [CROWN⁴.13 BUDGET VIOLATION] First Paint: ${value.toFixed(0)}ms exceeds target of ${target}ms`);
+                    // Emit event for monitoring systems (Sentry, etc.)
+                    window.dispatchEvent(new CustomEvent('performance:budget_exceeded', {
+                        detail: { metric: 'firstPaint', value, target, severity: value > target * 2 ? 'critical' : 'warning' }
+                    }));
+                } else {
+                    console.log(`✅ [CROWN⁴.13] First Paint: ${value.toFixed(0)}ms (within ${target}ms budget)`);
+                }
+            }
         }
     }
 

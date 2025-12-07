@@ -56,14 +56,28 @@ class WebSocketManager {
      * @param {Array<string>} namespaces - Namespaces to connect (default: ['dashboard'])
      */
     init(workspaceId, namespaces = ['dashboard']) {
+        // CROWN⁴.10: Track which namespaces have been initialized to prevent duplicates
+        if (!this._initializedNamespaces) {
+            this._initializedNamespaces = new Set();
+        }
+        
         this.workspaceId = workspaceId;
         
+        // Only connect namespaces not already initialized
         namespaces.forEach(namespace => {
+            if (this._initializedNamespaces.has(namespace)) {
+                console.log(`[WebSocketManager] Namespace /${namespace} already initialized, skipping`);
+                return;
+            }
+            this._initializedNamespaces.add(namespace);
             this.connect(namespace);
         });
         
-        // Set up heartbeat
-        this.startHeartbeat();
+        // Set up heartbeat (only once)
+        if (!this._heartbeatStarted) {
+            this._heartbeatStarted = true;
+            this.startHeartbeat();
+        }
         
         console.log(`🔌 WebSocket Manager initialized for workspace ${workspaceId}`);
     }
@@ -912,11 +926,19 @@ class WebSocketManager {
     }
 }
 
-// Create global singleton instance
-// Telemetry will be injected by dashboard.js if available
-window.wsManager = new WebSocketManager(window.crownTelemetry || null);
+// CROWN⁴.10 SINGLETON GUARD: Prevent duplicate WebSocketManager instantiation
+if (!window.__wsManagerInstantiated) {
+    window.__wsManagerInstantiated = true;
+    
+    // Create global singleton instance
+    // Telemetry will be injected by dashboard.js if available
+    window.wsManager = new WebSocketManager(window.crownTelemetry || null);
+    console.log('🔌 WebSocketManager instantiated (singleton)');
 
-// Auto-cleanup on page unload
-window.addEventListener('beforeunload', () => {
-    window.wsManager.disconnectAll();
-});
+    // Auto-cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        window.wsManager.disconnectAll();
+    });
+} else {
+    console.warn('⚠️ [WebSocketManager] BLOCKED duplicate instantiation');
+}

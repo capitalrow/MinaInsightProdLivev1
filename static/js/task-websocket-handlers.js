@@ -731,7 +731,14 @@ class TaskWebSocketHandlers {
             if ((!tasks || tasks.length === 0) && serverRenderedCards > 0) {
                 console.log(`[WebSocketHandlers] Skipping filter render - cache empty but ${serverRenderedCards} server cards exist`);
             } else {
-                await window.taskBootstrap.renderTasks(tasks);
+                // CROWN⁴.12: Pass WebSocket metadata - lowest priority
+                const sortConfig = window.taskBootstrap._getCurrentViewContext?.()?.sort || { field: 'created_at', direction: 'desc' };
+                await window.taskBootstrap.renderTasks(tasks, {
+                    source: 'websocket',
+                    filterContext: data.filter?.filter || data.filter?.status || 'active',
+                    searchQuery: data.filter?.search || '',
+                    sortConfig: sortConfig
+                });
             }
         }
         
@@ -760,7 +767,15 @@ class TaskWebSocketHandlers {
             await window.taskCache.saveTasks(rehydratedTasks);
             
             if (window.taskBootstrap) {
-                await window.taskBootstrap.renderTasks(rehydratedTasks);
+                // CROWN⁴.12: Pass WebSocket metadata - lowest priority with full context
+                const ctx = window.taskBootstrap._getCurrentViewContext?.() || { filter: 'active', search: '', sort: { field: 'created_at', direction: 'desc' } };
+                await window.taskBootstrap.renderTasks(rehydratedTasks, {
+                    source: 'websocket',
+                    fromCache: false,
+                    filterContext: ctx.filter,
+                    searchQuery: ctx.search,
+                    sortConfig: ctx.sort
+                });
             }
         }
     }

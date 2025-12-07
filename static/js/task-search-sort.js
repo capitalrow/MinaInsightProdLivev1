@@ -18,6 +18,11 @@ class TaskSearchSort {
         this.broadcast = window.broadcastSync || null;
         this.viewStateKey = 'tasks_page';
         this.isApplyingRemoteState = false;
+        
+        // CROWN⁴.16: Remote state settling period to prevent echo loops
+        // When remote state is received, broadcasts are suppressed for this duration
+        this._remoteStateReceivedAt = 0;
+        this._remoteStateSettlingPeriod = 500; // 500ms settling period after receiving remote state
 
         this.searchQuery = '';
         this.currentSort = 'default';
@@ -31,11 +36,21 @@ class TaskSearchSort {
         // CROWN⁴.9: Track hydration state for deferred operations
         this._hydrationReady = false;
         this._deferredFilterApply = false;
+        
+        // CROWN⁴.12: User action lock prevents background restores from overwriting user clicks
+        this._userActionTimestamp = 0;
+        this._userActionLockDuration = 3000; // 3 seconds lock after user clicks
+        
+        // CROWN⁴.13: Skip initial load hydration to prevent flicker
+        // Always start with 'active' filter, only hydrate on visibility changes
+        this._isInitialLoad = true;
 
         this.init();
-        this.hydrateFromViewState();
+        // CROWN⁴.13: Don't hydrate on initial load - use default 'active' filter
+        // This prevents persisted 'archived' state from overwriting the default
+        // Hydration only happens on visibility change (tab switch back)
         this.registerCrossTabSync();
-        console.log('[TaskSearchSort] Initialized with default filter: active');
+        console.log('[TaskSearchSort] Initialized with default filter: active (skipping initial hydration)');
     }
     
     /**
@@ -46,6 +61,56 @@ class TaskSearchSort {
         return this._hydrationReady || 
                window.taskHydrationReady || 
                (window.taskBootstrap?.isHydrationReady?.() ?? false);
+    }
+    
+    /**
+     * CROWN⁴.12: Check if user action lock is active
+     * Prevents background state restores from overwriting recent user clicks
+     * @returns {boolean}
+     */
+    _isUserActionLocked() {
+        const elapsed = Date.now() - this._userActionTimestamp;
+        const locked = elapsed < this._userActionLockDuration;
+        if (locked) {
+            console.log(`[TaskSearchSort] User action lock active (${elapsed}ms ago) - blocking background restore`);
+        }
+        return locked;
+    }
+    
+    /**
+     * CROWN⁴.12: Set user action lock when user clicks filter/sort
+     */
+    _setUserActionLock() {
+        this._userActionTimestamp = Date.now();
+        console.log('[TaskSearchSort] User action lock set');
+    }
+    
+    /**
+     * CROWN⁴.16: Check if in remote state settling period
+     * Prevents echo loops by suppressing broadcasts after receiving remote state
+     * @returns {boolean}
+     */
+    _isInRemoteStateSettling() {
+        const now = Date.now();
+        const elapsed = now - this._remoteStateReceivedAt;
+        const isSettling = elapsed < this._remoteStateSettlingPeriod;
+        if (this._remoteStateReceivedAt > 0) {
+            console.log(`[TaskSearchSort] _isInRemoteStateSettling: now=${now}, receivedAt=${this._remoteStateReceivedAt}, elapsed=${elapsed}ms, settling=${isSettling}`);
+        }
+        return isSettling;
+    }
+    
+    /**
+     * CROWN⁴.16: Mark that remote state was just received
+     * This starts the settling period to prevent echo broadcasts
+     */
+    _markRemoteStateReceived() {
+        this._remoteStateReceivedAt = Date.now();
+        // Also cancel any pending broadcast timer
+        if (this._broadcastDebounceTimer) {
+            clearTimeout(this._broadcastDebounceTimer);
+            this._broadcastDebounceTimer = null;
+        }
     }
 
     init() {
@@ -101,6 +166,10 @@ class TaskSearchSort {
         document.addEventListener('tasks:hydrated', () => {
             console.log('[TaskSearchSort] Hydration complete - enabling filter operations');
             this._hydrationReady = true;
+            
+            // CROWN⁴.13 FIX: Clear initial load flag after bootstrap completes
+            // This allows IndexedDB hydration on subsequent visibility changes
+            this._isInitialLoad = false;
             
             // Apply any deferred filter
             if (this._deferredFilterApply) {
@@ -166,14 +235,32 @@ class TaskSearchSort {
 
     /**
      * Load persisted view state from IndexedDB and reapply locally
+     * CROWN⁴.12: Respects user action lock to prevent overwriting user clicks
+     * CROWN⁴.13: Skips initial load to prevent flicker
      */
     async hydrateFromViewState() {
         if (!this.cache?.getViewState) return;
+        
+        // CROWN⁴.13: Skip hydration on initial page load
+        // Always use default 'active' filter on fresh load
+        if (this._isInitialLoad) {
+            console.log('[TaskSearchSort] Skipping hydration on initial load - using default filter');
+            return;
+        }
+        
+        // CROWN⁴.12: Skip hydration if user recently clicked a filter tab
+        if (this._isUserActionLocked()) {
+            console.log('[TaskSearchSort] Skipping hydration - user action lock active');
+            return;
+        }
 
         try {
             const viewState = await this.cache.getViewState(this.viewStateKey);
             if (!viewState) return;
 
+            // CROWN⁴.16: Mark remote state received to start settling period
+            this._markRemoteStateReceived();
+            
             this.isApplyingRemoteState = true;
             if (viewState.search) {
                 this.searchQuery = viewState.search.toLowerCase();
@@ -200,55 +287,126 @@ class TaskSearchSort {
     }
 
     /**
+     * CROWN⁴.14: Check if in settling period (1.5s after hydration)
+     * @private
+     */
+    _isInSettlingPeriod() {
+        if (!this._hydrationReady) return true; // Before hydration = always settling
+        const settlingMs = 1500; // 1.5 second settling period
+        const elapsed = Date.now() - (window.taskBootstrap?._hydrationCompleteTime || 0);
+        return elapsed < settlingMs;
+    }
+    
+    /**
      * Register BroadcastChannel + idle visibility sync
+     * CROWN⁴.14: Added initial load and settling period guards to prevent echo loops
      */
     registerCrossTabSync() {
         if (this.broadcast?.on) {
             this.broadcast.on(this.broadcast.EVENTS.FILTER_APPLY, async (payload) => {
                 if (!payload) return;
-                this.isApplyingRemoteState = true;
-                if (payload.filter) {
-                    this.currentFilter = payload.filter;
-                    this.setActiveFilterTab(payload.filter);
+                // CROWN⁴.14: Block during initial load
+                if (this._isInitialLoad) {
+                    console.log('[TaskSearchSort] FILTER_APPLY blocked - initial load');
+                    return;
                 }
-                await this.applyFiltersAndSort();
-                this.isApplyingRemoteState = false;
+                // CROWN⁴.14: Block during settling period
+                if (this._isInSettlingPeriod()) {
+                    console.log('[TaskSearchSort] FILTER_APPLY blocked - settling period');
+                    return;
+                }
+                // CROWN⁴.12: Skip if user recently clicked a filter
+                if (this._isUserActionLocked()) return;
+                
+                // CROWN⁴.16: Mark remote state received to start settling period
+                this._markRemoteStateReceived();
+                
+                this.isApplyingRemoteState = true;
+                try {
+                    if (payload.filter) {
+                        this.currentFilter = payload.filter;
+                        this.setActiveFilterTab(payload.filter);
+                    }
+                    await this.applyFiltersAndSort();
+                } finally {
+                    this.isApplyingRemoteState = false;
+                }
             });
 
             this.broadcast.on(this.broadcast.EVENTS.SEARCH_QUERY, async (payload) => {
                 if (!payload?.query) return;
+                // CROWN⁴.14: Block during initial load
+                if (this._isInitialLoad) {
+                    console.log('[TaskSearchSort] SEARCH_QUERY blocked - initial load');
+                    return;
+                }
+                // CROWN⁴.14: Block during settling period
+                if (this._isInSettlingPeriod()) {
+                    console.log('[TaskSearchSort] SEARCH_QUERY blocked - settling period');
+                    return;
+                }
+                // CROWN⁴.12: Skip if user recently clicked a filter
+                if (this._isUserActionLocked()) return;
+                
+                // CROWN⁴.16: Mark remote state received to start settling period
+                this._markRemoteStateReceived();
+                
                 this.isApplyingRemoteState = true;
-                this.searchQuery = payload.query.toLowerCase();
-                if (this.searchInput) this.searchInput.value = payload.query;
-                this.updateClearButton();
-                await this.applyFiltersAndSort();
-                this.isApplyingRemoteState = false;
+                try {
+                    this.searchQuery = payload.query.toLowerCase();
+                    if (this.searchInput) this.searchInput.value = payload.query;
+                    this.updateClearButton();
+                    await this.applyFiltersAndSort();
+                } finally {
+                    this.isApplyingRemoteState = false;
+                }
             });
 
             this.broadcast.on(this.broadcast.EVENTS.UI_STATE_SYNC, async (payload) => {
                 if (!payload) return;
+                // CROWN⁴.14: Block during initial load
+                if (this._isInitialLoad) {
+                    console.log('[TaskSearchSort] UI_STATE_SYNC blocked - initial load');
+                    return;
+                }
+                // CROWN⁴.14: Block during settling period
+                if (this._isInSettlingPeriod()) {
+                    console.log('[TaskSearchSort] UI_STATE_SYNC blocked - settling period');
+                    return;
+                }
+                // CROWN⁴.12: Skip if user recently clicked a filter
+                if (this._isUserActionLocked()) return;
+                
+                // CROWN⁴.16: Mark remote state received to start settling period
+                this._markRemoteStateReceived();
+                
                 this.isApplyingRemoteState = true;
-                if (payload.search !== undefined) {
-                    this.searchQuery = payload.search?.toLowerCase() || '';
-                    if (this.searchInput) this.searchInput.value = payload.search || '';
-                    this.updateClearButton();
+                try {
+                    if (payload.search !== undefined) {
+                        this.searchQuery = payload.search?.toLowerCase() || '';
+                        if (this.searchInput) this.searchInput.value = payload.search || '';
+                        this.updateClearButton();
+                    }
+                    if (payload.filter) {
+                        this.currentFilter = payload.filter;
+                        this.setActiveFilterTab(payload.filter);
+                    }
+                    if (payload.sort) {
+                        this.currentSort = this.mapSortConfigToKey(payload.sort);
+                        if (this.sortSelect) this.sortSelect.value = this.currentSort;
+                    }
+                    await this.applyFiltersAndSort();
+                } finally {
+                    this.isApplyingRemoteState = false;
                 }
-                if (payload.filter) {
-                    this.currentFilter = payload.filter;
-                    this.setActiveFilterTab(payload.filter);
-                }
-                if (payload.sort) {
-                    this.currentSort = this.mapSortConfigToKey(payload.sort);
-                    if (this.sortSelect) this.sortSelect.value = this.currentSort;
-                }
-                await this.applyFiltersAndSort();
-                this.isApplyingRemoteState = false;
             });
         }
 
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
                 // Idle callback keeps main thread free when returning to tab
+                // CROWN⁴.13: _isInitialLoad is cleared in tasks:hydrated, so hydration
+                // only happens after bootstrap completes (not on first load)
                 const resync = () => this.hydrateFromViewState();
                 if ('requestIdleCallback' in window) {
                     window.requestIdleCallback(resync, { timeout: 1000 });
@@ -276,6 +434,20 @@ class TaskSearchSort {
             return;
         }
         
+        // CROWN⁴.12: Build sort config for scheduler context
+        const sortConfig = this.mapSortKeyToConfig(this.currentSort) || { field: 'created_at', direction: 'desc' };
+        
+        // CROWN⁴.12: Dispatch context change BEFORE rendering
+        // This updates the scheduler's context so it can reject stale payloads
+        document.dispatchEvent(new CustomEvent('task:view-context-changed', {
+            detail: {
+                filter: this.currentFilter,
+                search: this.searchQuery,
+                sort: sortConfig
+            }
+        }));
+        console.log(`📋 [TaskSearchSort] Context changed: filter=${this.currentFilter}, search="${this.searchQuery}"`);
+        
         // Prefer ledger-backed cache rendering when available
         if (this.cache?.getAllTasks && window.taskBootstrap?.renderTasks) {
             const allTasks = await this.cache.getAllTasks();
@@ -295,7 +467,15 @@ class TaskSearchSort {
             const filteredTasks = this.filterTasksData(nonDeleted);
             const sortedTasks = this.sortTaskData(filteredTasks, this.currentSort);
 
-            await window.taskBootstrap.renderTasks(sortedTasks, { fromCache: true });
+            // CROWN⁴.12: Pass full context metadata for scheduler routing
+            await window.taskBootstrap.renderTasks(sortedTasks, { 
+                fromCache: true, 
+                isFilterChange: true,
+                source: 'filter_change',
+                filterContext: this.currentFilter,
+                searchQuery: this.searchQuery,
+                sortConfig: sortConfig
+            });
             this.updateCounts(sortedTasks.length, nonDeleted.length);
             await this.persistViewState();
             return;
@@ -347,12 +527,15 @@ class TaskSearchSort {
         }
 
         // 4. Update DOM visibility
+        // CROWN⁴.13: Use class-based approach to avoid overriding layout-specific display values
         tasks.forEach(task => {
             if (visibleTasks.includes(task)) {
-                task.style.display = '';
+                task.classList.add('is-visible');
+                task.classList.remove('is-hidden');
                 task.style.order = visibleTasks.indexOf(task);
             } else {
-                task.style.display = 'none';
+                task.classList.add('is-hidden');
+                task.classList.remove('is-visible');
             }
         });
 
@@ -456,15 +639,52 @@ class TaskSearchSort {
     }
 
     broadcastState(viewState) {
-        if (this.broadcast?.broadcast) {
-            this.broadcast.broadcast(this.broadcast.EVENTS.FILTER_APPLY, viewState);
-            this.broadcast.broadcast(this.broadcast.EVENTS.SEARCH_QUERY, { query: this.searchQuery });
-            this.broadcast.broadcast(this.broadcast.EVENTS.UI_STATE_SYNC, viewState);
+        console.log(`[TaskSearchSort] broadcastState() called. isApplyingRemoteState=${this.isApplyingRemoteState}, _remoteStateReceivedAt=${this._remoteStateReceivedAt}`);
+        
+        // CROWN⁴.14: Debounce broadcasts to prevent rapid-fire events during initialization
+        if (this._broadcastDebounceTimer) {
+            clearTimeout(this._broadcastDebounceTimer);
         }
-
-        if (window.multiTabSync?.broadcastFilterChanged) {
-            window.multiTabSync.broadcastFilterChanged(viewState);
+        
+        // CROWN⁴.14: Skip broadcasts during initial load or hydration settling period
+        if (this._isInitialLoad || this._isInSettlingPeriod()) {
+            console.log('[TaskSearchSort] Broadcast skipped - initial load or hydration settling');
+            return;
         }
+        
+        // CROWN⁴.16: Skip broadcasts during remote state settling period (prevents echo loops)
+        if (this._isInRemoteStateSettling()) {
+            console.log('[TaskSearchSort] Broadcast skipped - remote state settling period');
+            return;
+        }
+        
+        // CROWN⁴.14: Skip if applying remote state (prevents echo loop)
+        if (this.isApplyingRemoteState) {
+            console.log('[TaskSearchSort] Broadcast skipped - applying remote state');
+            return;
+        }
+        
+        console.log('[TaskSearchSort] Scheduling 300ms broadcast debounce timer');
+        this._broadcastDebounceTimer = setTimeout(() => {
+            console.log(`[TaskSearchSort] Debounce timer fired. Checking guards again...`);
+            // CROWN⁴.16: Double-check settling period inside debounce (in case state changed)
+            if (this._isInRemoteStateSettling()) {
+                console.log('[TaskSearchSort] Broadcast cancelled inside debounce - remote state settling');
+                return;
+            }
+            if (this.isApplyingRemoteState) {
+                console.log('[TaskSearchSort] Broadcast cancelled inside debounce - applying remote state');
+                return;
+            }
+            
+            console.log('[TaskSearchSort] Sending broadcasts now');
+            // CROWN⁴.15: Only use BroadcastSync (not MultiTabSync) to avoid duplicate broadcasts
+            if (this.broadcast?.broadcast) {
+                this.broadcast.broadcast(this.broadcast.EVENTS.FILTER_APPLY, viewState);
+                this.broadcast.broadcast(this.broadcast.EVENTS.SEARCH_QUERY, { query: this.searchQuery });
+                this.broadcast.broadcast(this.broadcast.EVENTS.UI_STATE_SYNC, viewState);
+            }
+        }, 300); // 300ms debounce
     }
 
     setActiveFilterTab(filter) {

@@ -1,0 +1,38 @@
+00:00
+I'm just going to describe what I'm seeing. At the moment, on the task page. While interacting, With the test page currently.
+
+02:41
+So, When I land on the task page. I can see the tasks, I immediately land on the active page. The task refreshes a bit and the tasks. Refresh as well. So flickering for a few seconds then settling down. And when I try and click, Ai proposals. I can see it generating.
+
+03:12
+Kind of stuck. And if I click new task that opens up perfectly fine, And if I typed in task, let's say, Check on. Engineering progress.
+
+03:33
+And I put that task to And I set the task due for. Next week, the 10th. And I create a task. I can see the task is created perfectly fine. I can now see the tuska disappeared again. So, if I refresh The screen. On the task page.
+
+04:15
+I can see it's the same behave with the flagrant, Behaviour for a few seconds in the tasks set up. But the task that I created. Circle, engineering progress is not showing up anymore. So if I, then try and interact with any of the current tasks, On the active. Before I do, if I click on the old t, I can see all the tasks, and if I click on the active, I can see the active tasks, if I click on the archive, It's not working.
+
+04:55
+And I don't know if I'm the count that I'm seeing the count that I'm seeing on the Board tab is not matching. What is showing on the task list? The tab switching is not stable, cuz when I click on a particular, It's not staying on there on its own, and it's flicking to another t.
+
+05:18
+Archive tab. I'm now able to click on the archive tab, but then, to flip back to the active, Then if Try and interact with the task menu. And let's talk about task is complete. It seems to work. So if I refresh the page just to check and confirm that it's definitely so good, the task is complete.
+
+05:58
+Yeah, that seems to work.
+
+06:04
+But then if I try and change priority unit task,
+
+06:19
+The page is not the test page is essentially not stable because what I'm trying to interact with the task on an active page on the active tab is flipping to Through different types like old taboo, archive tab. And it's not stable. And if I try and change priority, I can't see the change being take taking effect on the task.
+
+06:38
+Again, it doesn't help with the fact that there are the top switching is happening on its own and the task is fully not stable at all, basically, See, there's some features that are working some features that are not probably working at the moment. So let's just try and investigate this thoroughly.
+
+06:54
+Do we need to run any automated test to identify the issues? What is the best approach method to? Identify all issues on a task page. And let's create a plan. To critically resolve this. Be it. Whether we have to rewrite, the whole task page from scratch as the best approach.
+
+07:15
+Or if we have to restructure our current Set up or if we have to add additional logic. What is the best approach here?

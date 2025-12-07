@@ -1477,8 +1477,14 @@
   }
 }
 
-.task-item-enhanced {
+/* CROWN⁴.10: Only apply animation to NEW items, not during re-renders
+   Animation disabled when parent has tasks-hydrated class */
+.task-item-enhanced:not(.tasks-hydrated .task-item-enhanced) {
   animation: task-appear 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tasks-hydrated .task-item-enhanced {
+  animation: none;
 }
 
 /* Completed task styling */
