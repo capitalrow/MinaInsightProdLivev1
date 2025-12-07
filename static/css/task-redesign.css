@@ -5380,3 +5380,274 @@ button:not(.btn-loading) svg {
 /* ========================================
  * END OF PHASE 9: ERROR STATES & RETRY
  * ======================================== */
+
+/* ========================================
+ * TRUE 2-ROW COMMAND BAR LAYOUT
+ * Fixes the 3+ row issue on mobile
+ * ======================================== */
+
+/* ROW 1: Title + Filter Tabs */
+.command-row-1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--task-space-3);
+  padding: var(--task-space-2) 0;
+  margin-bottom: var(--task-space-2);
+}
+
+.tasks-title-compact {
+  font-size: var(--task-font-lg);
+  font-weight: var(--task-weight-bold);
+  color: var(--task-text-primary);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* ROW 2: All Controls */
+.command-row-2 {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-2) var(--task-space-3);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-lg);
+  margin-bottom: var(--task-space-4);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.command-row-2::-webkit-scrollbar {
+  display: none;
+}
+
+/* Compact search */
+.command-row-2 .search-wrapper-compact {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.command-row-2 .search-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.command-row-2 .search-toggle-btn:hover {
+  background: var(--task-bg-card-hover);
+  color: var(--task-text-primary);
+}
+
+.command-row-2 .search-input-container {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition: all var(--task-transition-base);
+}
+
+.command-row-2 .search-input-container.expanded {
+  max-width: 200px;
+  opacity: 1;
+  margin-left: var(--task-space-2);
+}
+
+.command-row-2 .search-input {
+  width: 180px;
+  padding: var(--task-space-2);
+  background: var(--task-bg-input);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-primary);
+  font-size: var(--task-font-sm);
+}
+
+/* Sort dropdown */
+.command-row-2 .sort-select-compact {
+  padding: var(--task-space-2) var(--task-space-3);
+  background: var(--task-bg-input);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-secondary);
+  font-size: var(--task-font-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Meeting toggle with calendar icon */
+.meeting-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  flex-shrink: 0;
+}
+
+.meeting-toggle-btn:hover {
+  background: var(--task-bg-card-hover);
+  color: var(--task-text-primary);
+}
+
+.meeting-toggle-btn.active {
+  background: var(--task-accent-primary);
+  border-color: var(--task-accent-primary);
+  color: white;
+}
+
+/* View toggle group */
+.command-row-2 .view-toggle-group {
+  display: flex;
+  gap: 1px;
+  background: var(--task-bg-input);
+  border-radius: var(--task-radius-sm);
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.command-row-2 .view-toggle-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.command-row-2 .view-toggle-btn:hover {
+  color: var(--task-text-primary);
+}
+
+.command-row-2 .view-toggle-btn.active {
+  background: var(--task-accent-primary);
+  color: white;
+}
+
+/* AI button compact */
+.btn-ai-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 1px solid var(--task-border-subtle) !important;
+  border-radius: var(--task-radius-sm) !important;
+  color: var(--task-text-tertiary) !important;
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  flex-shrink: 0;
+}
+
+.btn-ai-compact:hover {
+  background: var(--task-bg-card-hover) !important;
+  color: var(--task-accent-primary) !important;
+}
+
+/* New button compact */
+.btn-new-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--task-space-1);
+  padding: var(--task-space-2) var(--task-space-3) !important;
+  min-height: 36px;
+  font-size: var(--task-font-sm);
+  flex-shrink: 0;
+}
+
+.btn-new-compact .btn-text-desktop {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .btn-new-compact .btn-text-desktop {
+    display: inline;
+  }
+}
+
+/* Mobile optimizations for 2-row layout */
+@media (max-width: 640px) {
+  .command-row-1 {
+    flex-wrap: wrap;
+    gap: var(--task-space-2);
+  }
+  
+  .tasks-title-compact {
+    font-size: var(--task-font-base);
+  }
+  
+  .task-filters-inline {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .task-filters-inline .filter-tab {
+    padding: var(--task-space-1) var(--task-space-2);
+    font-size: 13px;
+  }
+  
+  .task-filters-inline .filter-counter {
+    font-size: 10px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+  }
+  
+  .command-row-2 {
+    padding: var(--task-space-2);
+    gap: var(--task-space-1);
+  }
+  
+  .command-row-2 .sort-select-compact {
+    padding: var(--task-space-1) var(--task-space-2);
+    font-size: 12px;
+    max-width: 80px;
+  }
+  
+  /* Hide view toggles and AI on mobile - use FAB for new task */
+  .command-row-2 .view-toggle-group,
+  .command-row-2 .btn-ai-compact {
+    display: none;
+  }
+  
+  .command-row-2 .btn-new-compact {
+    display: none;
+  }
+}
+
+/* Ensure old elements are hidden */
+.tasks-header-consolidated,
+.search-sort-toolbar-compact,
+.header-actions-compact {
+  display: none !important;
+}
+
+/* ========================================
+ * END OF 2-ROW COMMAND BAR
+ * ======================================== */

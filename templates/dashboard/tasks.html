@@ -68,18 +68,10 @@
 <div id="task-list-live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
 <div class="container tasks-container" role="main" aria-label="Tasks page">
-    <!-- PHASE 2: Consolidated Command Bar - Row 1: Header with inline filters -->
-    <div class="tasks-header-consolidated" role="banner">
-        <div class="header-left">
-            <h1 class="tasks-title">Action Items</h1>
-            <!-- CROWN⁴.6: Stress Indicator (inline) -->
-            <div id="stress-indicator" class="stress-indicator hidden">
-                <div class="stress-dot"></div>
-                <div class="stress-tooltip">High workload</div>
-            </div>
-        </div>
-        
-        <!-- Inline Filters (moved from separate row) -->
+    <!-- TRUE 2-ROW COMMAND BAR -->
+    <!-- ROW 1: Title + Filters -->
+    <div class="command-row-1" role="banner">
+        <h1 class="tasks-title-compact">Action Items</h1>
         <div class="task-filters-inline" role="tablist" aria-label="Task filters">
             <button class="filter-tab" data-filter="all" role="tab" aria-selected="false" aria-controls="tasks-list-container" id="filter-all-tab">
                 All
@@ -94,40 +86,85 @@
                 <span class="filter-counter filter-counter-archived" data-counter="archived" aria-label="{% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}{% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}{{ completed_count + cancelled_count }} archived tasks">{% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}{% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}{{ completed_count + cancelled_count }}</span>
             </button>
         </div>
-        
-        <div class="header-actions-compact">
-            <button class="btn btn-secondary btn-generate-proposals btn-icon-only" data-meeting-id="{{ meeting_id if meeting_id else '' }}" title="AI Proposals">
-                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+    </div>
+    
+    <!-- ROW 2: Search + Sort + View + Actions (all controls) -->
+    <div class="command-row-2">
+        <div class="search-wrapper-compact">
+            <button id="search-toggle-btn" class="search-toggle-btn" title="Search tasks (/)">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
-                <span class="btn-text">AI</span>
             </button>
-            <button id="new-task-btn" class="btn btn-primary">
-                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-                <span class="btn-text">New</span>
-            </button>
-            
-            <!-- View Toggle (compact) -->
-            <div class="view-toggle-group" role="group" aria-label="View options">
-                <button class="view-toggle-btn active" data-view="list" title="List view" aria-label="List view">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                    </svg>
-                </button>
-                <button class="view-toggle-btn" data-view="grid" title="Grid view" aria-label="Grid view">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
-                    </svg>
-                </button>
-                <button class="view-toggle-btn" data-view="bar" title="Compact view" aria-label="Compact view">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+            <div class="search-input-container collapsed">
+                <input type="text" 
+                       id="task-search-input" 
+                       class="search-input" 
+                       placeholder="Search tasks..."
+                       autocomplete="off"
+                       aria-label="Search tasks">
+                <button id="search-clear-btn" class="search-clear-btn hidden" aria-label="Clear search">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                 </button>
             </div>
         </div>
+        
+        <select id="task-sort-select" class="sort-select-compact" aria-label="Sort tasks">
+            <option value="default">Default</option>
+            <option value="priority">Priority ↓</option>
+            <option value="priority-reverse">Priority ↑</option>
+            <option value="due-date">Due Soon</option>
+            <option value="due-date-reverse">Due Later</option>
+            <option value="created">Newest</option>
+            <option value="created-reverse">Oldest</option>
+            <option value="title">A → Z</option>
+            <option value="title-reverse">Z → A</option>
+        </select>
+        
+        <button id="meeting-intelligence-toggle" class="meeting-toggle-btn" title="Group by meeting">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+        </button>
+        
+        <div class="view-toggle-group" role="group" aria-label="View options">
+            <button class="view-toggle-btn active" data-view="list" title="List view" aria-label="List view">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+            <button class="view-toggle-btn" data-view="grid" title="Grid view" aria-label="Grid view">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+                </svg>
+            </button>
+            <button class="view-toggle-btn" data-view="bar" title="Compact view" aria-label="Compact view">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                </svg>
+            </button>
+        </div>
+        
+        <button class="btn btn-secondary btn-ai-compact" data-meeting-id="{{ meeting_id if meeting_id else '' }}" title="AI Proposals">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+        </button>
+        
+        <button id="new-task-btn" class="btn btn-primary btn-new-compact">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            <span class="btn-text-desktop">New</span>
+        </button>
+    </div>
+    
+    <!-- CROWN⁴.6: Stress Indicator (hidden by default) -->
+    <div id="stress-indicator" class="stress-indicator hidden">
+        <div class="stress-dot"></div>
+        <div class="stress-tooltip">High workload</div>
     </div>
 
     <!-- Offline/Status Banner (CROWN⁴.9 Phase 9: Enhanced with retry) -->
@@ -178,66 +215,6 @@
                 Cancel
             </button>
         </div>
-    </div>
-
-    <!-- PHASE 2: Row 2 - Compact Search & Sort Toolbar -->
-    <div class="search-sort-toolbar-compact">
-        <div class="search-wrapper-compact">
-            <button id="search-toggle-btn" class="search-toggle-btn" title="Search tasks (/)">
-                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-            </button>
-            <div class="search-input-container collapsed">
-                <input type="text" 
-                       id="task-search-input" 
-                       class="search-input" 
-                       placeholder="Search tasks... (Esc to close)"
-                       autocomplete="off"
-                       aria-label="Search tasks">
-                <button id="search-clear-btn" class="search-clear-btn hidden" aria-label="Clear search">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-                <button id="semantic-search-toggle" class="semantic-search-toggle" title="AI Semantic Search">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-        
-        <div class="toolbar-controls">
-            <select id="task-sort-select" class="sort-select-compact" aria-label="Sort tasks">
-                <option value="default">Default</option>
-                <option value="priority">Priority ↓</option>
-                <option value="priority-reverse">Priority ↑</option>
-                <option value="due-date">Due Soon</option>
-                <option value="due-date-reverse">Due Later</option>
-                <option value="created">Newest</option>
-                <option value="created-reverse">Oldest</option>
-                <option value="title">A → Z</option>
-                <option value="title-reverse">Z → A</option>
-            </select>
-            
-            <button id="meeting-intelligence-toggle" class="meeting-intelligence-toggle-compact" title="Group by meeting">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-                </svg>
-            </button>
-        </div>
-        
-        <div class="toolbar-stats-inline">
-            <span id="visible-task-count">{{ tasks|length if tasks else 0 }}</span>/<span id="total-task-count">{{ tasks|length if tasks else 0 }}</span>
-        </div>
-    </div>
-    
-    <!-- Legacy search-sort-toolbar for JS compatibility (hidden) -->
-    <div class="search-sort-toolbar" style="display: none !important;">
-        <div class="search-wrapper"></div>
-        <div class="sort-wrapper"></div>
-        <div class="toolbar-stats"></div>
     </div>
 
     <!-- AI Proposals Section (CROWN⁴.5 Task 10) -->
