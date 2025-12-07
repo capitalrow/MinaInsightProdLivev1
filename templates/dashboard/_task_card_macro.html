@@ -1,5 +1,5 @@
 {# Task Card Macro - Reusable template for server-rendered task cards #}
-{# CROWN⁴.8: Progressive Disclosure - Essential info visible, details on hover/tap #}
+{# CROWN⁴.9: 3-Tier Progressive Disclosure - Scan → Glance → Detail #}
 
 {% macro task_card(task) %}
 {# Precompute context data for efficiency #}
@@ -8,6 +8,7 @@
 {% set start_ms = task.transcript_span.start_ms if task.transcript_span and task.transcript_span.start_ms is not none else 0 %}
 {% set has_provenance = task.extracted_by_ai and task.meeting %}
 {% set has_transcript = task.meeting_id and task.transcript_span and task.transcript_span.start_ms is not none %}
+{% set has_detail_content = has_provenance or has_transcript or (task.labels and task.labels|length > 0) or task.description %}
 
 <div class="task-card{% if task.status == 'completed' %} completed{% endif %}" 
      data-task-id="{{ task.id }}"
@@ -22,6 +23,7 @@
      data-transcript-span="{{ task.transcript_span|tojson|escape if task.transcript_span else '{}' }}"
      data-updated-at="{{ task.updated_at.isoformat() if task.updated_at else '' }}"
      data-is-pinned="{{ 'true' if task.is_pinned else 'false' }}"
+     data-has-detail="{{ 'true' if has_detail_content else 'false' }}"
      role="article"
      aria-label="Task: {{ task.title }}">
     
@@ -35,35 +37,43 @@
     </div>
     
     <div class="task-content">
-        {# PRIMARY ROW - Always visible: Title + Essential metadata #}
-        <div class="task-primary-row">
+        {# TIER 1: SCAN - Always visible: Checkbox + Title + Priority dot ONLY #}
+        <div class="task-primary-row task-tier-1">
             <h3 class="task-title" data-field="title">{{ task.title or 'Untitled Task' }}</h3>
             
             <div class="task-essential-meta">
-                {# Priority dot (subtle indicator) #}
+                {# Priority dot (subtle indicator) - ONLY thing in Tier 1 meta #}
                 <span class="priority-dot priority-{{ task.priority|default('medium')|lower }}" 
                       data-field="priority"
-                      title="Priority: {{ task.priority|default('Medium')|capitalize }}. Click to change."></span>
+                      title="Priority: {{ task.priority|default('Medium')|capitalize }}"></span>
                 
-                {# Due date - only show if set #}
-                {% if task.due_date %}
-                {% set today = now() if now is defined else none %}
-                {% set is_overdue = task.is_overdue if task.is_overdue is defined else false %}
-                {% set is_due_soon = task.is_due_soon if task.is_due_soon is defined else false %}
-                <span class="due-date-compact{% if is_overdue %} overdue{% elif is_due_soon %} due-soon{% endif %}" 
-                      data-field="due_date"
-                      title="Due {{ task.due_date.strftime('%B %d, %Y') }}">
-                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/>
+                {# Expand indicator for cards with detail content #}
+                {% if has_detail_content %}
+                <button class="task-expand-trigger" aria-label="Expand task details" title="Show details">
+                    <svg class="expand-icon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                     </svg>
-                    {{ task.due_date.strftime('%b %d') }}
-                </span>
+                </button>
                 {% endif %}
             </div>
         </div>
         
-        {# SECONDARY ROW - Revealed on hover/tap: Assignee, Labels, Provenance #}
-        <div class="task-secondary-row">
+        {# TIER 2: GLANCE - Revealed on hover: Due date + Assignee #}
+        <div class="task-secondary-row task-tier-2">
+            {# Due date - moved from Tier 1 to Tier 2 #}
+            {% if task.due_date %}
+            {% set is_overdue = task.is_overdue if task.is_overdue is defined else false %}
+            {% set is_due_soon = task.is_due_soon if task.is_due_soon is defined else false %}
+            <span class="due-date-compact{% if is_overdue %} overdue{% elif is_due_soon %} due-soon{% endif %}" 
+                  data-field="due_date"
+                  title="Due {{ task.due_date.strftime('%B %d, %Y') }}">
+                <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/>
+                </svg>
+                {{ task.due_date.strftime('%b %d') }}
+            </span>
+            {% endif %}
+            
             {# Assignee badge #}
             {% if task.assigned_to %}
             <span class="assignee-compact" data-field="assignee" title="Assigned to {{ task.assigned_to.display_name or task.assigned_to.username }}">
@@ -74,6 +84,19 @@
             </span>
             {% endif %}
             
+            {# Show "more" hint if there's detail content #}
+            {% if has_detail_content and not task.due_date and not task.assigned_to %}
+            <span class="tier2-hint">
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span>Details available</span>
+            </span>
+            {% endif %}
+        </div>
+        
+        {# TIER 3: DETAIL - Revealed on expand: Labels, Provenance, Notes #}
+        <div class="task-tertiary-row task-tier-3">
             {# Labels #}
             {% if task.labels and task.labels|length > 0 %}
             <div class="labels-compact" data-field="labels">
@@ -81,7 +104,7 @@
                 <span class="label-compact">{{ label }}</span>
                 {% endfor %}
                 {% if task.labels|length > 3 %}
-                <span class="label-compact">+{{ task.labels|length - 3 }}</span>
+                <span class="label-compact label-overflow">+{{ task.labels|length - 3 }}</span>
                 {% endif %}
             </div>
             {% endif %}
@@ -121,12 +144,19 @@
                 <span>Transcript</span>
             </button>
             {% endif %}
+            
+            {# Task Description/Notes (if available) #}
+            {% if task.description %}
+            <div class="task-description-preview">
+                <p class="description-text">{{ task.description|truncate(100, True) }}</p>
+            </div>
+            {% endif %}
         </div>
     </div>
     
     {# Actions area - Menu trigger always present but revealed on hover #}
     <div class="task-actions">
-        {# Priority badge (full version for editing) #}
+        {# Priority badge (full version for editing) - hidden by CSS #}
         <span class="priority-badge priority-{{ task.priority|default('medium')|lower }}" 
               data-field="priority"
               title="Click to change priority">
@@ -151,31 +181,32 @@
 {% endmacro %}
 
 {# 
-CROWN⁴.8 Progressive Disclosure Structure:
+CROWN⁴.9 3-Tier Progressive Disclosure Structure:
 
-PRIMARY ROW (Always visible):
-- Checkbox
-- Task title
-- Priority dot (subtle)
-- Due date (if set)
+TIER 1 - SCAN (Always visible):
+- Checkbox (48×48dp touch target)
+- Task title (16px, 2-line clamp)
+- Priority dot (8px, color-coded)
+- Expand indicator (if detail content exists)
 
-SECONDARY ROW (Revealed on hover/tap):
-- Assignee
-- Labels (max 3 + overflow)
-- Meeting provenance
-- Jump to transcript
+TIER 2 - GLANCE (Revealed on hover):
+- Due date (with overdue/due-soon states)
+- Assignee badge
+- "Details available" hint (if no date/assignee but has Tier 3 content)
 
-ACTION AREA:
-- Priority badge (for editing)
-- Three-dot menu (for other actions)
+TIER 3 - DETAIL (Revealed on expand click):
+- Labels (max 3 + overflow count)
+- Meeting provenance badge
+- Jump to transcript button
+- Task description/notes preview
 
-CSS classes work together:
-- .task-primary-row: Always visible
-- .task-secondary-row: Hidden, revealed by CSS on .task-card:hover or .task-card.expanded
-- Mobile: Tap toggles .expanded class via JS
+CSS classes:
+- .task-tier-1 / .task-primary-row: Always visible
+- .task-tier-2 / .task-secondary-row: Hidden, revealed on .task-card:hover
+- .task-tier-3 / .task-tertiary-row: Hidden, revealed on .task-card.expanded
+- Mobile: Tap card to toggle .expanded class
 
-Touch targets:
-- Checkbox wrapper: 48×48dp minimum
-- All buttons: 44px minimum height
-- Priority dot: Expandable on hover
+Interaction Model:
+- Desktop: Hover shows Tier 2, click expand button shows Tier 3
+- Mobile: First tap shows Tier 2+3, second tap collapses
 #}

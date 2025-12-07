@@ -54,7 +54,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-mobile-gestures.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-empty-states.css') }}?v=1" media="print" data-async-css>
 <!-- REDESIGN: Clean design system - must load last to override -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-redesign.css') }}?v=2">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-redesign.css') }}?v=4">
 <script nonce="{{ csp_nonce }}">
 (function(){var a=document.querySelectorAll('link[data-async-css]');a.forEach(function(l){l.onload=function(){l.media='all'};if(l.sheet)l.media='all'})})();
 </script>
@@ -62,33 +62,48 @@
 
 {% block content %}
 <div class="container tasks-container">
-    <!-- Header -->
-    <div class="tasks-header flex justify-between items-center">
-        <div>
+    <!-- PHASE 2: Consolidated Command Bar - Row 1: Header with inline filters -->
+    <div class="tasks-header-consolidated">
+        <div class="header-left">
             <h1 class="tasks-title">Action Items</h1>
-            <p class="tasks-subtitle">Track and manage tasks from your meetings</p>
-        </div>
-        <div class="header-actions">
-            <!-- CROWN⁴.6: Stress Indicator -->
+            <!-- CROWN⁴.6: Stress Indicator (inline) -->
             <div id="stress-indicator" class="stress-indicator hidden">
                 <div class="stress-dot"></div>
                 <div class="stress-tooltip">High workload</div>
             </div>
-            
-            <button class="btn btn-secondary btn-generate-proposals" data-meeting-id="{{ meeting_id if meeting_id else '' }}">
+        </div>
+        
+        <!-- Inline Filters (moved from separate row) -->
+        <div class="task-filters-inline">
+            <button class="filter-tab" data-filter="all">
+                All
+                <span class="filter-counter filter-counter-all" data-counter="all">{{ tasks|length if tasks else 0 }}</span>
+            </button>
+            <button class="filter-tab active" data-filter="active">
+                Active
+                <span class="filter-counter filter-counter-active" data-counter="active">{{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }}</span>
+            </button>
+            <button class="filter-tab" data-filter="archived">
+                Archived
+                <span class="filter-counter filter-counter-archived" data-counter="archived">{% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}{% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}{{ completed_count + cancelled_count }}</span>
+            </button>
+        </div>
+        
+        <div class="header-actions-compact">
+            <button class="btn btn-secondary btn-generate-proposals btn-icon-only" data-meeting-id="{{ meeting_id if meeting_id else '' }}" title="AI Proposals">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                 </svg>
-                AI Proposals
+                <span class="btn-text">AI</span>
             </button>
             <button id="new-task-btn" class="btn btn-primary">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
-                New Task
+                <span class="btn-text">New</span>
             </button>
             
-            <!-- View Toggle Buttons -->
+            <!-- View Toggle (compact) -->
             <div class="view-toggle-group" role="group" aria-label="View options">
                 <button class="view-toggle-btn active" data-view="list" title="List view" aria-label="List view">
                     <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,31 +131,11 @@
         <span class="pending-count"></span>
     </div>
 
-    <!-- Filters - All/Active/Archived Tabs (Linear-style) -->
-    <!-- CROWN⁴.6: Fixed counters to use status field (Task model has no archived_at column) -->
-    <!-- Active = todo, in_progress, pending, blocked (not completed/cancelled) -->
-    <!-- Archived = completed or cancelled tasks -->
-    <div class="task-filters">
-        <button class="filter-tab" data-filter="all">
-            All
-            <span class="filter-counter filter-counter-all" data-counter="all">
-                {{ tasks|length if tasks else 0 }}
-            </span>
-        </button>
-        <button class="filter-tab active" data-filter="active">
-            Active
-            <span class="filter-counter filter-counter-active" data-counter="active">
-                {{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }}
-            </span>
-        </button>
-        <button class="filter-tab" data-filter="archived">
-            Archived
-            <span class="filter-counter filter-counter-archived" data-counter="archived">
-                {% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}
-                {% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}
-                {{ completed_count + cancelled_count }}
-            </span>
-        </button>
+    <!-- Legacy task-filters div for JS compatibility (hidden, data synced) -->
+    <div class="task-filters" style="display: none !important;">
+        <button class="filter-tab" data-filter="all">All<span class="filter-counter filter-counter-all" data-counter="all">{{ tasks|length if tasks else 0 }}</span></button>
+        <button class="filter-tab active" data-filter="active">Active<span class="filter-counter filter-counter-active" data-counter="active">{{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }}</span></button>
+        <button class="filter-tab" data-filter="archived">Archived<span class="filter-counter filter-counter-archived" data-counter="archived">{% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}{% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}{{ completed_count + cancelled_count }}</span></button>
     </div>
 
     <!-- Bulk Action Toolbar (appears when tasks selected) -->
@@ -173,58 +168,64 @@
         </div>
     </div>
 
-    <!-- Search & Sort Toolbar (CROWN⁴.5 Task 5) -->
-    <div class="search-sort-toolbar">
-        <div class="search-wrapper">
-            <svg class="search-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-            <input type="text" 
-                   id="task-search-input" 
-                   class="search-input" 
-                   placeholder="Search tasks..."
-                   autocomplete="off"
-                   aria-label="Search tasks">
-            <button id="search-clear-btn" class="search-clear-btn hidden" aria-label="Clear search">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-            <button id="semantic-search-toggle" class="semantic-search-toggle" title="AI Semantic Search - Find tasks by meaning, not just keywords">
+    <!-- PHASE 2: Row 2 - Compact Search & Sort Toolbar -->
+    <div class="search-sort-toolbar-compact">
+        <div class="search-wrapper-compact">
+            <button id="search-toggle-btn" class="search-toggle-btn" title="Search tasks (/)">
                 <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
-                <span class="semantic-label">AI</span>
+            </button>
+            <div class="search-input-container collapsed">
+                <input type="text" 
+                       id="task-search-input" 
+                       class="search-input" 
+                       placeholder="Search tasks... (Esc to close)"
+                       autocomplete="off"
+                       aria-label="Search tasks">
+                <button id="search-clear-btn" class="search-clear-btn hidden" aria-label="Clear search">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+                <button id="semantic-search-toggle" class="semantic-search-toggle" title="AI Semantic Search">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <div class="toolbar-controls">
+            <select id="task-sort-select" class="sort-select-compact" aria-label="Sort tasks">
+                <option value="default">Default</option>
+                <option value="priority">Priority ↓</option>
+                <option value="priority-reverse">Priority ↑</option>
+                <option value="due-date">Due Soon</option>
+                <option value="due-date-reverse">Due Later</option>
+                <option value="created">Newest</option>
+                <option value="created-reverse">Oldest</option>
+                <option value="title">A → Z</option>
+                <option value="title-reverse">Z → A</option>
+            </select>
+            
+            <button id="meeting-intelligence-toggle" class="meeting-intelligence-toggle-compact" title="Group by meeting">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                </svg>
             </button>
         </div>
-        <div class="sort-wrapper">
-            <svg class="sort-icon" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
-            </svg>
-            <select id="task-sort-select" class="sort-select" aria-label="Sort tasks">
-                <option value="default">Sort: Default</option>
-                <option value="priority">Sort: Priority (High → Low)</option>
-                <option value="priority-reverse">Sort: Priority (Low → High)</option>
-                <option value="due-date">Sort: Due Date (Soonest first)</option>
-                <option value="due-date-reverse">Sort: Due Date (Latest first)</option>
-                <option value="created">Sort: Created (Newest first)</option>
-                <option value="created-reverse">Sort: Created (Oldest first)</option>
-                <option value="title">Sort: Title (A → Z)</option>
-                <option value="title-reverse">Sort: Title (Z → A)</option>
-            </select>
+        
+        <div class="toolbar-stats-inline">
+            <span id="visible-task-count">{{ tasks|length if tasks else 0 }}</span>/<span id="total-task-count">{{ tasks|length if tasks else 0 }}</span>
         </div>
-        <button id="meeting-intelligence-toggle" class="meeting-intelligence-toggle" title="Group tasks by meeting">
-            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-            </svg>
-            <span class="toggle-label">Group by Meeting</span>
-        </button>
-        <div class="toolbar-stats">
-            <span id="visible-task-count">{{ tasks|length if tasks else 0 }}</span>
-            <span class="stats-label">of</span>
-            <span id="total-task-count">{{ tasks|length if tasks else 0 }}</span>
-            <span class="stats-label">tasks</span>
-        </div>
+    </div>
+    
+    <!-- Legacy search-sort-toolbar for JS compatibility (hidden) -->
+    <div class="search-sort-toolbar" style="display: none !important;">
+        <div class="search-wrapper"></div>
+        <div class="sort-wrapper"></div>
+        <div class="toolbar-stats"></div>
     </div>
 
     <!-- AI Proposals Section (CROWN⁴.5 Task 10) -->
@@ -827,6 +828,7 @@ window.__FIRST_PAINT_START = performance.now();
 <script defer src="{{ url_for('static', filename='js/task-animation-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-cache.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-search-sort.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-command-bar.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-detail-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-grouping.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -913,7 +915,7 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 <script defer src="{{ url_for('static', filename='js/task-progressive-disclosure.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- REDESIGN: Clean task page interactions -->
-<script defer src="{{ url_for('static', filename='js/task-redesign.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-redesign.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Mobile Gestures (swipe-to-complete/snooze, long-press context) -->
 <script defer src="{{ url_for('static', filename='js/task-mobile-gestures.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>

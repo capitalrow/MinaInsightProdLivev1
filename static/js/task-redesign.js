@@ -11,10 +11,10 @@
   'use strict';
 
   // ========================================
-  // MOBILE TAP EXPANSION
+  // TASK CARD EXPANSION (3-TIER PROGRESSIVE DISCLOSURE)
   // ========================================
   
-  function initMobileTapExpansion() {
+  function initTaskCardExpansion() {
     const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     
     function toggleExpand(taskCard, collapseOthers) {
@@ -26,17 +26,44 @@
         });
       }
       taskCard.classList.toggle('expanded');
+      
+      // Update aria-expanded for accessibility
+      const isExpanded = taskCard.classList.contains('expanded');
+      taskCard.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+      
+      // Update expand trigger icon rotation
+      const expandTrigger = taskCard.querySelector('.task-expand-trigger');
+      if (expandTrigger) {
+        expandTrigger.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        expandTrigger.setAttribute('title', isExpanded ? 'Hide details' : 'Show details');
+      }
     }
     
     function isInteractiveElement(target) {
       return target.closest('.task-checkbox') || 
              target.closest('.task-menu-trigger') ||
+             target.closest('.task-expand-trigger') ||
              target.closest('button') ||
              target.closest('a') ||
              target.closest('input') ||
              target.closest('select');
     }
     
+    // Handle expand trigger button click (desktop + mobile)
+    document.addEventListener('click', function(e) {
+      const expandTrigger = e.target.closest('.task-expand-trigger');
+      if (expandTrigger) {
+        e.preventDefault();
+        e.stopPropagation();
+        const taskCard = expandTrigger.closest('.task-card');
+        if (taskCard) {
+          toggleExpand(taskCard, true);
+        }
+        return;
+      }
+    });
+    
+    // Mobile: tap anywhere on card to expand (except interactive elements)
     if (isTouchDevice) {
       document.addEventListener('click', function(e) {
         const taskCard = e.target.closest('.task-card');
@@ -336,7 +363,7 @@
   function init() {
     console.log('[TaskRedesign] Initializing...');
     
-    initMobileTapExpansion();
+    initTaskCardExpansion();
     initViewToggles();
     initCheckboxHandlers();
     // CROWN⁴.12: Removed initFilterTabs() - now handled by task-page-master-init.js + TaskSearchSort

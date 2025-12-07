@@ -1874,5 +1874,577 @@ body,
 }
 
 /* ========================================
- * END OF CRITICAL FIXES
+ * END OF PHASE 1 FIXES
+ * ======================================== */
+
+/* ========================================
+ * PHASE 2: CONSOLIDATED COMMAND BAR
+ * Merges 4 rows into 2 for cleaner UI
+ * ======================================== */
+
+/* Row 1: Header with inline filters */
+.tasks-header-consolidated {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--task-space-4);
+  padding: var(--task-space-3) 0;
+  margin-bottom: var(--task-space-4);
+  flex-wrap: wrap;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  flex-shrink: 0;
+}
+
+.header-left .tasks-title {
+  margin: 0;
+  font-size: var(--task-font-xl);
+  font-weight: var(--task-weight-bold);
+  color: var(--task-text-primary);
+}
+
+/* Remove subtitle for cleaner look */
+.tasks-subtitle {
+  display: none;
+}
+
+/* Inline filters - pill style */
+.task-filters-inline {
+  display: flex;
+  gap: var(--task-space-1);
+  padding: var(--task-space-1);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-lg);
+}
+
+.task-filters-inline .filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-2) var(--task-space-3);
+  min-height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-secondary);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  white-space: nowrap;
+}
+
+.task-filters-inline .filter-tab:hover {
+  color: var(--task-text-primary);
+  background: var(--task-bg-card-hover);
+}
+
+.task-filters-inline .filter-tab.active {
+  background: var(--task-accent-primary);
+  color: white;
+}
+
+.task-filters-inline .filter-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--task-space-1);
+  background: var(--task-bg-elevated);
+  border-radius: var(--task-radius-full);
+  font-size: 11px;
+  font-weight: var(--task-weight-semibold);
+}
+
+.task-filters-inline .filter-tab.active .filter-counter {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+/* Compact header actions */
+.header-actions-compact {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex-shrink: 0;
+}
+
+/* Icon-only button style */
+.btn-icon-only {
+  padding: var(--task-space-2) var(--task-space-3) !important;
+  min-height: 40px;
+}
+
+.btn-icon-only .btn-text {
+  display: none;
+}
+
+/* Show text on larger screens */
+@media (min-width: 768px) {
+  .btn-icon-only .btn-text {
+    display: inline;
+  }
+  
+  #new-task-btn .btn-text {
+    display: inline;
+  }
+}
+
+/* Mobile: hide button text */
+@media (max-width: 767px) {
+  #new-task-btn .btn-text {
+    display: none;
+  }
+  
+  #new-task-btn {
+    padding: var(--task-space-2) var(--task-space-3);
+  }
+}
+
+/* Row 2: Compact search & sort toolbar */
+.search-sort-toolbar-compact {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-2) var(--task-space-3);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-lg);
+  margin-bottom: var(--task-space-4);
+  min-height: 48px;
+}
+
+/* Collapsible search */
+.search-wrapper-compact {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.search-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  flex-shrink: 0;
+}
+
+.search-toggle-btn:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+.search-toggle-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Search input container - collapsible */
+.search-input-container {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: all var(--task-transition-base);
+}
+
+.search-input-container.expanded {
+  max-width: 400px;
+  opacity: 1;
+}
+
+.search-input-container .search-input {
+  width: 100%;
+  padding: var(--task-space-2) var(--task-space-3);
+  min-height: 36px;
+  background: var(--task-bg-input);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-primary);
+  font-size: var(--task-font-sm);
+}
+
+.search-input-container .search-input:focus {
+  outline: none;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus);
+}
+
+.search-input-container .search-clear-btn,
+.search-input-container .semantic-search-toggle {
+  position: absolute;
+  right: var(--task-space-2);
+  background: transparent;
+  border: none;
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  padding: var(--task-space-1);
+}
+
+.search-input-container {
+  position: relative;
+}
+
+.search-input-container .search-clear-btn {
+  right: 36px;
+}
+
+.search-input-container .semantic-search-toggle {
+  right: 8px;
+}
+
+/* Toolbar controls */
+.toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex-shrink: 0;
+}
+
+/* Compact sort select */
+.sort-select-compact {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: var(--task-space-2) var(--task-space-6) var(--task-space-2) var(--task-space-3);
+  min-height: 36px;
+  background: var(--task-bg-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a1a1aa'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") no-repeat right 8px center;
+  background-size: 14px;
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-secondary);
+  font-size: var(--task-font-sm);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.sort-select-compact:hover {
+  background-color: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+.sort-select-compact:focus {
+  outline: none;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Compact meeting toggle */
+.meeting-intelligence-toggle-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.meeting-intelligence-toggle-compact:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+.meeting-intelligence-toggle-compact.active {
+  background: var(--task-accent-primary);
+  border-color: var(--task-accent-primary);
+  color: white;
+}
+
+/* Inline stats */
+.toolbar-stats-inline {
+  font-size: var(--task-font-xs);
+  color: var(--task-text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Mobile responsive for Phase 2 */
+@media (max-width: 640px) {
+  .tasks-header-consolidated {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--task-space-3);
+  }
+  
+  .header-left {
+    justify-content: space-between;
+  }
+  
+  .task-filters-inline {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .task-filters-inline .filter-tab {
+    flex: 1;
+    justify-content: center;
+    padding: var(--task-space-2);
+  }
+  
+  .header-actions-compact {
+    justify-content: flex-end;
+  }
+  
+  .search-sort-toolbar-compact {
+    flex-wrap: wrap;
+  }
+  
+  .search-wrapper-compact {
+    width: 100%;
+    order: -1;
+  }
+  
+  .search-input-container.expanded {
+    max-width: 100%;
+  }
+  
+  .toolbar-controls {
+    flex: 1;
+  }
+  
+  .toolbar-stats-inline {
+    margin-left: auto;
+  }
+}
+
+/* Hide legacy elements */
+.tasks-header {
+  display: none !important;
+}
+
+/* ========================================
+ * END OF PHASE 2
+ * ======================================== */
+
+/* ========================================
+ * PHASE 3: 3-TIER PROGRESSIVE DISCLOSURE
+ * Scan → Glance → Detail
+ * ======================================== */
+
+/* Tier 1: SCAN - Always visible */
+.task-tier-1 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--task-space-3);
+}
+
+/* Expand trigger button */
+.task-expand-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  opacity: 0;
+}
+
+.task-card:hover .task-expand-trigger,
+.task-card:focus-within .task-expand-trigger {
+  opacity: 1;
+}
+
+.task-expand-trigger:hover {
+  background: var(--task-bg-elevated);
+  color: var(--task-text-primary);
+}
+
+.task-expand-trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--task-shadow-focus);
+}
+
+.task-expand-trigger .expand-icon {
+  transition: transform var(--task-transition-fast);
+}
+
+.task-card.expanded .task-expand-trigger .expand-icon {
+  transform: rotate(180deg);
+}
+
+/* Always show expand trigger on mobile */
+@media (hover: none) {
+  .task-expand-trigger {
+    opacity: 1;
+  }
+}
+
+/* Tier 2: GLANCE - Due date + Assignee on hover */
+.task-tier-2 {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  flex-wrap: wrap;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: all var(--task-transition-base);
+}
+
+/* Desktop: Reveal Tier 2 on hover */
+@media (hover: hover) {
+  .task-card:hover .task-tier-2 {
+    max-height: 40px;
+    opacity: 1;
+    margin-top: var(--task-space-2);
+  }
+}
+
+/* Mobile/Touch: Reveal Tier 2 on expanded */
+.task-card.expanded .task-tier-2 {
+  max-height: 40px;
+  opacity: 1;
+  margin-top: var(--task-space-2);
+}
+
+/* Tier 2 hint for cards with detail but no visible T2 content */
+.tier2-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+  font-size: var(--task-font-xs);
+  color: var(--task-text-muted);
+}
+
+/* Tier 3: DETAIL - Labels, Provenance, Notes on expand */
+.task-tier-3 {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--task-space-3);
+  flex-wrap: wrap;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: all var(--task-transition-slow);
+}
+
+/* Only reveal Tier 3 on explicit expand (not hover) */
+.task-card.expanded .task-tier-3 {
+  max-height: 200px;
+  opacity: 1;
+  margin-top: var(--task-space-3);
+  padding-top: var(--task-space-3);
+  border-top: 1px solid var(--task-border-subtle);
+}
+
+/* Label overflow style */
+.label-overflow {
+  background: var(--task-bg-elevated);
+  color: var(--task-text-tertiary);
+}
+
+/* Task description preview */
+.task-description-preview {
+  width: 100%;
+  margin-top: var(--task-space-2);
+}
+
+.task-description-preview .description-text {
+  font-size: var(--task-font-sm);
+  color: var(--task-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Compact mode: Simpler card for bar view */
+.task-card.compact-mode .task-tier-2,
+.task-card.compact-mode .task-tier-3,
+.task-card.compact-mode .task-expand-trigger {
+  display: none !important;
+}
+
+/* Mobile-first: Combined Tier 2+3 reveal on tap */
+@media (hover: none) {
+  .task-card.expanded .task-tier-2,
+  .task-card.expanded .task-tier-3 {
+    max-height: 200px;
+    opacity: 1;
+  }
+  
+  .task-card.expanded .task-tier-2 {
+    margin-top: var(--task-space-2);
+  }
+  
+  .task-card.expanded .task-tier-3 {
+    margin-top: var(--task-space-2);
+    padding-top: var(--task-space-2);
+    border-top: 1px solid var(--task-border-subtle);
+  }
+}
+
+/* Enhanced priority dot with tooltip on hover */
+.priority-dot {
+  position: relative;
+  cursor: help;
+}
+
+.priority-dot::after {
+  content: attr(title);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--task-space-1) var(--task-space-2);
+  background: var(--task-bg-elevated);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-sm);
+  font-size: var(--task-font-xs);
+  color: var(--task-text-secondary);
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--task-transition-fast);
+  z-index: 10;
+}
+
+.priority-dot:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Suppress default title tooltip */
+.priority-dot:hover {
+  position: relative;
+}
+
+/* Hide old task-secondary-row in favor of task-tier-2/3 */
+.task-secondary-row:not(.task-tier-2) {
+  display: none !important;
+}
+
+/* ========================================
+ * END OF PHASE 3
  * ======================================== */
