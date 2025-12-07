@@ -69,6 +69,11 @@
 
             filterTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
+            
+            // PHASE 10: Save filter preference to localStorage
+            if (window.TaskRedesign?.setFilterPreference) {
+                window.TaskRedesign.setFilterPreference(filter);
+            }
 
             dispatchTaskEvent('filterChanged', { filter });
             dispatchTaskEvent('task:filter-changed', { filter });

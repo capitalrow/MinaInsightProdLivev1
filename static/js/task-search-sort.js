@@ -149,6 +149,12 @@ class TaskSearchSort {
             if (e.target.id !== 'task-sort-select') return;
             this._setUserActionLock();
             this.currentSort = e.target.value;
+            
+            // PHASE 10: Save sort preference to localStorage
+            if (window.TaskRedesign?.setSortPreference) {
+                window.TaskRedesign.setSortPreference(this.currentSort);
+            }
+            
             this.safeApplyFiltersAndSort();
             document.dispatchEvent(new CustomEvent('task:sort', { detail: { sort: this.currentSort } }));
         };
