@@ -909,8 +909,18 @@ class TaskBootstrap {
                 const status = task.status || 'todo';
                 return status === 'completed' || status === 'cancelled';
             });
+        } else if (currentFilter === 'all' && tasks && tasks.length > 0) {
+            // CROWN⁴.14: Sort completed tasks to bottom in 'all' view
+            // This improves visual hierarchy - active tasks first
+            filteredTasks = [...tasks].sort((a, b) => {
+                const aCompleted = a.status === 'completed' || a.status === 'cancelled';
+                const bCompleted = b.status === 'completed' || b.status === 'cancelled';
+                if (aCompleted && !bCompleted) return 1;
+                if (!aCompleted && bCompleted) return -1;
+                return 0; // Preserve existing order within groups
+            });
+            console.log(`🔧 [TaskBootstrap] Sorted completed tasks to bottom in All view`);
         }
-        // For 'all' filter, keep all tasks
         tasks = filteredTasks;
         
         // CROWN⁴.9 FIX: Check existing content FIRST before any processing
@@ -1005,9 +1015,53 @@ class TaskBootstrap {
             } else {
                 console.log('🔧 [TaskBootstrap] Using flat list render (no grouping)');
                 // Fallback to flat list for small counts or very large (virtualized) lists
-                const tasksHTML = tasks.map((task, index) => this.renderTaskCard(task, index)).join('');
-                container.innerHTML = tasksHTML;
-                console.log(`✅ [TaskBootstrap] Rendered ${tasks.length} tasks as flat list`);
+                
+                // CROWN⁴.14: Add divider before completed tasks in 'all' view
+                const currentViewFilter = options.filterContext || 
+                                         window.taskSearchSort?.currentFilter || 
+                                         'active';
+                
+                if (currentViewFilter === 'all') {
+                    // Find first completed task index
+                    const firstCompletedIndex = tasks.findIndex(t => 
+                        t.status === 'completed' || t.status === 'cancelled'
+                    );
+                    
+                    if (firstCompletedIndex > 0) {
+                        // Split into active and completed sections
+                        const activeTasks = tasks.slice(0, firstCompletedIndex);
+                        const completedTasks = tasks.slice(firstCompletedIndex);
+                        
+                        const activeHTML = activeTasks.map((task, index) => 
+                            this.renderTaskCard(task, index)
+                        ).join('');
+                        
+                        const dividerHTML = `
+                            <div class="completed-section-divider" role="separator" aria-label="Completed tasks section">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span>Completed (${completedTasks.length})</span>
+                            </div>
+                        `;
+                        
+                        const completedHTML = completedTasks.map((task, index) => 
+                            this.renderTaskCard(task, firstCompletedIndex + index)
+                        ).join('');
+                        
+                        container.innerHTML = activeHTML + dividerHTML + completedHTML;
+                        console.log(`✅ [TaskBootstrap] Rendered ${activeTasks.length} active + ${completedTasks.length} completed with divider`);
+                    } else {
+                        // All tasks are same type (all active or all completed)
+                        const tasksHTML = tasks.map((task, index) => this.renderTaskCard(task, index)).join('');
+                        container.innerHTML = tasksHTML;
+                        console.log(`✅ [TaskBootstrap] Rendered ${tasks.length} tasks as flat list (no divider needed)`);
+                    }
+                } else {
+                    const tasksHTML = tasks.map((task, index) => this.renderTaskCard(task, index)).join('');
+                    container.innerHTML = tasksHTML;
+                    console.log(`✅ [TaskBootstrap] Rendered ${tasks.length} tasks as flat list`);
+                }
             }
             
             // Show tasks list (hides all state overlays)

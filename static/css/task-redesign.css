@@ -5708,3 +5708,114 @@ button:not(.btn-loading) svg {
   width: 18px;
   height: 18px;
 }
+
+/* ========================================
+ * CROWN⁴.14 MOBILE UX IMPROVEMENTS
+ * Based on user feedback - December 2025
+ * ======================================== */
+
+/* 1. MOBILE TASK TEXT VISIBILITY - Show 3 lines on mobile */
+@media (max-width: 640px) {
+  .task-title {
+    -webkit-line-clamp: 3;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  
+  /* Increase card padding for better touch targets */
+  .task-card {
+    padding: var(--task-space-4) var(--task-space-4);
+    margin-bottom: var(--task-space-3);
+  }
+  
+  /* More breathing room between cards */
+  .tasks-list-container {
+    gap: var(--task-space-3);
+  }
+}
+
+/* 2. PRIORITY VISUAL HIERARCHY - Color-coded left border */
+.task-card {
+  border-left: 3px solid transparent;
+}
+
+.task-card[data-priority="urgent"] {
+  border-left-color: var(--priority-urgent);
+}
+
+.task-card[data-priority="high"] {
+  border-left-color: var(--priority-high);
+}
+
+.task-card[data-priority="medium"] {
+  border-left-color: var(--priority-medium);
+}
+
+.task-card[data-priority="low"] {
+  border-left-color: var(--priority-low);
+}
+
+/* Completed tasks have subtle border */
+.task-card.completed {
+  border-left-color: var(--task-border-subtle) !important;
+}
+
+/* 3. COMPLETED TASKS STYLING - More distinct separation */
+.task-card.completed {
+  opacity: 0.5;
+  background: rgba(22, 22, 30, 0.7);
+}
+
+/* Visual separator before completed section (added via JS) */
+.completed-section-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-4) 0;
+  margin-top: var(--task-space-3);
+  color: var(--task-text-tertiary);
+  font-size: var(--task-font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.completed-section-divider::before,
+.completed-section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--task-border-subtle);
+}
+
+.completed-section-divider svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.6;
+}
+
+/* 4. MOBILE TOUCH TARGET IMPROVEMENTS */
+@media (max-width: 640px) {
+  /* Larger checkbox wrapper for easier tapping */
+  .checkbox-wrapper {
+    width: 52px;
+    height: 52px;
+  }
+  
+  /* Larger action buttons */
+  .task-actions .task-menu-trigger {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+  
+  /* Priority icons more visible */
+  .priority-dot {
+    width: 10px;
+    height: 10px;
+  }
+  
+  /* Action icons spacing */
+  .task-actions {
+    gap: var(--task-space-2);
+  }
+}
