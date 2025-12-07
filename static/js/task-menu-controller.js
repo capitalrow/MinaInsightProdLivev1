@@ -415,6 +415,18 @@ class TaskMenuController {
                 detail: { taskId, updates: { status: newStatus }, source: 'menu' }
             }));
             
+            // CROWN⁴.8 Phase 8: Dispatch undo event for completed tasks
+            if (newStatus === 'completed') {
+                const taskData = data.task || { id: taskId, title: taskCard?.querySelector('.task-title')?.textContent?.trim() };
+                window.dispatchEvent(new CustomEvent('task:completed', {
+                    detail: { 
+                        taskId, 
+                        task: { ...taskData, previousStatus: currentStatus },
+                        showUndo: true 
+                    }
+                }));
+            }
+            
             window.toast?.success(`Task marked as ${newStatus}`);
             
         } catch (error) {
@@ -1203,6 +1215,16 @@ class TaskMenuController {
                 await window.optimisticUI.cache.saveTask(data.task);
             }
             
+            // CROWN⁴.8 Phase 8: Dispatch undo event for archived tasks
+            const taskData = data.task || { id: taskId, title: task?.title };
+            window.dispatchEvent(new CustomEvent('task:archived', {
+                detail: { 
+                    taskId, 
+                    task: { ...taskData, previousStatus: task?.status || 'todo' },
+                    showUndo: true 
+                }
+            }));
+            
             // Remove from DOM
             if (taskCard) {
                 taskCard.remove();
@@ -1314,6 +1336,15 @@ class TaskMenuController {
             if (window.optimisticUI?.cache?.deleteTask) {
                 await window.optimisticUI.cache.deleteTask(taskId);
             }
+            
+            // CROWN⁴.8 Phase 8: Dispatch undo event for deleted tasks
+            window.dispatchEvent(new CustomEvent('task:deleted', {
+                detail: { 
+                    taskId, 
+                    task: { id: taskId, title: task?.title, status: task?.status, priority: task?.priority },
+                    showUndo: true 
+                }
+            }));
             
             // Remove from DOM
             if (taskCard) {
