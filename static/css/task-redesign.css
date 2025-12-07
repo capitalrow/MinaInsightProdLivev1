@@ -5651,3 +5651,60 @@ button:not(.btn-loading) svg {
 /* ========================================
  * END OF 2-ROW COMMAND BAR
  * ======================================== */
+
+/* ========================================
+ * CROWN⁴.13 MOBILE PROGRESSIVE DISCLOSURE
+ * Show Tier 2 content (due date, assignee) by default on mobile
+ * since hover doesn't work on touch devices
+ * ======================================== */
+
+@media (hover: none), (max-width: 640px) {
+  /* Show secondary row by default on mobile/touch devices */
+  .task-card .task-secondary-row {
+    max-height: 100px;
+    opacity: 1;
+    margin-top: var(--task-space-2);
+    overflow: visible;
+  }
+  
+  /* Also show task actions by default on mobile */
+  .task-card .task-actions {
+    opacity: 1;
+  }
+}
+
+/* ========================================
+ * CROWN⁴.13 BAR VIEW ACTION ICONS FIX
+ * Ensure action icons are visible and consistent in bar view
+ * ======================================== */
+
+.view-bar .task-card .task-actions {
+  opacity: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-1);
+}
+
+.view-bar .task-card .task-menu-trigger {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  margin: 0;
+}
+
+/* Compact bar view - tighter spacing for action icons */
+.view-bar .task-card {
+  padding: var(--task-space-2) var(--task-space-3);
+}
+
+.view-bar .task-card .checkbox-wrapper {
+  width: 36px;
+  height: 36px;
+  margin: calc(-1 * var(--task-space-2));
+  margin-right: 0;
+}
+
+.view-bar .task-card .task-checkbox {
+  width: 18px;
+  height: 18px;
+}
