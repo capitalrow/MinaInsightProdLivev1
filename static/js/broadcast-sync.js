@@ -30,6 +30,15 @@ window.BroadcastSync = class BroadcastSync {
         this.messageQueue = [];
         this.isInitialized = false;
         
+        // CROWN⁴.14: Message deduplication to prevent echo loops
+        this._processedMessageIds = new Set();
+        this._messageIdCleanupInterval = null;
+        this._maxProcessedMessages = 100;
+        this._messageSeq = 0;
+        
+        // CROWN⁴.14: Handler guard - prevents rebroadcasts while handling incoming message
+        this._isHandlingBroadcast = false;
+        
         // Event types - Complete CROWN⁴ 15-event pipeline
         this.EVENTS = {
             // Existing events
@@ -104,30 +113,69 @@ window.BroadcastSync = class BroadcastSync {
     }
     
     /**
+     * CROWN⁴.14: Generate unique message ID for deduplication
+     * @private
+     */
+    _generateMessageId() {
+        this._messageSeq++;
+        return `${this.tabId}_${Date.now()}_${this._messageSeq}`;
+    }
+    
+    /**
      * Broadcast message to all other tabs
      * @param {string} type - Event type
      * @param {Object} payload - Message payload
+     * @param {Object} options - Broadcast options
      */
-    broadcast(type, payload) {
+    broadcast(type, payload, options = {}) {
         if (!this.channel) {
             console.warn('[BroadcastSync] Channel not initialized, queueing message');
             this.messageQueue.push({ type, payload });
             return;
         }
         
+        // CROWN⁴.14: Block broadcasts while handling incoming message (prevents echo loops)
+        if (this._isHandlingBroadcast && !options.allowDuringHandler) {
+            console.log(`📡 [BroadcastSync] Skipping broadcast during handler: ${type}`);
+            return;
+        }
+        
+        // CROWN⁴.14: Generate unique messageId for deduplication
+        const messageId = this._generateMessageId();
+        
         const message = {
             type,
             payload,
             timestamp: Date.now(),
             tabId: this.tabId,
-            workspaceId: this.workspaceId
+            workspaceId: this.workspaceId,
+            messageId: messageId,
+            isRebroadcast: options.isRebroadcast || false
         };
+        
+        // CROWN⁴.14: Track our own messages to prevent self-echo
+        this._processedMessageIds.add(messageId);
+        this._cleanupProcessedMessages();
         
         try {
             this.channel.postMessage(message);
-            console.log(`📡 Broadcast sent: ${type}`, payload);
+            console.log(`📡 Broadcast sent: ${type} (id=${messageId.substring(0, 20)}...)`, payload);
         } catch (error) {
             console.error('[BroadcastSync] Failed to broadcast:', error);
+        }
+    }
+    
+    /**
+     * CROWN⁴.14: Cleanup old processed message IDs to prevent memory leak
+     * @private
+     */
+    _cleanupProcessedMessages() {
+        if (this._processedMessageIds.size > this._maxProcessedMessages) {
+            const toDelete = this._processedMessageIds.size - this._maxProcessedMessages;
+            const ids = Array.from(this._processedMessageIds);
+            for (let i = 0; i < toDelete; i++) {
+                this._processedMessageIds.delete(ids[i]);
+            }
         }
     }
     
@@ -250,20 +298,46 @@ window.BroadcastSync = class BroadcastSync {
             return;
         }
         
-        console.log(`📨 Broadcast received: ${message.type}`, message.payload);
+        // CROWN⁴.14: Message deduplication - skip if already processed
+        if (message.messageId && this._processedMessageIds.has(message.messageId)) {
+            console.log(`📨 [BroadcastSync] Skipping duplicate message: ${message.type} (id=${message.messageId.substring(0, 20)}...)`);
+            return;
+        }
         
-        // Call registered listeners
-        const listeners = this.listeners.get(message.type) || [];
-        listeners.forEach(callback => {
-            try {
-                callback(message.payload, message);
-            } catch (error) {
-                console.error(`[BroadcastSync] Listener error for ${message.type}:`, error);
-            }
-        });
+        // CROWN⁴.14: Track this message to prevent re-processing
+        if (message.messageId) {
+            this._processedMessageIds.add(message.messageId);
+            this._cleanupProcessedMessages();
+        }
         
-        // Default handlers
-        this._applyDefaultHandlers(message);
+        // CROWN⁴.14: Skip rebroadcasts to prevent infinite loops
+        if (message.isRebroadcast) {
+            console.log(`📨 [BroadcastSync] Skipping rebroadcast: ${message.type}`);
+            return;
+        }
+        
+        // CROWN⁴.14: Set handler guard to prevent rebroadcasts from within handlers
+        this._isHandlingBroadcast = true;
+        
+        try {
+            console.log(`📨 Broadcast received: ${message.type}`, message.payload);
+            
+            // Call registered listeners
+            const listeners = this.listeners.get(message.type) || [];
+            listeners.forEach(callback => {
+                try {
+                    callback(message.payload, message);
+                } catch (error) {
+                    console.error(`[BroadcastSync] Listener error for ${message.type}:`, error);
+                }
+            });
+            
+            // Default handlers
+            this._applyDefaultHandlers(message);
+        } finally {
+            // CROWN⁴.14: Always clear handler guard
+            this._isHandlingBroadcast = false;
+        }
     }
     
     /**
