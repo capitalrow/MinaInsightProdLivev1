@@ -284,6 +284,44 @@ window.BroadcastSync = class BroadcastSync {
     }
     
     /**
+     * CROWN⁴.17: Check if hydration is ready before processing filter-related messages
+     * @private
+     */
+    _isHydrationReady() {
+        return window.taskHydrationReady || 
+               (window.taskBootstrap?.isHydrationReady?.() ?? false);
+    }
+    
+    /**
+     * CROWN⁴.17: Check if in post-hydration settling period
+     * Prevents race conditions immediately after hydration completes
+     * @private
+     */
+    _isInSettlingPeriod() {
+        if (!this._isHydrationReady()) return true;
+        const settlingMs = 1000; // 1 second settling period after hydration
+        const hydrationTime = window.taskBootstrap?._hydrationCompleteTime || 0;
+        if (hydrationTime === 0) return true;
+        const elapsed = Date.now() - hydrationTime;
+        return elapsed < settlingMs;
+    }
+    
+    /**
+     * CROWN⁴.17: List of event types that require hydration before processing
+     * These events can cause filter mutations that lead to flickering if processed too early
+     * NOTE: TASK_UPDATE and ARCHIVE_REVEAL are NOT blocked as they carry essential sync data
+     * @private
+     */
+    _requiresHydration(eventType) {
+        const hydrationRequiredEvents = [
+            this.EVENTS.FILTER_APPLY,
+            this.EVENTS.SEARCH_QUERY,
+            this.EVENTS.UI_STATE_SYNC
+        ];
+        return hydrationRequiredEvents.includes(eventType);
+    }
+    
+    /**
      * Handle incoming broadcast message
      * @private
      */
@@ -313,6 +351,20 @@ window.BroadcastSync = class BroadcastSync {
         // CROWN⁴.14: Skip rebroadcasts to prevent infinite loops
         if (message.isRebroadcast) {
             console.log(`📨 [BroadcastSync] Skipping rebroadcast: ${message.type}`);
+            return;
+        }
+        
+        // CROWN⁴.17: Block filter-related events until hydration is complete
+        // This prevents race conditions where cached/stale filter state overwrites default
+        if (this._requiresHydration(message.type) && !this._isHydrationReady()) {
+            console.log(`📨 [BroadcastSync] Blocking ${message.type} - hydration not ready`);
+            return;
+        }
+        
+        // CROWN⁴.17: Also block during post-hydration settling period
+        // This prevents early cross-tab messages from causing flicker
+        if (this._requiresHydration(message.type) && this._isInSettlingPeriod()) {
+            console.log(`📨 [BroadcastSync] Blocking ${message.type} - in settling period`);
             return;
         }
         
