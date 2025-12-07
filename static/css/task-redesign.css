@@ -2448,3 +2448,417 @@ body,
 /* ========================================
  * END OF PHASE 3
  * ======================================== */
+
+/* ========================================
+ * PHASE 4: ACCESSIBILITY ENHANCEMENTS
+ * WCAG 2.1 AA Compliance
+ * ======================================== */
+
+/* Screen reader only utility class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Make sr-only content visible when focused (for skip links) */
+.sr-only-focusable:focus,
+.sr-only-focusable:active {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* ----------------------------------------
+ * ENHANCED FOCUS STATES
+ * High contrast focus rings for all interactive elements
+ * ---------------------------------------- */
+
+/* Global focus ring - high visibility */
+:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Remove default outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Task card focus state */
+.task-card:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Checkbox focus state - enhanced visibility */
+.task-checkbox:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 3px;
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Button focus states */
+button:focus-visible,
+.btn:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.filter-tab:focus-visible,
+.view-toggle-btn:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Expand trigger focus */
+.task-expand-trigger:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  border-radius: var(--task-radius-sm);
+  background: var(--task-bg-card-hover);
+}
+
+/* Menu trigger focus */
+.task-menu-trigger:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  background: var(--task-bg-elevated);
+  color: var(--task-text-primary);
+}
+
+/* Input focus states */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 0;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Search input specific focus */
+.search-input:focus-visible {
+  outline: none;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus), inset 0 0 0 1px var(--task-border-focus);
+}
+
+/* Menu items focus */
+.task-menu-item:focus-visible {
+  outline: none;
+  background: var(--task-bg-card-hover);
+  box-shadow: inset 0 0 0 2px var(--task-accent-primary);
+}
+
+/* Link focus */
+a:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  border-radius: var(--task-radius-sm);
+}
+
+/* Provenance/transcript buttons focus */
+.provenance-compact:focus-visible,
+.jump-to-transcript-btn:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  background: rgba(34, 197, 94, 0.25);
+}
+
+/* ----------------------------------------
+ * TOUCH TARGETS - 44px MINIMUM (WCAG 2.1)
+ * ---------------------------------------- */
+
+/* Ensure all interactive elements meet minimum touch target */
+.task-expand-trigger {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-md);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  margin: calc(-1 * var(--task-space-2));
+  padding: var(--task-space-2);
+}
+
+.task-expand-trigger:hover {
+  background: var(--task-bg-card-hover);
+}
+
+/* Expand icon rotation when expanded */
+.task-card.expanded .task-expand-trigger .expand-icon {
+  transform: rotate(180deg);
+}
+
+.expand-icon {
+  transition: transform var(--task-transition-base);
+}
+
+/* Filter tabs - ensure 44px height */
+.filter-tab {
+  min-height: 44px;
+  padding: var(--task-space-2) var(--task-space-4);
+}
+
+/* View toggle buttons - 44px touch target */
+.view-toggle-btn {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Sort select - 44px height */
+.sort-select-compact,
+.sort-select {
+  min-height: 44px;
+  padding: var(--task-space-2) var(--task-space-3);
+}
+
+/* Search toggle button */
+.search-toggle-btn {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Bulk action buttons */
+.bulk-action-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--task-space-2) var(--task-space-3);
+}
+
+/* Meeting intelligence toggle */
+.meeting-intelligence-toggle-compact,
+.meeting-intelligence-toggle {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* ----------------------------------------
+ * PRIORITY INDICATORS WITH TEXT LABELS
+ * Screen reader accessible priority information
+ * ---------------------------------------- */
+
+/* Priority dot with accessible label */
+.priority-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+}
+
+/* Priority dot retains visual appearance */
+.priority-dot {
+  position: relative;
+}
+
+/* Screen reader text for priority */
+.priority-dot .priority-sr-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ----------------------------------------
+ * ARIA LIVE REGIONS STYLING
+ * ---------------------------------------- */
+
+/* Status announcements container */
+.aria-live-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Task list updates announcement */
+#task-list-live-region {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* ----------------------------------------
+ * KEYBOARD NAVIGATION ENHANCEMENTS
+ * ---------------------------------------- */
+
+/* Task card keyboard focus indicator */
+.task-card[tabindex="0"]:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+/* Keyboard shortcut hints */
+.keyboard-shortcut-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--task-space-1);
+  margin-left: var(--task-space-2);
+  background: var(--task-bg-elevated);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-sm);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--task-text-tertiary);
+}
+
+/* Hide keyboard hints on touch devices */
+@media (hover: none) {
+  .keyboard-shortcut-hint {
+    display: none;
+  }
+}
+
+/* ----------------------------------------
+ * HIGH CONTRAST MODE SUPPORT
+ * ---------------------------------------- */
+
+@media (prefers-contrast: high) {
+  :root {
+    --task-border-subtle: rgba(255, 255, 255, 0.3);
+    --task-border-default: rgba(255, 255, 255, 0.5);
+    --task-border-hover: rgba(255, 255, 255, 0.7);
+    --task-shadow-focus: 0 0 0 4px rgba(99, 102, 241, 0.6);
+  }
+  
+  .task-card {
+    border-width: 2px;
+  }
+  
+  .task-card:focus-visible {
+    outline-width: 3px;
+  }
+  
+  .task-checkbox {
+    border-width: 3px;
+  }
+  
+  .priority-dot {
+    width: 12px;
+    height: 12px;
+    border: 2px solid currentColor;
+  }
+  
+  .priority-dot.priority-urgent {
+    border-color: var(--priority-urgent);
+  }
+  
+  .priority-dot.priority-high {
+    border-color: var(--priority-high);
+  }
+  
+  .priority-dot.priority-medium {
+    border-color: var(--priority-medium);
+  }
+  
+  .priority-dot.priority-low {
+    border-color: var(--priority-low);
+  }
+}
+
+/* ----------------------------------------
+ * REDUCED MOTION PREFERENCES
+ * ---------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .expand-icon {
+    transition: none;
+  }
+  
+  .task-card,
+  .task-expand-trigger,
+  .filter-tab,
+  .btn,
+  button {
+    transition: none;
+  }
+  
+  .task-secondary-row,
+  .task-tertiary-row,
+  .task-tier-2,
+  .task-tier-3 {
+    transition: none;
+  }
+}
+
+/* ----------------------------------------
+ * SKIP LINK - IMPROVED
+ * ---------------------------------------- */
+
+.skip-to-content {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  z-index: 9999;
+  padding: var(--task-space-3) var(--task-space-4);
+  background: var(--task-accent-primary);
+  color: white;
+  font-weight: var(--task-weight-semibold);
+  text-decoration: none;
+  border-radius: var(--task-radius-md);
+  transition: top 0.2s ease;
+}
+
+.skip-to-content:focus {
+  top: 16px;
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+/* ----------------------------------------
+ * SEMANTIC STRUCTURE HELPERS
+ * ---------------------------------------- */
+
+/* Landmark region borders for debugging (only in dev) */
+[role="main"],
+[role="navigation"],
+[role="region"],
+[role="complementary"] {
+  /* outline: 1px dashed rgba(99, 102, 241, 0.3); */ /* Uncomment for debugging */
+}
+
+/* Task list group */
+.tasks-list-container[role="list"] .task-card {
+  /* Implicit listitem role */
+}
+
+/* ========================================
+ * END OF PHASE 4: ACCESSIBILITY
+ * ======================================== */
