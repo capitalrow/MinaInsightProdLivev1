@@ -341,6 +341,12 @@ class MultiTabSync {
             return;
         }
         
+        // CROWN⁴.15: Check user action lock from TaskSearchSort to prevent echo loops
+        if (window.taskSearchSort?._isUserActionLocked?.()) {
+            console.log('[MultiTabSync] _handleFilterChanged blocked - user action lock active');
+            return;
+        }
+        
         // CROWN⁴.14: Set flag to prevent re-broadcast during remote state application
         this._isApplyingRemoteState = true;
         
@@ -422,6 +428,12 @@ class MultiTabSync {
         // CROWN⁴.14: Block during settling period
         if (this._isInSettlingPeriod()) {
             console.log('[MultiTabSync] _handleStateSync blocked - in settling period');
+            return;
+        }
+        
+        // CROWN⁴.15: Check user action lock from TaskSearchSort to prevent echo loops
+        if (window.taskSearchSort?._isUserActionLocked?.()) {
+            console.log('[MultiTabSync] _handleStateSync blocked - user action lock active');
             return;
         }
         
