@@ -1537,5 +1537,225 @@ body.clustering-active .cluster-view-container {
 }
 
 /* ========================================
+ * MERGE MODAL STYLES
+ * ======================================== */
+
+.merge-preview {
+  background: var(--task-bg-elevated);
+  border-radius: var(--task-radius-lg);
+  padding: var(--task-space-4);
+  margin-bottom: var(--task-space-4);
+}
+
+.merge-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--task-space-2);
+  margin-bottom: var(--task-space-4);
+}
+
+.merge-task-item {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-3);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-md);
+  transition: all var(--task-transition-fast);
+}
+
+.merge-task-item.primary {
+  border-color: var(--task-accent-success);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.primary-badge {
+  padding: var(--task-space-1) var(--task-space-2);
+  background: var(--task-accent-success);
+  color: white;
+  border-radius: var(--task-radius-sm);
+  font-size: var(--task-font-xs);
+  font-weight: var(--task-weight-semibold);
+  text-transform: uppercase;
+}
+
+.delete-badge {
+  padding: var(--task-space-1) var(--task-space-2);
+  background: var(--task-accent-danger);
+  color: white;
+  border-radius: var(--task-radius-sm);
+  font-size: var(--task-font-xs);
+  font-weight: var(--task-weight-semibold);
+  text-transform: uppercase;
+}
+
+.merge-task-title {
+  flex: 1;
+  font-size: var(--task-font-sm);
+  color: var(--task-text-primary);
+}
+
+.merge-title-field {
+  margin-top: var(--task-space-4);
+}
+
+.merge-title-field label {
+  display: block;
+  font-size: var(--task-font-sm);
+  color: var(--task-text-secondary);
+  margin-bottom: var(--task-space-2);
+}
+
+.merge-title-input {
+  width: 100%;
+  padding: var(--task-space-3);
+  background: var(--task-bg-input);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-primary);
+  font-size: var(--task-font-base);
+}
+
+.merge-title-input:focus {
+  outline: none;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus);
+}
+
+.merge-info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--task-space-2);
+  padding: var(--task-space-3);
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: var(--task-radius-md);
+  font-size: var(--task-font-sm);
+  color: var(--task-accent-info);
+}
+
+.merge-info-box svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Task Modal Footer */
+.task-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--task-space-3);
+  padding: var(--task-space-4);
+  border-top: 1px solid var(--task-border-subtle);
+}
+
+.task-modal-footer .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-3) var(--task-space-4);
+  background: transparent;
+  color: var(--task-text-secondary);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-md);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.task-modal-footer .btn-secondary:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+.task-modal-footer .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-3) var(--task-space-4);
+  background: var(--task-accent-primary);
+  color: white;
+  border: none;
+  border-radius: var(--task-radius-md);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-semibold);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.task-modal-footer .btn-primary:hover {
+  background: var(--task-accent-primary-hover);
+  transform: translateY(-1px);
+}
+
+/* ========================================
+ * SNOOZE MODAL STYLES
+ * ======================================== */
+
+.snooze-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--task-space-3);
+}
+
+.snooze-option-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-4) var(--task-space-3);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-lg);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.snooze-option-btn:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-accent-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.snooze-option-btn svg {
+  color: var(--task-accent-primary);
+}
+
+.snooze-option-btn span {
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  color: var(--task-text-primary);
+}
+
+.snooze-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--task-space-4);
+  margin-top: var(--task-space-4);
+  border-top: 1px solid var(--task-border-default);
+}
+
+.snooze-modal-footer .btn-secondary {
+  padding: var(--task-space-2) var(--task-space-4);
+  background: transparent;
+  color: var(--task-text-secondary);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-md);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.snooze-modal-footer .btn-secondary:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+/* ========================================
  * END OF CRITICAL FIXES
  * ======================================== */

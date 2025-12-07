@@ -464,30 +464,34 @@
             <p class="text-secondary mb-4" id="snooze-task-title">Snooze this task until...</p>
             
             <div class="snooze-options">
-                <button class="snooze-option-btn" data-duration="1h">
+                <button class="snooze-option-btn" data-snooze-duration="later-today">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    <span>1 Hour</span>
+                    <span>Later Today</span>
                 </button>
-                <button class="snooze-option-btn" data-duration="4h">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <span>4 Hours</span>
-                </button>
-                <button class="snooze-option-btn" data-duration="tomorrow">
+                <button class="snooze-option-btn" data-snooze-duration="tomorrow">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
                     <span>Tomorrow</span>
                 </button>
-                <button class="snooze-option-btn" data-duration="1w">
+                <button class="snooze-option-btn" data-snooze-duration="next-week">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
-                    <span>1 Week</span>
+                    <span>Next Week</span>
                 </button>
+                <button class="snooze-option-btn" data-snooze-duration="next-month">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <span>Next Month</span>
+                </button>
+            </div>
+            
+            <div class="snooze-modal-footer">
+                <button class="btn-secondary snooze-cancel-btn">Cancel</button>
             </div>
         </div>
     </div>
@@ -498,7 +502,7 @@
     <div class="task-modal task-modal-medium">
         <div class="task-modal-header">
             <h2 class="task-modal-title">Merge Tasks</h2>
-            <button class="task-modal-close" id="merge-modal-close">
+            <button class="task-modal-close merge-cancel-btn" id="merge-modal-close">
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -506,15 +510,29 @@
         </div>
         
         <div class="modal-body">
-            <p class="text-secondary mb-4" id="merge-task-title">Select a task to merge with:</p>
+            <p class="text-secondary mb-4" id="merge-task-title">Combine selected tasks into one:</p>
             
-            <div id="merge-task-list" class="merge-task-list">
-                <!-- Task options will be populated dynamically -->
+            <!-- Preview of tasks to merge -->
+            <div class="merge-preview">
+                <!-- Will be populated by renderMergePreview() -->
             </div>
             
-            <div class="mt-6 text-sm text-secondary">
-                <p><strong>Note:</strong> The selected task will be merged into the current task. All labels, dates, and metadata will be combined.</p>
+            <div class="merge-info-box mt-4">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                </svg>
+                <span>The first task will be kept. Other tasks will be deleted and their labels merged.</span>
             </div>
+        </div>
+        
+        <div class="task-modal-footer">
+            <button class="btn-secondary merge-cancel-btn">Cancel</button>
+            <button class="btn-primary merge-confirm-btn">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+                Merge Tasks
+            </button>
         </div>
     </div>
 </div>

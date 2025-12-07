@@ -1007,24 +1007,32 @@
     
     /**
      * Initialize Snooze Modal (Task 10)
+     * Note: The primary snooze handler is in TaskActionHandlers.handleSnoozeTask
+     * which uses window.taskSnoozeModal (JS-generated modal with date picker).
+     * This function only sets up the server-rendered modal as a fallback.
      */
     function initSnoozeModal() {
         if (window.__snoozeModalReady) return;
-        console.log('[MasterInit] Initializing Snooze Modal...');
+        console.log('[MasterInit] Initializing Snooze Modal fallback...');
         
         const overlay = document.getElementById('snooze-modal-overlay');
         if (!overlay) {
-            console.warn('[MasterInit] Snooze modal overlay not found');
+            console.log('[MasterInit] Server-rendered snooze modal not found - using TaskSnoozeModal');
+            window.__snoozeModalReady = true;
             return;
         }
         
         let currentTaskId = null;
         
-        // Listen for snooze action from task menu
-        document.addEventListener('task:snooze', (e) => {
-            currentTaskId = e.detail.taskId;
+        // Note: Do NOT listen for task:snooze here - that's handled by TaskActionHandlers
+        // which opens the more robust TaskSnoozeModal with date picker.
+        // This fallback modal is only used if explicitly shown via showServerSnoozeModal()
+        
+        // Provide a way to show the server-rendered modal as fallback
+        window.showServerSnoozeModal = (taskId) => {
+            currentTaskId = taskId;
             overlay.classList.remove('hidden');
-        });
+        };
         
         // Close modal on overlay click
         overlay.addEventListener('click', (e) => {
@@ -1034,16 +1042,16 @@
             }
         });
         
-        // Close button
-        const closeBtn = overlay.querySelector('.modal-close, .snooze-cancel-btn');
-        if (closeBtn) {
+        // Close button (support both header X and footer Cancel)
+        const closeButtons = overlay.querySelectorAll('.task-modal-close, .snooze-cancel-btn');
+        closeButtons.forEach(closeBtn => {
             closeBtn.addEventListener('click', () => {
                 overlay.classList.add('hidden');
                 currentTaskId = null;
             });
-        }
+        });
         
-        // Snooze option buttons
+        // Snooze option buttons for server-rendered modal
         overlay.querySelectorAll('[data-snooze-duration]').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (!currentTaskId) return;
@@ -1054,8 +1062,7 @@
                 try {
                     if (window.optimisticUI?.updateTask) {
                         await window.optimisticUI.updateTask(currentTaskId, {
-                            snooze_until: snoozeUntil.toISOString(),
-                            status: 'snoozed'
+                            snoozed_until: snoozeUntil.toISOString()
                         });
                     }
                     
@@ -1080,7 +1087,7 @@
         });
         
         window.__snoozeModalReady = true;
-        console.log('[MasterInit] ✅ Snooze Modal initialized');
+        console.log('[MasterInit] ✅ Snooze Modal fallback initialized');
     }
     
     /**
