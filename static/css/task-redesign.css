@@ -4122,3 +4122,430 @@ button:not(.btn-loading) svg {
 /* ========================================
  * END OF PHASE 6: MICRO-INTERACTIONS
  * ======================================== */
+
+/* ========================================
+ * PHASE 7: MEETING-NATIVE EMPTY STATES
+ * Professional SVG illustrations, contextual messaging
+ * ======================================== */
+
+/* ----------------------------------------
+ * BASE EMPTY STATE - ENHANCED
+ * ---------------------------------------- */
+
+.task-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--task-space-12) var(--task-space-6);
+  text-align: center;
+  min-height: 300px;
+  animation: emptyStateSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes emptyStateSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ----------------------------------------
+ * EMPTY STATE ILLUSTRATIONS - SVG BASED
+ * ---------------------------------------- */
+
+.empty-state-illustration {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin-bottom: var(--task-space-6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state-illustration.meeting-native {
+  background: radial-gradient(
+    circle at center,
+    rgba(99, 102, 241, 0.12) 0%,
+    rgba(99, 102, 241, 0.04) 50%,
+    transparent 70%
+  );
+  border-radius: 50%;
+}
+
+.empty-state-illustration.meeting-native::before {
+  content: '';
+  width: 56px;
+  height: 56px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236366f1' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  animation: micPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes micPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+.empty-state-illustration.meeting-native::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 2px solid rgba(99, 102, 241, 0.25);
+  border-radius: 50%;
+  animation: soundWaveRipple 2.5s ease-out infinite;
+}
+
+@keyframes soundWaveRipple {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+
+.empty-state-illustration.all-done {
+  background: radial-gradient(
+    circle at center,
+    rgba(34, 197, 94, 0.12) 0%,
+    rgba(34, 197, 94, 0.04) 50%,
+    transparent 70%
+  );
+  border-radius: 50%;
+}
+
+.empty-state-illustration.all-done::before {
+  content: '';
+  width: 56px;
+  height: 56px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2322c55e' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  animation: checkmarkPop 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes checkmarkPop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.empty-state-illustration.no-results {
+  background: radial-gradient(
+    circle at center,
+    rgba(99, 102, 241, 0.08) 0%,
+    transparent 70%
+  );
+  border-radius: 50%;
+}
+
+.empty-state-illustration.no-results::before {
+  content: '';
+  width: 56px;
+  height: 56px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.7;
+}
+
+.empty-state-illustration.archived {
+  background: radial-gradient(
+    circle at center,
+    rgba(113, 113, 122, 0.1) 0%,
+    transparent 70%
+  );
+  border-radius: 50%;
+}
+
+.empty-state-illustration.archived::before {
+  content: '';
+  width: 56px;
+  height: 56px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.8;
+}
+
+/* ----------------------------------------
+ * EMPTY STATE TYPOGRAPHY - ENHANCED
+ * ---------------------------------------- */
+
+.empty-state-title {
+  font-size: var(--task-font-xl);
+  font-weight: var(--task-weight-semibold);
+  color: var(--task-text-primary);
+  margin: 0 0 var(--task-space-2);
+  line-height: 1.3;
+}
+
+.empty-state-description {
+  font-size: var(--task-font-base);
+  color: var(--task-text-secondary);
+  max-width: 340px;
+  line-height: 1.6;
+  margin: 0 0 var(--task-space-6);
+}
+
+.empty-state-highlight {
+  color: var(--task-accent-primary);
+  font-weight: var(--task-weight-semibold);
+}
+
+/* ----------------------------------------
+ * EMPTY STATE ACTIONS - ENHANCED
+ * ---------------------------------------- */
+
+.empty-state-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--task-space-3);
+}
+
+.empty-state-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-3) var(--task-space-6);
+  min-height: var(--touch-target-min);
+  background: var(--task-accent-primary);
+  color: white;
+  border: none;
+  border-radius: var(--task-radius-lg);
+  font-size: var(--task-font-base);
+  font-weight: var(--task-weight-semibold);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.empty-state-primary-btn:hover {
+  background: var(--task-accent-primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+}
+
+.empty-state-primary-btn:active {
+  transform: translateY(0);
+}
+
+.empty-state-primary-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.empty-state-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-2) var(--task-space-4);
+  min-height: 40px;
+  background: transparent;
+  color: var(--task-text-secondary);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-md);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.empty-state-secondary-btn:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+.empty-state-secondary-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* ----------------------------------------
+ * CONTEXTUAL EMPTY STATES
+ * ---------------------------------------- */
+
+.empty-state-all-done .empty-state-title {
+  color: var(--task-accent-success);
+}
+
+.empty-state-no-results .search-query {
+  color: var(--task-accent-primary);
+  font-weight: var(--task-weight-semibold);
+  background: rgba(99, 102, 241, 0.1);
+  padding: 2px 6px;
+  border-radius: var(--task-radius-sm);
+}
+
+/* Archived Filter Empty State */
+.empty-state-archived .empty-state-title {
+  color: var(--task-text-secondary);
+}
+
+/* ----------------------------------------
+ * MEETING WORKFLOW HINTS
+ * ---------------------------------------- */
+
+.empty-state-workflow-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-4);
+  margin-top: var(--task-space-6);
+  padding: var(--task-space-4);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-lg);
+  max-width: 380px;
+}
+
+.workflow-hint-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex: 1;
+  text-align: center;
+}
+
+.workflow-hint-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: var(--task-radius-md);
+  color: var(--task-accent-primary);
+}
+
+.workflow-hint-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.workflow-hint-label {
+  font-size: var(--task-font-xs);
+  color: var(--task-text-tertiary);
+  font-weight: var(--task-weight-medium);
+}
+
+.workflow-hint-arrow {
+  color: var(--task-text-muted);
+  flex-shrink: 0;
+}
+
+.workflow-hint-arrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ----------------------------------------
+ * MOBILE ADAPTATIONS
+ * ---------------------------------------- */
+
+@media (max-width: 640px) {
+  .task-empty-state {
+    padding: var(--task-space-8) var(--task-space-4);
+    min-height: 250px;
+  }
+  
+  .empty-state-illustration {
+    width: 120px;
+    height: 120px;
+    margin-bottom: var(--task-space-5);
+  }
+  
+  .empty-state-illustration::before {
+    width: 48px !important;
+    height: 48px !important;
+  }
+  
+  .empty-state-title {
+    font-size: var(--task-font-lg);
+  }
+  
+  .empty-state-description {
+    font-size: var(--task-font-sm);
+    max-width: 280px;
+  }
+  
+  .empty-state-actions {
+    width: 100%;
+    padding: 0 var(--task-space-4);
+  }
+  
+  .empty-state-primary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .empty-state-workflow-hint {
+    flex-direction: column;
+    gap: var(--task-space-2);
+    padding: var(--task-space-3);
+  }
+  
+  .workflow-hint-arrow {
+    transform: rotate(90deg);
+  }
+}
+
+/* ----------------------------------------
+ * REDUCED MOTION SUPPORT
+ * ---------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .task-empty-state {
+    animation: none;
+  }
+  
+  .empty-state-illustration.meeting-native::before {
+    animation: none;
+  }
+  
+  .empty-state-illustration.meeting-native::after {
+    animation: none;
+    opacity: 0.3;
+  }
+  
+  .empty-state-illustration.all-done::before {
+    animation: none;
+  }
+}
+
+/* ========================================
+ * END OF PHASE 7: MEETING-NATIVE EMPTY STATES
+ * ======================================== */
