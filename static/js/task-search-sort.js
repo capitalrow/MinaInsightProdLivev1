@@ -18,6 +18,11 @@ class TaskSearchSort {
         this.broadcast = window.broadcastSync || null;
         this.viewStateKey = 'tasks_page';
         this.isApplyingRemoteState = false;
+        
+        // CROWN⁴.16: Remote state settling period to prevent echo loops
+        // When remote state is received, broadcasts are suppressed for this duration
+        this._remoteStateReceivedAt = 0;
+        this._remoteStateSettlingPeriod = 500; // 500ms settling period after receiving remote state
 
         this.searchQuery = '';
         this.currentSort = 'default';
@@ -78,6 +83,34 @@ class TaskSearchSort {
     _setUserActionLock() {
         this._userActionTimestamp = Date.now();
         console.log('[TaskSearchSort] User action lock set');
+    }
+    
+    /**
+     * CROWN⁴.16: Check if in remote state settling period
+     * Prevents echo loops by suppressing broadcasts after receiving remote state
+     * @returns {boolean}
+     */
+    _isInRemoteStateSettling() {
+        const now = Date.now();
+        const elapsed = now - this._remoteStateReceivedAt;
+        const isSettling = elapsed < this._remoteStateSettlingPeriod;
+        if (this._remoteStateReceivedAt > 0) {
+            console.log(`[TaskSearchSort] _isInRemoteStateSettling: now=${now}, receivedAt=${this._remoteStateReceivedAt}, elapsed=${elapsed}ms, settling=${isSettling}`);
+        }
+        return isSettling;
+    }
+    
+    /**
+     * CROWN⁴.16: Mark that remote state was just received
+     * This starts the settling period to prevent echo broadcasts
+     */
+    _markRemoteStateReceived() {
+        this._remoteStateReceivedAt = Date.now();
+        // Also cancel any pending broadcast timer
+        if (this._broadcastDebounceTimer) {
+            clearTimeout(this._broadcastDebounceTimer);
+            this._broadcastDebounceTimer = null;
+        }
     }
 
     init() {
@@ -225,12 +258,8 @@ class TaskSearchSort {
             const viewState = await this.cache.getViewState(this.viewStateKey);
             if (!viewState) return;
 
-            // CROWN⁴.16: Cancel pending broadcast timer to prevent echo loop
-            if (this._broadcastDebounceTimer) {
-                clearTimeout(this._broadcastDebounceTimer);
-                this._broadcastDebounceTimer = null;
-                console.log('[TaskSearchSort] Cancelled pending broadcast on hydration');
-            }
+            // CROWN⁴.16: Mark remote state received to start settling period
+            this._markRemoteStateReceived();
             
             this.isApplyingRemoteState = true;
             if (viewState.search) {
@@ -289,12 +318,8 @@ class TaskSearchSort {
                 // CROWN⁴.12: Skip if user recently clicked a filter
                 if (this._isUserActionLocked()) return;
                 
-                // CROWN⁴.16: Cancel pending broadcast timer to prevent echo loop
-                if (this._broadcastDebounceTimer) {
-                    clearTimeout(this._broadcastDebounceTimer);
-                    this._broadcastDebounceTimer = null;
-                    console.log('[TaskSearchSort] Cancelled pending broadcast on remote state receive');
-                }
+                // CROWN⁴.16: Mark remote state received to start settling period
+                this._markRemoteStateReceived();
                 
                 this.isApplyingRemoteState = true;
                 try {
@@ -323,12 +348,8 @@ class TaskSearchSort {
                 // CROWN⁴.12: Skip if user recently clicked a filter
                 if (this._isUserActionLocked()) return;
                 
-                // CROWN⁴.16: Cancel pending broadcast timer to prevent echo loop
-                if (this._broadcastDebounceTimer) {
-                    clearTimeout(this._broadcastDebounceTimer);
-                    this._broadcastDebounceTimer = null;
-                    console.log('[TaskSearchSort] Cancelled pending broadcast on remote state receive');
-                }
+                // CROWN⁴.16: Mark remote state received to start settling period
+                this._markRemoteStateReceived();
                 
                 this.isApplyingRemoteState = true;
                 try {
@@ -356,12 +377,8 @@ class TaskSearchSort {
                 // CROWN⁴.12: Skip if user recently clicked a filter
                 if (this._isUserActionLocked()) return;
                 
-                // CROWN⁴.16: Cancel pending broadcast timer to prevent echo loop
-                if (this._broadcastDebounceTimer) {
-                    clearTimeout(this._broadcastDebounceTimer);
-                    this._broadcastDebounceTimer = null;
-                    console.log('[TaskSearchSort] Cancelled pending broadcast on remote state receive');
-                }
+                // CROWN⁴.16: Mark remote state received to start settling period
+                this._markRemoteStateReceived();
                 
                 this.isApplyingRemoteState = true;
                 try {
@@ -622,14 +639,22 @@ class TaskSearchSort {
     }
 
     broadcastState(viewState) {
+        console.log(`[TaskSearchSort] broadcastState() called. isApplyingRemoteState=${this.isApplyingRemoteState}, _remoteStateReceivedAt=${this._remoteStateReceivedAt}`);
+        
         // CROWN⁴.14: Debounce broadcasts to prevent rapid-fire events during initialization
         if (this._broadcastDebounceTimer) {
             clearTimeout(this._broadcastDebounceTimer);
         }
         
-        // CROWN⁴.14: Skip broadcasts during initial load or settling period
+        // CROWN⁴.14: Skip broadcasts during initial load or hydration settling period
         if (this._isInitialLoad || this._isInSettlingPeriod()) {
-            console.log('[TaskSearchSort] Broadcast skipped - initial load or settling');
+            console.log('[TaskSearchSort] Broadcast skipped - initial load or hydration settling');
+            return;
+        }
+        
+        // CROWN⁴.16: Skip broadcasts during remote state settling period (prevents echo loops)
+        if (this._isInRemoteStateSettling()) {
+            console.log('[TaskSearchSort] Broadcast skipped - remote state settling period');
             return;
         }
         
@@ -639,15 +664,26 @@ class TaskSearchSort {
             return;
         }
         
+        console.log('[TaskSearchSort] Scheduling 300ms broadcast debounce timer');
         this._broadcastDebounceTimer = setTimeout(() => {
+            console.log(`[TaskSearchSort] Debounce timer fired. Checking guards again...`);
+            // CROWN⁴.16: Double-check settling period inside debounce (in case state changed)
+            if (this._isInRemoteStateSettling()) {
+                console.log('[TaskSearchSort] Broadcast cancelled inside debounce - remote state settling');
+                return;
+            }
+            if (this.isApplyingRemoteState) {
+                console.log('[TaskSearchSort] Broadcast cancelled inside debounce - applying remote state');
+                return;
+            }
+            
+            console.log('[TaskSearchSort] Sending broadcasts now');
             // CROWN⁴.15: Only use BroadcastSync (not MultiTabSync) to avoid duplicate broadcasts
-            // MultiTabSync listens to filter_changed which can cause echo loops
             if (this.broadcast?.broadcast) {
                 this.broadcast.broadcast(this.broadcast.EVENTS.FILTER_APPLY, viewState);
                 this.broadcast.broadcast(this.broadcast.EVENTS.SEARCH_QUERY, { query: this.searchQuery });
                 this.broadcast.broadcast(this.broadcast.EVENTS.UI_STATE_SYNC, viewState);
             }
-            // REMOVED: multiTabSync.broadcastFilterChanged - causes duplicate broadcasts
         }, 300); // 300ms debounce
     }
 
