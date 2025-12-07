@@ -4878,3 +4878,505 @@ button:not(.btn-loading) svg {
 /* ========================================
  * END OF PHASE 8: UNDO SYSTEM
  * ======================================== */
+
+/* ========================================
+ * PHASE 9: ERROR STATES & RETRY
+ * Inline error messages with retry buttons
+ * Graceful degradation when operations fail
+ * ======================================== */
+
+/* ----------------------------------------
+ * INLINE ERROR MESSAGE ON TASK CARD
+ * Shows when an action fails with retry option
+ * ---------------------------------------- */
+
+.task-error-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-2) var(--task-space-3);
+  margin-top: var(--task-space-2);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--task-radius-md);
+  animation: error-slide-in 0.2s ease-out;
+}
+
+@keyframes error-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.task-error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--task-accent-danger);
+}
+
+.task-error-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.task-error-text {
+  flex: 1;
+  font-size: var(--task-font-xs);
+  color: var(--task-accent-danger);
+  line-height: 1.4;
+}
+
+.task-error-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+  padding: var(--task-space-1) var(--task-space-2);
+  min-height: 28px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--task-radius-sm);
+  color: var(--task-accent-danger);
+  font-size: var(--task-font-xs);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  white-space: nowrap;
+}
+
+.task-error-retry-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.task-error-retry-btn:active {
+  transform: scale(0.98);
+}
+
+.task-error-retry-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+}
+
+.task-error-retry-btn.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.task-error-retry-btn.loading::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  margin-left: var(--task-space-1);
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: error-retry-spin 0.6s linear infinite;
+}
+
+@keyframes error-retry-spin {
+  to { transform: rotate(360deg); }
+}
+
+.task-error-dismiss-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  flex-shrink: 0;
+}
+
+.task-error-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--task-text-secondary);
+}
+
+/* ----------------------------------------
+ * CONNECTION STATUS BANNER (enhanced)
+ * ---------------------------------------- */
+
+.connection-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-3) var(--task-space-4);
+  margin-bottom: var(--task-space-4);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--task-radius-lg);
+  animation: banner-slide-down 0.3s ease-out;
+}
+
+@keyframes banner-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.connection-banner.hidden {
+  display: none;
+}
+
+.connection-banner.offline {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.connection-banner.offline .connection-status-icon::before {
+  background: var(--task-accent-danger);
+}
+
+.connection-banner.reconnecting {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.connection-banner.reconnecting .connection-status-icon::before {
+  background: var(--task-accent-warning);
+  animation: connection-pulse 1s infinite;
+}
+
+.connection-banner.online {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.connection-banner.online .connection-status-icon::before {
+  background: var(--task-accent-success);
+}
+
+.connection-status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  position: relative;
+}
+
+.connection-status-icon::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: var(--task-accent-warning);
+  border-radius: 50%;
+}
+
+@keyframes connection-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.connection-message {
+  flex: 1;
+  font-size: var(--task-font-sm);
+  color: var(--task-text-primary);
+}
+
+.connection-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+  padding: var(--task-space-2) var(--task-space-3);
+  min-height: 32px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-primary);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.connection-retry-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--task-border-hover);
+}
+
+.pending-count {
+  font-size: var(--task-font-xs);
+  color: var(--task-text-tertiary);
+  white-space: nowrap;
+}
+
+/* ----------------------------------------
+ * TASK CARD ERROR STATE
+ * Visual indicator that task has error
+ * ---------------------------------------- */
+
+.task-card.has-error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: linear-gradient(
+    135deg,
+    var(--task-bg-card) 0%,
+    rgba(239, 68, 68, 0.05) 100%
+  );
+}
+
+.task-card.has-error:hover {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+/* ----------------------------------------
+ * NETWORK ERROR TOAST (global)
+ * For network-wide issues
+ * ---------------------------------------- */
+
+.network-error-toast {
+  position: fixed;
+  top: var(--task-space-4);
+  left: 50%;
+  transform: translateX(-50%) translateY(-100%);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-3) var(--task-space-4);
+  max-width: 480px;
+  width: calc(100% - var(--task-space-8));
+  background: var(--task-bg-elevated);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: var(--task-radius-lg);
+  box-shadow: var(--task-shadow-lg);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.network-error-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.network-error-toast.hiding {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+.network-error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: rgba(239, 68, 68, 0.2);
+  border-radius: var(--task-radius-md);
+  color: var(--task-accent-danger);
+  flex-shrink: 0;
+}
+
+.network-error-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.network-error-title {
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-semibold);
+  color: var(--task-text-primary);
+  margin-bottom: 2px;
+}
+
+.network-error-message {
+  font-size: var(--task-font-xs);
+  color: var(--task-text-secondary);
+}
+
+.network-error-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex-shrink: 0;
+}
+
+.network-error-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+  padding: var(--task-space-2) var(--task-space-3);
+  min-height: 32px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--task-radius-md);
+  color: var(--task-accent-danger);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.network-error-retry:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.network-error-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.network-error-dismiss:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--task-text-primary);
+}
+
+/* ----------------------------------------
+ * GRACEFUL DEGRADATION INDICATOR
+ * Shows when running in offline/degraded mode
+ * ---------------------------------------- */
+
+.degraded-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+  padding: var(--task-space-1) var(--task-space-2);
+  background: rgba(245, 158, 11, 0.15);
+  border-radius: var(--task-radius-full);
+  font-size: var(--task-font-xs);
+  color: var(--task-accent-warning);
+}
+
+.degraded-mode-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--task-accent-warning);
+  border-radius: 50%;
+}
+
+/* ----------------------------------------
+ * LOADING STATE FOR RETRY
+ * Skeleton shimmer during retry
+ * ---------------------------------------- */
+
+.task-card.retrying {
+  position: relative;
+  overflow: hidden;
+}
+
+.task-card.retrying::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 100%
+  );
+  animation: retry-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes retry-shimmer {
+  from { left: -100%; }
+  to { left: 100%; }
+}
+
+/* ----------------------------------------
+ * MOBILE ADAPTATIONS FOR ERROR STATES
+ * ---------------------------------------- */
+
+@media (max-width: 640px) {
+  .task-error-inline {
+    flex-wrap: wrap;
+    gap: var(--task-space-2);
+  }
+  
+  .task-error-text {
+    flex: 1 1 100%;
+    order: 1;
+  }
+  
+  .task-error-icon {
+    order: 0;
+  }
+  
+  .task-error-retry-btn {
+    order: 2;
+    flex: 1;
+    justify-content: center;
+  }
+  
+  .task-error-dismiss-btn {
+    order: 3;
+  }
+  
+  .network-error-toast {
+    flex-wrap: wrap;
+    width: calc(100% - var(--task-space-4));
+  }
+  
+  .network-error-content {
+    flex: 1 1 calc(100% - 50px);
+  }
+  
+  .network-error-actions {
+    flex: 1 1 100%;
+    margin-top: var(--task-space-2);
+  }
+  
+  .network-error-retry {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+/* ----------------------------------------
+ * REDUCED MOTION FOR ERROR STATES
+ * ---------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .task-error-inline,
+  .connection-banner,
+  .network-error-toast {
+    animation: none;
+  }
+  
+  .task-card.retrying::after {
+    animation: none;
+    display: none;
+  }
+  
+  .connection-banner.reconnecting .connection-status-icon::before {
+    animation: none;
+  }
+  
+  .task-error-retry-btn.loading::after {
+    animation: none;
+  }
+}
+
+/* ========================================
+ * END OF PHASE 9: ERROR STATES & RETRY
+ * ======================================== */

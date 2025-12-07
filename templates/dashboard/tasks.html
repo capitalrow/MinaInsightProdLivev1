@@ -130,11 +130,17 @@
         </div>
     </div>
 
-    <!-- Offline/Status Banner -->
-    <div id="connection-banner" class="connection-banner hidden">
-        <span class="connection-status-icon"></span>
-        <span class="connection-message"></span>
-        <span class="pending-count"></span>
+    <!-- Offline/Status Banner (CROWN⁴.9 Phase 9: Enhanced with retry) -->
+    <div id="connection-banner" class="connection-banner hidden" role="alert">
+        <span class="connection-status-icon" aria-hidden="true"></span>
+        <span class="connection-message">You're offline</span>
+        <button class="connection-retry-btn hidden" aria-label="Retry connection">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Retry
+        </button>
+        <span class="pending-count" aria-live="polite"></span>
     </div>
 
     <!-- Legacy task-filters div for JS compatibility (hidden, data synced) -->
@@ -977,6 +983,9 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 
 <!-- CROWN⁴.8 Phase 8: Undo System -->
 <script defer src="{{ url_for('static', filename='js/task-undo-manager.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+
+<!-- CROWN⁴.9 Phase 9: Error States & Retry -->
+<script defer src="{{ url_for('static', filename='js/task-error-handler.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.8: Progressive Disclosure & Mobile UX -->
 <script defer src="{{ url_for('static', filename='js/task-progressive-disclosure.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
