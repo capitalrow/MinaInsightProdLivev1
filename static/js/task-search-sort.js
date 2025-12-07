@@ -612,15 +612,14 @@ class TaskSearchSort {
         }
         
         this._broadcastDebounceTimer = setTimeout(() => {
+            // CROWN⁴.15: Only use BroadcastSync (not MultiTabSync) to avoid duplicate broadcasts
+            // MultiTabSync listens to filter_changed which can cause echo loops
             if (this.broadcast?.broadcast) {
                 this.broadcast.broadcast(this.broadcast.EVENTS.FILTER_APPLY, viewState);
                 this.broadcast.broadcast(this.broadcast.EVENTS.SEARCH_QUERY, { query: this.searchQuery });
                 this.broadcast.broadcast(this.broadcast.EVENTS.UI_STATE_SYNC, viewState);
             }
-
-            if (window.multiTabSync?.broadcastFilterChanged) {
-                window.multiTabSync.broadcastFilterChanged(viewState);
-            }
+            // REMOVED: multiTabSync.broadcastFilterChanged - causes duplicate broadcasts
         }, 300); // 300ms debounce
     }
 
