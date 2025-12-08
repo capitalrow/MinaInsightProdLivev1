@@ -1,6 +1,7 @@
 /**
  * PHASE 2: Command Bar Consolidation
  * Handles collapsible search and filter sync between inline/legacy elements
+ * CROWN⁴.18: URL-based filter state for flicker-free SSR
  */
 
 (function() {
@@ -16,14 +17,83 @@
             
             this.isSearchExpanded = false;
             
+            // CROWN⁴.18: Track current filter from URL
+            this.currentFilter = this.getFilterFromURL();
+            
             this.init();
+        }
+        
+        /**
+         * CROWN⁴.18: Read filter from URL query parameter
+         * @returns {string} Current filter (default: 'active')
+         */
+        getFilterFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            const filter = params.get('filter');
+            const validFilters = ['active', 'completed', 'archived', 'all'];
+            return validFilters.includes(filter) ? filter : 'active';
+        }
+        
+        /**
+         * CROWN⁴.18: Update URL with new filter using pushState (no page reload)
+         * @param {string} filter - New filter value
+         */
+        updateURLFilter(filter) {
+            const url = new URL(window.location.href);
+            if (filter === 'active') {
+                // Active is default, remove param for cleaner URL
+                url.searchParams.delete('filter');
+            } else {
+                url.searchParams.set('filter', filter);
+            }
+            window.history.pushState({ filter }, '', url.toString());
+            this.currentFilter = filter;
+            console.log(`[TaskCommandBar] URL updated to: ${url.pathname}${url.search}`);
         }
         
         init() {
             this.initSearchToggle();
             this.initFilterSync();
             this.initKeyboardShortcuts();
-            console.log('[TaskCommandBar] Phase 2 command bar initialized');
+            this.initPopStateHandler();
+            console.log(`[TaskCommandBar] Phase 2 command bar initialized (filter: ${this.currentFilter})`);
+        }
+        
+        /**
+         * CROWN⁴.18: Handle browser back/forward navigation
+         */
+        initPopStateHandler() {
+            window.addEventListener('popstate', (e) => {
+                const filter = e.state?.filter || this.getFilterFromURL();
+                this.applyFilter(filter, false); // Don't update URL again
+            });
+        }
+        
+        /**
+         * CROWN⁴.18: Apply filter and optionally update URL
+         * @param {string} filter - Filter to apply
+         * @param {boolean} updateURL - Whether to update URL (default: true)
+         */
+        applyFilter(filter, updateURL = true) {
+            // Update tab UI
+            this.inlineFilters?.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.filter === filter);
+            });
+            this.legacyFilters?.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.filter === filter);
+            });
+            
+            // Update URL if needed
+            if (updateURL) {
+                this.updateURLFilter(filter);
+            }
+            
+            // Dispatch filter change event for other modules
+            document.dispatchEvent(new CustomEvent('filterChanged', {
+                detail: { filter: filter, fromURL: !updateURL }
+            }));
+            
+            this.currentFilter = filter;
         }
         
         initSearchToggle() {
@@ -87,6 +157,7 @@
                 return;
             }
             
+            // CROWN⁴.18: Filter tab clicks now use URL-based state
             this.inlineFilters.addEventListener('click', (e) => {
                 const filterTab = e.target.closest('.filter-tab');
                 if (!filterTab) return;
@@ -94,20 +165,8 @@
                 const filter = filterTab.dataset.filter;
                 if (!filter) return;
                 
-                this.inlineFilters.querySelectorAll('.filter-tab').forEach(tab => {
-                    tab.classList.remove('active');
-                });
-                filterTab.classList.add('active');
-                
-                if (this.legacyFilters) {
-                    this.legacyFilters.querySelectorAll('.filter-tab').forEach(tab => {
-                        tab.classList.toggle('active', tab.dataset.filter === filter);
-                    });
-                }
-                
-                document.dispatchEvent(new CustomEvent('filterChanged', {
-                    detail: { filter: filter }
-                }));
+                // Use applyFilter which updates URL and dispatches event
+                this.applyFilter(filter, true);
                 
                 console.log(`[TaskCommandBar] Filter changed to: ${filter}`);
             });

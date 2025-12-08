@@ -295,7 +295,25 @@ def meetings():
 @dashboard_bp.route('/tasks')
 @login_required
 def tasks():
-    """Tasks overview page with kanban board."""
+    """Tasks overview page with kanban board.
+    
+    CROWN⁴.18: URL-based filter state for flicker-free SSR.
+    The ?filter= parameter determines which tasks to render server-side:
+    - active (default): todo, in_progress, pending, blocked tasks
+    - completed: completed tasks only
+    - archived: completed + cancelled tasks  
+    - all: all tasks
+    
+    This eliminates flicker because SSR renders exactly what JS expects.
+    """
+    import logging
+    
+    # CROWN⁴.18: Read filter from URL query parameter (default: active)
+    current_filter = request.args.get('filter', 'active')
+    valid_filters = ['active', 'completed', 'archived', 'all']
+    if current_filter not in valid_filters:
+        current_filter = 'active'
+    
     # Get all tasks for workspace (not just assigned to current user)
     if current_user.is_authenticated and current_user.workspace_id:
         # CROWN⁴.6: Eager load meeting, analytics, and assigned_to relationships for spoken provenance + Impact Score
@@ -322,7 +340,6 @@ def tasks():
             .order_by(Task.id.desc(), Task.due_date.asc().nullslast(), Task.priority.desc(), Task.created_at.desc()).all()
         
         # Debug: Log meeting relationship loading
-        import logging
         meeting_linked = [t for t in all_tasks if t.meeting is not None]
         ai_extracted = [t for t in all_tasks if t.extracted_by_ai]
         logging.info(f"[CROWN DEBUG] Tasks loaded: {len(all_tasks)}, with meeting: {len(meeting_linked)}, AI-extracted: {len(ai_extracted)}")
@@ -331,7 +348,27 @@ def tasks():
     else:
         all_tasks = []
     
-    # Get tasks by status
+    # CROWN⁴.18: Filter tasks based on URL parameter for SSR
+    # Active = not completed, not cancelled (todo, in_progress, pending, blocked)
+    # Archived = completed + cancelled
+    active_statuses = ['todo', 'in_progress', 'pending', 'blocked']
+    archived_statuses = ['completed', 'cancelled']
+    
+    if current_filter == 'active':
+        filtered_tasks = [t for t in all_tasks if t.status in active_statuses]
+    elif current_filter == 'completed':
+        filtered_tasks = [t for t in all_tasks if t.status == 'completed']
+    elif current_filter == 'archived':
+        filtered_tasks = [t for t in all_tasks if t.status in archived_statuses]
+    else:  # 'all'
+        filtered_tasks = all_tasks
+    
+    # Calculate counts for tab counters (always from all_tasks)
+    active_count = len([t for t in all_tasks if t.status in active_statuses])
+    archived_count = len([t for t in all_tasks if t.status in archived_statuses])
+    total_count = len(all_tasks)
+    
+    # Get tasks by status (for legacy compatibility)
     todo_tasks = [t for t in all_tasks if t.status == 'todo']
     in_progress_tasks = [t for t in all_tasks if t.status == 'in_progress']
     completed_tasks = [t for t in all_tasks if t.status == 'completed'][:10]
@@ -339,12 +376,19 @@ def tasks():
     # CROWN⁴.6: Serialize tasks for frontend (fixes JSON serialization of to_dict method)
     tasks_serialized = [t.to_dict() for t in all_tasks]
     
+    logging.info(f"[CROWN⁴.18] SSR filter={current_filter}, rendering {len(filtered_tasks)}/{len(all_tasks)} tasks")
+    
     return render_template('dashboard/tasks.html',
-                         tasks=all_tasks,
+                         tasks=filtered_tasks,  # CROWN⁴.18: Only filtered tasks for SSR
+                         all_tasks=all_tasks,   # Full list for JS hydration
                          tasks_json=tasks_serialized,
                          todo_tasks=todo_tasks,
                          in_progress_tasks=in_progress_tasks,
-                         completed_tasks=completed_tasks)
+                         completed_tasks=completed_tasks,
+                         current_filter=current_filter,  # CROWN⁴.18: Pass filter to template
+                         active_count=active_count,
+                         archived_count=archived_count,
+                         total_count=total_count)
 
 
 @dashboard_bp.route('/tasks/<int:task_id>')
