@@ -629,23 +629,24 @@ class AnalysisService:
             'message': None
         }
     
+    # Chunking configuration for long transcripts
+    CHUNK_SIZE = 6000  # ~6k chars per chunk (leaves room for prompt overhead)
+    CHUNK_OVERLAP = 500  # 500 char overlap for context continuity
+    CHUNKING_THRESHOLD = 10000  # Use chunking for transcripts > 10k chars
+    
     @staticmethod
     def _build_context(segments: List[Segment]) -> str:
         """
-        Build bounded context string from final segments.
+        Build FULL context string from final segments without truncation.
+        Chunking is handled separately in _analyse_with_openai for long transcripts.
         
         Args:
             segments: List of final segments ordered by time
             
         Returns:
-            Context string limited to configured character count
+            Full context string (no truncation - chunking handles long transcripts)
         """
-        try:
-            max_chars = current_app.config.get('SUMMARY_CONTEXT_CHARS', 12000)
-        except RuntimeError:
-            max_chars = 12000
-        
-        # Build full transcript
+        # Build full transcript without truncation
         transcript_parts = []
         for segment in segments:
             # Format with timestamp for context
@@ -659,21 +660,238 @@ class AnalysisService:
         
         full_transcript = " ".join(transcript_parts)
         
-        # Truncate if too long (keep ending for recent context)
-        if len(full_transcript) > max_chars:
-            truncated = full_transcript[-max_chars:]
-            # Try to start at a sentence boundary
-            sentence_start = truncated.find('. ')
-            if sentence_start > 0 and sentence_start < 1000:  # Don't cut too much
-                truncated = truncated[sentence_start + 2:]
-            full_transcript = "..." + truncated
+        # Log transcript size for debugging
+        logger.info(f"[Build Context] Full transcript: {len(full_transcript)} chars, {len(full_transcript.split())} words")
         
         return full_transcript
+    
+    @staticmethod
+    def _chunk_transcript(transcript: str, chunk_size: int = None, overlap: int = None) -> List[Dict[str, Any]]:
+        """
+        Split long transcript into overlapping chunks for processing.
+        Maintains sentence boundaries for better context.
+        
+        Args:
+            transcript: Full transcript text
+            chunk_size: Target chunk size in chars (default: CHUNK_SIZE)
+            overlap: Overlap between chunks in chars (default: CHUNK_OVERLAP)
+            
+        Returns:
+            List of chunk dicts with keys: text, chunk_index, total_chunks, start_char, end_char
+        """
+        if chunk_size is None:
+            chunk_size = AnalysisService.CHUNK_SIZE
+        if overlap is None:
+            overlap = AnalysisService.CHUNK_OVERLAP
+        
+        # If transcript fits in one chunk, return as single chunk
+        if len(transcript) <= chunk_size:
+            return [{
+                'text': transcript,
+                'chunk_index': 0,
+                'total_chunks': 1,
+                'start_char': 0,
+                'end_char': len(transcript)
+            }]
+        
+        chunks = []
+        start = 0
+        chunk_index = 0
+        
+        while start < len(transcript):
+            # Calculate end position
+            end = min(start + chunk_size, len(transcript))
+            
+            # If not at the end, try to break at sentence boundary
+            if end < len(transcript):
+                # Look for sentence endings (. ! ?) within last 500 chars of chunk
+                search_start = max(end - 500, start)
+                last_sentence_end = -1
+                
+                for i in range(end - 1, search_start - 1, -1):
+                    if transcript[i] in '.!?' and (i + 1 >= len(transcript) or transcript[i + 1] in ' \n'):
+                        last_sentence_end = i + 1
+                        break
+                
+                # Use sentence boundary if found, otherwise use chunk_size
+                if last_sentence_end > start:
+                    end = last_sentence_end
+            
+            chunk_text = transcript[start:end].strip()
+            
+            if chunk_text:  # Only add non-empty chunks
+                chunks.append({
+                    'text': chunk_text,
+                    'chunk_index': chunk_index,
+                    'total_chunks': -1,  # Will be updated after all chunks created
+                    'start_char': start,
+                    'end_char': end
+                })
+                chunk_index += 1
+            
+            # Move start position, accounting for overlap
+            start = max(end - overlap, start + 1)  # Ensure progress
+        
+        # Update total_chunks in all chunks
+        total = len(chunks)
+        for chunk in chunks:
+            chunk['total_chunks'] = total
+        
+        logger.info(f"[Chunking] Split {len(transcript)} chars into {total} chunks (size={chunk_size}, overlap={overlap})")
+        
+        return chunks
+    
+    @staticmethod
+    def _merge_insights(chunk_results: List[Dict], level: SummaryLevel, style: SummaryStyle) -> Dict:
+        """
+        Merge insights from multiple chunk analyses into unified result.
+        Handles deduplication, summary combination, and metadata aggregation.
+        
+        Args:
+            chunk_results: List of analysis results from individual chunks
+            level: Summary detail level
+            style: Summary style type
+            
+        Returns:
+            Merged analysis results dictionary
+        """
+        if not chunk_results:
+            return {
+                'summary_md': 'No content to analyze.',
+                'actions': [],
+                'decisions': [],
+                'risks': []
+            }
+        
+        if len(chunk_results) == 1:
+            return chunk_results[0]
+        
+        logger.info(f"[Merge] Merging insights from {len(chunk_results)} chunks")
+        
+        # Initialize merged result
+        merged = {
+            'summary_md': '',
+            'brief_summary': '',
+            'actions': [],
+            'decisions': [],
+            'risks': [],
+            'executive_insights': [],
+            'technical_details': [],
+            'action_plan': [],
+            '_chunked_processing': {
+                'chunk_count': len(chunk_results),
+                'merge_timestamp': datetime.utcnow().isoformat()
+            }
+        }
+        
+        # Collect all items from all chunks
+        all_summaries = []
+        all_brief_summaries = []
+        
+        for i, result in enumerate(chunk_results):
+            # Collect summaries
+            if result.get('summary_md'):
+                all_summaries.append(f"**Part {i+1}:** {result['summary_md']}")
+            if result.get('brief_summary'):
+                all_brief_summaries.append(result['brief_summary'])
+            
+            # Collect actions with chunk source
+            for action in result.get('actions', []) or []:
+                action['_source_chunk'] = i
+                merged['actions'].append(action)
+            
+            # Collect decisions with chunk source
+            for decision in result.get('decisions', []) or []:
+                decision['_source_chunk'] = i
+                merged['decisions'].append(decision)
+            
+            # Collect risks with chunk source
+            for risk in result.get('risks', []) or []:
+                risk['_source_chunk'] = i
+                merged['risks'].append(risk)
+            
+            # Collect other insights
+            for insight in result.get('executive_insights', []) or []:
+                merged['executive_insights'].append(insight)
+            for detail in result.get('technical_details', []) or []:
+                merged['technical_details'].append(detail)
+            for plan_item in result.get('action_plan', []) or []:
+                merged['action_plan'].append(plan_item)
+        
+        # Combine summaries
+        if all_summaries:
+            merged['summary_md'] = '\n\n'.join(all_summaries)
+        if all_brief_summaries:
+            # Use first and last for brief summary to capture beginning and end
+            if len(all_brief_summaries) >= 2:
+                merged['brief_summary'] = f"{all_brief_summaries[0]} [...] {all_brief_summaries[-1]}"
+            else:
+                merged['brief_summary'] = all_brief_summaries[0]
+        
+        # Deduplicate actions by text similarity
+        merged['actions'] = AnalysisService._deduplicate_items(merged['actions'], 'text')
+        merged['decisions'] = AnalysisService._deduplicate_items(merged['decisions'], 'text')
+        merged['risks'] = AnalysisService._deduplicate_items(merged['risks'], 'text')
+        
+        logger.info(f"[Merge] Final counts - Actions: {len(merged['actions'])}, Decisions: {len(merged['decisions'])}, Risks: {len(merged['risks'])}")
+        
+        return merged
+    
+    @staticmethod
+    def _deduplicate_items(items: List[Dict], text_key: str, similarity_threshold: float = 0.8) -> List[Dict]:
+        """
+        Deduplicate items based on text similarity.
+        
+        Args:
+            items: List of item dicts
+            text_key: Key containing the text to compare
+            similarity_threshold: Threshold for considering items duplicates (0-1)
+            
+        Returns:
+            Deduplicated list of items
+        """
+        if not items:
+            return []
+        
+        unique_items = []
+        
+        for item in items:
+            item_text = item.get(text_key, '').lower().strip()
+            if not item_text:
+                continue
+            
+            is_duplicate = False
+            for existing in unique_items:
+                existing_text = existing.get(text_key, '').lower().strip()
+                
+                # Simple similarity check: normalized word overlap
+                item_words = set(item_text.split())
+                existing_words = set(existing_text.split())
+                
+                if not item_words or not existing_words:
+                    continue
+                
+                intersection = len(item_words & existing_words)
+                union = len(item_words | existing_words)
+                similarity = intersection / union if union > 0 else 0
+                
+                if similarity >= similarity_threshold:
+                    is_duplicate = True
+                    break
+            
+            if not is_duplicate:
+                unique_items.append(item)
+        
+        if len(items) != len(unique_items):
+            logger.debug(f"[Dedupe] Removed {len(items) - len(unique_items)} duplicates (from {len(items)} to {len(unique_items)})")
+        
+        return unique_items
     
     @staticmethod
     def _analyse_with_openai(context: str, level: SummaryLevel, style: SummaryStyle) -> Dict:
         """
         Analyse context using OpenAI GPT with specified level and style.
+        For long transcripts (>10k chars), uses chunked processing to capture full content.
         Implements exponential backoff retry (3 attempts: 0s, 2s, 5s).
         
         Args:
@@ -685,6 +903,14 @@ class AnalysisService:
             Analysis results dictionary
         """
         import time
+        
+        # Check if we need chunked processing for long transcripts
+        if len(context) > AnalysisService.CHUNKING_THRESHOLD:
+            logger.info(f"[Chunked Analysis] Transcript is {len(context)} chars (>{AnalysisService.CHUNKING_THRESHOLD}), using chunked processing")
+            return AnalysisService._analyse_with_chunking(context, level, style)
+        
+        # Standard single-call processing for shorter transcripts
+        logger.info(f"[Single Analysis] Transcript is {len(context)} chars, using single-call processing")
         
         # Retry configuration
         MAX_RETRIES = 3
@@ -727,6 +953,100 @@ class AnalysisService:
         
         # Should never reach here, but just in case
         raise ValueError(f"OpenAI analysis failed: {last_error}")
+    
+    @staticmethod
+    def _analyse_with_chunking(context: str, level: SummaryLevel, style: SummaryStyle) -> Dict:
+        """
+        Process long transcripts using chunked analysis.
+        Splits transcript into chunks, processes each, then merges results.
+        
+        Args:
+            context: Full meeting transcript (>10k chars)
+            level: Summary detail level
+            style: Summary style type
+            
+        Returns:
+            Merged analysis results from all chunks
+        """
+        import time
+        
+        # Split transcript into chunks
+        chunks = AnalysisService._chunk_transcript(context)
+        total_chunks = len(chunks)
+        
+        logger.info(f"[Chunked Analysis] Processing {total_chunks} chunks for {len(context)} char transcript")
+        
+        chunk_results = []
+        failed_chunks = []
+        
+        for chunk in chunks:
+            chunk_idx = chunk['chunk_index']
+            chunk_text = chunk['text']
+            
+            logger.info(f"[Chunk {chunk_idx + 1}/{total_chunks}] Processing {len(chunk_text)} chars...")
+            
+            # Add chunk context to the prompt
+            chunk_context = f"[CHUNK {chunk_idx + 1} OF {total_chunks}]\n{chunk_text}"
+            
+            # Retry configuration for each chunk
+            MAX_RETRIES = 3
+            BACKOFF_DELAYS = [0, 2, 5]
+            
+            chunk_success = False
+            last_error = None
+            
+            for attempt in range(MAX_RETRIES):
+                try:
+                    if attempt > 0:
+                        delay = BACKOFF_DELAYS[attempt]
+                        logger.info(f"[Chunk {chunk_idx + 1}] Retry {attempt}, waiting {delay}s...")
+                        time.sleep(delay)
+                    
+                    result = AnalysisService._perform_openai_analysis(chunk_context, level, style, attempt)
+                    result['_chunk_index'] = chunk_idx
+                    chunk_results.append(result)
+                    chunk_success = True
+                    
+                    logger.info(f"[Chunk {chunk_idx + 1}/{total_chunks}] ✓ Processed successfully")
+                    break
+                    
+                except (json.JSONDecodeError, ValueError) as e:
+                    last_error = e
+                    logger.warning(f"[Chunk {chunk_idx + 1}] Attempt {attempt + 1} failed: {e}")
+                    continue
+                    
+                except Exception as e:
+                    last_error = e
+                    logger.error(f"[Chunk {chunk_idx + 1}] Non-retryable error: {e}")
+                    break
+            
+            if not chunk_success:
+                failed_chunks.append({
+                    'chunk_index': chunk_idx,
+                    'error': str(last_error)
+                })
+                logger.error(f"[Chunk {chunk_idx + 1}/{total_chunks}] ✗ Failed after all retries: {last_error}")
+        
+        # Log summary
+        success_count = len(chunk_results)
+        fail_count = len(failed_chunks)
+        logger.info(f"[Chunked Analysis] Completed: {success_count}/{total_chunks} chunks succeeded, {fail_count} failed")
+        
+        if not chunk_results:
+            raise ValueError(f"All {total_chunks} chunks failed to process")
+        
+        # Merge results from all successful chunks
+        merged_result = AnalysisService._merge_insights(chunk_results, level, style)
+        
+        # Add chunking metadata
+        merged_result['_chunked_processing'] = {
+            'total_chunks': total_chunks,
+            'successful_chunks': success_count,
+            'failed_chunks': failed_chunks,
+            'original_length': len(context)
+        }
+        
+        return merged_result
     
     @staticmethod
     def _perform_openai_analysis(context: str, level: SummaryLevel, style: SummaryStyle, attempt: int = 0) -> Dict:
