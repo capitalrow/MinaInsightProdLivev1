@@ -1,0 +1,21 @@
+{
+  "timestamp": "2025-12-08T15:43:19.297753",
+  "summary": {
+    "total_metrics": 0,
+    "validated": 0,
+    "passed": 0,
+    "failed": 0,
+    "details": {}
+  },
+  "metrics": {},
+  "thresholds": {
+    "first_paint_ms": 200,
+    "cache_bootstrap_ms": 50,
+    "semantic_search_ms": 100,
+    "optimistic_update_ms": 150,
+    "event_latency_ms": 300,
+    "scroll_fps": 60,
+    "checkmark_burst_ms": 150,
+    "reconciliation_ms": 150
+  }
+}
