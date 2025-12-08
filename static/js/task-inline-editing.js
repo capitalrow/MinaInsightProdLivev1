@@ -4,7 +4,7 @@ class TaskInlineEditing {
         this.workspaceUsers = null; // Cache for workspace users
         this.fetchingUsers = null; // Promise for in-flight fetch
         this.init();
-        console.log('[TaskInlineEditing] Initialized');
+        console.log('[InlineEdit] ✅ TaskInlineEditing initialized');
     }
 
     init() {
@@ -74,6 +74,7 @@ class TaskInlineEditing {
     editTitle(titleElement) {
         // Prevent multiple edit sessions
         if (titleElement.hasAttribute('contenteditable')) {
+            console.log('[InlineEdit] Already editing, ignoring');
             return;
         }
 
@@ -82,6 +83,10 @@ class TaskInlineEditing {
 
         const taskId = card.dataset.taskId;
         const originalText = titleElement.textContent.trim();
+        
+        console.log('[InlineEdit] ✏️ TITLE EDIT START');
+        console.log('[InlineEdit] Task ID:', taskId);
+        console.log('[InlineEdit] Original text:', originalText);
 
         // Enable contenteditable
         titleElement.setAttribute('contenteditable', 'true');
@@ -108,12 +113,15 @@ class TaskInlineEditing {
 
             // If text changed, update task
             if (newText && newText !== originalText) {
+                console.log('[InlineEdit] 📝 Title changed:', originalText, '→', newText);
                 try {
                     // Show saving state
                     titleElement.classList.add('saving');
 
+                    console.log('[InlineEdit] 📤 Calling optimisticUI.updateTask()');
                     // Update task via optimistic UI
                     await this.taskUI.updateTask(taskId, { title: newText });
+                    console.log('[InlineEdit] ✅ Title update successful');
 
                     // Emit task updated event for CognitiveSynchronizer
                     document.dispatchEvent(new CustomEvent('task:updated', {
@@ -135,7 +143,7 @@ class TaskInlineEditing {
                         window.CROWNTelemetry.recordMetric('inline_edit_success', 1, { field: 'title' });
                     }
                 } catch (error) {
-                    console.error('Failed to update title:', error);
+                    console.error('[InlineEdit] ❌ Failed to update title:', error);
 
                     // Rollback to original text
                     titleElement.textContent = originalText;
@@ -146,8 +154,11 @@ class TaskInlineEditing {
                     }
                 }
             } else if (!newText) {
+                console.log('[InlineEdit] Empty title, reverting to original');
                 // Don't allow empty titles
                 titleElement.textContent = originalText;
+            } else {
+                console.log('[InlineEdit] No change detected');
             }
         };
 

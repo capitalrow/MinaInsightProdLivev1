@@ -879,16 +879,21 @@ class TaskSearchSort {
     }
 
     setFilter(filter) {
+        console.log('[SearchSort] 🔍 setFilter called:', filter);
+        console.log('[SearchSort] Previous filter:', this.currentFilter);
         this.currentFilter = filter;
         this.safeApplyFiltersAndSort();
+        console.log('[SearchSort] ✅ Filter applied:', filter);
     }
 
     setQuickFilter(filter) {
+        console.log('[SearchSort] ⚡ setQuickFilter called:', filter);
         this.quickFilter = filter;
         this.safeApplyFiltersAndSort();
     }
 
     clearQuickFilter() {
+        console.log('[SearchSort] 🧹 clearQuickFilter called');
         this.quickFilter = null;
         this.safeApplyFiltersAndSort();
     }
