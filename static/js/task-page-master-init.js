@@ -46,6 +46,8 @@
     
     /**
      * Initialize filter tabs (All/Active/Archived)
+     * CROWN⁴.19 FIX: Attach listeners directly to container to avoid
+     * stopPropagation issues from TaskRedesign's mobile tap handlers
      */
     function initFilterTabs() {
         if (window.__taskFilterTabsReady) return;
@@ -56,6 +58,7 @@
             if (!tab) return;
 
             e.preventDefault();
+            e.stopPropagation(); // Prevent TaskRedesign mobile handlers from interfering
 
             const filter = tab.dataset.filter;
             const filterTabs = document.querySelectorAll('.filter-tab');
@@ -83,6 +86,14 @@
             }
         };
 
+        // CROWN⁴.19 FIX: Attach directly to filter container instead of document
+        // This ensures clicks are captured before TaskRedesign's stopPropagation can block them
+        const filterContainers = document.querySelectorAll('.task-filters-inline');
+        filterContainers.forEach(container => {
+            container.addEventListener('click', handleFilterClick, { capture: true });
+        });
+        
+        // Fallback: Also attach to document for any dynamically added filter containers
         document.addEventListener('click', handleFilterClick);
         
         initState.filterTabs = true;
