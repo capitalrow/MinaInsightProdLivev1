@@ -331,6 +331,7 @@ def tasks():
                 joinedload(Task.assigned_to)
             )\
             .filter(
+                Task.deleted_at.is_(None),  # CROWN⁴.18 FIX: Exclude soft-deleted tasks (match API behavior)
                 or_(
                     Task.workspace_id == current_user.workspace_id,
                     Meeting.workspace_id == current_user.workspace_id,  # INTEGER comparison
