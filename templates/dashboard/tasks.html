@@ -871,6 +871,9 @@ window.__FIRST_PAINT_START = performance.now();
 <!-- CROWN⁴.6 TaskStateStore - MUST load first as single source of truth -->
 <script defer src="{{ url_for('static', filename='js/task-state-store.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
 
+<!-- CROWN⁴.18 Shared Task Card Renderer - MUST load before other task scripts -->
+<script defer src="{{ url_for('static', filename='js/task-card-renderer.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+
 <!-- CROWN⁴.5 Frontend Modules - ALL deferred for <200ms First Paint -->
 <script defer src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>

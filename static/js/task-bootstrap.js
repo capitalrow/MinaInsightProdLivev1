@@ -1099,216 +1099,69 @@ class TaskBootstrap {
     }
 
     /**
-     * Render single task card HTML (CROWN⁴.5 Phase 3: Compact 36-40px Design)
+     * CROWN⁴.18: Render single task card using shared TaskCardRenderer
+     * Ensures visual consistency between SSR and client-side rendering
      * @param {Object} task
      * @param {number} index
      * @returns {string} HTML
      */
     renderTaskCard(task, index) {
+        // Use shared TaskCardRenderer for SSR-matching output
+        if (window.taskCardRenderer) {
+            return window.taskCardRenderer.render(task, {
+                isVirtual: false,
+                virtualIndex: index
+            });
+        }
+        
+        // Fallback: minimal render if shared renderer not loaded
+        console.warn('⚠️ TaskCardRenderer not available, using fallback');
         const priority = task.priority || 'medium';
         const status = task.status || 'todo';
         const isCompleted = status === 'completed';
-        const isSnoozed = task.snoozed_until && new Date(task.snoozed_until) > new Date();
-        const isSyncing = task._is_syncing || (task.id && typeof task.id === 'string' && task.id.startsWith('temp_'));
-        const isDueSoon = task.due_date && this.isDueDateWithin(task.due_date, 1); // 1 day
-        const isOverdue = task.due_date && this.isDueDateOverdue(task.due_date) && !isCompleted;
-
-        // CROWN⁴.8: Multi-assignee display with overflow handling + ID sorting for consistency
-        const assigneeIds = (task.assignee_ids || []).slice().sort((a, b) => a - b);
-        const assignees = (task.assignees || []).slice().sort((a, b) => (a.id || 0) - (b.id || 0));
-        const maxVisibleAssignees = 2;
+        const priorityText = priority.charAt(0).toUpperCase() + priority.slice(1);
         
-        let assigneeHTML = '';
-        if (assigneeIds.length > 0) {
-            // Multi-assignee mode (sorted by ID for consistency with optimistic updates)
-            const visibleAssignees = assignees.slice(0, maxVisibleAssignees);
-            const overflowCount = assigneeIds.length - maxVisibleAssignees;
-            
-            const assigneeNames = visibleAssignees
-                .map(a => a.display_name || a.username)
-                .filter(Boolean)
-                .join(', ');
-            
-            const fullList = assignees
-                .map(a => a.display_name || a.username)
-                .filter(Boolean)
-                .join(', ');
-            
-            assigneeHTML = `
-                <div class="task-assignees" 
-                     data-task-id="${task.id}"
-                     title="${this.escapeHtml(fullList || 'Click to change assignees')}">
-                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                    </svg>
-                    <span class="assignee-names">
-                        ${this.escapeHtml(assigneeNames || 'Assigned')}${overflowCount > 0 ? ` <span class="assignee-overflow">+${overflowCount}</span>` : ''}
-                    </span>
-                </div>
-            `;
-        } else {
-            // Legacy single assignee fallback
-            const assigneeText = task.assignee_name || (task.assignee ? 'Assigned' : null);
-            if (assigneeText) {
-                assigneeHTML = `
-                    <div class="task-assignees" 
-                         data-task-id="${task.id}"
-                         title="Click to change assignee">
-                        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                        </svg>
-                        <span class="assignee-names">${this.escapeHtml(assigneeText)}</span>
-                    </div>
-                `;
-            } else {
-                assigneeHTML = `
-                    <div class="task-assignees task-assignees-empty" 
-                         data-task-id="${task.id}"
-                         title="Click to assign">
-                        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-                        </svg>
-                        <span class="assignee-names">Assign</span>
-                    </div>
-                `;
-            }
-        }
-
         return `
-            <div class="task-card ${isCompleted ? 'completed' : ''} ${isSyncing ? 'task-syncing' : ''} ${isOverdue ? 'overdue' : ''}" 
+            <div class="task-card${isCompleted ? ' completed' : ''}" 
                  data-task-id="${task.id}"
                  data-status="${status}"
                  data-priority="${priority}"
-                 data-assignee-ids="${assigneeIds.join(',')}"
                  data-updated-at="${task.updated_at || ''}"
                  data-is-pinned="${task.is_pinned ? 'true' : 'false'}"
-                 style="animation-delay: ${index * 0.05}s;">
-                
-                <!-- Checkbox (36x36px click area with 22x22px visual) -->
+                 role="article"
+                 tabindex="0"
+                 aria-expanded="false">
                 <div class="checkbox-wrapper">
                     <input type="checkbox" 
+                           ${isCompleted ? 'checked' : ''} 
                            class="task-checkbox" 
-                           ${isCompleted ? 'checked' : ''}
-                           ${isSyncing ? 'disabled title="Task is syncing with server..."' : ''}
                            data-task-id="${task.id}"
                            aria-label="Mark task as ${isCompleted ? 'incomplete' : 'complete'}">
                 </div>
-
-                <!-- Task Title (Inline Editable) -->
-                <h3 class="task-title ${isCompleted ? 'completed' : ''}" 
-                    data-task-id="${task.id}"
-                    role="button"
-                    tabindex="0"
-                    title="Click to edit task title">
-                    ${this.escapeHtml(task.title || 'Untitled Task')}
-                </h3>
-
-                <!-- Task Metadata (Compact Inline) -->
-                <div class="task-metadata">
-                    <!-- Priority Badge (Inline Editable) -->
-                    <span class="priority-badge priority-${priority.toLowerCase()}" 
-                          data-task-id="${task.id}"
-                          title="Click to change priority (current: ${priority})">
-                        ${priority.charAt(0).toUpperCase() + priority.slice(1)}
-                    </span>
-
-                    ${assigneeHTML}
-
-                    ${task.due_date ? `
-                        <span class="due-date-badge ${isOverdue ? 'overdue' : ''} ${isDueSoon ? 'due-soon' : ''}" 
-                              data-task-id="${task.id}"
-                              data-iso-date="${task.due_date}"
-                              title="Click to change due date">
-                            ${this.formatDueDate(task.due_date)}
-                        </span>
-                    ` : `
-                        <span class="due-date-badge due-date-add" 
-                              data-task-id="${task.id}"
-                              title="Click to set due date">
-                            + Add due date
-                        </span>
-                    `}
-
-                    ${task.labels && task.labels.length > 0 ? `
-                        <div class="task-labels" data-task-id="${task.id}">
-                            ${task.labels.slice(0, 2).map(label => `
-                                <span class="task-label" data-label="${this.escapeHtml(label)}">
-                                    ${this.escapeHtml(label)}
-                                </span>
-                            `).join('')}
-                            ${task.labels.length > 2 ? `
-                                <span class="task-label task-label-count" title="${task.labels.slice(2).join(', ')}">
-                                    +${task.labels.length - 2}
-                                </span>
-                            ` : ''}
+                <div class="task-content">
+                    <div class="task-primary-row task-tier-1">
+                        <h3 class="task-title" data-field="title">${this.escapeHtml(task.title || 'Untitled Task')}</h3>
+                        <div class="task-essential-meta">
+                            <span class="priority-dot priority-${priority.toLowerCase()}" 
+                                  data-field="priority"
+                                  role="img"
+                                  aria-label="Priority: ${priorityText}"
+                                  title="Priority: ${priorityText}">
+                                <span class="sr-only">${priorityText} priority</span>
+                            </span>
                         </div>
-                    ` : `
-                        <div class="task-labels task-labels-empty" 
-                             data-task-id="${task.id}"
-                             title="Click to add labels">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                            </svg>
-                            Labels
-                        </div>
-                    `}
-
-                    ${task._sync_status === 'failed' ? `
-                        <span class="sync-status-badge failed" title="${this.escapeHtml(task._sync_error || 'Sync failed')}">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            Sync Failed
-                            <button class="retry-btn" 
-                                    onclick="window.optimisticUI._retryOperation('${task._operation_id || ''}')" 
-                                    title="Retry sync">
-                                ↻
-                            </button>
-                        </span>
-                    ` : isSyncing ? `
-                        <span class="sync-status-badge syncing">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" class="spin-animation">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                            </svg>
-                            Syncing
-                        </span>
-                    ` : ''}
+                    </div>
                 </div>
-
-                <!-- Task Actions (Hidden until hover) -->
-                <div class="task-actions">
-                    <!-- Priority Quick Selector -->
-                    <button class="task-action-btn priority-btn" 
-                            data-task-id="${task.id}"
-                            data-priority="${priority}"
-                            title="Change priority (${priority})"
-                            aria-label="Change priority">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
-                        </svg>
-                    </button>
-
-                    <!-- Archive (Complete → Archive → Delete lifecycle) -->
-                    ${isCompleted ? `
-                        <button class="task-action-btn archive-btn" 
-                                data-task-id="${task.id}"
-                                title="Archive completed task"
-                                aria-label="Archive task">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-                            </svg>
-                        </button>
-                    ` : ''}
-
-                    <!-- More Actions Menu -->
+                <div class="task-actions" role="group" aria-label="Task actions">
                     <button class="task-menu-trigger" 
                             data-task-id="${task.id}"
-                            title="More actions"
-                            aria-label="More actions"
-                            aria-haspopup="true">
-                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="2"/>
+                            type="button"
+                            aria-haspopup="menu"
+                            aria-expanded="false"
+                            title="More actions">
+                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <circle cx="12" cy="5" r="2"/>
+                            <circle cx="12" cy="12" r="2"/>
                             <circle cx="12" cy="19" r="2"/>
                         </svg>
                     </button>
