@@ -98,10 +98,19 @@ class TaskActionLock {
      */
     shouldBlockSync() {
         const blocked = this.isAnyLockActive();
+        const elapsed = Date.now() - this._globalLockTimestamp;
+        const activeLocks = this._locks.size;
+        
         if (blocked) {
-            const elapsed = Date.now() - this._globalLockTimestamp;
-            const activeLocks = this._locks.size;
-            console.log(`[TaskActionLock] Sync blocked - ${activeLocks} active locks, ${elapsed}ms since last action`);
+            console.log(`[TaskActionLock] 🔒 Sync BLOCKED - ${activeLocks} active locks, ${elapsed}ms since last action`);
+            if (activeLocks > 0) {
+                const lockDetails = Array.from(this._locks.values())
+                    .map(l => `Task ${l.taskId}: ${l.reason}`)
+                    .join(', ');
+                console.log(`[TaskActionLock] 📋 Active locks: ${lockDetails}`);
+            }
+        } else {
+            console.log(`[TaskActionLock] ✅ Sync ALLOWED - ${elapsed}ms since last action (threshold: ${this._globalLockDuration}ms)`);
         }
         return blocked;
     }

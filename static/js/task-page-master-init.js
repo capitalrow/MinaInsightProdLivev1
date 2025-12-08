@@ -180,7 +180,9 @@
                 const taskId = card.dataset.taskId;
                 const completed = checkbox.checked;
 
-                console.log(`[Checkbox] Task ${taskId} completion toggled to: ${completed}`);
+                console.log(`\n${'='.repeat(60)}`);
+                console.log(`🖱️ [Checkbox] CLICK - Task ${taskId}, checked: ${completed}`);
+                console.log(`🔒 [Checkbox] Action lock status:`, window.taskActionLock?.getDebugInfo?.() || 'N/A');
 
                 dispatchTaskEvent('task_update:status_toggle', { taskId, completed });
                 
@@ -190,12 +192,14 @@
                         status: completed ? 'completed' : 'todo',
                         completed_at: completed ? new Date().toISOString() : null
                     };
+                    console.log(`📦 [Checkbox] Prepared updates:`, updates);
                     let updatedTask = null;
 
                     // Update via optimistic UI (ledger-backed + reconciliation aware)
                     if (window.optimisticUI?.toggleTaskStatus) {
+                        console.log(`🚀 [Checkbox] Calling optimisticUI.toggleTaskStatus(${taskId})...`);
                         updatedTask = await window.optimisticUI.toggleTaskStatus(taskId);
-                        console.log(`[Checkbox] ✅ Task ${taskId} toggled via optimisticUI.toggleTaskStatus`);
+                        console.log(`✅ [Checkbox] Task ${taskId} toggle returned:`, { status: updatedTask?.status });
                     } else if (window.optimisticUI?.updateTask) {
                         updatedTask = await window.optimisticUI.updateTask(taskId, updates);
                         console.log(`[Checkbox] ✅ Task ${taskId} updated successfully`);
