@@ -75,15 +75,21 @@ def list_sessions():
         # Create simple pagination wrapper with proper method signatures
         class SimplePagination:
             def __init__(self, items, total):
-                self.items = items
+                self.items = items if items else []
                 self.total = total
                 self.pages = 1
                 self.page = 1
-                self.per_page = len(items) if items else 0
+                self.per_page = len(self.items)
                 self.has_prev = False
                 self.has_next = False
                 self.prev_num = None
                 self.next_num = None
+            
+            def __len__(self):
+                return len(self.items)
+            
+            def __iter__(self):
+                return iter(self.items)
             
             def iter_pages(self, left_edge=0, right_edge=0, left_current=0, right_current=0):
                 """Generator for page numbers"""
