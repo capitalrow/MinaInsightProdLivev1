@@ -5,6 +5,11 @@
  * local cache with server state when mismatches are detected.
  */
 
+// Guard against multiple declarations (script may be loaded from base.html and page templates)
+if (typeof window.ReconciliationCycle !== 'undefined') {
+    console.log('📡 ReconciliationCycle already loaded, skipping redeclaration');
+} else {
+
 class ReconciliationCycle {
     constructor(workspaceId) {
         this.workspaceId = workspaceId;
@@ -74,8 +79,15 @@ class ReconciliationCycle {
     
     /**
      * Run one reconciliation cycle
+     * CROWN⁴.13: Respects action lock to prevent overwriting user changes
      */
     async runCycle() {
+        // CROWN⁴.13: Skip if action lock is active
+        if (window.taskActionLock && window.taskActionLock.shouldBlockSync()) {
+            console.log('[Reconciliation] Skipping cycle - action lock active');
+            return;
+        }
+        
         this.reconciliationCount++;
         
         console.log(`[Reconciliation] Cycle #${this.reconciliationCount} starting...`);
@@ -390,3 +402,5 @@ class ReconciliationCycle {
 
 // Export for use in dashboard
 window.ReconciliationCycle = ReconciliationCycle;
+
+} // End of redeclaration guard

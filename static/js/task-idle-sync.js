@@ -162,6 +162,12 @@ class IdleSyncService {
             console.log('📵 Skipping sync - offline');
             return;
         }
+        
+        // CROWN⁴.13: Skip if action lock is active (pending user operations)
+        if (window.taskActionLock && window.taskActionLock.shouldBlockSync()) {
+            console.log('🔒 [Idle Sync] Skipping - action lock active');
+            return;
+        }
 
         const startTime = performance.now();
         console.log('🔄 [Idle Sync] Starting background sync...');
@@ -280,12 +286,18 @@ class IdleSyncService {
     /**
      * Reconcile DOM with server state
      * Only updates tasks that have changed (checksum comparison)
+     * CROWN⁴.13: Respects action lock to prevent overwriting user changes
      * @param {Array} serverTasks
      */
     async _reconcileDOM(serverTasks) {
         if (!window.taskCache) {
             return;
         }
+        
+        // CROWN⁴.13: Get pending task IDs to skip during reconciliation
+        const pendingTaskIds = window.taskActionLock 
+            ? window.taskActionLock.getPendingTaskIds()
+            : new Set();
 
         const localTasks = await window.taskCache.getAllTasks();
         const serverTasksById = new Map(serverTasks.map(t => [t.id, t]));
@@ -334,6 +346,12 @@ class IdleSyncService {
 
         // Check for updates and additions
         for (const [taskId, serverTask] of serverTasksById) {
+            // CROWN⁴.13: Skip tasks with pending operations
+            if (pendingTaskIds.has(taskId.toString())) {
+                console.log(`🔒 [Idle Sync] Skipping task ${taskId} - pending operation`);
+                continue;
+            }
+            
             const localTask = localTasksById.get(taskId);
 
             if (!localTask) {
@@ -359,6 +377,12 @@ class IdleSyncService {
 
         // Check for deletions
         for (const [taskId, localTask] of localTasksById) {
+            // CROWN⁴.13: Skip tasks with pending operations
+            if (pendingTaskIds.has(taskId.toString())) {
+                console.log(`🔒 [Idle Sync] Skipping deletion check for task ${taskId} - pending operation`);
+                continue;
+            }
+            
             if (!serverTasksById.has(taskId)) {
                 // Task deleted on server - remove from cache AND DOM
                 // Only remove if it's not a pending local creation (temp ID)
