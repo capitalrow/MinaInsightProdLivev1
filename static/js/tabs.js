@@ -175,6 +175,10 @@
         }
       });
       
+      window.socket.on('insights_progress', function(data) {
+        console.log('[WebSocket] Insights progress:', data.progress_percent + '%', data.message);
+      });
+      
       window.socket.on('analytics_update', function(data) {
         console.log('[WebSocket] Analytics update received:', data);
       });

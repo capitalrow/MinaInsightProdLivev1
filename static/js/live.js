@@ -185,6 +185,29 @@
     }
   });
 
+  // Progress updates for chunked analysis (long transcripts)
+  socket.on("insights_progress", (data) => {
+    const { current_chunk, total_chunks, progress_percent, status, message } = data;
+    
+    if (status === 'started') {
+      dlog(`📊 ${message}`);
+      updateProcessingState(message, 30);
+    } else if (status === 'processing') {
+      dlog(`📊 Chunk ${current_chunk}/${total_chunks} (${progress_percent}%)`);
+      // Map chunk progress (0-100%) to the insights phase (30-50% of total)
+      const mappedProgress = 30 + (progress_percent * 0.2);
+      updateProcessingState(message, mappedProgress);
+    } else if (status === 'merging') {
+      dlog(`🔄 ${message}`);
+      updateProcessingState(message, 48);
+    } else if (status === 'completed') {
+      dlog(`✅ ${message}`);
+      updateProcessingState("Insights ready...", 50);
+    } else if (status === 'failed') {
+      dlog(`❌ ${message}`);
+    }
+  });
+
   socket.on("analytics_update", (data) => {
     dlog(`📊 Analytics updated`);
     updateProcessingState("Analyzing metrics...", 62.5);
