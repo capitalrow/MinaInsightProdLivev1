@@ -1,13 +1,37 @@
 from __future__ import annotations
 import os
 import logging
-from flask import Blueprint, request, jsonify, abort
+from flask import Blueprint, request, jsonify, abort, render_template
+from flask_login import login_required, current_user
 from services.stripe_service import stripe_svc
 from models.core_models import Customer, Subscription
 from models import db
 
 logger = logging.getLogger(__name__)
 billing_bp = Blueprint("billing", __name__, url_prefix="/billing")
+
+
+@billing_bp.route("/")
+@login_required
+def billing_page():
+    """Render the billing/subscription management page."""
+    subscription = None
+    customer = None
+    
+    try:
+        customer = Customer.query.filter_by(user_id=current_user.id).first()
+        if customer:
+            subscription = Subscription.query.filter_by(customer_id=customer.id).first()
+    except Exception as e:
+        logger.warning(f"Error fetching subscription info: {e}")
+    
+    return render_template(
+        "billing.html",
+        subscription=subscription,
+        customer=customer,
+        user=current_user
+    )
+
 
 @billing_bp.post("/create-checkout-session")
 def create_checkout():

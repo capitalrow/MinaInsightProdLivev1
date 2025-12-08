@@ -27,6 +27,18 @@ except ImportError:
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 
+@admin_bp.route('/')
+@login_required
+def admin_index():
+    """
+    Admin Dashboard Index - redirects to analytics dashboard.
+    """
+    from flask import redirect, url_for
+    if not current_user.is_admin:
+        abort(403)
+    return redirect(url_for('admin.analytics_dashboard'))
+
+
 def admin_required(f):
     """
     Decorator to require admin or owner role for access.
