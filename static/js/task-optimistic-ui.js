@@ -320,6 +320,7 @@ class OptimisticUI {
 
     /**
      * Update task optimistically
+     * CROWN⁴.13: Acquires action lock to prevent sync overwrites
      * @param {number|string} taskId
      * @param {Object} updates
      * @returns {Promise<Object>} Updated task
@@ -327,10 +328,17 @@ class OptimisticUI {
     async updateTask(taskId, updates) {
         const opId = this._generateOperationId();
         
+        // CROWN⁴.13: Acquire action lock to prevent sync overwrites
+        let lockId = null;
+        if (window.taskActionLock) {
+            lockId = window.taskActionLock.acquire(taskId, `update:${Object.keys(updates).join(',')}`);
+        }
+        
         try {
             // Get current task
             const currentTask = await this.cache.getTask(taskId);
             if (!currentTask) {
+                if (lockId) window.taskActionLock.release(lockId);
                 throw new Error('Task not found');
             }
 
@@ -387,7 +395,8 @@ class OptimisticUI {
                 updates,  // Clean updates data for retry
                 data: updates,  // Explicit clean data reference
                 queueId,  // Store queue ID to remove on success
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                lockId  // CROWN⁴.13: Store lock ID for release on completion
             };
             this.pendingOperations.set(opId, operation);
             
@@ -401,6 +410,10 @@ class OptimisticUI {
             return optimisticTask;
         } catch (error) {
             console.error('❌ Optimistic update failed:', error);
+            // CROWN⁴.13: Release lock on error
+            if (lockId && window.taskActionLock) {
+                window.taskActionLock.release(lockId);
+            }
             throw error;
         }
     }
@@ -1662,6 +1675,12 @@ class OptimisticUI {
             }
         }
 
+        // CROWN⁴.13: Release action lock on successful sync
+        if (operation.lockId && window.taskActionLock) {
+            window.taskActionLock.release(operation.lockId);
+            console.log(`🔓 [Reconcile] Released action lock ${operation.lockId}`);
+        }
+
         // Remove operation from in-memory map
         this.pendingOperations.delete(opId);
 
@@ -1796,6 +1815,12 @@ class OptimisticUI {
             // Restore deleted task
             await this.cache.saveTask(operation.task);
             this._addTaskToDOM(operation.task);
+        }
+
+        // CROWN⁴.13: Release action lock on failure (don't block future syncs)
+        if (operation.lockId && window.taskActionLock) {
+            window.taskActionLock.release(operation.lockId);
+            console.log(`🔓 [Reconcile] Released action lock ${operation.lockId} after failure`);
         }
 
         // CRITICAL FIX: DO NOT delete operation from pendingOperations
