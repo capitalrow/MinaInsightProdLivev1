@@ -156,10 +156,10 @@ class TaskSearchSort {
             document.dispatchEvent(new CustomEvent('task:search-cleared'));
         };
 
-        // Delegated sort selector handler
+        // Sort selector handler
         // CROWN⁴.17: Set user action lock on sort change
+        // CROWN⁴.19 FIX: Attach directly to element to avoid stopPropagation issues
         this.handleSortChange = (e) => {
-            if (e.target.id !== 'task-sort-select') return;
             this._setUserActionLock();
             this.currentSort = e.target.value;
             
@@ -174,7 +174,18 @@ class TaskSearchSort {
 
         document.addEventListener('input', this.handleSearchInput);
         document.addEventListener('click', this.handleSearchClear);
-        document.addEventListener('change', this.handleSortChange);
+        
+        // CROWN⁴.19 FIX: Attach sort handler directly to the select element
+        // This avoids issues with mobile tap handlers blocking document-level delegation
+        if (this.sortSelect) {
+            this.sortSelect.addEventListener('change', this.handleSortChange);
+        }
+        // Fallback for dynamically created selects
+        document.addEventListener('change', (e) => {
+            if (e.target.id === 'task-sort-select' && e.target !== this.sortSelect) {
+                this.handleSortChange(e);
+            }
+        });
         
         // Listen for filter tab changes
         // CROWN⁴.17: Set user action lock when filter tab is clicked
