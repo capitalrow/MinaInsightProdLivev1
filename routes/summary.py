@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import logging
 from flask import Blueprint, request, jsonify, current_app, abort
-# from flask_socketio import emit  # Disabled for native WebSocket testing
+from flask_login import login_required, current_user
 from dataclasses import asdict
 from sqlalchemy import select
 from services.analysis_service import AnalysisService
@@ -45,6 +45,7 @@ SYSTEM_PROMPT = (
 )
 
 @summary_bp.route('/<int:session_id>/summarise', methods=['POST'])
+@login_required
 def generate_summary(session_id: int):
     """
     Generate AI-powered summary for a session.
@@ -164,6 +165,7 @@ def trigger_auto_summary(session_id: int):
 
 
 @summary_bp.route('/<int:session_id>/generate-summary', methods=['POST'])
+@login_required
 def generate_multi_level_summary(session_id: int):
     """
     Generate AI-powered summary with specified level and style.

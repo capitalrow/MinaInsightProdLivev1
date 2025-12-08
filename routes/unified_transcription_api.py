@@ -777,6 +777,7 @@ def detailed_health_metrics():
         }), 500
 
 @unified_api_bp.route('/api/session/persist', methods=['POST'])
+@login_required
 def persist_session():
     """Persist session state for recovery"""
     try:
@@ -805,6 +806,7 @@ def persist_session():
         return jsonify({'error': str(e)}), 500
 
 @unified_api_bp.route('/api/session/recover/<session_id>', methods=['GET'])
+@login_required
 def recover_session(session_id):
     """Recover persisted session state"""
     try:
