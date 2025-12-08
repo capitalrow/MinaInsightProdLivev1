@@ -291,38 +291,60 @@ def create_app() -> Flask:
     # reverse proxy (Replit)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
     
-    # Configure filesystem-backed server-side sessions
-    # Store session data on filesystem to avoid cookie size limits (4KB max)
+    # Configure server-side sessions with Redis (production) or filesystem (development)
+    # Redis enables horizontal scaling across multiple server instances
     is_production = os.getenv("FLASK_ENV") == "production" or os.getenv("REPLIT_DEPLOYMENT")
+    redis_url = os.environ.get("REDIS_URL")
     
-    try:
-        import tempfile
-        session_dir = os.path.join(tempfile.gettempdir(), "mina_sessions")
-        os.makedirs(session_dir, exist_ok=True)
-        
-        app.config["SESSION_TYPE"] = "filesystem"
-        app.config["SESSION_FILE_DIR"] = session_dir
-        app.config["SESSION_FILE_THRESHOLD"] = 500  # Max 500 sessions before cleanup
-        app.config["SESSION_PERMANENT"] = False
-        app.config["SESSION_USE_SIGNER"] = True  # Cryptographically sign session IDs
-        app.config["SESSION_COOKIE_NAME"] = "mina_sid"
-        
-        # Session cookie security (environment-aware)
-        app.config["SESSION_COOKIE_SECURE"] = is_production  # HTTPS only in production
-        app.config["SESSION_COOKIE_HTTPONLY"] = True  # Block XSS attacks
-        app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
-        app.config["PERMANENT_SESSION_LIFETIME"] = 28800  # 8 hours
-        
-        Session(app)
-        app.logger.info(f"✅ Filesystem-backed sessions configured: {session_dir}")
-    except Exception as e:
-        app.logger.error(f"❌ Filesystem session setup failed: {e}")
-        # Fallback: Use cookie sessions with size monitoring
-        app.config["SESSION_COOKIE_SECURE"] = is_production
-        app.config["SESSION_COOKIE_HTTPONLY"] = True
-        app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-        app.config["PERMANENT_SESSION_LIFETIME"] = 900  # 15 minutes
-        app.logger.warning("⚠️ Using cookie-based sessions - may hit size limits!")
+    # Common session cookie security settings
+    app.config["SESSION_PERMANENT"] = False
+    app.config["SESSION_USE_SIGNER"] = True
+    app.config["SESSION_COOKIE_NAME"] = "mina_sid"
+    app.config["SESSION_COOKIE_SECURE"] = is_production
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["PERMANENT_SESSION_LIFETIME"] = 28800  # 8 hours
+    
+    session_backend = "cookie"  # Track which backend is used
+    
+    # Try Redis first (production-ready, supports horizontal scaling)
+    if redis_url:
+        try:
+            import redis
+            redis_client = redis.from_url(redis_url, decode_responses=False)
+            redis_client.ping()  # Test connection
+            
+            app.config["SESSION_TYPE"] = "redis"
+            app.config["SESSION_REDIS"] = redis_client
+            app.config["SESSION_KEY_PREFIX"] = "mina:session:"
+            
+            Session(app)
+            session_backend = "redis"
+            app.logger.info(f"✅ Redis-backed sessions configured (production-ready)")
+        except Exception as e:
+            app.logger.warning(f"⚠️ Redis session setup failed: {e}, falling back to filesystem")
+    
+    # Fallback to filesystem sessions (single-server only)
+    if session_backend == "cookie":
+        try:
+            import tempfile
+            session_dir = os.path.join(tempfile.gettempdir(), "mina_sessions")
+            os.makedirs(session_dir, exist_ok=True)
+            
+            app.config["SESSION_TYPE"] = "filesystem"
+            app.config["SESSION_FILE_DIR"] = session_dir
+            app.config["SESSION_FILE_THRESHOLD"] = 500
+            
+            Session(app)
+            session_backend = "filesystem"
+            if is_production:
+                app.logger.warning("⚠️ Filesystem sessions in production - horizontal scaling NOT supported!")
+            else:
+                app.logger.info(f"✅ Filesystem-backed sessions configured: {session_dir}")
+        except Exception as e:
+            app.logger.error(f"❌ Session setup failed: {e}")
+            app.config["PERMANENT_SESSION_LIFETIME"] = 900  # 15 minutes for cookie sessions
+            app.logger.warning("⚠️ Using cookie-based sessions - may hit size limits!")
     
     # Initialize CSRF protection  
     csrf = CSRFProtect(app)
@@ -333,21 +355,40 @@ def create_app() -> Flask:
     # Store CSRF protect for blueprint access
     app.extensions['csrf'] = csrf
 
-    # Configure Flask-Limiter for rate limiting with in-memory storage
-    # Memory storage works well for single-server deployments
+    # Configure Flask-Limiter for rate limiting
+    # Use Redis when available (production), memory otherwise (development)
+    rate_limit_storage = "memory://"
+    rate_limit_backend = "memory"
+    
+    if redis_url:
+        try:
+            import redis
+            redis_client_check = redis.from_url(redis_url)
+            redis_client_check.ping()
+            rate_limit_storage = redis_url
+            rate_limit_backend = "redis"
+        except Exception as e:
+            app.logger.warning(f"⚠️ Redis rate limiter check failed: {e}, using memory")
+    
     limiter = Limiter(
         get_remote_address,
         app=app,
-        storage_uri="memory://",
+        storage_uri=rate_limit_storage,
         default_limits=["100 per minute", "1000 per hour"],
         strategy="fixed-window",
-        headers_enabled=True,  # Include X-RateLimit-* headers in responses
-        swallow_errors=True,  # Don't crash app if rate limiter fails
+        headers_enabled=True,
+        swallow_errors=True,
     )
     
-    # Make limiter available via extensions (proper Flask pattern)
     app.extensions['limiter'] = limiter
-    app.logger.info("✅ Flask-Limiter configured (Memory backend): 100/min, 1000/hour per IP")
+    
+    if rate_limit_backend == "redis":
+        app.logger.info("✅ Flask-Limiter configured (Redis backend - production-ready): 100/min, 1000/hour per IP")
+    else:
+        if is_production:
+            app.logger.warning("⚠️ Rate limiter using memory backend in production - horizontal scaling NOT supported!")
+        else:
+            app.logger.info("✅ Flask-Limiter configured (Memory backend): 100/min, 1000/hour per IP")
 
     # gzip (optional)
     try:
