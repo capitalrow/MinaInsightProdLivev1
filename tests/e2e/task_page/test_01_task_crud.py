@@ -10,6 +10,7 @@ Success Criteria:
 """
 import pytest
 import time
+import re
 from datetime import datetime, timedelta
 from playwright.sync_api import Page, expect
 
@@ -200,8 +201,9 @@ class TestTaskCompletion:
         
         helpers.complete_task(task)
         
-        expect(task).to_have_class(/completed/)
-        expect(task.locator('.task-title')).to_have_css('text-decoration', /line-through/)
+        import re
+        expect(task).to_have_class(re.compile(r'completed'))
+        expect(task.locator('.task-title')).to_have_css('text-decoration', re.compile(r'line-through'))
     
     def test_complete_task_via_menu(self, authenticated_task_page: Page, helpers: TaskPageHelpers):
         """Mark task complete via action menu"""
@@ -223,7 +225,8 @@ class TestTaskCompletion:
             complete_btn.click()
             time.sleep(0.5)
             
-            expect(task).to_have_class(/completed/)
+            import re
+            expect(task).to_have_class(re.compile(r'completed'))
     
     def test_undo_complete(self, authenticated_task_page: Page, helpers: TaskPageHelpers):
         """Undo task completion restores previous state"""
@@ -247,7 +250,8 @@ class TestTaskCompletion:
             time.sleep(0.5)
             
             task = page.locator(f'.task-card[data-task-id="{task_id}"]')
-            expect(task).not_to_have_class(/completed/)
+            import re
+            expect(task).not_to_have_class(re.compile(r'completed'))
         except:
             pass
     

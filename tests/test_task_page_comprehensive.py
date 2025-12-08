@@ -68,7 +68,7 @@ class TestTaskPageAPI:
             meeting = Meeting(
                 title="Test Meeting",
                 workspace_id=workspace.id,
-                created_at=datetime.utcnow()
+                organizer_id=user.id
             )
             db.session.add(meeting)
             
@@ -191,7 +191,7 @@ class TestTaskPageAPI:
             meeting = Meeting(
                 title="Test Meeting",
                 workspace_id=self.workspace.id,
-                created_at=datetime.utcnow()
+                organizer_id=self.user.id
             )
             db.session.add(meeting)
             db.session.commit()
@@ -641,7 +641,7 @@ class TestTaskWorkflow:
             self.meeting = Meeting(
                 title="Test Meeting for Workflow",
                 workspace_id=self.workspace.id,
-                created_at=datetime.utcnow()
+                organizer_id=self.user.id
             )
             db.session.add(self.meeting)
             db.session.commit()
