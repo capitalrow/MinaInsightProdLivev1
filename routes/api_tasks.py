@@ -49,16 +49,23 @@ def list_tasks():
         # CROWN⁴.6 OPTIMIZATION: Eager load ALL relationships to prevent N+1 queries
         # Performance target: <500ms for full sync with 15+ tasks
         # - assignees: selectinload for many-to-many (more efficient than joinedload)
-        # - meeting: joinedload since we're already joining on Meeting table
+        # - meeting: joinedload since we're using outerjoin on Meeting table
         # - assigned_to, created_by, deleted_by: joinedload for single FK relationships
-        stmt = select(Task).join(Meeting).options(
+        # CROWN⁴.18 FIX: Use outerjoin to include tasks without meeting_id (matches SSR)
+        # Also join Session for tasks linked via session_id
+        stmt = select(Task).outerjoin(Meeting, Task.meeting_id == Meeting.id).outerjoin(Session, Task.session_id == Session.id).options(
             selectinload(Task.assignees),
             joinedload(Task.meeting),
             joinedload(Task.assigned_to),
             joinedload(Task.created_by),
             joinedload(Task.deleted_by)
         ).where(
-            Meeting.workspace_id == current_user.workspace_id
+            or_(
+                Task.workspace_id == current_user.workspace_id,
+                Task.workspace_id == str(current_user.workspace_id),
+                Meeting.workspace_id == current_user.workspace_id,
+                Session.workspace_id == current_user.workspace_id,
+            )
         )
         
         # CROWN⁴.5 Phase 1: Filter out soft-deleted tasks by default
