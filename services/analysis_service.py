@@ -733,8 +733,22 @@ class AnalysisService:
                 })
                 chunk_index += 1
             
-            # Move start position, accounting for overlap
-            start = max(end - overlap, start + 1)  # Ensure progress
+            # Break if we've reached the end of the transcript
+            if end >= len(transcript):
+                break
+            
+            # Move start position forward with overlap for context continuity
+            # The new start should be (end - overlap) to maintain overlap
+            # But ensure we always advance by at least (chunk_size - overlap) to prevent micro-chunks
+            min_advance = chunk_size - overlap  # Normal step size when not at sentence boundary
+            new_start = end - overlap
+            
+            # If we'd advance less than expected (due to short sentence boundary chunk), 
+            # ensure we still make meaningful progress
+            if new_start <= start:
+                new_start = start + min_advance
+            
+            start = new_start
         
         # Update total_chunks in all chunks
         total = len(chunks)
