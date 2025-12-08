@@ -507,35 +507,16 @@
   function restoreSavedPreferences() {
     console.log('[TaskRedesign] Restoring saved preferences...');
     
-    // Restore filter preference
-    const savedFilter = getFilterPreference();
-    if (savedFilter && savedFilter !== 'active') {
-      // Update filter tabs UI
-      document.querySelectorAll('.filter-tab').forEach(tab => {
-        const isActive = tab.dataset.filter === savedFilter;
-        tab.classList.toggle('active', isActive);
-        tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
-      });
-      
-      // Sync with TaskSearchSort and trigger proper filter application
-      if (window.taskSearchSort) {
-        window.taskSearchSort.currentFilter = savedFilter;
-        // Apply filters through TaskSearchSort to ensure proper state sync
-        if (typeof window.taskSearchSort.safeApplyFiltersAndSort === 'function') {
-          window.taskSearchSort.safeApplyFiltersAndSort();
-        }
-      } else {
-        // Fallback: Apply the filter directly if TaskSearchSort not available
-        applyFilter(savedFilter);
-      }
-      
-      // Dispatch event for any other listeners
-      document.dispatchEvent(new CustomEvent('filterChanged', { detail: { filter: savedFilter } }));
-      
-      console.log('[TaskRedesign] Restored filter preference:', savedFilter);
-    }
+    // CROWN⁴.13 FIX: Do NOT restore filter preference on initial page load
+    // SSR renders with 'active' default - restoring a saved filter causes visible flicker
+    // Filter preference should only be restored on tab visibility changes (returning to tab)
+    // This matches Todoist/Linear behavior where fresh page loads always show default view
+    console.log('[TaskRedesign] Skipping filter preference restore on initial load (using SSR default)');
     
-    // Restore sort preference
+    // NOTE: We intentionally skip filter restoration here to prevent tab flicker
+    // The saved filter preference is preserved in localStorage for future use
+    
+    // Restore sort preference (sort doesn't cause flicker like filter does)
     const savedSort = getSortPreference();
     const sortSelect = document.getElementById('task-sort-select');
     if (savedSort && savedSort !== 'default') {
@@ -547,11 +528,9 @@
       // Sync with TaskSearchSort and trigger proper sort application
       if (window.taskSearchSort) {
         window.taskSearchSort.currentSort = savedSort;
-        // If filter wasn't restored (stayed at 'active'), apply filters now for sort
-        if (!savedFilter || savedFilter === 'active') {
-          if (typeof window.taskSearchSort.safeApplyFiltersAndSort === 'function') {
-            window.taskSearchSort.safeApplyFiltersAndSort();
-          }
+        // Apply sort (filter stays at SSR default 'active')
+        if (typeof window.taskSearchSort.safeApplyFiltersAndSort === 'function') {
+          window.taskSearchSort.safeApplyFiltersAndSort();
         }
       }
       
