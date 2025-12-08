@@ -409,6 +409,50 @@ window.taskActionLock.release(lockId);
 
 ---
 
+## Complete Logging Reference
+
+All features now have comprehensive end-to-end logging with consistent prefixes:
+
+### Frontend Console Log Prefixes
+| Prefix | Source File | Feature |
+|--------|-------------|---------|
+| `[Checkbox]` | task-page-master-init.js | Checkbox click handling |
+| `[ToggleStatus]` | task-optimistic-ui.js | Status toggle flow |
+| `[UpdateTask]` | task-optimistic-ui.js | Task update operations |
+| `[TaskActionLock]` | task-action-lock.js | Lock acquire/release/block |
+| `[Reconcile]` | task-optimistic-ui.js | Server reconciliation |
+| `[Idle Sync]` | task-idle-sync.js | 30-second background sync |
+| `[Reconciliation]` | reconciliation-cycle.js | ETag drift detection |
+| `[FilterTabs]` | task-page-master-init.js | Tab switching |
+| `[SearchSort]` | task-search-sort.js | Filter/sort operations |
+| `[Keyboard]` | task-keyboard-shortcuts.js | Keyboard shortcuts |
+| `[DragDrop]` | task-drag-drop.js | Drag and drop reordering |
+| `[InlineEdit]` | task-inline-editing.js | Inline title/field editing |
+| `[Menu]` | task-page-master-init.js | Menu action events |
+| `[TaskMenuController]` | task-menu-controller.js | Menu action execution |
+| `[NewTask]` | task-page-master-init.js | Task creation |
+| `[MasterInit]` | task-page-master-init.js | Page initialization |
+
+### Backend Server Log Prefixes
+| Prefix | Source File | Feature |
+|--------|-------------|---------|
+| `[API]` | routes/api_tasks.py | All task API endpoints |
+
+### Log Level Guide
+- ✅ = Success/completion
+- ❌ = Error/failure
+- 📥 = Incoming request
+- 📤 = Outgoing request/API call
+- 📝 = Data/payload info
+- 🔄 = State transition
+- 🔒 = Lock blocked
+- ⌨️ = Keyboard input
+- 🎯 = Event start
+- 📍 = Position/drop
+- ✏️ = Edit start
+
+---
+
 ## Quick Debugging Checklist
 
 ### Task Not Persisting After Completion?

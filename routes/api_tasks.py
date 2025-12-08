@@ -541,7 +541,9 @@ def get_meeting_heatmap():
 def create_task():
     """Create a new task (supports both meeting-linked and standalone tasks)."""
     try:
+        logger.info(f"[API] 📥 POST /api/tasks/ - User {current_user.id}")
         data = request.get_json()
+        logger.info(f"[API] 📝 Create payload: title='{data.get('title', '')[:50]}', keys={list(data.keys())}")
         
         # Validate required fields
         if not data.get('title'):
@@ -833,15 +835,20 @@ def check_duplicate():
 def update_task(task_id):
     """Update task information (field-level updates)."""
     try:
+        logger.info(f"[API] 📥 PUT /api/tasks/{task_id} - User {current_user.id}")
+        
         task = db.session.query(Task).join(Meeting).filter(
             Task.id == task_id,
             Meeting.workspace_id == current_user.workspace_id
         ).first()
         
         if not task:
+            logger.warning(f"[API] ❌ Task {task_id} not found")
             return jsonify({'success': False, 'message': 'Task not found'}), 404
         
         data = request.get_json()
+        logger.info(f"[API] 📝 Update payload: {list(data.keys())}")
+        
         old_status = task.status
         old_labels = task.labels
         old_snoozed_until = task.snoozed_until
@@ -867,13 +874,16 @@ def update_task(task_id):
         if 'status' in data:
             new_status = data['status']
             if new_status != old_status:
+                logger.info(f"[API] 🔄 Status change: {old_status} → {new_status} (task {task_id})")
                 task.status = new_status
                 
                 # Update completion timestamp
                 if new_status == 'completed' and old_status != 'completed':
                     task.completed_at = datetime.now()
+                    logger.info(f"[API] ✅ Task {task_id} marked completed at {task.completed_at}")
                 elif new_status != 'completed' and old_status == 'completed':
                     task.completed_at = None
+                    logger.info(f"[API] ↩️ Task {task_id} uncompleted")
         
         if 'due_date' in data:
             if data['due_date']:
@@ -973,6 +983,7 @@ def update_task(task_id):
         
         task.updated_at = datetime.now()
         db.session.commit()
+        logger.info(f"[API] 💾 Task {task_id} committed to database (status={task.status})")
         
         # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_UPDATE_CORE event
         try:

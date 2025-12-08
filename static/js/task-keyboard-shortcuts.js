@@ -165,13 +165,16 @@ class TaskKeyboardShortcuts {
      * Handle new task (N)
      */
     _handleNewTask() {
-        console.log('⌨️ Shortcut: New Task');
+        console.log('[Keyboard] ⌨️ N pressed - New Task');
+        console.log('[Keyboard] Looking for create button...');
         
         // Show task creation modal/form
         const createButton = document.querySelector('[data-action="create-task"]');
         if (createButton) {
+            console.log('[Keyboard] ✅ Found create button, triggering click');
             createButton.click();
         } else {
+            console.log('[Keyboard] Create button not found, showing quick dialog');
             this._showQuickCreateDialog();
         }
     }
@@ -180,11 +183,14 @@ class TaskKeyboardShortcuts {
      * Handle command palette (Cmd+K)
      */
     _handleCommandPalette() {
-        console.log('⌨️ Shortcut: Command Palette');
+        console.log('[Keyboard] ⌨️ Cmd+K pressed - Command Palette');
+        console.log('[Keyboard] Current palette state:', this.commandPaletteOpen ? 'OPEN' : 'CLOSED');
         
         if (this.commandPaletteOpen) {
+            console.log('[Keyboard] Closing command palette');
             this._closeCommandPalette();
         } else {
+            console.log('[Keyboard] Opening command palette');
             this._openCommandPalette();
         }
     }
@@ -193,14 +199,24 @@ class TaskKeyboardShortcuts {
      * Handle quick complete (Cmd+Enter)
      */
     async _handleQuickComplete() {
-        console.log('⌨️ Shortcut: Quick Complete');
+        console.log('[Keyboard] ⌨️ Cmd+Enter pressed - Quick Complete');
         
         const selectedTask = this._getSelectedTask();
-        if (!selectedTask) return;
+        if (!selectedTask) {
+            console.log('[Keyboard] ⚠️ No task selected for quick complete');
+            return;
+        }
 
         const taskId = selectedTask.dataset.taskId;
+        console.log('[Keyboard] Selected task:', taskId);
+        console.log('[Keyboard] Current status:', selectedTask.dataset?.status);
+        
         if (window.optimisticUI) {
-            await window.optimisticUI.toggleTaskStatus(taskId);
+            console.log('[Keyboard] Calling optimisticUI.toggleTaskStatus()');
+            const result = await window.optimisticUI.toggleTaskStatus(taskId);
+            console.log('[Keyboard] ✅ Toggle result:', result);
+        } else {
+            console.error('[Keyboard] ❌ optimisticUI not available');
         }
     }
 
@@ -208,11 +224,15 @@ class TaskKeyboardShortcuts {
      * Handle snooze (S)
      */
     _handleSnooze() {
-        console.log('⌨️ Shortcut: Snooze');
+        console.log('[Keyboard] ⌨️ S pressed - Snooze');
         
         const selectedTask = this._getSelectedTask();
-        if (!selectedTask) return;
+        if (!selectedTask) {
+            console.log('[Keyboard] ⚠️ No task selected for snooze');
+            return;
+        }
 
+        console.log('[Keyboard] Snoozing task:', selectedTask.dataset.taskId);
         this._showSnoozeDialog(selectedTask.dataset.taskId);
     }
 
@@ -244,12 +264,15 @@ class TaskKeyboardShortcuts {
      * Handle search (/)
      */
     _handleSearch() {
-        console.log('⌨️ Shortcut: Search');
+        console.log('[Keyboard] ⌨️ / pressed - Focus Search');
         
         const searchInput = document.querySelector('[data-search="tasks"]');
         if (searchInput) {
+            console.log('[Keyboard] ✅ Found search input, focusing');
             searchInput.focus();
             searchInput.select();
+        } else {
+            console.log('[Keyboard] ⚠️ Search input not found');
         }
     }
 
@@ -257,7 +280,7 @@ class TaskKeyboardShortcuts {
      * Handle help (?)
      */
     _handleHelp() {
-        console.log('⌨️ Shortcut: Help');
+        console.log('[Keyboard] ⌨️ ? pressed - Show Help');
         this._showShortcutsHelp();
     }
 
