@@ -72,18 +72,19 @@
     <!-- ROW 1: Title + Filters -->
     <div class="command-row-1" role="banner">
         <h1 class="tasks-title-compact">Action Items</h1>
-        <div class="task-filters-inline" role="tablist" aria-label="Task filters">
-            <button class="filter-tab" data-filter="all" role="tab" aria-selected="false" aria-controls="tasks-list-container" id="filter-all-tab">
+        <!-- CROWN⁴.18: URL-based filter state - active tab matches current_filter from URL -->
+        <div class="task-filters-inline" role="tablist" aria-label="Task filters" data-current-filter="{{ current_filter }}">
+            <button class="filter-tab{% if current_filter == 'all' %} active{% endif %}" data-filter="all" role="tab" aria-selected="{{ 'true' if current_filter == 'all' else 'false' }}" aria-controls="tasks-list-container" id="filter-all-tab">
                 All
-                <span class="filter-counter filter-counter-all" data-counter="all" aria-label="{{ tasks|length if tasks else 0 }} total tasks">{{ tasks|length if tasks else 0 }}</span>
+                <span class="filter-counter filter-counter-all" data-counter="all" aria-label="{{ total_count }} total tasks">{{ total_count }}</span>
             </button>
-            <button class="filter-tab active" data-filter="active" role="tab" aria-selected="true" aria-controls="tasks-list-container" id="filter-active-tab">
+            <button class="filter-tab{% if current_filter == 'active' %} active{% endif %}" data-filter="active" role="tab" aria-selected="{{ 'true' if current_filter == 'active' else 'false' }}" aria-controls="tasks-list-container" id="filter-active-tab">
                 Active
-                <span class="filter-counter filter-counter-active" data-counter="active" aria-label="{{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }} active tasks">{{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }}</span>
+                <span class="filter-counter filter-counter-active" data-counter="active" aria-label="{{ active_count }} active tasks">{{ active_count }}</span>
             </button>
-            <button class="filter-tab" data-filter="archived" role="tab" aria-selected="false" aria-controls="tasks-list-container" id="filter-archived-tab">
+            <button class="filter-tab{% if current_filter == 'archived' %} active{% endif %}" data-filter="archived" role="tab" aria-selected="{{ 'true' if current_filter == 'archived' else 'false' }}" aria-controls="tasks-list-container" id="filter-archived-tab">
                 Archived
-                <span class="filter-counter filter-counter-archived" data-counter="archived" aria-label="{% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}{% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}{{ completed_count + cancelled_count }} archived tasks">{% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}{% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}{{ completed_count + cancelled_count }}</span>
+                <span class="filter-counter filter-counter-archived" data-counter="archived" aria-label="{{ archived_count }} archived tasks">{{ archived_count }}</span>
             </button>
         </div>
     </div>
@@ -181,10 +182,11 @@
     </div>
 
     <!-- Legacy task-filters div for JS compatibility (hidden, data synced) -->
+    <!-- CROWN⁴.18: Updated to use server-computed counts -->
     <div class="task-filters" style="display: none !important;">
-        <button class="filter-tab" data-filter="all">All<span class="filter-counter filter-counter-all" data-counter="all">{{ tasks|length if tasks else 0 }}</span></button>
-        <button class="filter-tab active" data-filter="active">Active<span class="filter-counter filter-counter-active" data-counter="active">{{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }}</span></button>
-        <button class="filter-tab" data-filter="archived">Archived<span class="filter-counter filter-counter-archived" data-counter="archived">{% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}{% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}{{ completed_count + cancelled_count }}</span></button>
+        <button class="filter-tab{% if current_filter == 'all' %} active{% endif %}" data-filter="all">All<span class="filter-counter filter-counter-all" data-counter="all">{{ total_count }}</span></button>
+        <button class="filter-tab{% if current_filter == 'active' %} active{% endif %}" data-filter="active">Active<span class="filter-counter filter-counter-active" data-counter="active">{{ active_count }}</span></button>
+        <button class="filter-tab{% if current_filter == 'archived' %} active{% endif %}" data-filter="archived">Archived<span class="filter-counter filter-counter-archived" data-counter="archived">{{ archived_count }}</span></button>
     </div>
 
     <!-- Bulk Action Toolbar (appears when tasks selected) -->

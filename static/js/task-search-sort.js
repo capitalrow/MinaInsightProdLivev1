@@ -26,7 +26,7 @@ class TaskSearchSort {
 
         this.searchQuery = '';
         this.currentSort = 'default';
-        this.currentFilter = 'active'; // Default to 'active' tab to hide archived tasks
+        this.currentFilter = this._getFilterFromURL(); // CROWN⁴.18: Read from URL for SSR sync
         this.quickFilter = null; // Added for quick filter support
 
         this.handleSearchInput = null;
@@ -46,11 +46,24 @@ class TaskSearchSort {
         this._isInitialLoad = true;
 
         this.init();
-        // CROWN⁴.13: Don't hydrate on initial load - use default 'active' filter
-        // This prevents persisted 'archived' state from overwriting the default
+        // CROWN⁴.18: Don't hydrate on initial load - URL already has correct filter
+        // This prevents persisted IndexedDB state from overwriting URL-based filter
         // Hydration only happens on visibility change (tab switch back)
         this.registerCrossTabSync();
-        console.log('[TaskSearchSort] Initialized with default filter: active (skipping initial hydration)');
+        console.log(`[TaskSearchSort] Initialized with URL filter: ${this.currentFilter} (skipping initial hydration)`);
+    }
+    
+    /**
+     * CROWN⁴.18: Read filter from URL query parameter
+     * This syncs with SSR - server already rendered tasks based on URL filter
+     * @returns {string} Current filter (default: 'active')
+     * @private
+     */
+    _getFilterFromURL() {
+        const params = new URLSearchParams(window.location.search);
+        const filter = params.get('filter');
+        const validFilters = ['active', 'completed', 'archived', 'all'];
+        return validFilters.includes(filter) ? filter : 'active';
     }
     
     /**
