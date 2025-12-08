@@ -1193,7 +1193,9 @@ class TaskBootstrap {
 
     /**
      * Attach event listeners to task cards
-     * Handles checkbox toggle, card clicks, and other interactions
+     * Handles card clicks and other interactions
+     * NOTE: Checkbox toggle is handled by event delegation in task-page-master-init.js
+     * to avoid duplicate handlers causing race conditions
      */
     _attachEventListeners() {
         const container = document.getElementById('tasks-list-container');
@@ -1202,33 +1204,8 @@ class TaskBootstrap {
             return;
         }
 
-        // Checkbox toggle (with optimistic UI)
-        const checkboxes = container.querySelectorAll('.task-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', async (e) => {
-                const taskId = e.target.dataset.taskId;
-                
-                // Call optimistic UI handler
-                if (window.optimisticUI) {
-                    try {
-                        await window.optimisticUI.toggleTaskStatus(taskId);
-                        
-                        // Track telemetry
-                        if (window.CROWNTelemetry) {
-                            window.CROWNTelemetry.recordMetric('task_status_toggle', 1, {
-                                task_id: taskId,
-                                new_status: e.target.checked ? 'completed' : 'todo'
-                            });
-                        }
-                    } catch (error) {
-                        console.error('❌ Failed to toggle task status:', error);
-                        
-                        // Rollback checkbox state on error
-                        e.target.checked = !e.target.checked;
-                    }
-                }
-            });
-        });
+        // NOTE: Checkbox toggle is now handled via event delegation in task-page-master-init.js
+        // This prevents duplicate handlers which caused race conditions and update failures
 
         // Task card clicks (for detail view - future implementation)
         const cards = container.querySelectorAll('.task-card');
