@@ -237,18 +237,11 @@ class VirtualList {
 
     /**
      * Attach event listeners to task cards
+     * NOTE: Checkbox toggle is handled by event delegation in task-page-master-init.js
      */
     _attachEventListeners() {
-        // Checkbox toggle
-        const checkboxes = this.container.querySelectorAll('.task-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', async (e) => {
-                const taskId = e.target.dataset.taskId;
-                if (window.optimisticUI) {
-                    await window.optimisticUI.toggleTaskStatus(taskId);
-                }
-            });
-        });
+        // NOTE: Checkbox toggle is handled via event delegation in task-page-master-init.js
+        // This prevents duplicate handlers which caused race conditions and update failures
 
         // Task click (for details/edit)
         const cards = this.container.querySelectorAll('.task-card');
