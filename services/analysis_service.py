@@ -378,6 +378,16 @@ class AnalysisService:
             ValueError: If session not found or no segments available
         """
         logger.info(f"Generating summary for session {session_id}")
+        
+        # Load session once (used for both validation and progress broadcasting)
+        session = db.session.get(Session, session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+        
+        # Get external session ID for WebSocket progress broadcasting (optional, for chunked processing)
+        external_session_id = getattr(session, 'external_id', None)
+        if not external_session_id:
+            logger.info(f"Session {session_id} has no external_id - progress events will be skipped")
 
         # --- Memory-aware context (NEW) ---
         memory_context = ""
@@ -395,12 +405,6 @@ class AnalysisService:
                 logger.info("Memory store not available, skipping memory retrieval.")
         except Exception as e:
             logger.warning(f"Memory retrieval skipped: {e}")
-        # -----------------------------------
-
-        # Load session and segments
-        session = db.session.get(Session, session_id)
-        if not session:
-            raise ValueError(f"Session {session_id} not found")
         
         # Load final segments ordered by timestamp
         from sqlalchemy import select
@@ -461,7 +465,7 @@ class AnalysisService:
             else:
                 # Generate insights using OpenAI engine only - no mock fallbacks in production
                 if engine == 'openai_gpt':
-                    summary_data = AnalysisService._analyse_with_openai(context_with_memory, level, style)
+                    summary_data = AnalysisService._analyse_with_openai(context_with_memory, level, style, external_session_id=external_session_id)
                 else:
                     # AI service unavailable - return informative error instead of fake data
                     logger.error("AI analysis unavailable: OpenAI API key not configured")
@@ -888,7 +892,7 @@ class AnalysisService:
         return unique_items
     
     @staticmethod
-    def _analyse_with_openai(context: str, level: SummaryLevel, style: SummaryStyle) -> Dict:
+    def _analyse_with_openai(context: str, level: SummaryLevel, style: SummaryStyle, external_session_id: Optional[str] = None) -> Dict:
         """
         Analyse context using OpenAI GPT with specified level and style.
         For long transcripts (>10k chars), uses chunked processing to capture full content.
@@ -898,6 +902,7 @@ class AnalysisService:
             context: Meeting transcript context
             level: Summary detail level
             style: Summary style type
+            external_session_id: Optional session ID for WebSocket progress broadcasting
             
         Returns:
             Analysis results dictionary
@@ -907,7 +912,7 @@ class AnalysisService:
         # Check if we need chunked processing for long transcripts
         if len(context) > AnalysisService.CHUNKING_THRESHOLD:
             logger.info(f"[Chunked Analysis] Transcript is {len(context)} chars (>{AnalysisService.CHUNKING_THRESHOLD}), using chunked processing")
-            return AnalysisService._analyse_with_chunking(context, level, style)
+            return AnalysisService._analyse_with_chunking(context, level, style, external_session_id=external_session_id)
         
         # Standard single-call processing for shorter transcripts
         logger.info(f"[Single Analysis] Transcript is {len(context)} chars, using single-call processing")
@@ -955,26 +960,60 @@ class AnalysisService:
         raise ValueError(f"OpenAI analysis failed: {last_error}")
     
     @staticmethod
-    def _analyse_with_chunking(context: str, level: SummaryLevel, style: SummaryStyle) -> Dict:
+    def _analyse_with_chunking(context: str, level: SummaryLevel, style: SummaryStyle, external_session_id: Optional[str] = None) -> Dict:
         """
         Process long transcripts using chunked analysis.
         Splits transcript into chunks, processes each, then merges results.
+        Emits WebSocket progress events for real-time UI updates.
         
         Args:
             context: Full meeting transcript (>10k chars)
             level: Summary detail level
             style: Summary style type
+            external_session_id: Optional session ID for WebSocket progress broadcasting
             
         Returns:
             Merged analysis results from all chunks
         """
         import time
         
+        # Import socketio for progress broadcasting
+        try:
+            from app import socketio
+            can_broadcast = socketio is not None and external_session_id is not None
+            if not can_broadcast:
+                logger.debug(f"[Chunked Analysis] Progress broadcasting disabled (socketio={socketio is not None}, session_id={external_session_id})")
+        except ImportError:
+            can_broadcast = False
+            socketio = None
+            logger.debug("[Chunked Analysis] Progress broadcasting disabled (socketio import failed)")
+        
+        # Helper to emit progress events
+        def emit_progress(current_chunk: int, total: int, status: str = 'processing', message: str = None):
+            if not can_broadcast:
+                return
+            try:
+                progress_pct = int((current_chunk / total) * 100) if total > 0 else 0
+                socketio.emit('insights_progress', {
+                    'session_id': external_session_id,
+                    'current_chunk': current_chunk,
+                    'total_chunks': total,
+                    'progress_percent': progress_pct,
+                    'status': status,
+                    'message': message or f'Processing chunk {current_chunk} of {total}...'
+                })
+                logger.debug(f"[Progress] Emitted insights_progress: {progress_pct}% ({current_chunk}/{total})")
+            except Exception as e:
+                logger.warning(f"[Progress] Failed to emit progress event: {e}")
+        
         # Split transcript into chunks
         chunks = AnalysisService._chunk_transcript(context)
         total_chunks = len(chunks)
         
         logger.info(f"[Chunked Analysis] Processing {total_chunks} chunks for {len(context)} char transcript")
+        
+        # Emit initial progress event
+        emit_progress(0, total_chunks, 'started', f'Analyzing long transcript ({total_chunks} sections)...')
         
         chunk_results = []
         failed_chunks = []
@@ -984,6 +1023,9 @@ class AnalysisService:
             chunk_text = chunk['text']
             
             logger.info(f"[Chunk {chunk_idx + 1}/{total_chunks}] Processing {len(chunk_text)} chars...")
+            
+            # Emit progress for this chunk
+            emit_progress(chunk_idx + 1, total_chunks, 'processing', f'Analyzing section {chunk_idx + 1} of {total_chunks}...')
             
             # Add chunk context to the prompt
             chunk_context = f"[CHUNK {chunk_idx + 1} OF {total_chunks}]\n{chunk_text}"
@@ -1033,7 +1075,11 @@ class AnalysisService:
         logger.info(f"[Chunked Analysis] Completed: {success_count}/{total_chunks} chunks succeeded, {fail_count} failed")
         
         if not chunk_results:
+            emit_progress(total_chunks, total_chunks, 'failed', 'Analysis failed - all sections had errors')
             raise ValueError(f"All {total_chunks} chunks failed to process")
+        
+        # Emit merging progress
+        emit_progress(total_chunks, total_chunks, 'merging', 'Combining insights from all sections...')
         
         # Merge results from all successful chunks
         merged_result = AnalysisService._merge_insights(chunk_results, level, style)
@@ -1045,6 +1091,9 @@ class AnalysisService:
             'failed_chunks': failed_chunks,
             'original_length': len(context)
         }
+        
+        # Emit completion progress
+        emit_progress(total_chunks, total_chunks, 'completed', 'Analysis complete!')
         
         return merged_result
     
