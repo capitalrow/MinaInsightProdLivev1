@@ -1442,7 +1442,24 @@ class OptimisticUI {
                 eventName = 'task_update';
                 let updateType = 'title'; // default
                 
-                if (data.status !== undefined) {
+                // CRITICAL FIX: deleted_at (archive/soft-delete) uses HTTP fallback
+                // WebSocket doesn't have dedicated archive event, but HTTP PUT supports deleted_at
+                if (data.deleted_at !== undefined) {
+                    console.log(`🔄 [Archive] Using HTTP fallback for deleted_at update`);
+                    try {
+                        const result = await this._syncViaHTTP(opId, type, data, taskId);
+                        await this._reconcileSuccess(opId, type, result, taskId);
+                        console.log(`✅ [Archive] HTTP update succeeded`);
+                        return;
+                    } catch (httpError) {
+                        console.error(`❌ [Archive] HTTP fallback failed:`, httpError);
+                        await this._reconcileFailure(opId, type, taskId, httpError);
+                        if (window.toast) {
+                            window.toast.error(`Failed to archive: ${httpError.message || 'Network error'}`);
+                        }
+                        return;
+                    }
+                } else if (data.status !== undefined) {
                     updateType = 'status_toggle';
                 } else if (data.priority !== undefined) {
                     updateType = 'priority';
