@@ -326,21 +326,28 @@ class OptimisticUI {
      * @returns {Promise<Object>} Updated task
      */
     async updateTask(taskId, updates) {
+        console.log(`\n📥 [UpdateTask] START - Task ${taskId}`, updates);
         const opId = this._generateOperationId();
+        console.log(`🔑 [UpdateTask] Generated operation ID: ${opId}`);
         
         // CROWN⁴.13: Acquire action lock to prevent sync overwrites
         let lockId = null;
         if (window.taskActionLock) {
             lockId = window.taskActionLock.acquire(taskId, `update:${Object.keys(updates).join(',')}`);
+            console.log(`🔒 [UpdateTask] Lock acquired: ${lockId}`);
+        } else {
+            console.warn(`⚠️ [UpdateTask] taskActionLock not available - sync protection disabled!`);
         }
         
         try {
             // Get current task
             const currentTask = await this.cache.getTask(taskId);
             if (!currentTask) {
+                console.error(`❌ [UpdateTask] Task ${taskId} not found in cache`);
                 if (lockId) window.taskActionLock.release(lockId);
                 throw new Error('Task not found');
             }
+            console.log(`📋 [UpdateTask] Current task state:`, { id: currentTask.id, status: currentTask.status });
 
             // Create optimistic version
             const optimisticTask = {
@@ -405,14 +412,17 @@ class OptimisticUI {
                 console.error('❌ Failed to persist pending operation:', err);
             });
             
+            console.log(`📤 [UpdateTask] Calling _syncToServer() for task ${taskId}...`);
             this._syncToServer(opId, 'update', updates, taskId);
+            console.log(`📨 [UpdateTask] _syncToServer() initiated (async) - returning optimistic task`);
 
             return optimisticTask;
         } catch (error) {
-            console.error('❌ Optimistic update failed:', error);
+            console.error('❌ [UpdateTask] FAILED:', error);
             // CROWN⁴.13: Release lock on error
             if (lockId && window.taskActionLock) {
                 window.taskActionLock.release(lockId);
+                console.log(`🔓 [UpdateTask] Lock ${lockId} released after error`);
             }
             throw error;
         }
@@ -633,20 +643,32 @@ class OptimisticUI {
 
     /**
      * Toggle task status optimistically
+     * CROWN⁴.13: Complete flow logging for debugging persistence issues
      * @param {number|string} taskId
      * @returns {Promise<Object>}
      */
     async toggleTaskStatus(taskId) {
+        console.log(`🔄 [ToggleStatus] START - Task ${taskId}`);
+        
         const task = await this.cache.getTask(taskId);
-        if (!task) return;
+        if (!task) {
+            console.warn(`⚠️ [ToggleStatus] Task ${taskId} not found in cache`);
+            return;
+        }
 
-        const newStatus = task.status === 'completed' ? 'todo' : 'completed';
+        const oldStatus = task.status;
+        const newStatus = oldStatus === 'completed' ? 'todo' : 'completed';
+        console.log(`📝 [ToggleStatus] Task ${taskId}: ${oldStatus} → ${newStatus}`);
+        
         const updates = {
             status: newStatus,
             completed_at: newStatus === 'completed' ? new Date().toISOString() : null
         };
+        console.log(`📦 [ToggleStatus] Update payload:`, updates);
 
         const result = await this.updateTask(taskId, updates);
+        console.log(`✅ [ToggleStatus] updateTask() returned for task ${taskId}`);
+        console.log(`📊 [ToggleStatus] Result:`, { id: result?.id, status: result?.status });
 
         if (newStatus === 'completed') {
             if (window.emotionalAnimations) {
