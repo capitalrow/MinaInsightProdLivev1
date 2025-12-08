@@ -400,10 +400,21 @@ class TaskBootstrap {
             // CROWN⁴.9: Mark hydration as complete IMMEDIATELY for SSR content
             // Server-rendered content is already the "hydrated" state
             this._markHydrationComplete();
-            
-            // Background: sync cache to IndexedDB without touching DOM
-            this.syncInBackground();
             this.initialized = true;
+            
+            // CROWN⁴.13 PERFORMANCE: Defer background sync until browser is idle
+            // This ensures First Paint is not blocked by network/IndexedDB operations
+            const deferredSync = () => {
+                console.log('🔄 [Bootstrap] Starting deferred background sync...');
+                this.syncInBackground();
+            };
+            
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(deferredSync, { timeout: 2000 });
+            } else {
+                // Fallback for Safari: use setTimeout with 100ms delay
+                setTimeout(deferredSync, 100);
+            }
             
             // Emit bootstrap complete with server source
             // CROWN⁴.7 PERFORMANCE FIX: For SSR, use browser's actual FCP (paint happened before JS)
@@ -490,7 +501,17 @@ class TaskBootstrap {
             }
 
             // Step 4: Start background sync (with reconciliation if needed)
-            this.syncInBackground();
+            // CROWN⁴.13 PERFORMANCE: Defer sync until browser is idle
+            const deferredCacheSync = () => {
+                console.log('🔄 [Bootstrap] Starting deferred cache sync...');
+                this.syncInBackground();
+            };
+            
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(deferredCacheSync, { timeout: 2000 });
+            } else {
+                setTimeout(deferredCacheSync, 100);
+            }
 
             this.initialized = true;
 
