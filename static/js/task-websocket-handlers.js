@@ -298,6 +298,15 @@ class TaskWebSocketHandlers {
             window.crownTelemetry.recordBatch1Event(eventType, 'received');
         }
         
+        // TASK 5: Event deduplication - check before processing
+        if (window.taskEventDeduplicator) {
+            const { isNew } = window.taskEventDeduplicator.checkAndMark('task_created', data, 'websocket');
+            if (!isNew) {
+                console.log('⏭️ [WebSocket] Skipping duplicate task_created event');
+                return;
+            }
+        }
+        
         // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -335,7 +344,8 @@ class TaskWebSocketHandlers {
         }
         
         if (window.multiTabSync) {
-            window.multiTabSync.broadcastTaskCreated(task);
+            // TASK 5: Pass event metadata for deduplication
+            window.multiTabSync.broadcastTaskCreated(task, { event_id: data.event_id });
         }
     }
 
@@ -348,6 +358,15 @@ class TaskWebSocketHandlers {
         const eventType = data.event_type || 'task.update.core';
         if (window.crownTelemetry && eventType === 'task.update.core') {
             window.crownTelemetry.recordBatch1Event(eventType, 'received');
+        }
+        
+        // TASK 5: Event deduplication - check before processing
+        if (window.taskEventDeduplicator) {
+            const { isNew } = window.taskEventDeduplicator.checkAndMark('task_updated', data, 'websocket');
+            if (!isNew) {
+                console.log('⏭️ [WebSocket] Skipping duplicate task_updated event');
+                return;
+            }
         }
         
         // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
@@ -387,7 +406,8 @@ class TaskWebSocketHandlers {
         }
         
         if (window.multiTabSync) {
-            window.multiTabSync.broadcastTaskUpdated(task);
+            // TASK 5: Pass event metadata for deduplication
+            window.multiTabSync.broadcastTaskUpdated(task, { event_id: data.event_id });
         }
     }
 
@@ -396,6 +416,15 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskStatusToggled(data) {
+        // TASK 5: Event deduplication - check before processing
+        if (window.taskEventDeduplicator) {
+            const { isNew } = window.taskEventDeduplicator.checkAndMark('task_status_toggled', data, 'websocket');
+            if (!isNew) {
+                console.log('⏭️ [WebSocket] Skipping duplicate task_status_toggled event');
+                return;
+            }
+        }
+        
         // Process CROWN⁴.5 metadata (check shouldProcess before any mutations)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -415,7 +444,8 @@ class TaskWebSocketHandlers {
         }
         
         if (window.multiTabSync) {
-            window.multiTabSync.broadcastTaskUpdated(task);
+            // TASK 5: Pass event metadata for deduplication
+            window.multiTabSync.broadcastTaskUpdated(task, { event_id: data.event_id });
         }
         
         // Animate status change
@@ -431,6 +461,15 @@ class TaskWebSocketHandlers {
      * @param {Object} data
      */
     async _handleTaskPriorityChanged(data) {
+        // TASK 5: Event deduplication - check before processing
+        if (window.taskEventDeduplicator) {
+            const { isNew } = window.taskEventDeduplicator.checkAndMark('task_priority_changed', data, 'websocket');
+            if (!isNew) {
+                console.log('⏭️ [WebSocket] Skipping duplicate task_priority_changed event');
+                return;
+            }
+        }
+        
         // Process CROWN⁴.5 metadata (check shouldProcess before any mutations)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -450,7 +489,8 @@ class TaskWebSocketHandlers {
         }
         
         if (window.multiTabSync) {
-            window.multiTabSync.broadcastTaskUpdated(task);
+            // TASK 5: Pass event metadata for deduplication
+            window.multiTabSync.broadcastTaskUpdated(task, { event_id: data.event_id });
         }
     }
 
@@ -835,6 +875,15 @@ class TaskWebSocketHandlers {
             window.crownTelemetry.recordBatch1Event(eventType, 'received');
         }
         
+        // TASK 5: Event deduplication - check before processing
+        if (window.taskEventDeduplicator) {
+            const { isNew } = window.taskEventDeduplicator.checkAndMark('task_deleted', data, 'websocket');
+            if (!isNew) {
+                console.log('⏭️ [WebSocket] Skipping duplicate task_deleted event');
+                return;
+            }
+        }
+        
         // Process CROWN⁴.5 metadata (event_id, checksum, timestamp)
         const { shouldProcess } = await this._processCROWNMetadata(data);
         if (!shouldProcess) {
@@ -863,7 +912,8 @@ class TaskWebSocketHandlers {
         }
         
         if (window.multiTabSync) {
-            window.multiTabSync.broadcastTaskDeleted(taskId);
+            // TASK 5: Pass event metadata for deduplication
+            window.multiTabSync.broadcastTaskDeleted(taskId, { event_id: data.event_id });
         }
     }
 
