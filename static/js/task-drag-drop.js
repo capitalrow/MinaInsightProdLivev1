@@ -23,6 +23,21 @@ class TaskDragDrop {
         this.touchScrollThreshold = 10; // px movement before canceling long press
         this.isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
         
+        // Performance optimization: detect reduced motion preference
+        const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+        this.prefersReducedMotion = motionQuery.matches;
+        this.isMobile = window.innerWidth <= 768;
+        
+        // Listen for preference changes (with browser compatibility)
+        // Safari <14 doesn't support addEventListener on MediaQueryList
+        const updateMotionPref = (e) => { this.prefersReducedMotion = e.matches; };
+        if (motionQuery.addEventListener) {
+            motionQuery.addEventListener('change', updateMotionPref);
+        } else if (motionQuery.addListener) {
+            // Deprecated but needed for Safari <14 compatibility
+            motionQuery.addListener(updateMotionPref);
+        }
+        
         // Bound handler references for proper cleanup
         this._boundTouchStart = this.handleTouchStart.bind(this);
         this._boundTouchMove = this.handleTouchMove.bind(this);
@@ -120,14 +135,17 @@ class TaskDragDrop {
             }
         }, 0);
         
-        // Animate drag start with GSAP
-        if (window.gsap) {
+        // Animate drag start with GSAP (skip if reduced motion or mobile)
+        if (window.gsap && !this.prefersReducedMotion) {
             gsap.to(this.draggedElement, {
                 opacity: 0.5,
-                scale: 0.98,
-                duration: 0.2,
+                scale: this.isMobile ? 1 : 0.98, // Skip scale on mobile
+                duration: this.isMobile ? 0.1 : 0.2, // Faster on mobile
                 ease: 'power2.out'
             });
+        } else if (this.draggedElement) {
+            // Instant opacity change for reduced motion
+            this.draggedElement.style.opacity = '0.5';
         }
         
         // Track telemetry
@@ -231,14 +249,18 @@ class TaskDragDrop {
         if (this.draggedElement) {
             this.draggedElement.classList.remove('task-dragging');
             
-            // Animate drag end with GSAP
-            if (window.gsap) {
+            // Animate drag end with GSAP (skip complex animation if reduced motion or mobile)
+            if (window.gsap && !this.prefersReducedMotion) {
                 gsap.to(this.draggedElement, {
                     opacity: 1,
                     scale: 1,
-                    duration: 0.3,
-                    ease: 'elastic.out(1, 0.5)'
+                    duration: this.isMobile ? 0.15 : 0.3,
+                    ease: this.isMobile ? 'power2.out' : 'elastic.out(1, 0.5)' // Simpler ease on mobile
                 });
+            } else {
+                // Instant reset for reduced motion
+                this.draggedElement.style.opacity = '1';
+                this.draggedElement.style.transform = '';
             }
         }
         
@@ -380,14 +402,17 @@ class TaskDragDrop {
         // Add dragging class to original
         card.classList.add('task-dragging');
         
-        // Animate original to semi-transparent
-        if (window.gsap) {
+        // Animate original to semi-transparent (skip if reduced motion)
+        if (window.gsap && !this.prefersReducedMotion) {
             gsap.to(card, {
                 opacity: 0.4,
-                scale: 0.98,
-                duration: 0.2,
+                scale: 1, // Skip scale on touch (performance)
+                duration: 0.15, // Faster on touch
                 ease: 'power2.out'
             });
+        } else {
+            // Instant change for reduced motion
+            card.style.opacity = '0.4';
         }
         
         // Haptic feedback
@@ -411,8 +436,10 @@ class TaskDragDrop {
         this.touchClone = card.cloneNode(true);
         this.touchClone.className = 'task-drag-clone';
         
-        // Style the clone
+        // Style the clone - lighter styling for reduced motion and mobile performance
         const rect = card.getBoundingClientRect();
+        const isReducedMotion = this.prefersReducedMotion;
+        
         Object.assign(this.touchClone.style, {
             position: 'fixed',
             top: `${rect.top}px`,
@@ -421,11 +448,13 @@ class TaskDragDrop {
             height: `${rect.height}px`,
             zIndex: '10000',
             pointerEvents: 'none',
-            opacity: '0.9',
-            transform: 'rotate(2deg) scale(1.02)',
-            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+            opacity: isReducedMotion ? '1' : '0.9',
+            // Skip rotation/scale for reduced motion (less GPU work)
+            transform: isReducedMotion ? 'none' : 'rotate(2deg) scale(1.02)',
+            // Lighter shadow for mobile performance
+            boxShadow: isReducedMotion ? '0 4px 12px rgba(0, 0, 0, 0.2)' : '0 10px 40px rgba(0, 0, 0, 0.3)',
             transition: 'none',
-            willChange: 'transform'
+            willChange: isReducedMotion ? 'auto' : 'transform' // Reduce GPU layers if not animating
         });
         
         document.body.appendChild(this.touchClone);
@@ -545,13 +574,18 @@ class TaskDragDrop {
         if (this.draggedElement) {
             this.draggedElement.classList.remove('task-dragging');
             
-            if (window.gsap) {
+            // Animate restore (skip complex animation if reduced motion)
+            if (window.gsap && !this.prefersReducedMotion) {
                 gsap.to(this.draggedElement, {
                     opacity: 1,
                     scale: 1,
-                    duration: 0.3,
-                    ease: 'elastic.out(1, 0.5)'
+                    duration: 0.2, // Faster on touch
+                    ease: 'power2.out' // Simpler ease for touch
                 });
+            } else {
+                // Instant reset for reduced motion
+                this.draggedElement.style.opacity = '1';
+                this.draggedElement.style.transform = '';
             }
         }
         
