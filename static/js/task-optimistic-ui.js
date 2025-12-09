@@ -10,6 +10,7 @@ class OptimisticUI {
         this.pendingOperations = new Map();
         this.operationCounter = 0;
         this.rehydrationComplete = false;
+        this._lastCacheWarningTime = null; // TASK 4: Debounce cache warnings
         this._setupReconnectHandler();
     }
     
@@ -118,15 +119,26 @@ class OptimisticUI {
             }
         });
         
-        // Listen for cache degraded mode events
+        // TASK 4: Listen for cache degraded mode events and surface to user
         window.addEventListener('cache:degraded', (event) => {
             console.warn('⚠️ [OptimisticUI] Cache degraded mode detected:', event.detail?.reason);
             this._showConnectionBanner('degraded', 'Offline features limited - changes will sync to server');
+            
+            // Show toast notification (debounced by _showCacheWarning)
+            this._showCacheWarning(
+                [`cache: ${event.detail?.reason || 'Storage temporarily unavailable'}`],
+                'CacheDegraded'
+            );
         });
         
         window.addEventListener('cache:recovered', () => {
             console.log('✅ [OptimisticUI] Cache recovered from degraded mode');
             this._showConnectionBanner('online', 'Cache restored', 2000);
+            
+            // Show success toast
+            if (window.toast?.success) {
+                window.toast.success('Offline features restored', 3000);
+            }
         });
     }
     
@@ -318,8 +330,10 @@ class OptimisticUI {
             this.pendingOperations.set(opId, operation);
             
             // ENTERPRISE-GRADE: Persist to IndexedDB for rehydration after refresh
+            // TASK 4: Surface failure to user if cache write fails
             await this.cache.savePendingOperation(opId, operation).catch(err => {
                 console.error('❌ Failed to persist pending operation:', err);
+                this._showCacheWarning([`pendingOp: ${err?.message || 'Failed to save'}`], 'CreateTask');
             });
             
             console.log('🔥 [OptimisticUI] About to call _syncToServer for create operation');
@@ -463,16 +477,13 @@ class OptimisticUI {
             this._syncToServer(opId, 'update', updates, taskId);
             console.log(`📨 [UpdateTask] _syncToServer() initiated (async)`);
             
-            // Log cache results when they complete (fire-and-forget)
+            // TASK 4: Handle cache results and surface failures to user
             cachePromise.then(results => {
-                const failures = Object.entries(results)
-                    .filter(([_, r]) => r && !r.success)
-                    .map(([k, r]) => `${k}: ${r.error}`);
-                if (failures.length > 0) {
-                    console.warn(`⚠️ [UpdateTask] Cache operations had failures:`, failures);
-                }
+                this._handleCacheResults(results, 'UpdateTask');
             }).catch(err => {
                 console.error(`❌ [UpdateTask] Unexpected cache promise error:`, err);
+                // Surface unexpected errors too
+                this._showCacheWarning([`unexpected: ${err?.message || 'Unknown error'}`], 'UpdateTask');
             });
 
             return optimisticTask;
@@ -569,8 +580,10 @@ class OptimisticUI {
             this.pendingOperations.set(opId, operation);
             
             // ENTERPRISE-GRADE: Persist to IndexedDB for rehydration after refresh
+            // TASK 4: Surface failure to user if cache write fails
             await this.cache.savePendingOperation(opId, operation).catch(err => {
                 console.error('❌ Failed to persist pending operation:', err);
+                this._showCacheWarning([`pendingOp: ${err?.message || 'Failed to save'}`], 'DeleteTask');
             });
             
             this._syncToServer(opId, 'update', updates, taskId);
@@ -2166,6 +2179,120 @@ class OptimisticUI {
             window.showToast(message, 'error');
         } else {
             console.error(message);
+        }
+    }
+    
+    /**
+     * TASK 4: Surface cache/queue failures to UI with context-appropriate messaging
+     * Shows non-intrusive warning when offline features are degraded
+     * Uses debouncing to avoid spam during multiple rapid failures
+     * Includes RETRY option for user recovery
+     * @param {string[]} failures - Array of failure descriptions
+     * @param {string} context - Operation context (e.g., 'update', 'create')
+     */
+    _showCacheWarning(failures, context = 'operation') {
+        // Debounce: Don't show more than once every 30 seconds
+        const now = Date.now();
+        const DEBOUNCE_MS = 30000;
+        if (this._lastCacheWarningTime && (now - this._lastCacheWarningTime) < DEBOUNCE_MS) {
+            console.log(`⏳ [CacheWarning] Debounced (shown ${Math.round((now - this._lastCacheWarningTime) / 1000)}s ago)`);
+            return;
+        }
+        this._lastCacheWarningTime = now;
+        
+        // User-friendly message based on what failed
+        const hasQueueFailure = failures.some(f => f.includes('queueOp') || f.includes('pendingOp'));
+        const hasCacheFailure = failures.some(f => f.includes('taskSave') || f.includes('eventAdd'));
+        
+        let message = '';
+        let duration = 8000; // Longer duration to give user time to click retry
+        
+        if (hasQueueFailure && hasCacheFailure) {
+            message = 'Offline mode temporarily unavailable. Your changes are saving to the server.';
+        } else if (hasQueueFailure) {
+            message = 'Changes may not be saved if you go offline. Server sync continues normally.';
+        } else if (hasCacheFailure) {
+            message = 'Local cache temporarily unavailable. Changes will sync to server.';
+        } else {
+            message = 'Some background operations failed. Your changes are still being saved.';
+        }
+        
+        console.warn(`⚠️ [CacheWarning] Surfacing to user:`, message, failures);
+        
+        // Check if there are pending operations that could benefit from retry
+        const hasPendingOps = this.pendingOperations.size > 0;
+        
+        // Show as warning toast with RETRY option
+        if (window.toast?.warning) {
+            if (hasPendingOps) {
+                // Include retry button when there are pending operations
+                window.toast.warning(message, duration, {
+                    undoText: 'Retry Now',
+                    undoCallback: async () => {
+                        console.log('🔄 [CacheWarning] User clicked Retry - syncing pending operations');
+                        
+                        // Show syncing feedback
+                        if (window.toast?.info) {
+                            window.toast.info('Syncing pending changes...', 3000);
+                        }
+                        
+                        try {
+                            await this._retryPendingOperations();
+                            
+                            // Check if all operations succeeded
+                            const remaining = this.pendingOperations.size;
+                            if (remaining === 0) {
+                                if (window.toast?.success) {
+                                    window.toast.success('All changes synced successfully', 4000);
+                                }
+                                this._showConnectionBanner('online', 'Connected', 2000);
+                            } else {
+                                // Some operations still pending (may have failed again)
+                                if (window.toast?.warning) {
+                                    window.toast.warning(`${remaining} changes still pending. Will retry automatically when possible.`, 6000);
+                                }
+                            }
+                        } catch (err) {
+                            console.error('❌ [CacheWarning] Retry failed:', err);
+                            if (window.toast?.error) {
+                                window.toast.error('Sync failed. Changes will retry automatically when connection improves.', 6000);
+                            }
+                        }
+                    }
+                });
+            } else {
+                // No pending ops - just show dismissible warning
+                window.toast.warning(message, duration);
+            }
+        } else if (window.toast?.show) {
+            window.toast.show(message, 'warning', duration);
+        } else if (window.showToast) {
+            window.showToast(message, 'warning');
+        }
+        
+        // Also update connection banner if visible (with retry button hint)
+        const bannerMessage = hasPendingOps 
+            ? `Offline features limited (${this.pendingOperations.size} pending)` 
+            : 'Offline features limited';
+        this._showConnectionBanner('degraded', bannerMessage, 10000);
+    }
+    
+    /**
+     * TASK 4: Track and surface multiple cache failures intelligently
+     * Called by cache operations to report failures for aggregated user notification
+     * @param {Object} results - Cache operation results object
+     * @param {string} context - Operation context for messaging
+     */
+    _handleCacheResults(results, context = 'operation') {
+        const failures = Object.entries(results)
+            .filter(([_, r]) => r && !r.success)
+            .map(([k, r]) => `${k}: ${r.error}`);
+        
+        if (failures.length > 0) {
+            console.warn(`⚠️ [${context}] Cache operations had failures:`, failures);
+            
+            // Surface to user with context-appropriate message
+            this._showCacheWarning(failures, context);
         }
     }
 
