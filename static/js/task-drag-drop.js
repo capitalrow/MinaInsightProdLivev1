@@ -231,39 +231,146 @@ class TaskDragDrop {
         console.log('[DragDrop] Task:', taskId, '| From:', oldIndex, '→ To:', newIndex);
         
         try {
-            // Get all tasks in current order
+            // Get all visible cards in current DOM order
             const allCards = Array.from(document.querySelectorAll('.task-card, .task-item-enhanced'));
-            const taskOrder = allCards.map(card => parseInt(card.dataset.taskId));
-            console.log('[DragDrop] Current task order:', taskOrder);
+            console.log('[DragDrop] Visible cards count:', allCards.length);
             
-            // Calculate new positions for affected tasks
-            const updates = [];
+            // CROWN⁴.5 FIX: Calculate position using GLOBAL task list
+            // This preserves global order when filters hide intermediate tasks
+            
+            // Get ALL tasks from cache (including hidden/filtered ones)
+            const allTasks = await this.optimisticUI.cache.getTasks();
+            const activeTasks = allTasks.filter(t => !t.deleted_at && !t.archived_at);
+            
+            // Sort ALL tasks by position to get global order
+            const globalSorted = [...activeTasks].sort((a, b) => (a.position || 0) - (b.position || 0));
+            
+            console.log('[DragDrop] Global task order:', globalSorted.map(t => ({id: t.id, pos: t.position})));
+            
+            // Build array of visible task IDs in DOM order
+            const visibleTaskIds = allCards.map(card => parseInt(card.dataset.taskId));
+            
+            // Remove the dragged task from globalSorted for position calculation
+            const globalWithoutDragged = globalSorted.filter(t => t.id !== taskId);
+            
+            // FIXED ALGORITHM: Use the drop target's global position as the anchor
+            // When dropping at position N in filtered view:
+            // - If moving down (after card at newIndex): insert right after that card in GLOBAL order
+            // - If moving up (before card at newIndex): insert right before that card in GLOBAL order
+            
+            // Get the anchor task (the visible task we're dropping relative to)
+            let anchorTaskId;
+            let insertBefore; // true = insert before anchor, false = insert after
             
             if (newIndex > oldIndex) {
-                // Moving down: shift tasks between oldIndex and newIndex up
-                for (let i = oldIndex + 1; i <= newIndex; i++) {
-                    updates.push({
-                        task_id: taskOrder[i],
-                        position: i - 1
-                    });
-                }
-                updates.push({
-                    task_id: taskId,
-                    position: newIndex
-                });
+                // Moving down: we want to go AFTER the card at newIndex
+                anchorTaskId = visibleTaskIds[newIndex];
+                insertBefore = false;
             } else {
-                // Moving up: shift tasks between newIndex and oldIndex down
-                for (let i = newIndex; i < oldIndex; i++) {
-                    updates.push({
-                        task_id: taskOrder[i],
-                        position: i + 1
-                    });
-                }
-                updates.push({
-                    task_id: taskId,
-                    position: newIndex
-                });
+                // Moving up: we want to go BEFORE the card at newIndex
+                anchorTaskId = visibleTaskIds[newIndex];
+                insertBefore = true;
             }
+            
+            // Handle edge cases where anchor is self
+            if (anchorTaskId === taskId) {
+                if (insertBefore && newIndex > 0) {
+                    anchorTaskId = visibleTaskIds[newIndex - 1];
+                    insertBefore = false;
+                } else if (!insertBefore && newIndex + 1 < visibleTaskIds.length) {
+                    anchorTaskId = visibleTaskIds[newIndex + 1];
+                    insertBefore = true;
+                }
+            }
+            
+            console.log('[DragDrop] Anchor task:', anchorTaskId, insertBefore ? 'insert BEFORE' : 'insert AFTER');
+            
+            // Find the anchor's position in the global list
+            const anchorGlobalIdx = globalWithoutDragged.findIndex(t => t.id === anchorTaskId);
+            
+            // Determine actual global neighbors based on insertion direction
+            let actualPrevTask, actualNextTask;
+            
+            if (anchorGlobalIdx === -1) {
+                // Anchor not found (edge case) - insert at beginning
+                actualPrevTask = null;
+                actualNextTask = globalWithoutDragged[0] || null;
+            } else if (insertBefore) {
+                // Insert BEFORE anchor: prev = task before anchor, next = anchor
+                actualPrevTask = anchorGlobalIdx > 0 ? globalWithoutDragged[anchorGlobalIdx - 1] : null;
+                actualNextTask = globalWithoutDragged[anchorGlobalIdx];
+            } else {
+                // Insert AFTER anchor: prev = anchor, next = task after anchor
+                actualPrevTask = globalWithoutDragged[anchorGlobalIdx];
+                actualNextTask = anchorGlobalIdx + 1 < globalWithoutDragged.length 
+                    ? globalWithoutDragged[anchorGlobalIdx + 1] 
+                    : null;
+            }
+            
+            const globalPrevPosition = actualPrevTask ? (actualPrevTask.position ?? 0) : null;
+            const globalNextPosition = actualNextTask ? (actualNextTask.position ?? 0) : null;
+            
+            console.log('[DragDrop] Actual global neighbors:', { 
+                prev: actualPrevTask ? { id: actualPrevTask.id, pos: globalPrevPosition } : null,
+                next: actualNextTask ? { id: actualNextTask.id, pos: globalNextPosition } : null
+            });
+            
+            // Calculate new position between actual global neighbors
+            let newPosition;
+            let redistributionUpdates = []; // Additional tasks to renumber if needed
+            
+            if (globalPrevPosition !== null && globalNextPosition !== null) {
+                // Dropping between two tasks
+                const gap = globalNextPosition - globalPrevPosition;
+                
+                if (gap > 1) {
+                    // There's room - use midpoint
+                    newPosition = Math.floor((globalPrevPosition + globalNextPosition) / 2);
+                } else {
+                    // NO GAP - need to redistribute positions to create space
+                    // Strategy: Shift all tasks from nextTask onwards by 1000 to create room
+                    console.log('[DragDrop] ⚠️ No position gap, redistributing...');
+                    
+                    const nextTaskIdx = globalWithoutDragged.findIndex(t => t.id === actualNextTask.id);
+                    
+                    // Shift all tasks from nextTask onwards
+                    for (let i = nextTaskIdx; i < globalWithoutDragged.length; i++) {
+                        const task = globalWithoutDragged[i];
+                        const shiftAmount = 1000;
+                        redistributionUpdates.push({
+                            task_id: task.id,
+                            position: (task.position || 0) + shiftAmount
+                        });
+                    }
+                    
+                    // Now there's room - use midpoint between prev and shifted next
+                    const shiftedNextPosition = globalNextPosition + 1000;
+                    newPosition = Math.floor((globalPrevPosition + shiftedNextPosition) / 2);
+                    
+                    console.log('[DragDrop] Redistributed', redistributionUpdates.length, 'tasks');
+                }
+            } else if (globalPrevPosition !== null) {
+                // Dropping at the end - add spacing after last
+                newPosition = globalPrevPosition + 1000;
+            } else if (globalNextPosition !== null) {
+                // Dropping at the beginning - subtract spacing from first
+                newPosition = globalNextPosition - 1000;
+            } else {
+                // Only task or edge case - use center
+                newPosition = 0;
+            }
+            
+            console.log('[DragDrop] New position calculated:', newPosition, 
+                        '(between', globalPrevPosition, 'and', globalNextPosition, ')');
+            
+            // Combine dragged task update with any redistribution updates
+            const updates = [
+                ...redistributionUpdates, // Shift tasks first
+                {
+                    task_id: taskId,
+                    position: newPosition
+                }
+            ];
             
             // Animate the reorder with GSAP
             this.animateReorder(allCards, oldIndex, newIndex);
@@ -276,7 +383,7 @@ class TaskDragDrop {
             }
             
             // Persist to backend
-            console.log('[DragDrop] 📤 POST /api/tasks/reorder with', updates.length, 'updates');
+            console.log('[DragDrop] 📤 POST /api/tasks/reorder with', updates.length, 'updates (including', redistributionUpdates.length, 'redistributions)');
             const response = await fetch('/api/tasks/reorder', {
                 method: 'POST',
                 headers: {
@@ -308,7 +415,9 @@ class TaskDragDrop {
                     task_id: taskId,
                     old_index: oldIndex,
                     new_index: newIndex,
-                    affected_count: updates.length
+                    new_position: newPosition,
+                    visible_tasks_count: visibleTaskIds.length,
+                    redistributed_count: redistributionUpdates.length
                 });
             }
             
@@ -318,15 +427,15 @@ class TaskDragDrop {
             }
             
             // Re-render tasks to reflect new order
-            const tasks = await this.optimisticUI.cache.getTasks();
-            const activeTasks = tasks.filter(t => !t.deleted_at && !t.archived_at);
+            const tasksForRender = await this.optimisticUI.cache.getTasks();
+            const tasksToRender = tasksForRender.filter(t => !t.deleted_at && !t.archived_at);
             
             // Sort by position
-            activeTasks.sort((a, b) => (a.position || 0) - (b.position || 0));
+            tasksToRender.sort((a, b) => (a.position || 0) - (b.position || 0));
             
             if (window.taskBootstrap) {
                 const ctx = window.taskBootstrap._getCurrentViewContext?.() || { filter: 'active', search: '', sort: { field: 'created_at', direction: 'desc' } };
-                await window.taskBootstrap.renderTasks(activeTasks, { 
+                await window.taskBootstrap.renderTasks(tasksToRender, { 
                     fromCache: true, 
                     source: 'optimistic',
                     isUserAction: true,
