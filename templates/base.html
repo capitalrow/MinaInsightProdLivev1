@@ -18,30 +18,46 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="dns-prefetch" href="https://cdn.socket.io">
     
-    <!-- PERF: Critical inline theme initialization (prevents flash) -->
+    <!-- CROWN⁴.14: Critical inline CSS for navbar/layout first paint -->
+    <style>
+    :root{--bg-primary:#0f172a;--bg-secondary:#1e293b;--text-primary:#f8fafc;--text-secondary:#94a3b8;--primary:#6366f1;--border:#334155}
+    [data-theme="light"]{--bg-primary:#f8fafc;--bg-secondary:#f1f5f9;--text-primary:#1a1a2e;--text-secondary:#6b7280;--border:#e0e0e0}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg-primary);color:var(--text-primary);font-family:system-ui,-apple-system,sans-serif}
+    .container{max-width:1200px;margin:0 auto;padding:0 1rem}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+    .navbar{position:sticky;top:0;z-index:100;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:0.75rem 0}
+    .navbar-content{display:flex;justify-content:space-between;align-items:center}
+    .navbar-brand{display:flex;align-items:center;gap:0.5rem;text-decoration:none;color:var(--text-primary);font-weight:600}
+    .navbar-title{font-size:1.25rem}
+    .navbar-menu{display:flex;align-items:center;gap:1rem}
+    .navbar-link{color:var(--text-secondary);text-decoration:none;font-size:0.875rem;transition:color 0.15s}
+    .navbar-link:hover{color:var(--text-primary)}
+    .btn{padding:0.5rem 1rem;border-radius:8px;border:none;cursor:pointer;font-size:0.875rem}
+    .btn-primary{background:var(--primary);color:white}
+    main{min-height:calc(100vh - 60px)}
+    </style>
     <script>
     (function(){try{var t=localStorage.getItem('mina-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
     </script>
     
-    <!-- PERF: Preload critical CSS -->
-    <link rel="preload" href="{{ url_for('static', filename='css/main.css') }}" as="style">
-    <link rel="preload" href="{{ url_for('static', filename='css/mina-tokens.css') }}" as="style">
+    <!-- CROWN⁴.14: ALL CSS is async - page-specific inline CSS handles first paint -->
+    <link rel="preload" href="{{ url_for('static', filename='css/main.css') }}" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <link rel="preload" href="{{ url_for('static', filename='css/mina-tokens.css') }}" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <link rel="preload" href="{{ url_for('static', filename='css/components.css') }}" as="style" onload="this.onload=null;this.rel='stylesheet'">
     
-    <!-- Critical CSS (render-blocking, required for first paint) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    <link rel="stylesheet" href="/static/css/mina-tokens.css">
-    
-    <!-- Non-critical CSS (can load after first paint) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}" media="print" onload="this.media='all'">
+    <!-- Non-critical CSS (load after first paint) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/loading-states.css') }}" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/empty-states.css') }}" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/error-states.css') }}" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-light.css') }}" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/calm-motion.css') }}" media="print" onload="this.media='all'">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/cookie-consent.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cookie-consent.css') }}?v=3" media="print" onload="this.media='all'">
     
     <!-- Fallback for browsers without onload -->
     <noscript>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/mina-tokens.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/loading-states.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/empty-states.css') }}">
