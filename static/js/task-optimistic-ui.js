@@ -358,18 +358,9 @@ class OptimisticUI {
                 _operation_id: opId
             };
 
-            // Step 1: Update DOM immediately
+            // Step 1: Update DOM immediately (never fails)
             this._updateTaskInDOM(taskId, optimisticTask);
             console.log(`✅ [UpdateTask] Step 1 complete: DOM updated`);
-            
-            // Step 2: Update IndexedDB
-            try {
-                await this.cache.saveTask(optimisticTask);
-                console.log(`✅ [UpdateTask] Step 2 complete: Task saved to IndexedDB`);
-            } catch (cacheError) {
-                console.error(`❌ [UpdateTask] Step 2 FAILED (saveTask):`, cacheError?.name, cacheError?.message, cacheError);
-                throw cacheError;
-            }
             
             // Dispatch update event for haptics/animations
             window.dispatchEvent(new CustomEvent('task:updated', {
@@ -377,64 +368,97 @@ class OptimisticUI {
             }));
             
             // CROWN⁴.15: Update TaskStateStore for counter synchronization
-            // This handles status changes (active<->archived) and completion
             window.taskStateStore?.upsertTask(optimisticTask);
             
-            // Step 3: Queue event via OfflineQueueManager
-            try {
-                await this.cache.addEvent({
-                    event_type: 'task_update',
-                    task_id: taskId,
-                    data: updates,
-                    timestamp: Date.now()
-                });
-                console.log(`✅ [UpdateTask] Step 3 complete: Event added to ledger`);
-            } catch (eventError) {
-                console.error(`❌ [UpdateTask] Step 3 FAILED (addEvent):`, eventError?.name, eventError?.message, eventError);
-                throw eventError;
-            }
-
-            // Use OfflineQueueManager for proper session tracking and replay
-            let queueId = null;
-            if (window.offlineQueue) {
-                try {
-                    queueId = await window.offlineQueue.queueOperation({
-                        type: 'task_update',
-                        task_id: taskId,
-                        data: updates,
-                        priority: 5,
-                        operation_id: opId  // Link queue entry to operation
-                    });
-                    console.log(`✅ [UpdateTask] Step 3b complete: Operation queued (queueId: ${queueId})`);
-                } catch (queueError) {
-                    console.error(`❌ [UpdateTask] Step 3b FAILED (queueOperation):`, queueError?.name, queueError?.message, queueError);
-                    throw queueError;
-                }
-            }
-
-            // Step 4: Sync to server
-            // Store clean updates data for retry
+            // Step 2: Prepare operation for server sync (must happen before cache)
             const operation = { 
                 type: 'update', 
                 taskId, 
-                previous: currentTask,  // Keep for rollback
-                updates,  // Clean updates data for retry
-                data: updates,  // Explicit clean data reference
-                queueId,  // Store queue ID to remove on success
+                previous: currentTask,
+                updates,
+                data: updates,
+                queueId: null,
                 timestamp: Date.now(),
-                lockId  // CROWN⁴.13: Store lock ID for release on completion
+                lockId
             };
             this.pendingOperations.set(opId, operation);
             
-            // ENTERPRISE-GRADE: Persist to IndexedDB for rehydration after refresh
-            await this.cache.savePendingOperation(opId, operation).catch(err => {
-                console.error('❌ Failed to persist pending operation:', err?.name, err?.message, err);
-            });
-            console.log(`✅ [UpdateTask] Step 4 complete: Pending operation saved`);
+            // Step 3: NON-BLOCKING cache operations - run in parallel, never block server sync
+            // Uses saveTaskResilient() which never throws
+            const cachePromise = (async () => {
+                const results = { taskSave: null, eventAdd: null, queueOp: null, pendingOp: null };
+                
+                // Save task to IndexedDB (non-blocking)
+                results.taskSave = await this.cache.saveTaskResilient(optimisticTask);
+                if (!results.taskSave.success) {
+                    console.warn(`⚠️ [UpdateTask] Cache save failed (non-blocking): ${results.taskSave.error}`);
+                } else {
+                    console.log(`✅ [UpdateTask] Task saved to IndexedDB`);
+                }
+                
+                // Add event to ledger (non-blocking)
+                try {
+                    await this.cache.addEvent({
+                        event_type: 'task_update',
+                        task_id: taskId,
+                        data: updates,
+                        timestamp: Date.now()
+                    });
+                    results.eventAdd = { success: true };
+                    console.log(`✅ [UpdateTask] Event added to ledger`);
+                } catch (err) {
+                    results.eventAdd = { success: false, error: err?.message };
+                    console.warn(`⚠️ [UpdateTask] Event add failed (non-blocking): ${err?.message}`);
+                }
+                
+                // Queue operation (non-blocking)
+                if (window.offlineQueue) {
+                    try {
+                        const queueId = await window.offlineQueue.queueOperation({
+                            type: 'task_update',
+                            task_id: taskId,
+                            data: updates,
+                            priority: 5,
+                            operation_id: opId
+                        });
+                        operation.queueId = queueId;
+                        results.queueOp = { success: true, queueId };
+                        console.log(`✅ [UpdateTask] Operation queued (queueId: ${queueId})`);
+                    } catch (err) {
+                        results.queueOp = { success: false, error: err?.message };
+                        console.warn(`⚠️ [UpdateTask] Queue operation failed (non-blocking): ${err?.message}`);
+                    }
+                }
+                
+                // Persist pending operation (non-blocking)
+                try {
+                    await this.cache.savePendingOperation(opId, operation);
+                    results.pendingOp = { success: true };
+                } catch (err) {
+                    results.pendingOp = { success: false, error: err?.message };
+                    console.warn(`⚠️ [UpdateTask] Pending operation save failed (non-blocking): ${err?.message}`);
+                }
+                
+                return results;
+            })();
             
+            // Step 4: Server sync - ALWAYS proceeds regardless of cache status
+            // This is the critical path - cache failures must never block server updates
             console.log(`📤 [UpdateTask] Calling _syncToServer() for task ${taskId}...`);
             this._syncToServer(opId, 'update', updates, taskId);
-            console.log(`📨 [UpdateTask] _syncToServer() initiated (async) - returning optimistic task`);
+            console.log(`📨 [UpdateTask] _syncToServer() initiated (async)`);
+            
+            // Log cache results when they complete (fire-and-forget)
+            cachePromise.then(results => {
+                const failures = Object.entries(results)
+                    .filter(([_, r]) => r && !r.success)
+                    .map(([k, r]) => `${k}: ${r.error}`);
+                if (failures.length > 0) {
+                    console.warn(`⚠️ [UpdateTask] Cache operations had failures:`, failures);
+                }
+            }).catch(err => {
+                console.error(`❌ [UpdateTask] Unexpected cache promise error:`, err);
+            });
 
             return optimisticTask;
         } catch (error) {
