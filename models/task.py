@@ -239,6 +239,43 @@ class Task(Base):
         if self.watchers and user_id in self.watchers:
             self.watchers.remove(user_id)
 
+    def to_dict_ssr(self):
+        """CROWN⁴.13: Optimized serialization for SSR First Paint (<200ms target).
+        Includes fields essential for hydration + modal display, excludes expensive computed fields.
+        ~25 fields vs 45+ in full to_dict (50% reduction).
+        """
+        data = {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'status': self.status,
+            'priority': self.priority,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'assigned_to_id': self.assigned_to_id,
+            'assignee_ids': sorted([user.id for user in self.assignees]) if self.assignees else [],
+            'meeting_id': self.meeting_id,
+            'session_id': self.session_id,
+            'labels': self.labels,
+            'tags': self.tags,
+            'position': self.position,
+            'extracted_by_ai': self.extracted_by_ai,
+            'snoozed_until': self.snoozed_until.isoformat() if self.snoozed_until else None,
+            'is_overdue': self.is_overdue,
+            'is_due_soon': self.is_due_soon,
+        }
+        
+        if self.assigned_to:
+            data['assigned_to'] = {
+                'id': self.assigned_to.id,
+                'username': self.assigned_to.username,
+                'display_name': getattr(self.assigned_to, 'display_name', None),
+            }
+        
+        return data
+
     def to_dict(self, include_relationships=False):
         """Convert task to dictionary for JSON serialization.
         
