@@ -113,6 +113,17 @@ class OptimisticUI {
                 this._showConnectionBanner('reconnecting', 'Reconnecting...');
             }
         });
+        
+        // Listen for cache degraded mode events
+        window.addEventListener('cache:degraded', (event) => {
+            console.warn('⚠️ [OptimisticUI] Cache degraded mode detected:', event.detail?.reason);
+            this._showConnectionBanner('degraded', 'Offline features limited - changes will sync to server');
+        });
+        
+        window.addEventListener('cache:recovered', () => {
+            console.log('✅ [OptimisticUI] Cache recovered from degraded mode');
+            this._showConnectionBanner('online', 'Cache restored', 2000);
+        });
     }
     
     _showConnectionBanner(status, message, autohideDuration = 0) {

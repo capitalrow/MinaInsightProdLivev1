@@ -129,6 +129,12 @@
   color: #22c55e;
 }
 
+.connection-banner.degraded {
+  background: rgba(234, 179, 8, 0.1);
+  border-color: rgba(234, 179, 8, 0.5);
+  color: #eab308;
+}
+
 .connection-status-icon::before {
   content: '●';
   margin-right: var(--space-2);
