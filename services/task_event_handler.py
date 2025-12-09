@@ -682,12 +682,27 @@ class TaskEventHandler:
             if not self.check_workspace_access(task, user_id):
                 return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
-            # Toggle status
-            task.status = TASK_STATUS_COMPLETED if task.status == TASK_STATUS_TODO else TASK_STATUS_TODO
+            # CROWN⁴.13 FIX: Honor explicit status from payload (industry-standard pattern)
+            # Matches Linear/Todoist/Asana approach: client sends explicit intent, server respects it
+            explicit_status = payload.get('status')
+            old_status = task.status
+            
+            if explicit_status:
+                # Use explicit status value from client (preferred approach)
+                task.status = explicit_status
+                logger.info(f"📝 [StatusUpdate] Task {task_id}: {old_status} → {explicit_status} (explicit)")
+            else:
+                # Legacy fallback: toggle behavior for backwards compatibility
+                task.status = TASK_STATUS_COMPLETED if task.status == TASK_STATUS_TODO else TASK_STATUS_TODO
+                logger.info(f"📝 [StatusUpdate] Task {task_id}: {old_status} → {task.status} (toggle fallback)")
+            
             task.updated_at = datetime.utcnow()
             
+            # Set or clear completed_at timestamp based on final status
             if task.status == TASK_STATUS_COMPLETED:
                 task.completed_at = datetime.utcnow()
+            else:
+                task.completed_at = None
             
             # Update counters
             self._update_counters(user_id)
