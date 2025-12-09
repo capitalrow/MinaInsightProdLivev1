@@ -1,5 +1,5 @@
 /* ========================================================================
-   MINA TASK STATE STORE â€” FULLY PATCHED VERSION
+   MINA TASK STATE STORE - FULLY PATCHED VERSION
    PART 1/5
    ------------------------------------------------------------------------
    This file preserves your original architecture and coding style, while
@@ -11,7 +11,7 @@
    - Stable hydration sequence
    - Cross-tab sync support
    - Optimistic UI-first behaviour (integrates with OptimisticUI class)
-   - Storeâ†’UI reactive updates
+   - Store to UI reactive updates
    - Rollback behaviour
    - Sorting rules (in_progress above todo)
    - ZERO breaking changes to external modules
