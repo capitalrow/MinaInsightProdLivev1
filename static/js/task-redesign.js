@@ -144,7 +144,7 @@
     SORT: 'mina_task_sort_preference'
   };
   
-  const VALID_FILTERS = ['all', 'active', 'archived'];
+  const VALID_FILTERS = ['all', 'active', 'completed', 'archived'];
   const VALID_SORTS = ['default', 'priority', 'priority-reverse', 'due-date', 'due-date-reverse', 'created', 'created-reverse', 'title', 'title-reverse'];
   const VALID_VIEWS = ['list', 'grid', 'bar'];
   
@@ -177,6 +177,27 @@
     if (VALID_FILTERS.includes(filter)) {
       setPreference(STORAGE_KEYS.FILTER, filter);
       console.log('[TaskRedesign] Saved filter preference:', filter);
+    }
+  }
+  
+  /**
+   * CROWN⁴.19: Update URL with current filter for persistence and shareability
+   * Uses replaceState to avoid polluting browser history with every filter click
+   * @param {string} filter - Current filter value
+   */
+  function updateFilterURL(filter) {
+    try {
+      const url = new URL(window.location.href);
+      if (filter === 'active') {
+        // 'active' is the default - remove from URL to keep it clean
+        url.searchParams.delete('filter');
+      } else {
+        url.searchParams.set('filter', filter);
+      }
+      // Use replaceState to update URL without adding history entry
+      window.history.replaceState({}, '', url.toString());
+    } catch (e) {
+      console.warn('[TaskRedesign] Could not update filter URL:', e);
     }
   }
   
@@ -358,6 +379,12 @@
       // PHASE 10: Save filter preference to localStorage
       setFilterPreference(filter);
       
+      // CROWN⁴.19: Update URL for user-initiated filter changes only
+      // e.isTrusted = true for real user clicks, false for synthetic/programmatic events
+      if (e.isTrusted) {
+        updateFilterURL(filter);
+      }
+      
       applyFilter(filter);
     });
     
@@ -469,6 +496,12 @@
         
         // PHASE 10: Save filter preference
         setFilterPreference(targetFilter);
+        
+        // CROWN⁴.19: Update URL for user-initiated filter changes only
+        // e.isTrusted = true for real user clicks, false for synthetic/programmatic events
+        if (e.isTrusted) {
+          updateFilterURL(targetFilter);
+        }
         
         // Apply filter
         applyFilter(targetFilter);
@@ -621,7 +654,9 @@
     setFilterPreference: setFilterPreference,
     getSortPreference: getSortPreference,
     setSortPreference: setSortPreference,
-    restoreSavedPreferences: restoreSavedPreferences
+    restoreSavedPreferences: restoreSavedPreferences,
+    // CROWN⁴.19: URL update for external access
+    updateFilterURL: updateFilterURL
   };
   
 })();
