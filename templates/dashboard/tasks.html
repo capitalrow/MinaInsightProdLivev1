@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block title %}Tasks - Mina{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tasks-core.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="tasks-container">
+    <div class="tasks-wrapper">
+        <!-- Header -->
+        <header class="page-header">
+            <h1 class="page-title">Action Items</h1>
+            <p class="page-subtitle">Tasks from your meetings, ready to complete</p>
+        </header>
+
+        <!-- Command Bar -->
+        <div class="command-bar">
+            <div class="filter-tabs" role="tablist" aria-label="Task filters">
+                <a href="{{ url_for('dashboard.tasks', filter='active') }}" 
+                   class="filter-tab {% if current_filter == 'active' %}active{% endif %}" 
+                   role="tab" 
+                   aria-selected="{{ 'true' if current_filter == 'active' else 'false' }}"
+                   data-filter="active">
+                    Active <span class="filter-count">{{ active_count }}</span>
+                </a>
+                <a href="{{ url_for('dashboard.tasks', filter='archived') }}" 
+                   class="filter-tab {% if current_filter == 'archived' %}active{% endif %}" 
+                   role="tab" 
+                   aria-selected="{{ 'true' if current_filter == 'archived' else 'false' }}"
+                   data-filter="archived">
+                    Archived <span class="filter-count">{{ archived_count }}</span>
+                </a>
+                <a href="{{ url_for('dashboard.tasks', filter='all') }}" 
+                   class="filter-tab {% if current_filter == 'all' %}active{% endif %}" 
+                   role="tab" 
+                   aria-selected="{{ 'true' if current_filter == 'all' else 'false' }}"
+                   data-filter="all">
+                    All <span class="filter-count">{{ total_count }}</span>
+                </a>
+            </div>
+
+            <div class="search-box">
+                <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input type="text" 
+                       class="search-input" 
+                       placeholder="Search tasks or meetings..." 
+                       id="task-search"
+                       aria-label="Search tasks">
+            </div>
+
+            <div class="view-controls">
+                <button class="view-btn" title="Group by Meeting" id="toggle-grouping" aria-label="Toggle grouping view">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                </button>
+                <button class="new-task-btn" id="new-task-btn" aria-label="Create new task">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    New
+                </button>
+            </div>
+        </div>
+
+        <!-- Meeting Heatmap -->
+        <div class="meeting-heatmap" id="meeting-heatmap" role="region" aria-label="Meetings with tasks">
+            <span class="heatmap-label">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                From meetings:
+            </span>
+            <div class="heatmap-items" id="heatmap-items">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <!-- Task List Container -->
+        <div class="task-list-container" id="task-list-container" role="main" aria-label="Task list">
+            {% if tasks|length == 0 %}
+            <!-- Empty State -->
+            <div class="empty-state" id="empty-state">
+                <div class="empty-illustration">
+                    <svg viewBox="0 0 24 24" width="64" height="64" aria-hidden="true">
+                        <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" fill="none"/>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="2" fill="none"/>
+                    </svg>
+                </div>
+                <h2 class="empty-title">No tasks yet</h2>
+                <p class="empty-text">
+                    {% if current_filter == 'active' %}
+                    You're all caught up! Start a meeting to capture action items, or create a task manually.
+                    {% elif current_filter == 'archived' %}
+                    No archived tasks yet. Completed tasks will appear here.
+                    {% else %}
+                    Your tasks from meetings will appear here. Start recording to capture action items automatically.
+                    {% endif %}
+                </p>
+                <button class="new-task-btn" style="margin-top: 16px;" onclick="document.getElementById('new-task-btn').click()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Create your first task
+                </button>
+            </div>
+            {% else %}
+            <!-- Task Groups (SSR) -->
+            <div class="task-groups" id="task-groups">
+                {% set today = [] %}
+                {% set this_week = [] %}
+                {% set later = [] %}
+                {% set no_date = [] %}
+                
+                {% for task in tasks %}
+                    {% if task.due_date %}
+                        {% set days_until = (task.due_date - today_date).days if today_date else 999 %}
+                        {% if days_until <= 0 %}
+                            {% set _ = today.append(task) %}
+                        {% elif days_until <= 7 %}
+                            {% set _ = this_week.append(task) %}
+                        {% else %}
+                            {% set _ = later.append(task) %}
+                        {% endif %}
+                    {% else %}
+                        {% set _ = no_date.append(task) %}
+                    {% endif %}
+                {% endfor %}
+                
+                <!-- All tasks in a single list (grouping done by JS) -->
+                <div class="task-list" id="task-list">
+                    {% for task in tasks %}
+                    <div class="task-card {% if task.status == 'completed' %}completed{% endif %} is-visible" 
+                         data-task-id="{{ task.id }}"
+                         data-status="{{ task.status }}"
+                         data-priority="{{ task.priority }}"
+                         data-due-date="{{ task.due_date.isoformat() if task.due_date else '' }}"
+                         data-meeting-id="{{ task.meeting_id or '' }}"
+                         data-position="{{ task.position }}"
+                         draggable="true"
+                         role="article"
+                         aria-label="Task: {{ task.title }}">
+                        
+                        <!-- Checkbox -->
+                        <button class="task-checkbox {% if task.priority == 'high' or task.priority == 'urgent' %}priority-high{% elif task.priority == 'medium' %}priority-medium{% endif %} {% if task.status == 'completed' %}completed{% endif %}"
+                                aria-label="{% if task.status == 'completed' %}Mark as incomplete{% else %}Mark as complete{% endif %}"
+                                data-task-id="{{ task.id }}">
+                            {% if task.status == 'completed' %}
+                            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                            {% endif %}
+                        </button>
+                        
+                        <div class="task-content">
+                            <!-- Spoken Provenance -->
+                            <div class="task-provenance">
+                                {% if task.meeting %}
+                                <a href="{{ url_for('dashboard.meeting_detail', meeting_id=task.meeting.id) }}" class="provenance-meeting" title="View meeting">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                                    {{ task.meeting.title|truncate(30) }}
+                                </a>
+                                {% endif %}
+                                
+                                {% if task.extraction_context and task.extraction_context.speaker %}
+                                <span class="provenance-speaker">
+                                    <span class="speaker-avatar">{{ task.extraction_context.speaker[:2]|upper }}</span>
+                                    {{ task.extraction_context.speaker }}
+                                </span>
+                                {% endif %}
+                                
+                                {% if task.transcript_span and task.transcript_span.start_ms %}
+                                <span class="provenance-timestamp">
+                                    {{ '%02d:%02d'|format(task.transcript_span.start_ms // 60000, (task.transcript_span.start_ms // 1000) % 60) }}
+                                </span>
+                                {% endif %}
+                                
+                                {% if task.extracted_by_ai and task.confidence_score %}
+                                <span class="provenance-confidence {% if task.confidence_score >= 0.8 %}confidence-high{% elif task.confidence_score >= 0.5 %}confidence-medium{% else %}confidence-low{% endif %}">
+                                    {% if task.confidence_score >= 0.8 %}High{% elif task.confidence_score >= 0.5 %}Medium{% else %}Low{% endif %} confidence
+                                </span>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Task Title -->
+                            <h3 class="task-title" data-task-id="{{ task.id }}">{{ task.title }}</h3>
+                            
+                            <!-- Task Meta -->
+                            <div class="task-meta">
+                                {% if task.due_date %}
+                                <span class="meta-item {% if task.is_overdue %}overdue{% elif task.is_due_soon %}due-soon{% endif %}">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                    {% if task.is_overdue %}
+                                    Overdue
+                                    {% elif task.days_until_due == 0 %}
+                                    Due today
+                                    {% elif task.days_until_due == 1 %}
+                                    Due tomorrow
+                                    {% elif task.days_until_due <= 7 %}
+                                    Due {{ task.due_date.strftime('%A') }}
+                                    {% else %}
+                                    Due {{ task.due_date.strftime('%b %d') }}
+                                    {% endif %}
+                                </span>
+                                {% endif %}
+                                
+                                {% if task.status == 'completed' %}
+                                <span class="meta-item completed-indicator">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                                    Completed
+                                </span>
+                                {% endif %}
+                                
+                                {% if task.assigned_to %}
+                                <span class="meta-item assignee">
+                                    <span class="assignee-avatar">{{ task.assigned_to.username[:2]|upper }}</span>
+                                    {{ task.assigned_to.display_name or task.assigned_to.username }}
+                                </span>
+                                {% endif %}
+                                
+                                {% if task.labels and task.labels|length > 0 %}
+                                {% for label in task.labels[:2] %}
+                                <span class="task-label">{{ label }}</span>
+                                {% endfor %}
+                                {% endif %}
+                                
+                                {% if task.category %}
+                                <span class="task-label">{{ task.category }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Task Actions -->
+                        <div class="task-actions">
+                            {% if task.meeting %}
+                            <button class="action-btn" title="Jump to transcript" data-action="transcript" data-task-id="{{ task.id }}">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            </button>
+                            {% endif %}
+                            <button class="action-btn" title="Snooze" data-action="snooze" data-task-id="{{ task.id }}">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </button>
+                            <button class="action-btn" title="More options" data-action="menu" data-task-id="{{ task.id }}">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                            </button>
+                        </div>
+                        
+                        <!-- Transcript Preview (shown on hover) -->
+                        {% if task.extraction_context and task.extraction_context.quote %}
+                        <div class="transcript-preview" data-task-id="{{ task.id }}">
+                            <div class="transcript-quote">
+                                "{{ task.extraction_context.quote|truncate(200) }}"
+                            </div>
+                            {% if task.meeting %}
+                            <a href="{{ url_for('dashboard.meeting_detail', meeting_id=task.meeting.id) }}{% if task.transcript_span and task.transcript_span.start_ms %}?t={{ task.transcript_span.start_ms // 1000 }}{% endif %}" class="transcript-link">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                Jump to this moment
+                            </a>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- AI Suggestions Section (populated by JS) -->
+        <div class="ai-suggestions" id="ai-suggestions" style="display: none;">
+            <div class="ai-header">
+                <div class="ai-icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5 0 4 4 0 0 1-5 0 4 4 0 0 1-5 0A10 10 0 0 0 12 2z"/></svg>
+                </div>
+                <div>
+                    <div class="ai-title">Mina found potential tasks</div>
+                    <div class="ai-subtitle" id="ai-suggestions-subtitle">From your recent meetings</div>
+                </div>
+            </div>
+            <div id="ai-suggestions-list"></div>
+        </div>
+
+        <!-- AI Nudge (populated by JS) -->
+        <div class="ai-nudge" id="ai-nudge" style="display: none;">
+            <span class="nudge-icon">💡</span>
+            <span class="nudge-text" id="nudge-text"></span>
+            <button class="nudge-action" id="nudge-action">Take action</button>
+            <button class="nudge-dismiss" id="nudge-dismiss" aria-label="Dismiss">
+                <svg viewBox="0 0 24 24" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Undo Toast -->
+<div class="undo-toast" id="undo-toast" style="display: none;" role="status" aria-live="polite">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+    <span class="undo-text" id="undo-text">Task completed</span>
+    <button class="undo-btn" id="undo-btn">Undo</button>
+</div>
+
+<!-- Task Context Menu -->
+<div class="task-context-menu" id="task-context-menu" style="display: none;" role="menu">
+    <button class="context-menu-item" data-action="edit" role="menuitem">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Edit
+    </button>
+    <button class="context-menu-item" data-action="assign" role="menuitem">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Assign
+    </button>
+    <button class="context-menu-item" data-action="set-due" role="menuitem">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Set due date
+    </button>
+    <button class="context-menu-item" data-action="priority" role="menuitem">
+        <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        Set priority
+    </button>
+    <button class="context-menu-item" data-action="labels" role="menuitem">
+        <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        Labels
+    </button>
+    <div class="context-menu-divider"></div>
+    <button class="context-menu-item" data-action="duplicate" role="menuitem">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Duplicate
+    </button>
+    <button class="context-menu-item" data-action="archive" role="menuitem">
+        <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        Archive
+    </button>
+    <button class="context-menu-item danger" data-action="delete" role="menuitem">
+        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        Delete
+    </button>
+</div>
+
+<!-- New Task Modal -->
+<div class="modal-overlay" id="new-task-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="new-task-modal-title">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title" id="new-task-modal-title">New Task</h2>
+            <button class="modal-close" id="new-task-modal-close" aria-label="Close">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <form id="new-task-form">
+            <div class="form-group">
+                <input type="text" 
+                       id="new-task-title" 
+                       class="form-input" 
+                       placeholder="What needs to be done?" 
+                       required
+                       autocomplete="off">
+            </div>
+            <div class="form-group">
+                <textarea id="new-task-description" 
+                          class="form-textarea" 
+                          placeholder="Add description (optional)"
+                          rows="3"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Due date</label>
+                    <input type="date" id="new-task-due-date" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Priority</label>
+                    <select id="new-task-priority" class="form-select">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="new-task-cancel">Cancel</button>
+                <button type="submit" class="btn-primary">Create Task</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Inject tasks JSON for JS hydration -->
+<script id="tasks-data" type="application/json">
+{{ tasks_json|tojson|safe }}
+</script>
+
+<script>
+// CROWN⁴.13: FCP Budget Validation
+(function() {
+    if (window.performance && window.performance.getEntriesByType) {
+        const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+                if (entry.name === 'first-contentful-paint') {
+                    const fcp = entry.startTime;
+                    if (fcp > 200) {
+                        console.warn(`[CROWN⁴.13] FCP budget exceeded: ${fcp.toFixed(0)}ms > 200ms`);
+                        window.dispatchEvent(new CustomEvent('performance:budget_exceeded', { 
+                            detail: { metric: 'FCP', value: fcp, budget: 200 } 
+                        }));
+                    } else {
+                        console.log(`[CROWN⁴.13] FCP within budget: ${fcp.toFixed(0)}ms`);
+                    }
+                }
+            }
+        });
+        observer.observe({ type: 'paint', buffered: true });
+    }
+})();
+
+// Current filter for JS reference
+window.TASKS_CURRENT_FILTER = '{{ current_filter }}';
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/tasks-core.js') }}" defer></script>
+{% endblock %}
