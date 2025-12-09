@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mina Tasks - UI Mockup</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a24;
+            --card-bg: rgba(26, 26, 36, 0.8);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --card-hover: rgba(99, 102, 241, 0.1);
+            --text-primary: #f4f4f5;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --success: #22c55e;
+            --success-glow: rgba(34, 197, 94, 0.3);
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --glass-blur: blur(12px);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-full: 9999px;
+            --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+            --transition-fast: 0.15s ease;
+            --transition-base: 0.25s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .mockup-label {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            background: var(--accent);
+            color: white;
+            padding: 6px 12px;
+            border-radius: var(--radius-full);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            z-index: 1000;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px 20px;
+        }
+
+        /* Header */
+        .page-header {
+            margin-bottom: 24px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #f4f4f5 0%, #a1a1aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 4px;
+        }
+
+        .page-subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Command Bar */
+        .command-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-tertiary);
+            padding: 4px;
+            border-radius: var(--radius-md);
+        }
+
+        .filter-tab {
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-tab.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .filter-tab:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .filter-count {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 2px 6px;
+            border-radius: var(--radius-full);
+            font-size: 11px;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 14px 10px 38px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 13px;
+            transition: var(--transition-fast);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .view-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .view-btn, .new-task-btn {
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .view-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .new-task-btn {
+            background: var(--accent);
+            color: white;
+            font-weight: 500;
+        }
+
+        .new-task-btn:hover {
+            filter: brightness(1.1);
+        }
+
+        /* Meeting Heatmap */
+        .meeting-heatmap {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--card-border);
+            overflow-x: auto;
+        }
+
+        .heatmap-label {
+            color: var(--text-muted);
+            font-size: 12px;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .heatmap-item {
+            padding: 6px 12px;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            color: var(--accent);
+            white-space: nowrap;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+
+        .heatmap-item:hover {
+            background: rgba(99, 102, 241, 0.25);
+        }
+
+        .heatmap-item.recent {
+            background: rgba(99, 102, 241, 0.3);
+            animation: gentle-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes gentle-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+            50% { box-shadow: 0 0 12px 2px var(--accent-glow); }
+        }
+
+        /* Task Group */
+        .task-group {
+            margin-bottom: 24px;
+        }
+
+        .group-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding-left: 4px;
+        }
+
+        .group-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .group-count {
+            background: var(--bg-tertiary);
+            padding: 2px 8px;
+            border-radius: var(--radius-full);
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Task Cards */
+        .task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .task-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 16px;
+            background: var(--card-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            transition: var(--transition-base);
+            position: relative;
+        }
+
+        .task-card:hover {
+            background: var(--card-hover);
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-card);
+        }
+
+        /* Checkbox */
+        .task-checkbox {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid var(--text-muted);
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 2px;
+        }
+
+        .task-checkbox:hover {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        .task-checkbox.priority-high {
+            border-color: var(--danger);
+        }
+
+        .task-checkbox.priority-medium {
+            border-color: var(--warning);
+        }
+
+        .task-checkbox.completed {
+            background: var(--success);
+            border-color: var(--success);
+            animation: complete-burst 0.4s ease-out;
+        }
+
+        .task-checkbox.completed::after {
+            content: '✓';
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        @keyframes complete-burst {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); box-shadow: 0 0 20px var(--success-glow); }
+            100% { transform: scale(1); }
+        }
+
+        /* Task Content */
+        .task-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .task-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+
+        .task-card.completed .task-title {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        /* Spoken Provenance - THE DIFFERENTIATOR */
+        .task-provenance {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .provenance-meeting {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            background: rgba(99, 102, 241, 0.12);
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            color: var(--accent);
+        }
+
+        .provenance-meeting svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .provenance-speaker {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .speaker-avatar {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: white;
+            font-weight: 600;
+        }
+
+        .provenance-timestamp {
+            font-size: 11px;
+            color: var(--text-muted);
+            padding: 3px 8px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+        }
+
+        .provenance-confidence {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+        }
+
+        .confidence-high {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+        }
+
+        .confidence-medium {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+        }
+
+        /* Task Meta */
+        .task-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .meta-item.due-soon {
+            color: var(--warning);
+        }
+
+        .meta-item.overdue {
+            color: var(--danger);
+        }
+
+        .task-label {
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 500;
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+        }
+
+        /* Task Actions */
+        .task-actions {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: var(--transition-fast);
+        }
+
+        .task-card:hover .task-actions {
+            opacity: 1;
+        }
+
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition-fast);
+        }
+
+        .action-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        /* Transcript Preview Tooltip */
+        .transcript-preview {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 50px;
+            right: 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-md);
+            padding: 14px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px);
+            transition: var(--transition-base);
+            z-index: 100;
+        }
+
+        .task-card:hover .transcript-preview.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .transcript-quote {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-style: italic;
+            line-height: 1.6;
+            padding-left: 12px;
+            border-left: 3px solid var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .transcript-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .transcript-link:hover {
+            text-decoration: underline;
+        }
+
+        /* AI Suggestions Section */
+        .ai-suggestions {
+            margin-top: 32px;
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+            border: 1px dashed rgba(99, 102, 241, 0.3);
+            border-radius: var(--radius-lg);
+        }
+
+        .ai-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .ai-icon {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ai-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .ai-subtitle {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .suggestion-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--card-bg);
+            border-radius: var(--radius-md);
+            margin-bottom: 8px;
+        }
+
+        .suggestion-actions {
+            display: flex;
+            gap: 6px;
+            margin-left: auto;
+        }
+
+        .suggestion-btn {
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            border: none;
+            font-size: 12px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+
+        .suggestion-btn.accept {
+            background: var(--accent);
+            color: white;
+        }
+
+        .suggestion-btn.dismiss {
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+        }
+
+        /* AI Nudge */
+        .ai-nudge {
+            margin-top: 24px;
+            padding: 14px 16px;
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nudge-icon {
+            font-size: 20px;
+        }
+
+        .nudge-text {
+            flex: 1;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .nudge-action {
+            padding: 6px 14px;
+            background: rgba(245, 158, 11, 0.2);
+            border: none;
+            border-radius: var(--radius-sm);
+            color: var(--warning);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        /* Mobile Preview Section */
+        .mobile-preview-section {
+            margin-top: 60px;
+            padding-top: 40px;
+            border-top: 1px solid var(--card-border);
+        }
+
+        .section-label {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 24px;
+        }
+
+        .mobile-frame {
+            max-width: 375px;
+            margin: 0 auto;
+            background: var(--bg-primary);
+            border-radius: 32px;
+            border: 4px solid #333;
+            padding: 20px 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .mobile-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .mobile-title {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .mobile-filters {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+
+        .mobile-filter {
+            padding: 8px 14px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-full);
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            border: none;
+        }
+
+        .mobile-filter.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .mobile-task {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px;
+            background: var(--card-bg);
+            border-radius: var(--radius-md);
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .mobile-task::before {
+            content: '← Swipe to snooze';
+            position: absolute;
+            right: -100px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+
+        .mobile-task::after {
+            content: 'Swipe to complete →';
+            position: absolute;
+            left: -110px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+            color: var(--success);
+            opacity: 0.5;
+        }
+
+        .swipe-hint {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 16px;
+            padding: 10px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            margin-top: 40px;
+        }
+
+        .empty-illustration {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+        }
+
+        .empty-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-text {
+            color: var(--text-muted);
+            font-size: 14px;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+
+        /* Undo Toast */
+        .undo-toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-secondary);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-md);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            animation: slide-up 0.3s ease;
+        }
+
+        @keyframes slide-up {
+            from { transform: translate(-50%, 20px); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+
+        .undo-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .undo-btn {
+            padding: 6px 12px;
+            background: var(--accent);
+            border: none;
+            border-radius: var(--radius-sm);
+            color: white;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        /* SVG Icons inline */
+        svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+    </style>
+</head>
+<body>
+    <div class="mockup-label">UI Mockup Preview</div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="page-header">
+            <h1 class="page-title">Action Items</h1>
+            <p class="page-subtitle">Tasks from your meetings, ready to complete</p>
+        </header>
+
+        <!-- Command Bar -->
+        <div class="command-bar">
+            <div class="filter-tabs">
+                <button class="filter-tab active">
+                    All <span class="filter-count">12</span>
+                </button>
+                <button class="filter-tab">
+                    Active <span class="filter-count">8</span>
+                </button>
+                <button class="filter-tab">
+                    Archived <span class="filter-count">4</span>
+                </button>
+            </div>
+
+            <div class="search-box">
+                <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input type="text" class="search-input" placeholder="Search tasks or meetings...">
+            </div>
+
+            <div class="view-controls">
+                <button class="view-btn" title="Group by Meeting">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                </button>
+                <button class="new-task-btn">
+                    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    New
+                </button>
+            </div>
+        </div>
+
+        <!-- Meeting Heatmap -->
+        <div class="meeting-heatmap">
+            <span class="heatmap-label">
+                <svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                From meetings:
+            </span>
+            <span class="heatmap-item recent">Q4 Planning (today)</span>
+            <span class="heatmap-item">Product Sync (Dec 6)</span>
+            <span class="heatmap-item">Design Review (Dec 4)</span>
+            <span class="heatmap-item">Weekly Standup (Dec 2)</span>
+        </div>
+
+        <!-- Task Group: Today -->
+        <div class="task-group">
+            <div class="group-header">
+                <span class="group-title">Today</span>
+                <span class="group-count">3</span>
+            </div>
+            <div class="task-list">
+                <!-- Task Card 1 - High Priority with Transcript Preview -->
+                <div class="task-card">
+                    <div class="task-checkbox priority-high"></div>
+                    <div class="task-content">
+                        <div class="task-provenance">
+                            <span class="provenance-meeting">
+                                <svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                                Q4 Planning
+                            </span>
+                            <span class="provenance-speaker">
+                                <span class="speaker-avatar">JC</span>
+                                John Chen
+                            </span>
+                            <span class="provenance-timestamp">14:32</span>
+                            <span class="provenance-confidence confidence-high">High confidence</span>
+                        </div>
+                        <div class="task-title">Send updated pricing proposal to Acme Corp by EOD</div>
+                        <div class="task-meta">
+                            <span class="meta-item due-soon">
+                                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                Due today
+                            </span>
+                            <span class="task-label">Follow-up</span>
+                        </div>
+                    </div>
+                    <div class="task-actions">
+                        <button class="action-btn" title="Jump to transcript">
+                            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        </button>
+                        <button class="action-btn" title="Snooze">
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </button>
+                        <button class="action-btn" title="More">
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                        </button>
+                    </div>
+                    
+                    <!-- Transcript Preview (shown on hover) -->
+                    <div class="transcript-preview show">
+                        <div class="transcript-quote">
+                            "...and we really need to get that pricing proposal over to Acme before they make a decision. Can someone take that as an action item?"
+                        </div>
+                        <a href="#" class="transcript-link">
+                            <svg viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            Jump to this moment
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Task Card 2 -->
+                <div class="task-card">
+                    <div class="task-checkbox priority-medium"></div>
+                    <div class="task-content">
+                        <div class="task-provenance">
+                            <span class="provenance-meeting">
+                                <svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                                Product Sync
+                            </span>
+                            <span class="provenance-speaker">
+                                <span class="speaker-avatar">SM</span>
+                                Sarah Miller
+                            </span>
+                            <span class="provenance-timestamp">10:15</span>
+                        </div>
+                        <div class="task-title">Review wireframes for the new dashboard feature</div>
+                        <div class="task-meta">
+                            <span class="meta-item">
+                                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                Due tomorrow
+                            </span>
+                            <span class="task-label">Design</span>
+                        </div>
+                    </div>
+                    <div class="task-actions">
+                        <button class="action-btn"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+                        <button class="action-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+                        <button class="action-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+                    </div>
+                </div>
+
+                <!-- Task Card 3 - Completed -->
+                <div class="task-card completed">
+                    <div class="task-checkbox completed"></div>
+                    <div class="task-content">
+                        <div class="task-provenance">
+                            <span class="provenance-meeting">
+                                <svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                                Weekly Standup
+                            </span>
+                            <span class="provenance-speaker">
+                                <span class="speaker-avatar">MK</span>
+                                Mike Kim
+                            </span>
+                        </div>
+                        <div class="task-title">Schedule infrastructure review with DevOps team</div>
+                        <div class="task-meta">
+                            <span class="meta-item">
+                                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                                Completed
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Group: This Week -->
+        <div class="task-group">
+            <div class="group-header">
+                <span class="group-title">This Week</span>
+                <span class="group-count">2</span>
+            </div>
+            <div class="task-list">
+                <div class="task-card">
+                    <div class="task-checkbox"></div>
+                    <div class="task-content">
+                        <div class="task-provenance">
+                            <span class="provenance-meeting">
+                                <svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                                Design Review
+                            </span>
+                            <span class="provenance-speaker">
+                                <span class="speaker-avatar">AL</span>
+                                Amy Lee
+                            </span>
+                            <span class="provenance-confidence confidence-medium">Medium confidence</span>
+                        </div>
+                        <div class="task-title">Prepare competitive analysis document for board presentation</div>
+                        <div class="task-meta">
+                            <span class="meta-item">
+                                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                Due Friday
+                            </span>
+                            <span class="task-label">Research</span>
+                        </div>
+                    </div>
+                    <div class="task-actions">
+                        <button class="action-btn"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+                        <button class="action-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <div class="task-checkbox"></div>
+                    <div class="task-content">
+                        <div class="task-provenance">
+                            <span class="provenance-meeting">
+                                <svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                                Q4 Planning
+                            </span>
+                            <span class="provenance-speaker">
+                                <span class="speaker-avatar">JC</span>
+                                John Chen
+                            </span>
+                        </div>
+                        <div class="task-title">Finalize Q1 roadmap priorities and share with stakeholders</div>
+                        <div class="task-meta">
+                            <span class="meta-item">
+                                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                Due Saturday
+                            </span>
+                            <span class="task-label">Planning</span>
+                        </div>
+                    </div>
+                    <div class="task-actions">
+                        <button class="action-btn"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+                        <button class="action-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Suggestions -->
+        <div class="ai-suggestions">
+            <div class="ai-header">
+                <div class="ai-icon">
+                    <svg viewBox="0 0 24 24" style="stroke:white"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5 0 4 4 0 0 1-5 0 4 4 0 0 1-5 0A10 10 0 0 0 12 2z"/></svg>
+                </div>
+                <div>
+                    <div class="ai-title">Mina found potential tasks</div>
+                    <div class="ai-subtitle">From today's Q4 Planning meeting</div>
+                </div>
+            </div>
+            
+            <div class="suggestion-card">
+                <div class="task-checkbox" style="width:18px;height:18px;border-width:1.5px"></div>
+                <div style="flex:1">
+                    <div style="font-size:14px;color:var(--text-primary)">Set up meeting with legal team about contract terms</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Low confidence — mentioned in passing</div>
+                </div>
+                <div class="suggestion-actions">
+                    <button class="suggestion-btn accept">Accept</button>
+                    <button class="suggestion-btn dismiss">Dismiss</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Nudge -->
+        <div class="ai-nudge">
+            <span class="nudge-icon">💡</span>
+            <span class="nudge-text">You've postponed "Review wireframes" twice. Should I snooze it until next week?</span>
+            <button class="nudge-action">Yes, snooze it</button>
+        </div>
+
+        <!-- Mobile Preview Section -->
+        <div class="mobile-preview-section">
+            <div class="section-label">📱 Mobile View Preview</div>
+            
+            <div class="mobile-frame">
+                <div class="mobile-header">
+                    <span class="mobile-title">Tasks</span>
+                    <button style="background:var(--accent);color:white;border:none;padding:8px 12px;border-radius:8px;font-size:12px">+ New</button>
+                </div>
+                
+                <div class="mobile-filters">
+                    <button class="mobile-filter active">All</button>
+                    <button class="mobile-filter">Active</button>
+                    <button class="mobile-filter">Archived</button>
+                </div>
+
+                <div class="mobile-task">
+                    <div class="task-checkbox priority-high" style="width:20px;height:20px"></div>
+                    <div style="flex:1">
+                        <div style="font-size:14px;font-weight:500;margin-bottom:4px">Send pricing proposal to Acme</div>
+                        <div style="font-size:11px;color:var(--text-muted)">
+                            <span style="color:var(--accent)">Q4 Planning</span> · Due today
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mobile-task">
+                    <div class="task-checkbox" style="width:20px;height:20px"></div>
+                    <div style="flex:1">
+                        <div style="font-size:14px;font-weight:500;margin-bottom:4px">Review dashboard wireframes</div>
+                        <div style="font-size:11px;color:var(--text-muted)">
+                            <span style="color:var(--accent)">Product Sync</span> · Due tomorrow
+                        </div>
+                    </div>
+                </div>
+
+                <div class="swipe-hint">
+                    👆 Long-press to see meeting context<br>
+                    👉 Swipe right to complete · 👈 Swipe left to snooze
+                </div>
+            </div>
+        </div>
+
+        <!-- Undo Toast -->
+        <div class="undo-toast">
+            <svg viewBox="0 0 24 24" style="stroke:var(--success)"><polyline points="20 6 9 17 4 12"/></svg>
+            <span class="undo-text">Task completed</span>
+            <button class="undo-btn">Undo</button>
+        </div>
+    </div>
+
+    <script>
+        // Interactive demo: clicking checkboxes toggles completion
+        document.querySelectorAll('.task-checkbox:not(.completed)').forEach(checkbox => {
+            checkbox.addEventListener('click', (e) => {
+                e.stopPropagation();
+                checkbox.classList.toggle('completed');
+                const card = checkbox.closest('.task-card');
+                if (card) card.classList.toggle('completed');
+            });
+        });
+    </script>
+</body>
+</html>
