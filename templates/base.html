@@ -207,8 +207,8 @@
     </footer>
     {% endif %}
     
-    <!-- PERF: Critical scripts (needed for first interaction) - load synchronously but small -->
-    <script src="{{ url_for('static', filename='js/skeleton-manager.js') }}"></script>
+    <!-- CROWN⁴.14: All scripts deferred for <200ms First Paint -->
+    <script src="{{ url_for('static', filename='js/skeleton-manager.js') }}" defer></script>
     
     <!-- PERF: Heavy libraries deferred (not needed for first paint) -->
     <!-- GSAP for Cinematic Animations - defer, code has fallbacks -->
