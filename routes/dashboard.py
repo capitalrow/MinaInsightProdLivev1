@@ -374,10 +374,11 @@ def tasks():
     in_progress_tasks = [t for t in all_tasks if t.status == 'in_progress']
     completed_tasks = [t for t in all_tasks if t.status == 'completed'][:10]
     
-    # CROWN⁴.6: Serialize tasks for frontend (fixes JSON serialization of to_dict method)
-    tasks_serialized = [t.to_dict() for t in all_tasks]
+    # CROWN⁴.13: Use minimal serialization for <200ms First Paint
+    # Full data fetched via API in background after hydration
+    tasks_serialized = [t.to_dict_ssr() for t in all_tasks]
     
-    logging.info(f"[CROWN⁴.18] SSR filter={current_filter}, rendering {len(filtered_tasks)}/{len(all_tasks)} tasks")
+    logging.info(f"[CROWN⁴.13] SSR filter={current_filter}, rendering {len(filtered_tasks)}/{len(all_tasks)} tasks (minimal JSON)")
     
     return render_template('dashboard/tasks.html',
                          tasks=filtered_tasks,  # CROWN⁴.18: Only filtered tasks for SSR
