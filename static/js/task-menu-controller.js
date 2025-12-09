@@ -324,137 +324,73 @@ class TaskMenuController {
     }
 
     /**
-     * 3. TOGGLE STATUS - Mark complete/incomplete
-     * CRITICAL FIX (Dec 2025): Use HTTP-first approach for guaranteed persistence.
-     * 
-     * The issue with optimisticUI.toggleTaskStatus:
-     * - It returns optimistic result immediately, sync happens async
-     * - If async sync fails, we can't detect it here
-     * - Result: UI shows success but server never updates
-     * 
-     * Solution: HTTP-first approach with optimistic DOM update
-     * - Update DOM immediately for visual feedback
-     * - Send HTTP request directly (guaranteed persistence)
-     * - Update cache on success
+     * Toggle task status (completed <-> todo)
+     * MINA_FIX_START: Updated to delegate to TaskStateStore + Orchestrator
      */
     async handleToggleStatus(taskId) {
-        console.log(`[TaskMenuController] Toggling status for task ${taskId} (HTTP-first)`);
-        
-        const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-        
-        // Get current status from DOM or cache
-        let currentStatus = taskCard?.dataset?.status || 'todo';
-        
-        // Try to get from cache for better accuracy
-        if (window.optimisticUI?.cache?.getTask) {
+        console.log(`[TaskMenuController] Toggling status for task ${taskId}`);
+
+        // Try to read current task from TaskStateStore if available
+        const store = window.TaskStateStore;
+        const task = store?.getTask ? store.getTask(taskId) : null;
+
+        let currentStatus = task?.status;
+        if (!currentStatus) {
+            // fallback: infer from DOM if store unavailable
+            const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+            currentStatus = card?.dataset?.status || "todo";
+        }
+
+        const newStatus = currentStatus === "completed" ? "todo" : "completed";
+        console.log(`[TaskMenuController] Status ${currentStatus} → ${newStatus}`);
+
+        // If TaskStateStore exists, delegate the update
+        if (store?.updateTaskStatus) {
             try {
-                const cachedTask = await window.optimisticUI.cache.getTask(taskId);
-                if (cachedTask) {
-                    currentStatus = cachedTask.status || 'todo';
-                }
-            } catch (e) {
-                console.warn(`[TaskMenuController] Cache lookup failed, using DOM status:`, e);
+                store.updateTaskStatus(taskId, newStatus);
+
+                // Important: UI updates will occur through:
+                //  - TaskStateStore event → Orchestrator → Renderer
+                // No DOM manipulation here.
+                console.log("[TaskMenuController] Delegated status update to TaskStateStore");
+                return;
+            } catch (err) {
+                console.error("[TaskMenuController] Store-based toggle failed:", err);
+                this.showToast("Failed to update task status", "error");
+                // fallback to HTTP implementation below
             }
         }
-        
-        const newStatus = currentStatus === 'completed' ? 'todo' : 'completed';
-        console.log(`[TaskMenuController] 📤 Toggle: ${currentStatus} -> ${newStatus}`);
-        
-        // STEP 1: Optimistic DOM update for instant feedback
-        if (taskCard) {
-            taskCard.dataset.status = newStatus;
-            const checkbox = taskCard.querySelector('.task-checkbox');
-            if (checkbox) checkbox.checked = newStatus === 'completed';
-            if (newStatus === 'completed') {
-                taskCard.classList.add('completed');
-                // Trigger celebration animation
-                if (window.emotionalAnimations) {
-                    window.emotionalAnimations.celebrate(taskCard, ['burst', 'shimmer']);
-                }
-            } else {
-                taskCard.classList.remove('completed');
-            }
-        }
-        
-        // STEP 2: HTTP request for guaranteed persistence
+
+        // ===== FALLBACK: DIRECT HTTP UPDATE (Only if TaskStateStore unavailable) =====
+        console.warn("[TaskMenuController] TaskStateStore not available — using fallback HTTP toggle");
+
         try {
-            console.log(`[TaskMenuController] 📤 Sending HTTP PUT /api/tasks/${taskId}`);
-            
             const response = await fetch(`/api/tasks/${taskId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ 
-                    status: newStatus,
-                    completed_at: newStatus === 'completed' ? new Date().toISOString() : null
-                })
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: newStatus }),
             });
-            
+
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
+                throw new Error(`HTTP ${response.status}`);
             }
-            
-            const data = await response.json();
-            console.log(`[TaskMenuController] ✅ Server confirmed toggle:`, data);
-            
-            // STEP 3: Update cache to keep it in sync
-            if (window.optimisticUI?.cache?.saveTask) {
-                const task = data.task || { id: taskId, status: newStatus };
-                await window.optimisticUI.cache.saveTask({
-                    ...task,
-                    status: newStatus,
-                    completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
-                    updated_at: new Date().toISOString()
-                });
-                console.log(`[TaskMenuController] ✅ Cache synced`);
-            }
-            
-            // Dispatch event for any listeners
-            window.dispatchEvent(new CustomEvent('task:updated', {
-                detail: { taskId, updates: { status: newStatus }, source: 'menu' }
-            }));
-            
-            // CROWN⁴.8 Phase 8: Dispatch undo event for completed tasks
-            if (newStatus === 'completed') {
-                const taskData = data.task || { id: taskId, title: taskCard?.querySelector('.task-title')?.textContent?.trim() };
-                window.dispatchEvent(new CustomEvent('task:completed', {
-                    detail: { 
-                        taskId, 
-                        task: { ...taskData, previousStatus: currentStatus },
-                        showUndo: true 
-                    }
-                }));
-            }
-            
-            window.toast?.success(`Task marked as ${newStatus}`);
-            
-        } catch (error) {
-            console.error(`[TaskMenuController] ❌ Toggle failed:`, error);
-            
-            // ROLLBACK: Revert DOM to original state
-            if (taskCard) {
-                taskCard.dataset.status = currentStatus;
-                const checkbox = taskCard.querySelector('.task-checkbox');
-                if (checkbox) checkbox.checked = currentStatus === 'completed';
-                if (currentStatus === 'completed') {
-                    taskCard.classList.add('completed');
-                } else {
-                    taskCard.classList.remove('completed');
-                }
-            }
-            
-            // CROWN⁴.9 Phase 9: Use error handler with retry
-            const retryFn = () => this.handleToggleStatus(taskId);
-            if (window.taskErrorHandler) {
-                window.dispatchEvent(new CustomEvent('task:operation-failed', {
-                    detail: { taskId, action: 'toggle-status', error, retryFn }
-                }));
-            } else {
-                window.toast?.error('Failed to update status. Please try again.');
-            }
+
+            const updatedTask = await response.json();
+
+            // UI correction will still occur through renderer/orchestrator once
+            // TaskStateStore syncs next pull. We do NOT mutate DOM here.
+            window.dispatchEvent(
+                new CustomEvent("task:updated", { detail: { taskId, updatedTask } })
+            );
+
+            console.log("[TaskMenuController] Fallback HTTP status update succeeded");
+        } catch (err) {
+            console.error("[TaskMenuController] Fallback toggle failed:", err);
+            this.showToast("Failed to update task status", "error");
         }
+
     }
+    /** MINA_FIX_END */
 
     /**
      * Detect if running on mobile/touch device
