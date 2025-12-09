@@ -649,6 +649,43 @@
     text-decoration: underline;
 }
 
+/* Mobile long-press transcript preview */
+.transcript-preview.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.task-card.transcript-active {
+    border-color: var(--tasks-accent);
+    box-shadow: 0 0 0 2px var(--tasks-accent-glow);
+}
+
+@media (max-width: 768px) {
+    .transcript-preview {
+        position: fixed;
+        bottom: 80px;
+        left: 16px;
+        right: 16px;
+        top: auto;
+        max-height: 40vh;
+        overflow-y: auto;
+        z-index: 200;
+    }
+    
+    .task-card:hover .transcript-preview {
+        opacity: 0;
+        visibility: hidden;
+    }
+    
+    .transcript-preview.visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+}
+
 /* AI Suggestions */
 .ai-suggestions {
     margin-top: 32px;
@@ -1083,6 +1120,56 @@
 
 .btn-secondary:hover {
     background: rgba(255, 255, 255, 0.1);
+}
+
+/* Meeting Group (Group by Meeting mode) */
+.meeting-group {
+    margin-bottom: 24px;
+}
+
+.meeting-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: rgba(99, 102, 241, 0.08);
+    border-radius: var(--tasks-radius-md);
+    border-left: 3px solid var(--tasks-accent);
+}
+
+.meeting-group-header svg {
+    stroke: var(--tasks-accent);
+    fill: none;
+    stroke-width: 2;
+    flex-shrink: 0;
+}
+
+.meeting-group-header .group-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tasks-text-primary);
+    flex: 1;
+}
+
+.meeting-group-header .group-count {
+    background: var(--tasks-accent);
+    color: white;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: var(--tasks-radius-full);
+}
+
+.meeting-group-tasks {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-left: 16px;
+}
+
+.view-btn.active {
+    background: var(--tasks-accent);
+    color: white;
 }
 
 /* Loading skeleton */
