@@ -886,7 +886,7 @@ window.__FIRST_PAINT_START = performance.now();
 <script defer src="{{ url_for('static', filename='js/task-detail-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-grouping.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/prefetch-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- prefetch-controller.js already loaded in base.html -->
 <script defer src="{{ url_for('static', filename='js/task-prefetch-adapter.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-render-scheduler.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-bootstrap.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
@@ -917,10 +917,10 @@ window.__FIRST_PAINT_START = performance.now();
 <script defer src="{{ url_for('static', filename='js/task-virtual-list.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-clustering.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/haptic-feedback.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
+<!-- reconciliation-cycle.js already loaded in base.html -->
 
 <!-- CROWN⁴.5 Phase 2: Cache-First Architecture -->
-<script defer src="{{ url_for('static', filename='js/indexeddb-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- indexeddb-cache.js already loaded in base.html -->
 <script defer src="{{ url_for('static', filename='js/task-store.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/temporal-recovery-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
