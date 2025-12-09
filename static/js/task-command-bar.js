@@ -54,7 +54,6 @@
         init() {
             this.initSearchToggle();
             this.initFilterSync();
-            this.initKeyboardShortcuts();
             this.initPopStateHandler();
             console.log(`[TaskCommandBar] Phase 2 command bar initialized (filter: ${this.currentFilter})`);
         }
@@ -193,18 +192,6 @@
             }
         }
         
-        initKeyboardShortcuts() {
-            document.addEventListener('keydown', (e) => {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                    return;
-                }
-                
-                if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
-                    e.preventDefault();
-                    this.expandSearch();
-                }
-            });
-        }
     }
     
     if (document.readyState === 'loading') {
