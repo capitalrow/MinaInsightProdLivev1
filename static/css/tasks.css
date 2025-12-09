@@ -4280,3 +4280,176 @@
         max-height: 100px;
     }
 }
+
+/* ========================================
+ * MOBILE PERFORMANCE OPTIMIZATIONS
+ * Reduce animation weight and backdrop-filter usage
+ * ======================================== */
+
+/* Reduce expensive effects on mobile */
+@media (max-width: 768px) {
+    /* Reduce backdrop-filter blur intensity on mobile for better performance */
+    .task-filters,
+    .search-sort-toolbar,
+    .task-item-enhanced,
+    .task-card,
+    .connection-banner,
+    .bulk-actions-toolbar,
+    #bulk-action-toolbar,
+    .task-menu-trigger {
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+    
+    /* Disable complex glassmorphism shadows on mobile */
+    .task-card:hover,
+    .task-item-enhanced:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Simplify hover transforms on mobile (touch doesn't have hover) */
+    .task-card:hover,
+    .task-item-enhanced:hover {
+        transform: none;
+    }
+    
+    /* Reduce transition complexity */
+    .task-card,
+    .task-item-enhanced,
+    .task-menu-item,
+    .filter-tab {
+        transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    
+    /* Disable pulse glow animation (battery-intensive) */
+    .impact-score-badge {
+        animation: none;
+    }
+    
+    /* Use CSS containment for better rendering performance */
+    .task-card,
+    .task-item-enhanced {
+        contain: layout style;
+    }
+    
+    .tasks-list-container,
+    .task-list-enhanced {
+        contain: layout;
+    }
+}
+
+/* ========================================
+ * PREFERS-REDUCED-MOTION SUPPORT
+ * Respect user accessibility preferences
+ * ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    /* Disable all keyframe animations */
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    /* Specific animation resets */
+    .tasks-header,
+    .task-filters,
+    .search-sort-toolbar,
+    .task-item-enhanced,
+    .task-card,
+    .impact-score-badge,
+    .sync-status-badge .badge-icon,
+    .rollback-indicator,
+    .assignee-multi-select,
+    .bulk-action-toolbar,
+    #bulk-action-toolbar,
+    .placeholder-pulse,
+    .calm-shimmer,
+    .calm-shimmer-skeleton {
+        animation: none !important;
+    }
+    
+    /* Disable transforms on hover/active states */
+    .task-card:hover,
+    .task-item-enhanced:hover,
+    .task-menu-trigger:hover,
+    .task-menu-trigger:active,
+    .bulk-action-btn:hover,
+    .jump-to-transcript-btn:hover,
+    .confidence-indicator:hover {
+        transform: none !important;
+    }
+    
+    /* Keep instant visual feedback for interactions */
+    .task-card,
+    .task-item-enhanced,
+    .filter-tab,
+    .task-menu-item,
+    .bulk-action-btn {
+        transition: background-color 0.01ms, border-color 0.01ms, opacity 0.01ms !important;
+    }
+    
+    /* Disable drag animation effects */
+    .task-dragging,
+    .task-drag-over,
+    .task-drag-placeholder,
+    .task-drag-clone {
+        transition: none !important;
+        animation: none !important;
+    }
+    
+    /* Disable rollback shake */
+    .task-card.rollback-shake {
+        animation: none !important;
+    }
+    
+    /* Disable spin animations */
+    .spin-animation {
+        animation: none !important;
+    }
+}
+
+/* ========================================
+ * TOUCH DEVICE OPTIMIZATIONS
+ * Better active states for touch (no hover)
+ * ======================================== */
+
+@media (hover: none) and (pointer: coarse) {
+    /* Remove hover effects that don't work on touch */
+    .task-card:hover,
+    .task-item-enhanced:hover {
+        transform: none;
+        box-shadow: none;
+    }
+    
+    /* Add active states for touch feedback */
+    .task-card:active,
+    .task-item-enhanced:active {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.12);
+    }
+    
+    .filter-tab:active {
+        background: var(--color-surface-hover);
+    }
+    
+    .task-menu-item:active {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Increase tap targets for touch */
+    .filter-tab {
+        min-height: 44px;
+        padding: var(--space-3) var(--space-4);
+    }
+    
+    /* Disable backdrop-filter on very low-end devices (save GPU) */
+    .task-filters,
+    .search-sort-toolbar {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: rgba(30, 30, 40, 0.95);
+    }
+}
