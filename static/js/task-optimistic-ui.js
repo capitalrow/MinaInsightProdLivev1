@@ -1505,6 +1505,14 @@ class OptimisticUI {
             const reconcileTime = performance.now() - startTime;
             console.log(`✅ Server acknowledged ${type} in ${reconcileTime.toFixed(2)}ms, response:`, result);
 
+            // CROWN⁴.13 FIX: Check if server returned success=false and trigger rollback
+            // This handles cases where WebSocket ACK is received but the operation failed server-side
+            if (result?.success === false || result?.result?.success === false) {
+                const errorMessage = result?.error || result?.result?.error || 'Server rejected operation';
+                console.error(`❌ [_syncToServer] Server returned failure:`, errorMessage);
+                throw new Error(errorMessage);
+            }
+
             // Reconcile with server data
             await this._reconcileSuccess(opId, type, result, taskId);
 
