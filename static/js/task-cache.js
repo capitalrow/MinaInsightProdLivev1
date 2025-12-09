@@ -124,6 +124,114 @@ class TaskCache {
         this.ready = false;
         this.initPromise = null;
         this.nodeId = this._getOrCreateNodeId();
+        this.degradedMode = false; // Track if cache is in degraded mode
+    }
+    
+    /**
+     * RESILIENCE FIX: Sanitize task data for IndexedDB storage
+     * Removes non-serializable values and normalizes data types
+     * @param {Object} task - Raw task object
+     * @returns {Object} Sanitized task safe for IndexedDB
+     */
+    _sanitizeTaskForStorage(task) {
+        if (!task || typeof task !== 'object') {
+            return null;
+        }
+        
+        const sanitized = {};
+        
+        for (const [key, value] of Object.entries(task)) {
+            // Skip functions and symbols
+            if (typeof value === 'function' || typeof value === 'symbol') {
+                continue;
+            }
+            
+            // Skip undefined values (IndexedDB doesn't like them)
+            if (value === undefined) {
+                continue;
+            }
+            
+            // Handle VectorClock objects - convert to plain object
+            if (value && typeof value === 'object' && value.constructor?.name === 'VectorClock') {
+                sanitized[key] = value.clocks ? { ...value.clocks } : {};
+                continue;
+            }
+            
+            // Handle Date objects - convert to ISO string
+            if (value instanceof Date) {
+                sanitized[key] = value.toISOString();
+                continue;
+            }
+            
+            // Handle nested objects recursively (but not arrays)
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                // Check for circular references by trying to stringify
+                try {
+                    JSON.stringify(value);
+                    sanitized[key] = this._sanitizeTaskForStorage(value);
+                } catch (e) {
+                    console.warn(`[TaskCache] Skipping non-serializable field: ${key}`);
+                    continue;
+                }
+            } else if (Array.isArray(value)) {
+                // Sanitize array elements
+                sanitized[key] = value.map(item => {
+                    if (item && typeof item === 'object') {
+                        return this._sanitizeTaskForStorage(item);
+                    }
+                    return item;
+                }).filter(item => item !== undefined);
+            } else {
+                sanitized[key] = value;
+            }
+        }
+        
+        return sanitized;
+    }
+    
+    /**
+     * RESILIENCE FIX: Wrapper for resilient save with automatic recovery
+     * Never throws - returns success status instead
+     * @param {Object} task - Task to save
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    async saveTaskResilient(task) {
+        try {
+            // Sanitize before saving
+            const sanitizedTask = this._sanitizeTaskForStorage(task);
+            if (!sanitizedTask) {
+                return { success: false, error: 'Task sanitization failed' };
+            }
+            
+            await this.saveTask(sanitizedTask);
+            
+            // Clear degraded mode on success
+            if (this.degradedMode) {
+                console.log('✅ [TaskCache] Cache recovered from degraded mode');
+                this.degradedMode = false;
+                window.dispatchEvent(new CustomEvent('cache:recovered'));
+            }
+            
+            return { success: true };
+        } catch (error) {
+            const errorInfo = {
+                name: error?.name || 'Unknown',
+                message: error?.message || String(error)
+            };
+            
+            console.error('❌ [TaskCache] saveTaskResilient failed:', errorInfo.name, '-', errorInfo.message);
+            
+            // Enter degraded mode
+            if (!this.degradedMode) {
+                console.warn('⚠️ [TaskCache] Entering degraded mode - offline capabilities limited');
+                this.degradedMode = true;
+                window.dispatchEvent(new CustomEvent('cache:degraded', { 
+                    detail: { reason: errorInfo.message } 
+                }));
+            }
+            
+            return { success: false, error: errorInfo.message };
+        }
     }
 
     /**
