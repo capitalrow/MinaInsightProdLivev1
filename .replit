@@ -27,7 +27,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app"
+args = "gunicorn -k eventlet -w 1 --bind 0.0.0.0:5000 --reload main:app"
 waitForPort = 5000
 
 [agent]
