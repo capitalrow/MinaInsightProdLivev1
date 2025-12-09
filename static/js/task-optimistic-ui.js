@@ -1941,6 +1941,7 @@ class OptimisticUI {
      * Reconcile failed server sync (rollback)
      * ENTERPRISE-GRADE: Marks temp tasks as 'failed' instead of deleting (prevents data loss)
      * CRITICAL: Keeps operation in pendingOperations for retry capability
+     * CROWN⁴.16: Differentiates retriable vs permanent errors with appropriate UI feedback
      * @param {string} opId
      * @param {string} type
      * @param {number|string} taskId
@@ -1955,6 +1956,10 @@ class OptimisticUI {
 
         console.log(`🔄 [Offline-First] Handling ${type} failure:`, { opId, taskId, error: error.message });
 
+        // CROWN⁴.16: Classify error as retriable or permanent
+        const errorMsg = error.message || 'Unknown error';
+        const isPermanentError = this._isPermanentError(errorMsg);
+        
         if (type === 'create') {
             // ENTERPRISE-GRADE: Mark temp task as 'failed' instead of deleting
             // This preserves user data across page refreshes and enables retry
@@ -1963,10 +1968,16 @@ class OptimisticUI {
             // Rollback to previous state
             await this.cache.saveTask(operation.previous);
             this._updateTaskInDOM(taskId, operation.previous);
+            
+            // CROWN⁴.16: Add visual feedback for update rollback
+            this._showRollbackFeedback(taskId, 'update', isPermanentError, opId);
         } else if (type === 'delete') {
             // Restore deleted task
             await this.cache.saveTask(operation.task);
             this._addTaskToDOM(operation.task);
+            
+            // CROWN⁴.16: Add visual feedback for delete rollback
+            this._showRollbackFeedback(taskId, 'delete', isPermanentError, opId);
         }
 
         // CROWN⁴.13: Release action lock on failure (don't block future syncs)
@@ -1979,10 +1990,11 @@ class OptimisticUI {
         // Keep it so _retryOperation() can work after failure
         // Mark it as failed for tracking
         operation.failed = true;
-        operation.lastError = error.message;
+        operation.lastError = errorMsg;
+        operation.isPermanent = isPermanentError;
         operation.retryCount = (operation.retryCount || 0) + 1;
         
-        console.log(`✅ [Offline-First] Operation ${opId} marked as failed (retry count: ${operation.retryCount})`);
+        console.log(`✅ [Offline-First] Operation ${opId} marked as failed (retry count: ${operation.retryCount}, permanent: ${isPermanentError})`);
         
         // ENTERPRISE-GRADE: Persist failed state to IndexedDB for post-refresh retry
         if (this.cache) {
@@ -1991,11 +2003,102 @@ class OptimisticUI {
             });
         }
 
-        // Show detailed error notification
-        const errorMsg = error.message || 'Unknown error';
-        this._showErrorNotification(`Failed to ${type} task. You can retry when online.`, errorMsg);
+        // Show user-friendly error notification with retry option
+        const userMessage = isPermanentError 
+            ? this._getPermanentErrorMessage(errorMsg, type)
+            : `Failed to ${type} task. Tap retry when ready.`;
+        this._showErrorNotification(userMessage, errorMsg, isPermanentError ? null : opId);
         
         console.log(`✅ [Offline-First] Failure handling complete for operation ${opId}`);
+    }
+    
+    /**
+     * CROWN⁴.16: Check if error is permanent (no point in retrying)
+     * @param {string} errorMsg
+     * @returns {boolean}
+     */
+    _isPermanentError(errorMsg) {
+        const permanentPatterns = [
+            /HTTP 400/i,          // Bad request - validation error
+            /HTTP 403/i,          // Forbidden - permission denied
+            /HTTP 404/i,          // Not found - resource deleted
+            /HTTP 422/i,          // Unprocessable entity
+            /validation/i,        // Validation error
+            /forbidden/i,         // Permission error
+            /not found/i,         // Resource not found
+            /permission denied/i, // Permission error
+            /unauthorized/i       // Auth error
+        ];
+        return permanentPatterns.some(pattern => pattern.test(errorMsg));
+    }
+    
+    /**
+     * CROWN⁴.16: Get user-friendly message for permanent errors
+     * @param {string} errorMsg
+     * @param {string} type
+     * @returns {string}
+     */
+    _getPermanentErrorMessage(errorMsg, type) {
+        if (/403|forbidden|permission/i.test(errorMsg)) {
+            return `You don't have permission to ${type} this task.`;
+        }
+        if (/404|not found/i.test(errorMsg)) {
+            return type === 'update' || type === 'delete' 
+                ? 'This task was deleted by another user.'
+                : `Task ${type} failed - not found.`;
+        }
+        if (/400|422|validation/i.test(errorMsg)) {
+            return `Invalid task data. Please check your input.`;
+        }
+        return `Failed to ${type} task. Please try again later.`;
+    }
+    
+    /**
+     * CROWN⁴.16: Show visual feedback when rollback occurs
+     * @param {string|number} taskId
+     * @param {string} type
+     * @param {boolean} isPermanent
+     * @param {string} opId
+     */
+    _showRollbackFeedback(taskId, type, isPermanent, opId) {
+        const card = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (!card) return;
+        
+        // Add brief shake animation to indicate rollback
+        card.classList.add('rollback-shake');
+        setTimeout(() => card.classList.remove('rollback-shake'), 500);
+        
+        // For non-permanent errors, add subtle retry indicator (auto-dismiss after 5s)
+        if (!isPermanent) {
+            const existingIndicator = card.querySelector('.rollback-indicator');
+            if (existingIndicator) existingIndicator.remove();
+            
+            const indicator = document.createElement('div');
+            indicator.className = 'rollback-indicator';
+            indicator.innerHTML = `
+                <span class="rollback-icon">↩</span>
+                <span class="rollback-text">Reverted</span>
+                <button class="rollback-retry-btn" title="Retry">↻</button>
+            `;
+            
+            const retryBtn = indicator.querySelector('.rollback-retry-btn');
+            retryBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._retryOperation(opId);
+                indicator.remove();
+            });
+            
+            const cardHeader = card.querySelector('.task-card-header') || card;
+            cardHeader.appendChild(indicator);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                if (indicator.parentNode) {
+                    indicator.classList.add('fade-out');
+                    setTimeout(() => indicator.remove(), 300);
+                }
+            }, 5000);
+        }
     }
 
     /**
@@ -2040,14 +2143,26 @@ class OptimisticUI {
     }
 
     /**
-     * Show error notification
+     * Show error notification with retry option
+     * ENTERPRISE-GRADE: Uses toast system with action button for retry
      * @param {string} message
      * @param {string} detail - Optional detailed error message
+     * @param {string} opId - Optional operation ID for retry
      */
-    _showErrorNotification(message, detail = null) {
+    _showErrorNotification(message, detail = null, opId = null) {
         console.error(`🚨 Error notification: ${message}`, detail ? `(${detail})` : '');
         
-        if (window.showToast) {
+        // Try both toast APIs for compatibility
+        if (window.toast?.error) {
+            if (opId) {
+                window.toast.error(message, 8000, {
+                    undoText: 'Retry',
+                    undoCallback: () => this._retryOperation(opId)
+                });
+            } else {
+                window.toast.error(message, 5000);
+            }
+        } else if (window.showToast) {
             window.showToast(message, 'error');
         } else {
             console.error(message);
