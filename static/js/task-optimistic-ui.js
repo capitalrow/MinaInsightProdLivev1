@@ -16,8 +16,8 @@ class OptimisticUI {
     /**
      * ENTERPRISE-GRADE: Rehydrate pending operations from IndexedDB on page load
      * Restores ALL operation types (create/update/delete) from offline_queue
-     * CRITICAL FIX: Filters out stale operations older than 2 minutes
-     * This ensures retry mechanism works after page refresh
+     * IDEMPOTENT RECONCILIATION: Never silently drops operations - always verifies with server
+     * This ensures retry mechanism works after page refresh and extended offline periods
      */
     async rehydratePendingOperations() {
         if (this.rehydrationComplete) {
@@ -31,44 +31,48 @@ class OptimisticUI {
             // Get all pending operations from offline_queue (supports create/update/delete)
             const operations = await this.cache.getAllPendingOperations();
             
-            // CRITICAL FIX: Filter out stale operations before adding to memory
-            // Stale operations (older than 2 minutes) likely already succeeded on server
+            // IDEMPOTENT RECONCILIATION: Keep ALL operations - never silently drop
+            // Extended threshold for warning only, not filtering
             const now = Date.now();
-            const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
-            const freshOperations = new Map();
+            const STALE_WARNING_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours - warning only
+            const allOperations = new Map();
             const staleOpIds = [];
             
             for (const [opId, op] of operations.entries()) {
                 const opTime = op.timestamp ? new Date(op.timestamp).getTime() : 0;
                 const opAge = now - opTime;
                 
-                // Filter out stale create operations (likely already succeeded)
-                if (op.type === 'create' && opAge > STALE_THRESHOLD_MS) {
-                    console.log(`🧹 [Rehydrate] Skipping stale operation: ${opId} (age: ${Math.round(opAge/1000)}s)`);
+                // Mark stale operations for verification but NEVER drop them
+                if (opAge > STALE_WARNING_THRESHOLD_MS) {
+                    console.warn(`⚠️ [Rehydrate] Stale operation (will verify with server): ${opId} (age: ${Math.round(opAge/1000/60)}min)`);
                     staleOpIds.push(opId);
-                } else {
-                    freshOperations.set(opId, op);
+                    // Mark as needing verification
+                    op.needsVerification = true;
                 }
+                
+                // Always keep the operation - let server sync determine success/failure
+                allOperations.set(opId, op);
             }
             
-            // Restore only fresh operations to in-memory map
-            this.pendingOperations = freshOperations;
+            // Restore ALL operations to in-memory map
+            this.pendingOperations = allOperations;
             
-            console.log(`✅ [Offline-First] Rehydration complete: ${freshOperations.size} fresh operations (${staleOpIds.length} stale filtered)`);
+            console.log(`✅ [Offline-First] Rehydration complete: ${allOperations.size} operations (${staleOpIds.length} stale, will verify)`);
             
             // Log breakdown by type
-            const breakdown = { create: 0, update: 0, delete: 0, failed: 0, skipped: staleOpIds.length };
-            for (const [opId, op] of freshOperations.entries()) {
+            const breakdown = { create: 0, update: 0, delete: 0, failed: 0, stale: staleOpIds.length };
+            for (const [opId, op] of allOperations.entries()) {
                 breakdown[op.type] = (breakdown[op.type] || 0) + 1;
                 if (op.failed) breakdown.failed++;
                 
-                console.log(`  → ${opId}: ${op.type} (${op.failed ? 'FAILED' : 'pending'}, retries: ${op.retryCount || 0})`);
+                console.log(`  → ${opId}: ${op.type} (${op.failed ? 'FAILED' : op.needsVerification ? 'VERIFY' : 'pending'}, retries: ${op.retryCount || 0})`);
             }
             console.log(`📊 [Offline-First] Operations by type:`, breakdown);
             
             this.rehydrationComplete = true;
             
-            // Auto-retry pending (non-failed) operations if online
+            // Auto-retry ALL pending (non-failed) operations if online
+            // This includes stale operations - server will respond appropriately
             if (window.wsManager && window.wsManager.getConnectionStatus('/tasks')) {
                 const pendingOps = Array.from(this.pendingOperations.entries())
                     .filter(([_, op]) => !op.failed);
@@ -1654,6 +1658,7 @@ class OptimisticUI {
     /**
      * ENTERPRISE-GRADE: HTTP fallback when WebSocket is unavailable
      * Provides resilient sync path for offline-first behavior
+     * IDEMPOTENT: Handles 409 Conflict for create operations as success (task already exists)
      * @param {string} opId
      * @param {string} type
      * @param {Object} data
@@ -1698,11 +1703,49 @@ class OptimisticUI {
             body: JSON.stringify(body)
         });
         
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: response.statusText }));
-            throw new Error(errorData.error || `HTTP ${response.status}`);
+        // Check status FIRST before parsing JSON
+        const status = response.status;
+        
+        // IDEMPOTENT RECONCILIATION: Handle 409 Conflict for create operations
+        // If task already exists, treat as success (idempotent - already synced)
+        if (status === 409 && type === 'create') {
+            let conflictData;
+            try {
+                conflictData = await response.json();
+            } catch (parseError) {
+                console.warn(`⚠️ [HTTP Fallback] 409 response not JSON parseable`);
+                throw new Error('Task conflict - please retry');
+            }
+            
+            console.log(`ℹ️ [HTTP Fallback] Create returned 409 - task already exists (idempotent)`);
+            
+            // If server returns the existing task, use it for reconciliation
+            if (conflictData.existing_task || conflictData.task) {
+                return {
+                    success: true,
+                    is_duplicate: true,
+                    existing_task: conflictData.existing_task || conflictData.task,
+                    task: conflictData.existing_task || conflictData.task
+                };
+            }
+            
+            // No existing task data - cannot reconcile properly, treat as error
+            console.warn(`⚠️ [HTTP Fallback] 409 without existing task data`);
+            throw new Error('Task already exists but server did not return existing task data');
         }
         
+        // Handle all other non-OK responses as errors
+        if (!response.ok) {
+            let errorData;
+            try {
+                errorData = await response.json();
+            } catch (parseError) {
+                errorData = { error: response.statusText };
+            }
+            throw new Error(errorData.error || `HTTP ${status}`);
+        }
+        
+        // Success - parse and return JSON response
         const result = await response.json();
         console.log(`✅ [HTTP Fallback] ${type} operation completed:`, result);
         
