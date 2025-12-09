@@ -26,7 +26,7 @@ class TaskSearchSort {
 
         this.searchQuery = '';
         this.currentSort = 'default';
-        this.currentFilter = 'active'; // Default to 'active' tab to hide archived tasks
+        this.currentFilter = this._getFilterFromURL(); // CROWN⁴.18: Read from URL for SSR sync
         this.quickFilter = null; // Added for quick filter support
 
         this.handleSearchInput = null;
@@ -46,11 +46,24 @@ class TaskSearchSort {
         this._isInitialLoad = true;
 
         this.init();
-        // CROWN⁴.13: Don't hydrate on initial load - use default 'active' filter
-        // This prevents persisted 'archived' state from overwriting the default
+        // CROWN⁴.18: Don't hydrate on initial load - URL already has correct filter
+        // This prevents persisted IndexedDB state from overwriting URL-based filter
         // Hydration only happens on visibility change (tab switch back)
         this.registerCrossTabSync();
-        console.log('[TaskSearchSort] Initialized with default filter: active (skipping initial hydration)');
+        console.log(`[TaskSearchSort] Initialized with URL filter: ${this.currentFilter} (skipping initial hydration)`);
+    }
+    
+    /**
+     * CROWN⁴.18: Read filter from URL query parameter
+     * This syncs with SSR - server already rendered tasks based on URL filter
+     * @returns {string} Current filter (default: 'active')
+     * @private
+     */
+    _getFilterFromURL() {
+        const params = new URLSearchParams(window.location.search);
+        const filter = params.get('filter');
+        const validFilters = ['active', 'completed', 'archived', 'all'];
+        return validFilters.includes(filter) ? filter : 'active';
     }
     
     /**
@@ -143,20 +156,42 @@ class TaskSearchSort {
             document.dispatchEvent(new CustomEvent('task:search-cleared'));
         };
 
-        // Delegated sort selector handler
+        // Sort selector handler
+        // CROWN⁴.17: Set user action lock on sort change
+        // CROWN⁴.19 FIX: Attach directly to element to avoid stopPropagation issues
         this.handleSortChange = (e) => {
-            if (e.target.id !== 'task-sort-select') return;
+            this._setUserActionLock();
             this.currentSort = e.target.value;
+            
+            // PHASE 10: Save sort preference to localStorage
+            if (window.TaskRedesign?.setSortPreference) {
+                window.TaskRedesign.setSortPreference(this.currentSort);
+            }
+            
             this.safeApplyFiltersAndSort();
             document.dispatchEvent(new CustomEvent('task:sort', { detail: { sort: this.currentSort } }));
         };
 
         document.addEventListener('input', this.handleSearchInput);
         document.addEventListener('click', this.handleSearchClear);
-        document.addEventListener('change', this.handleSortChange);
+        
+        // CROWN⁴.19 FIX: Attach sort handler directly to the select element
+        // This avoids issues with mobile tap handlers blocking document-level delegation
+        if (this.sortSelect) {
+            this.sortSelect.addEventListener('change', this.handleSortChange);
+        }
+        // Fallback for dynamically created selects
+        document.addEventListener('change', (e) => {
+            if (e.target.id === 'task-sort-select' && e.target !== this.sortSelect) {
+                this.handleSortChange(e);
+            }
+        });
         
         // Listen for filter tab changes
+        // CROWN⁴.17: Set user action lock when filter tab is clicked
+        // This prevents background state restores from overwriting user's filter choice
         document.addEventListener('filterChanged', (e) => {
+            this._setUserActionLock();
             this.currentFilter = e.detail.filter;
             this.safeApplyFiltersAndSort();
         });
@@ -576,9 +611,23 @@ class TaskSearchSort {
         const sortConfig = this.mapSortKeyToConfig(sortKey);
         if (!sortConfig) return tasks;
 
-        const sortable = [...tasks];
+        let sortable = [...tasks];
         if (window.taskBootstrap?.sortTasks) {
-            return window.taskBootstrap.sortTasks(sortable, sortConfig);
+            sortable = window.taskBootstrap.sortTasks(sortable, sortConfig);
+        }
+
+        // CROWN⁴.15 FIX: Sort completed tasks to bottom in 'all' view
+        // This ensures consistent visual hierarchy - active tasks first
+        // Guard: Handle both data objects (t.status) and DOM nodes (t.dataset?.status)
+        if (this.currentFilter === 'all') {
+            const getStatus = (t) => t.status || t.dataset?.status || 'todo';
+            const isCompleted = (t) => {
+                const status = getStatus(t);
+                return status === 'completed' || status === 'cancelled';
+            };
+            const activeTasks = sortable.filter(t => !isCompleted(t));
+            const completedTasks = sortable.filter(t => isCompleted(t));
+            sortable = [...activeTasks, ...completedTasks];
         }
 
         return sortable;
@@ -830,16 +879,21 @@ class TaskSearchSort {
     }
 
     setFilter(filter) {
+        console.log('[SearchSort] 🔍 setFilter called:', filter);
+        console.log('[SearchSort] Previous filter:', this.currentFilter);
         this.currentFilter = filter;
         this.safeApplyFiltersAndSort();
+        console.log('[SearchSort] ✅ Filter applied:', filter);
     }
 
     setQuickFilter(filter) {
+        console.log('[SearchSort] ⚡ setQuickFilter called:', filter);
         this.quickFilter = filter;
         this.safeApplyFiltersAndSort();
     }
 
     clearQuickFilter() {
+        console.log('[SearchSort] 🧹 clearQuickFilter called');
         this.quickFilter = null;
         this.safeApplyFiltersAndSort();
     }

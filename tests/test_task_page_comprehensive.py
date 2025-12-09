@@ -34,7 +34,11 @@ class TestTaskPageAPI:
         self.client = self.app.test_client()
         
         with self.app.app_context():
-            self.user, self.workspace, self.meeting = self._create_test_data()
+            user, workspace, meeting = self._create_test_data()
+            # Store IDs to avoid DetachedInstanceError
+            self.user_id = user.id
+            self.workspace_id = workspace.id
+            self.meeting_id = meeting.id
             
     def _create_test_data(self):
         """Create test user, workspace and meeting"""
@@ -68,7 +72,7 @@ class TestTaskPageAPI:
             meeting = Meeting(
                 title="Test Meeting",
                 workspace_id=workspace.id,
-                created_at=datetime.utcnow()
+                organizer_id=user.id
             )
             db.session.add(meeting)
             
@@ -78,7 +82,7 @@ class TestTaskPageAPI:
     def _login(self):
         """Login and return authenticated client"""
         with self.client.session_transaction() as sess:
-            sess['_user_id'] = str(self.user.id)
+            sess['_user_id'] = str(self.user_id)
             sess['_fresh'] = True
     
     def test_01_tasks_page_loads(self):
@@ -129,7 +133,7 @@ class TestTaskPageAPI:
         self._login()
         
         with self.app.app_context():
-            meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace.id).first()
+            meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace_id).first()
             
             task_data = {
                 'title': f'Test Task {datetime.now().timestamp()}',
@@ -186,12 +190,12 @@ class TestTaskPageAPI:
     
     def _create_test_task(self):
         """Helper to create a test task"""
-        meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace.id).first()
+        meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace_id).first()
         if not meeting:
             meeting = Meeting(
                 title="Test Meeting",
-                workspace_id=self.workspace.id,
-                created_at=datetime.utcnow()
+                workspace_id=self.workspace_id,
+                organizer_id=self.user_id
             )
             db.session.add(meeting)
             db.session.commit()
@@ -202,7 +206,7 @@ class TestTaskPageAPI:
             status='todo',
             priority='medium',
             meeting_id=meeting.id,
-            workspace_id=str(self.workspace.id)
+            workspace_id=str(self.workspace_id)
         )
         db.session.add(task)
         db.session.commit()
@@ -302,15 +306,15 @@ class TestTaskPageAPI:
         
         with self.app.app_context():
             unique_title = f"UniqueSearchTerm_{datetime.now().timestamp()}"
-            meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace.id).first()
+            meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace_id).first()
             
             task = Task(
                 title=unique_title,
                 description="Searchable task",
                 status='todo',
                 priority='medium',
-                meeting_id=meeting.id,
-                workspace_id=str(self.workspace.id)
+                meeting_id=meeting.id if meeting else None,
+                workspace_id=str(self.workspace_id)
             )
             db.session.add(task)
             db.session.commit()
@@ -469,38 +473,42 @@ class TestTaskPageRendering:
         self.client = self.app.test_client()
         
         with self.app.app_context():
-            self._create_test_user()
+            user_id, workspace_id = self._create_test_user()
+            self.user_id = user_id
+            self.workspace_id = workspace_id
     
     def _create_test_user(self):
-        """Create test user"""
+        """Create test user and return IDs"""
         from werkzeug.security import generate_password_hash
         
         email = f"test_render_{datetime.now().timestamp()}@test.com"
-        self.user = db.session.query(User).filter_by(email=email).first()
-        if not self.user:
-            self.user = User(
+        user = db.session.query(User).filter_by(email=email).first()
+        if not user:
+            user = User(
                 username=f"testrender_{datetime.now().timestamp()}",
                 email=email,
                 password_hash=generate_password_hash("testpass123")
             )
-            db.session.add(self.user)
+            db.session.add(user)
             db.session.flush()
             
             workspace = Workspace(
                 name=f"Test Render Workspace",
                 slug=f"test-render-workspace-{datetime.now().timestamp()}",
-                owner_id=self.user.id
+                owner_id=user.id
             )
             db.session.add(workspace)
             db.session.flush()
             
-            self.user.workspace_id = workspace.id
+            user.workspace_id = workspace.id
             db.session.commit()
+            return user.id, workspace.id
+        return user.id, user.workspace_id
     
     def _login(self):
         """Login and return authenticated client"""
         with self.client.session_transaction() as sess:
-            sess['_user_id'] = str(self.user.id)
+            sess['_user_id'] = str(self.user_id)
             sess['_fresh'] = True
     
     def test_14_page_has_required_elements(self):
@@ -611,45 +619,53 @@ class TestTaskWorkflow:
         self.client = self.app.test_client()
         
         with self.app.app_context():
-            self._create_test_data()
+            user_id, workspace_id, meeting_id = self._create_test_data()
+            self.user_id = user_id
+            self.workspace_id = workspace_id
+            self.meeting_id = meeting_id
     
     def _create_test_data(self):
-        """Create test data"""
+        """Create test data and return IDs"""
         from werkzeug.security import generate_password_hash
         
         email = f"test_wf_{datetime.now().timestamp()}@test.com"
-        self.user = db.session.query(User).filter_by(email=email).first()
-        if not self.user:
-            self.user = User(
+        user = db.session.query(User).filter_by(email=email).first()
+        if not user:
+            user = User(
                 username=f"testwf_{datetime.now().timestamp()}",
                 email=email,
                 password_hash=generate_password_hash("testpass123")
             )
-            db.session.add(self.user)
+            db.session.add(user)
             db.session.flush()
             
-            self.workspace = Workspace(
+            workspace = Workspace(
                 name=f"Test WF Workspace",
                 slug=f"test-wf-workspace-{datetime.now().timestamp()}",
-                owner_id=self.user.id
+                owner_id=user.id
             )
-            db.session.add(self.workspace)
+            db.session.add(workspace)
             db.session.flush()
             
-            self.user.workspace_id = self.workspace.id
+            user.workspace_id = workspace.id
             
-            self.meeting = Meeting(
+            meeting = Meeting(
                 title="Test Meeting for Workflow",
-                workspace_id=self.workspace.id,
-                created_at=datetime.utcnow()
+                workspace_id=workspace.id,
+                organizer_id=user.id
             )
-            db.session.add(self.meeting)
+            db.session.add(meeting)
             db.session.commit()
+            return user.id, workspace.id, meeting.id
+        else:
+            workspace = db.session.query(Workspace).filter_by(owner_id=user.id).first()
+            meeting = db.session.query(Meeting).filter_by(workspace_id=workspace.id).first()
+            return user.id, workspace.id, meeting.id if meeting else None
     
     def _login(self):
         """Login and return authenticated client"""
         with self.client.session_transaction() as sess:
-            sess['_user_id'] = str(self.user.id)
+            sess['_user_id'] = str(self.user_id)
             sess['_fresh'] = True
     
     def test_17_complete_task_lifecycle(self):
@@ -661,7 +677,7 @@ class TestTaskWorkflow:
         self._login()
         
         with self.app.app_context():
-            meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace.id).first()
+            meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace_id).first()
             
             task_data = {
                 'title': f'Lifecycle Task {datetime.now().timestamp()}',
@@ -726,7 +742,7 @@ class TestTaskWorkflow:
         self._login()
         
         with self.app.app_context():
-            meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace.id).first()
+            meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace_id).first()
             
             due_date = (datetime.now() + timedelta(days=3)).strftime('%Y-%m-%d')
             
@@ -762,7 +778,7 @@ class TestTaskWorkflow:
         self._login()
         
         with self.app.app_context():
-            meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace.id).first()
+            meeting = db.session.query(Meeting).filter_by(workspace_id=self.workspace_id).first()
             
             task_data = {
                 'title': f'Priority Task {datetime.now().timestamp()}',

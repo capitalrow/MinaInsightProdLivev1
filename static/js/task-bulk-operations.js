@@ -1,7 +1,7 @@
 /**
  * CROWN⁴.5 Task Bulk Operations
- * Handles multi-select, bulk actions (complete, archive, delete), and visual feedback
- * Part of Phase 3 Task 8
+ * Handles multi-select, bulk actions (complete, archive, delete, label), and visual feedback
+ * Uses existing HTML toolbar from tasks.html template
  */
 
 class TaskBulkOperations {
@@ -9,33 +9,43 @@ class TaskBulkOperations {
         this.optimisticUI = optimisticUI;
         this.selectedTasks = new Set();
         this.isSelectAllMode = false;
+        this.isBulkMode = false;
         this.init();
     }
 
     init() {
-        this.setupEventListeners();
-        this.renderBulkToolbar();
+        this.toolbar = document.getElementById('bulk-action-toolbar');
+        this.countDisplay = document.getElementById('bulk-selected-count');
         
-        // Listen for task renders to add checkboxes
+        this.setupEventListeners();
+        
         window.addEventListener('tasks:rendered', () => {
-            this.addCheckboxesToTasks();
+            this.syncCheckboxStates();
         });
 
-        console.log('✅ TaskBulkOperations initialized');
+        console.log('[BulkOps] ✅ TaskBulkOperations initialized');
     }
 
     setupEventListeners() {
-        // Select all checkbox
-        document.addEventListener('change', (e) => {
-            if (e.target.id === 'bulk-select-all') {
-                this.handleSelectAll(e.target.checked);
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#bulk-complete-btn')) {
+                e.preventDefault();
+                this.bulkComplete();
+            } else if (e.target.closest('#bulk-delete-btn')) {
+                e.preventDefault();
+                this.bulkDelete();
+            } else if (e.target.closest('#bulk-label-btn')) {
+                e.preventDefault();
+                this.bulkAddLabel();
+            } else if (e.target.closest('#bulk-cancel-btn')) {
+                e.preventDefault();
+                this.clearSelection();
             }
         });
 
-        // Individual task checkboxes
         document.addEventListener('change', (e) => {
             if (e.target.classList.contains('task-bulk-checkbox')) {
-                const taskId = parseInt(e.target.dataset.taskId);
+                const taskId = e.target.dataset.taskId;
                 if (e.target.checked) {
                     this.selectTask(taskId);
                 } else {
@@ -44,124 +54,128 @@ class TaskBulkOperations {
             }
         });
 
-        // Bulk action buttons
-        document.addEventListener('click', (e) => {
-            if (e.target.closest('#bulk-complete-btn')) {
-                e.preventDefault();
-                this.bulkComplete();
-            } else if (e.target.closest('#bulk-archive-btn')) {
-                e.preventDefault();
-                this.bulkArchive();
-            } else if (e.target.closest('#bulk-delete-btn')) {
-                e.preventDefault();
-                this.bulkDelete();
-            } else if (e.target.closest('#bulk-cancel-btn')) {
-                e.preventDefault();
-                this.clearSelection();
-            }
-        });
-
-        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            // Cmd/Ctrl+A: Select all
             if ((e.metaKey || e.ctrlKey) && e.key === 'a' && this.isTasksPageActive()) {
                 e.preventDefault();
-                this.selectAll();
+                this.toggleBulkMode();
             }
-            // Escape: Clear selection
             if (e.key === 'Escape' && this.selectedTasks.size > 0) {
                 this.clearSelection();
             }
         });
+
+        document.addEventListener('click', (e) => {
+            const card = e.target.closest('.task-card');
+            if (!card) return;
+            
+            if (e.shiftKey && !e.target.closest('.task-checkbox')) {
+                e.preventDefault();
+                const taskId = card.dataset.taskId;
+                this.toggleTaskSelection(taskId);
+                return;
+            }
+            
+            if (this.isBulkMode && !e.target.closest('.task-checkbox') && 
+                !e.target.closest('.task-menu-trigger') && 
+                !e.target.closest('.task-actions')) {
+                e.preventDefault();
+                e.stopPropagation();
+                const taskId = card.dataset.taskId;
+                this.toggleTaskSelection(taskId);
+            }
+        });
+
+        this.setupLongPressHandler();
     }
 
-    renderBulkToolbar() {
-        const container = document.querySelector('.tasks-header') || document.querySelector('.tasks-page-header');
-        if (!container) return;
+    setupLongPressHandler() {
+        let longPressTimer = null;
+        let longPressTarget = null;
+        const LONG_PRESS_DURATION = 500;
 
-        // Add bulk toolbar after the header
-        const existingToolbar = document.getElementById('bulk-actions-toolbar');
-        if (existingToolbar) return; // Already rendered
+        const startLongPress = (e) => {
+            const card = e.target.closest('.task-card');
+            if (!card) return;
+            
+            if (e.target.closest('.task-checkbox') || 
+                e.target.closest('.task-menu-trigger') ||
+                e.target.closest('.task-actions')) return;
 
-        const toolbar = document.createElement('div');
-        toolbar.id = 'bulk-actions-toolbar';
-        toolbar.className = 'bulk-actions-toolbar';
-        toolbar.innerHTML = `
-            <div class="bulk-toolbar-inner">
-                <div class="bulk-select-section">
-                    <label class="bulk-select-all-wrapper">
-                        <input type="checkbox" id="bulk-select-all" class="bulk-checkbox">
-                        <span class="bulk-select-label">Select All</span>
-                    </label>
-                    <span class="bulk-selected-count">0 selected</span>
-                </div>
-                <div class="bulk-actions-section" style="display: none;">
-                    <button id="bulk-complete-btn" class="bulk-action-btn bulk-btn-success" title="Mark as completed">
-                        <i data-feather="check-circle"></i>
-                        Complete
-                    </button>
-                    <button id="bulk-archive-btn" class="bulk-action-btn bulk-btn-warning" title="Archive selected tasks">
-                        <i data-feather="archive"></i>
-                        Archive
-                    </button>
-                    <button id="bulk-delete-btn" class="bulk-action-btn bulk-btn-danger" title="Delete selected tasks">
-                        <i data-feather="trash-2"></i>
-                        Delete
-                    </button>
-                    <button id="bulk-cancel-btn" class="bulk-action-btn bulk-btn-secondary" title="Clear selection">
-                        <i data-feather="x"></i>
-                        Cancel
-                    </button>
-                </div>
-            </div>
-        `;
+            longPressTarget = card;
+            longPressTimer = setTimeout(() => {
+                const taskId = card.dataset.taskId;
+                
+                if ('vibrate' in navigator) {
+                    navigator.vibrate(50);
+                }
+                
+                this.selectTask(taskId);
+                card.classList.add('long-press-active');
+                
+                setTimeout(() => {
+                    card.classList.remove('long-press-active');
+                }, 300);
+            }, LONG_PRESS_DURATION);
+        };
 
-        container.after(toolbar);
+        const cancelLongPress = () => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            longPressTarget = null;
+        };
 
-        // Render feather icons
-        if (window.feather) {
-            feather.replace();
+        document.addEventListener('touchstart', startLongPress, { passive: true });
+        document.addEventListener('touchend', cancelLongPress);
+        document.addEventListener('touchmove', cancelLongPress);
+        document.addEventListener('touchcancel', cancelLongPress);
+    }
+
+    toggleBulkMode() {
+        this.isBulkMode = !this.isBulkMode;
+        
+        if (this.isBulkMode) {
+            this.selectAllVisible();
+        } else {
+            this.clearSelection();
         }
     }
 
-    addCheckboxesToTasks() {
-        const taskCards = document.querySelectorAll('.task-card');
-        taskCards.forEach(card => {
-            const taskId = parseInt(card.dataset.taskId);
+    toggleTaskSelection(taskId) {
+        if (this.selectedTasks.has(taskId)) {
+            this.deselectTask(taskId);
+        } else {
+            this.selectTask(taskId);
+        }
+    }
+
+    syncCheckboxStates() {
+        document.querySelectorAll('.task-card').forEach(card => {
+            const taskId = card.dataset.taskId;
+            const isSelected = this.selectedTasks.has(taskId);
+            const checkbox = card.querySelector('.task-bulk-checkbox');
             
-            // Skip if checkbox already exists
-            if (card.querySelector('.task-bulk-checkbox')) return;
-
-            // Create checkbox
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'task-bulk-checkbox';
-            checkbox.dataset.taskId = taskId;
-            checkbox.checked = this.selectedTasks.has(taskId);
-
-            // Create wrapper
-            const wrapper = document.createElement('div');
-            wrapper.className = 'task-bulk-select';
-            wrapper.appendChild(checkbox);
-
-            // Insert at the beginning of the card
-            card.insertBefore(wrapper, card.firstChild);
-
-            // Update card styling if selected
-            if (this.selectedTasks.has(taskId)) {
+            if (isSelected) {
                 card.classList.add('task-selected');
+            } else {
+                card.classList.remove('task-selected');
+            }
+            
+            if (checkbox) {
+                checkbox.checked = isSelected;
             }
         });
     }
 
     selectTask(taskId) {
         this.selectedTasks.add(taskId);
+        this.isBulkMode = true;
         this.updateUI();
         this.updateTaskCardSelection(taskId, true);
         
-        // Track telemetry
-        if (window.telemetry) {
-            window.telemetry.track('task_selected', { task_id: taskId });
+        if (window.CROWNTelemetry) {
+            window.CROWNTelemetry.recordMetric('bulk_task_selected', 1, { taskId });
         }
     }
 
@@ -169,48 +183,46 @@ class TaskBulkOperations {
         this.selectedTasks.delete(taskId);
         this.updateUI();
         this.updateTaskCardSelection(taskId, false);
+        
+        if (this.selectedTasks.size === 0) {
+            this.isBulkMode = false;
+        }
     }
 
-    selectAll() {
-        const taskCards = document.querySelectorAll('.task-card:not([data-archived]):not([data-deleted])');
+    selectAllVisible() {
+        const taskCards = document.querySelectorAll('.task-card:not(.is-hidden):not([data-status="completed"]):not([data-status="cancelled"])');
         taskCards.forEach(card => {
-            const taskId = parseInt(card.dataset.taskId);
+            const taskId = card.dataset.taskId;
             this.selectedTasks.add(taskId);
-            const checkbox = card.querySelector('.task-bulk-checkbox');
-            if (checkbox) checkbox.checked = true;
             card.classList.add('task-selected');
+            
+            const checkbox = card.querySelector('.task-bulk-checkbox');
+            if (checkbox) {
+                checkbox.checked = true;
+            }
         });
         
         this.isSelectAllMode = true;
         this.updateUI();
 
-        // Track telemetry
-        if (window.telemetry) {
-            window.telemetry.track('bulk_select_all', { count: this.selectedTasks.size });
-        }
-    }
-
-    handleSelectAll(checked) {
-        if (checked) {
-            this.selectAll();
-        } else {
-            this.clearSelection();
+        if (window.CROWNTelemetry) {
+            window.CROWNTelemetry.recordMetric('bulk_select_all', 1, { count: this.selectedTasks.size });
         }
     }
 
     clearSelection() {
-        this.selectedTasks.clear();
-        this.isSelectAllMode = false;
-        
-        // Uncheck all checkboxes
-        document.querySelectorAll('.task-bulk-checkbox').forEach(checkbox => {
-            checkbox.checked = false;
-        });
-        
-        // Remove selected styling
         document.querySelectorAll('.task-card.task-selected').forEach(card => {
             card.classList.remove('task-selected');
+            
+            const checkbox = card.querySelector('.task-bulk-checkbox');
+            if (checkbox) {
+                checkbox.checked = false;
+            }
         });
+        
+        this.selectedTasks.clear();
+        this.isSelectAllMode = false;
+        this.isBulkMode = false;
         
         this.updateUI();
     }
@@ -224,30 +236,26 @@ class TaskBulkOperations {
         } else {
             card.classList.remove('task-selected');
         }
+        
+        const checkbox = card.querySelector('.task-bulk-checkbox');
+        if (checkbox) {
+            checkbox.checked = selected;
+        }
     }
 
     updateUI() {
         const count = this.selectedTasks.size;
-        const countElement = document.querySelector('.bulk-selected-count');
-        const actionsSection = document.querySelector('.bulk-actions-section');
-        const selectAllCheckbox = document.getElementById('bulk-select-all');
-
-        // Update count
-        if (countElement) {
-            countElement.textContent = count === 1 ? '1 selected' : `${count} selected`;
+        
+        if (this.countDisplay) {
+            this.countDisplay.textContent = count;
         }
 
-        // Show/hide actions
-        if (actionsSection) {
-            actionsSection.style.display = count > 0 ? 'flex' : 'none';
-        }
-
-        // Update select all checkbox state
-        if (selectAllCheckbox) {
-            const taskCards = document.querySelectorAll('.task-card:not([data-archived]):not([data-deleted])');
-            const allSelected = taskCards.length > 0 && count === taskCards.length;
-            selectAllCheckbox.checked = allSelected;
-            selectAllCheckbox.indeterminate = count > 0 && !allSelected;
+        if (this.toolbar) {
+            if (count > 0) {
+                this.toolbar.classList.remove('hidden');
+            } else {
+                this.toolbar.classList.add('hidden');
+            }
         }
     }
 
@@ -255,120 +263,48 @@ class TaskBulkOperations {
         if (this.selectedTasks.size === 0) return;
 
         const taskIds = Array.from(this.selectedTasks);
+        const count = taskIds.length;
 
         try {
-            // Show loading state
             this.setLoadingState(true);
 
-            // Complete all selected tasks using completeTask helper
-            // This ensures proper WebSocket/offline queue event propagation
             let completedCount = 0;
             for (const taskId of taskIds) {
-                const taskBefore = await this.optimisticUI.cache.getTask(taskId);
-                const wasCompleted = taskBefore && taskBefore.status === 'completed';
-                
-                await this.optimisticUI.completeTask(taskId);
-                
-                // Only count if it wasn't already completed
-                if (!wasCompleted) {
+                try {
+                    if (this.optimisticUI?.completeTask) {
+                        await this.optimisticUI.completeTask(taskId);
+                    } else if (this.optimisticUI?.updateTask) {
+                        await this.optimisticUI.updateTask(taskId, { 
+                            status: 'completed',
+                            completed_at: new Date().toISOString()
+                        });
+                    }
                     completedCount++;
+                    
+                    const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+                    if (card) {
+                        card.classList.add('completed');
+                        card.dataset.status = 'completed';
+                    }
+                } catch (err) {
+                    console.error(`[BulkOps] Failed to complete task ${taskId}:`, err);
                 }
             }
 
-            // Show success toast
             if (window.toastManager && completedCount > 0) {
-                window.toastManager.show({
-                    message: `Completed ${completedCount} task${completedCount > 1 ? 's' : ''}`,
-                    type: 'success',
-                    duration: 3000
-                });
+                window.toastManager.show(`Completed ${completedCount} task${completedCount > 1 ? 's' : ''}`, 'success', 3000);
             }
 
-            // Track telemetry
-            if (window.telemetry) {
-                window.telemetry.track('bulk_complete', { 
-                    total: taskIds.length,
-                    completed: completedCount,
-                    already_completed: taskIds.length - completedCount
-                });
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('bulk_complete', 1, { count: completedCount });
             }
 
-            // Clear selection
             this.clearSelection();
 
         } catch (error) {
-            console.error('Bulk complete failed:', error);
+            console.error('[BulkOps] Bulk complete failed:', error);
             if (window.toastManager) {
-                window.toastManager.show({
-                    message: 'Failed to complete tasks',
-                    type: 'error',
-                    duration: 4000
-                });
-            }
-        } finally {
-            this.setLoadingState(false);
-        }
-    }
-
-    async bulkArchive() {
-        if (this.selectedTasks.size === 0) return;
-
-        const count = this.selectedTasks.size;
-
-        // Show confirmation modal
-        const confirmed = await this.showConfirmModal(
-            'Archive Tasks',
-            `Are you sure you want to archive ${count} task${count > 1 ? 's' : ''}?`,
-            'Archive',
-            'warning'
-        );
-
-        if (!confirmed) return;
-
-        const taskIds = Array.from(this.selectedTasks);
-
-        try {
-            // Show loading state
-            this.setLoadingState(true);
-
-            // Optimistically archive all tasks
-            for (const taskId of taskIds) {
-                await this.optimisticUI.archiveTask(taskId);
-            }
-
-            // Show success toast with undo
-            if (window.toastManager) {
-                window.toastManager.show({
-                    message: `Archived ${count} task${count > 1 ? 's' : ''}`,
-                    type: 'success',
-                    duration: 5000,
-                    action: {
-                        label: 'Undo',
-                        callback: async () => {
-                            for (const taskId of taskIds) {
-                                await this.optimisticUI.unarchiveTask(taskId);
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Track telemetry
-            if (window.telemetry) {
-                window.telemetry.track('bulk_archive', { count });
-            }
-
-            // Clear selection
-            this.clearSelection();
-
-        } catch (error) {
-            console.error('Bulk archive failed:', error);
-            if (window.toastManager) {
-                window.toastManager.show({
-                    message: 'Failed to archive tasks',
-                    type: 'error',
-                    duration: 4000
-                });
+                window.toastManager.show('Failed to complete tasks', 'error', 4000);
             }
         } finally {
             this.setLoadingState(false);
@@ -380,10 +316,9 @@ class TaskBulkOperations {
 
         const count = this.selectedTasks.size;
 
-        // Show confirmation modal
         const confirmed = await this.showConfirmModal(
             'Delete Tasks',
-            `Are you sure you want to delete ${count} task${count > 1 ? 's' : ''}? You can undo within 15 seconds.`,
+            `Are you sure you want to delete ${count} task${count > 1 ? 's' : ''}?`,
             'Delete',
             'danger'
         );
@@ -393,51 +328,183 @@ class TaskBulkOperations {
         const taskIds = Array.from(this.selectedTasks);
 
         try {
-            // Show loading state
             this.setLoadingState(true);
 
-            // Optimistically delete all tasks
             for (const taskId of taskIds) {
-                await this.optimisticUI.deleteTask(taskId);
-            }
-
-            // Show success toast with undo
-            if (window.toastManager) {
-                window.toastManager.show({
-                    message: `Deleted ${count} task${count > 1 ? 's' : ''}`,
-                    type: 'warning',
-                    duration: 15000,
-                    action: {
-                        label: 'Undo',
-                        callback: async () => {
-                            for (const taskId of taskIds) {
-                                await this.optimisticUI.restoreTask(taskId);
-                            }
+                try {
+                    if (this.optimisticUI?.deleteTask) {
+                        await this.optimisticUI.deleteTask(taskId);
+                    } else {
+                        const response = await fetch(`/api/tasks/${taskId}`, {
+                            method: 'DELETE',
+                            credentials: 'same-origin'
+                        });
+                        if (response.ok) {
+                            const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+                            if (card) card.remove();
                         }
                     }
-                });
+                } catch (err) {
+                    console.error(`[BulkOps] Failed to delete task ${taskId}:`, err);
+                }
             }
 
-            // Track telemetry
-            if (window.telemetry) {
-                window.telemetry.track('bulk_delete', { count });
+            if (window.toastManager) {
+                window.toastManager.show(`Deleted ${count} task${count > 1 ? 's' : ''}`, 'success', 3000);
             }
 
-            // Clear selection
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('bulk_delete', 1, { count });
+            }
+
             this.clearSelection();
 
         } catch (error) {
-            console.error('Bulk delete failed:', error);
+            console.error('[BulkOps] Bulk delete failed:', error);
             if (window.toastManager) {
-                window.toastManager.show({
-                    message: 'Failed to delete tasks',
-                    type: 'error',
-                    duration: 4000
-                });
+                window.toastManager.show('Failed to delete tasks', 'error', 4000);
             }
         } finally {
             this.setLoadingState(false);
         }
+    }
+
+    async bulkAddLabel() {
+        if (this.selectedTasks.size === 0) return;
+
+        const label = await this.showLabelInputModal();
+        if (!label) return;
+
+        const taskIds = Array.from(this.selectedTasks);
+        const count = taskIds.length;
+
+        try {
+            this.setLoadingState(true);
+
+            for (const taskId of taskIds) {
+                try {
+                    const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+                    let existingLabels = [];
+                    try {
+                        existingLabels = JSON.parse(card?.dataset.labels || '[]');
+                    } catch (e) {}
+                    
+                    if (!existingLabels.includes(label)) {
+                        const newLabels = [...existingLabels, label];
+                        
+                        if (this.optimisticUI?.updateTask) {
+                            await this.optimisticUI.updateTask(taskId, { labels: newLabels });
+                        } else {
+                            await fetch(`/api/tasks/${taskId}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ labels: newLabels })
+                            });
+                        }
+                        
+                        if (card) {
+                            card.dataset.labels = JSON.stringify(newLabels);
+                        }
+                    }
+                } catch (err) {
+                    console.error(`[BulkOps] Failed to add label to task ${taskId}:`, err);
+                }
+            }
+
+            if (window.toastManager) {
+                window.toastManager.show(`Added label "${label}" to ${count} task${count > 1 ? 's' : ''}`, 'success', 3000);
+            }
+
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('bulk_add_label', 1, { count, label });
+            }
+
+            this.clearSelection();
+
+        } catch (error) {
+            console.error('[BulkOps] Bulk add label failed:', error);
+            if (window.toastManager) {
+                window.toastManager.show('Failed to add labels', 'error', 4000);
+            }
+        } finally {
+            this.setLoadingState(false);
+        }
+    }
+
+    showLabelInputModal() {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'task-modal-overlay';
+            
+            overlay.innerHTML = `
+                <div class="task-modal bulk-label-modal">
+                    <div class="modal-header">
+                        <h3 class="modal-title">Add Label</h3>
+                        <button class="modal-close" aria-label="Close">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="text" class="form-input label-input" placeholder="Enter label name..." maxlength="30" autofocus>
+                        <div class="quick-labels">
+                            <button class="quick-label-btn" data-label="urgent">Urgent</button>
+                            <button class="quick-label-btn" data-label="follow-up">Follow-up</button>
+                            <button class="quick-label-btn" data-label="blocked">Blocked</button>
+                            <button class="quick-label-btn" data-label="review">Review</button>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary modal-cancel">Cancel</button>
+                        <button class="btn-primary modal-confirm">Add Label</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            requestAnimationFrame(() => overlay.classList.add('visible'));
+
+            const input = overlay.querySelector('.label-input');
+            const closeModal = (label) => {
+                overlay.classList.remove('visible');
+                setTimeout(() => {
+                    overlay.remove();
+                    resolve(label);
+                }, 200);
+            };
+
+            input.focus();
+            
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && input.value.trim()) {
+                    closeModal(input.value.trim());
+                }
+            });
+
+            overlay.querySelectorAll('.quick-label-btn').forEach(btn => {
+                btn.addEventListener('click', () => closeModal(btn.dataset.label));
+            });
+
+            overlay.querySelector('.modal-cancel').addEventListener('click', () => closeModal(null));
+            overlay.querySelector('.modal-close').addEventListener('click', () => closeModal(null));
+            overlay.querySelector('.modal-confirm').addEventListener('click', () => {
+                if (input.value.trim()) closeModal(input.value.trim());
+            });
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) closeModal(null);
+            });
+
+            const escapeHandler = (e) => {
+                if (e.key === 'Escape') {
+                    closeModal(null);
+                    document.removeEventListener('keydown', escapeHandler);
+                }
+            };
+            document.addEventListener('keydown', escapeHandler);
+        });
     }
 
     showConfirmModal(title, message, confirmText, variant = 'primary') {

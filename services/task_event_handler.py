@@ -221,8 +221,14 @@ class TaskEventHandler:
             # PRIORITY 2: Workspace membership access
             # Handle NULL workspace_id gracefully (legacy tasks, AI backfills)
             if task.workspace_id is None:
-                # Legacy task without workspace: only creator has access (already checked above)
-                logger.info(f"Task {task.id} has NULL workspace_id, access denied for non-owner")
+                # CROWN⁴.13 FIX: Allow workspace members to access/update NULL workspace tasks
+                # This handles AI-extracted tasks that don't have workspace_id set yet
+                # Grant access if user has a valid workspace (authenticated user)
+                if user.workspace_id is not None:
+                    logger.info(f"Task {task.id} has NULL workspace_id, granting access to workspace member (user {user_id}, ws={user.workspace_id})")
+                    return True
+                # Legacy task without workspace and user without workspace: only creator has access
+                logger.info(f"Task {task.id} has NULL workspace_id, access denied for non-owner without workspace")
                 return False
             
             # Normalize types to handle int vs string comparisons
@@ -545,12 +551,19 @@ class TaskEventHandler:
                 except (ValueError, AttributeError):
                     logger.warning(f"Invalid due_date format: {due_date_str}")
             
+            # CROWN⁴.13 FIX: Get user's workspace_id for proper task assignment
+            from models.user import User
+            user = db.session.get(User, user_id)
+            task_workspace_id = payload.get('workspace_id')
+            if not task_workspace_id and user:
+                task_workspace_id = user.workspace_id
+            
             # Create task
             task = Task(
                 title=title,
                 description=description,
                 created_by_id=user_id,
-                workspace_id=payload.get('workspace_id', 1),  # Default to workspace 1 if not provided
+                workspace_id=task_workspace_id,  # Use user's workspace if not provided
                 session_id=session_id,
                 status=payload.get('status', TASK_STATUS_TODO),
                 priority=payload.get('priority', TASK_PRIORITY_MEDIUM),
@@ -682,12 +695,27 @@ class TaskEventHandler:
             if not self.check_workspace_access(task, user_id):
                 return {'success': False, 'error': 'Access denied - task not in your workspace'}
             
-            # Toggle status
-            task.status = TASK_STATUS_COMPLETED if task.status == TASK_STATUS_TODO else TASK_STATUS_TODO
+            # CROWN⁴.13 FIX: Honor explicit status from payload (industry-standard pattern)
+            # Matches Linear/Todoist/Asana approach: client sends explicit intent, server respects it
+            explicit_status = payload.get('status')
+            old_status = task.status
+            
+            if explicit_status:
+                # Use explicit status value from client (preferred approach)
+                task.status = explicit_status
+                logger.info(f"📝 [StatusUpdate] Task {task_id}: {old_status} → {explicit_status} (explicit)")
+            else:
+                # Legacy fallback: toggle behavior for backwards compatibility
+                task.status = TASK_STATUS_COMPLETED if task.status == TASK_STATUS_TODO else TASK_STATUS_TODO
+                logger.info(f"📝 [StatusUpdate] Task {task_id}: {old_status} → {task.status} (toggle fallback)")
+            
             task.updated_at = datetime.utcnow()
             
+            # Set or clear completed_at timestamp based on final status
             if task.status == TASK_STATUS_COMPLETED:
                 task.completed_at = datetime.utcnow()
+            else:
+                task.completed_at = None
             
             # Update counters
             self._update_counters(user_id)

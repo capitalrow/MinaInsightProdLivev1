@@ -14,6 +14,7 @@ import json
 import time
 import asyncio
 from flask import Blueprint, request, jsonify
+from flask_login import login_required, current_user
 from flask_socketio import emit, join_room, leave_room
 from typing import Dict, List, Any, Optional
 import numpy as np
@@ -354,6 +355,7 @@ def get_comprehensive_processor():
 
 # REST API Routes
 @comprehensive_bp.route('/api/transcription/comprehensive/session', methods=['POST'])
+@login_required
 def create_comprehensive_session():
     """Create new enhanced comprehensive transcription session"""
     try:

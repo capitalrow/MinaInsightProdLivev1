@@ -49,16 +49,23 @@ def list_tasks():
         # CROWN⁴.6 OPTIMIZATION: Eager load ALL relationships to prevent N+1 queries
         # Performance target: <500ms for full sync with 15+ tasks
         # - assignees: selectinload for many-to-many (more efficient than joinedload)
-        # - meeting: joinedload since we're already joining on Meeting table
+        # - meeting: joinedload since we're using outerjoin on Meeting table
         # - assigned_to, created_by, deleted_by: joinedload for single FK relationships
-        stmt = select(Task).join(Meeting).options(
+        # CROWN⁴.18 FIX: Use outerjoin to include tasks without meeting_id (matches SSR)
+        # Also join Session for tasks linked via session_id
+        stmt = select(Task).outerjoin(Meeting, Task.meeting_id == Meeting.id).outerjoin(Session, Task.session_id == Session.id).options(
             selectinload(Task.assignees),
             joinedload(Task.meeting),
             joinedload(Task.assigned_to),
             joinedload(Task.created_by),
             joinedload(Task.deleted_by)
         ).where(
-            Meeting.workspace_id == current_user.workspace_id
+            or_(
+                Task.workspace_id == current_user.workspace_id,
+                Task.workspace_id == str(current_user.workspace_id),
+                Meeting.workspace_id == current_user.workspace_id,
+                Session.workspace_id == current_user.workspace_id,
+            )
         )
         
         # CROWN⁴.5 Phase 1: Filter out soft-deleted tasks by default
@@ -534,7 +541,9 @@ def get_meeting_heatmap():
 def create_task():
     """Create a new task (supports both meeting-linked and standalone tasks)."""
     try:
+        logger.info(f"[API] 📥 POST /api/tasks/ - User {current_user.id}")
         data = request.get_json()
+        logger.info(f"[API] 📝 Create payload: title='{data.get('title', '')[:50]}', keys={list(data.keys())}")
         
         # Validate required fields
         if not data.get('title'):
@@ -826,15 +835,20 @@ def check_duplicate():
 def update_task(task_id):
     """Update task information (field-level updates)."""
     try:
+        logger.info(f"[API] 📥 PUT /api/tasks/{task_id} - User {current_user.id}")
+        
         task = db.session.query(Task).join(Meeting).filter(
             Task.id == task_id,
             Meeting.workspace_id == current_user.workspace_id
         ).first()
         
         if not task:
+            logger.warning(f"[API] ❌ Task {task_id} not found")
             return jsonify({'success': False, 'message': 'Task not found'}), 404
         
         data = request.get_json()
+        logger.info(f"[API] 📝 Update payload: {list(data.keys())}")
+        
         old_status = task.status
         old_labels = task.labels
         old_snoozed_until = task.snoozed_until
@@ -860,13 +874,16 @@ def update_task(task_id):
         if 'status' in data:
             new_status = data['status']
             if new_status != old_status:
+                logger.info(f"[API] 🔄 Status change: {old_status} → {new_status} (task {task_id})")
                 task.status = new_status
                 
                 # Update completion timestamp
                 if new_status == 'completed' and old_status != 'completed':
                     task.completed_at = datetime.now()
+                    logger.info(f"[API] ✅ Task {task_id} marked completed at {task.completed_at}")
                 elif new_status != 'completed' and old_status == 'completed':
                     task.completed_at = None
+                    logger.info(f"[API] ↩️ Task {task_id} uncompleted")
         
         if 'due_date' in data:
             if data['due_date']:
@@ -966,6 +983,7 @@ def update_task(task_id):
         
         task.updated_at = datetime.now()
         db.session.commit()
+        logger.info(f"[API] 💾 Task {task_id} committed to database (status={task.status})")
         
         # CROWN⁴.5 Phase 2 Batch 1: Emit TASK_UPDATE_CORE event
         try:

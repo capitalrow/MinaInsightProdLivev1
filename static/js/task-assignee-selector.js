@@ -100,6 +100,7 @@ class TaskAssigneeSelector {
         list.style.display = 'none';
         error.style.display = 'none';
 
+        this.modal.classList.remove('hidden');
         this.modal.style.display = 'flex';
         requestAnimationFrame(() => {
             this.modal.classList.add('visible');

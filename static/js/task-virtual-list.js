@@ -125,98 +125,43 @@ class VirtualList {
     }
 
     /**
-     * Render single task card
+     * Render single task card using shared CROWN⁴.18 renderer
      * @param {Object} task
      * @param {number} index
      * @param {boolean} isVirtual
      * @returns {string} HTML
      */
     _renderTaskCard(task, index, isVirtual = false) {
+        // Use shared TaskCardRenderer for consistent SSR-matching output
+        if (window.taskCardRenderer) {
+            return window.taskCardRenderer.render(task, {
+                isVirtual: isVirtual,
+                virtualIndex: index,
+                itemHeight: this.itemHeight
+            });
+        }
+        
+        // Fallback: minimal render if shared renderer not loaded
+        console.warn('⚠️ TaskCardRenderer not available, using fallback');
         const priority = task.priority || 'medium';
         const status = task.status || 'todo';
         const isCompleted = status === 'completed';
-        const isArchived = !!task.archived_at;
-        const isPendingSuggest = task.emotional_state === 'pending_suggest';
-        const topPosition = isVirtual ? index * this.itemHeight : 'auto';
-
+        
         return `
-            <div class="task-card ${isPendingSuggest ? 'ai-proposal' : ''} ${isArchived ? 'task-archived' : ''}" 
+            <div class="task-card${isCompleted ? ' completed' : ''}" 
                  data-task-id="${task.id}"
                  data-index="${index}"
                  data-status="${status}"
                  data-priority="${priority}"
-                 data-emotional-state="${task.emotional_state || ''}"
-                 data-archived-at="${task.archived_at || ''}"
-                 data-deleted-at="${task.deleted_at || ''}"
-                 style="${isVirtual ? `position: absolute; top: ${topPosition}px; left: 0; right: 0;` : ''}">
-                <div class="task-card-header">
-                    ${isArchived ? `
-                        <div class="archived-badge">
-                            📦 Archived
-                        </div>
-                        <button class="btn-restore-task" data-task-id="${task.id}" title="Restore task">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                            </svg>
-                        </button>
-                    ` : isPendingSuggest ? `
-                        <div class="ai-proposal-badge">
-                            ✨ AI Suggested
-                        </div>
-                    ` : `
-                        <div class="task-checkbox-wrapper">
-                            <input type="checkbox" 
-                                   class="task-checkbox" 
-                                   ${isCompleted ? 'checked' : ''}
-                                   data-task-id="${task.id}">
-                        </div>
-                    `}
-                    <div class="task-content">
-                        <h3 class="task-title ${isCompleted ? 'completed' : ''}">
-                            ${this._escapeHtml(task.title || 'Untitled Task')}
-                        </h3>
-                        ${task.description ? `
-                            <p class="task-description">${this._escapeHtml(task.description)}</p>
-                        ` : ''}
-                        ${isPendingSuggest ? `
-                            <div class="ai-proposal-actions">
-                                <button class="btn-accept-proposal" data-task-id="${task.id}">
-                                    ✓ Accept
-                                </button>
-                                <button class="btn-reject-proposal" data-task-id="${task.id}">
-                                    ✗ Reject
-                                </button>
-                            </div>
-                        ` : ''}
-                        <div class="task-meta">
-                            <span class="priority-badge priority-${priority.toLowerCase()}">
-                                ${priority}
-                            </span>
-                            ${task.due_date ? `
-                                <span class="due-date-badge" data-iso-date="${task.due_date}">
-                                    ${this._formatDueDate(task.due_date)}
-                                </span>
-                            ` : `
-                                <span class="due-date-badge due-date-add">
-                                    + Add due date
-                                </span>
-                            `}
-                            ${task.assigned_to ? `
-                                <span class="assignee-badge" data-user-id="${task.assigned_to.id}">
-                                    👤 ${this._escapeHtml(task.assigned_to.username || task.assigned_to.email)}
-                                </span>
-                            ` : `
-                                <span class="assignee-badge assignee-add">
-                                    + Assign
-                                </span>
-                            `}
-                            ${task.labels && task.labels.length > 0 ? `
-                                <div class="task-labels">
-                                    ${task.labels.slice(0, 3).map(label => `
-                                        <span class="label-badge">${this._escapeHtml(label)}</span>
-                                    `).join('')}
-                                </div>
-                            ` : ''}
+                 ${isVirtual ? `style="position: absolute; top: ${index * this.itemHeight}px; left: 0; right: 0;"` : ''}>
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" ${isCompleted ? 'checked' : ''} class="task-checkbox" data-task-id="${task.id}">
+                </div>
+                <div class="task-content">
+                    <div class="task-primary-row task-tier-1">
+                        <h3 class="task-title">${this._escapeHtml(task.title || 'Untitled Task')}</h3>
+                        <div class="task-essential-meta">
+                            <span class="priority-dot priority-${priority.toLowerCase()}" title="Priority: ${priority}"></span>
                         </div>
                     </div>
                 </div>
@@ -292,18 +237,11 @@ class VirtualList {
 
     /**
      * Attach event listeners to task cards
+     * NOTE: Checkbox toggle is handled by event delegation in task-page-master-init.js
      */
     _attachEventListeners() {
-        // Checkbox toggle
-        const checkboxes = this.container.querySelectorAll('.task-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', async (e) => {
-                const taskId = e.target.dataset.taskId;
-                if (window.optimisticUI) {
-                    await window.optimisticUI.toggleTaskStatus(taskId);
-                }
-            });
-        });
+        // NOTE: Checkbox toggle is handled via event delegation in task-page-master-init.js
+        // This prevents duplicate handlers which caused race conditions and update failures
 
         // Task click (for details/edit)
         const cards = this.container.querySelectorAll('.task-card');

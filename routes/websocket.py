@@ -44,6 +44,11 @@ _SPEAKER_ENGINES: Dict[str, SpeakerDiarizationEngine] = {}
 _MULTI_SPEAKER_SYSTEMS: Dict[str, MultiSpeakerDiarization] = {}
 _SESSION_SPEAKERS: Dict[str, Dict[str, Dict]] = defaultdict(dict)  # session_id -> speaker_id -> speaker_info
 
+# AUTO-SAVE: Track last save timestamps and saved content to prevent data loss on disconnect
+_LAST_AUTO_SAVE_AT: Dict[str, float] = {}  # Last auto-save timestamp per session (ms)
+_LAST_SAVED_TRANSCRIPT: Dict[str, str] = {}  # Last saved transcript content per session
+_AUTO_SAVE_INTERVAL_MS = 30000.0  # Auto-save every 30 seconds of recording
+
 # Tunables - OPTIMIZED FOR COST
 _MIN_MS_BETWEEN_INTERIM = 2000.0     # 2 second minimum between API calls (was 400ms!)
 _MIN_CHUNK_BYTES = 8000              # Minimum audio bytes before transcribing (~0.5s of audio)
@@ -224,6 +229,112 @@ def _extract_text_delta(previous_text: str, new_text: str) -> str:
     logger.debug(f"[delta] Could not determine delta (similarity: {similarity:.2f}) - returning empty")
     return ""
 
+
+def _auto_save_transcript(session_id: str, cumulative_text: str, force: bool = False) -> bool:
+    """
+    Periodically save transcript segments to database to prevent data loss on disconnect.
+    
+    Args:
+        session_id: The external session ID
+        cumulative_text: Current cumulative transcript text
+        force: If True, save regardless of interval
+    
+    Returns:
+        True if save was performed, False otherwise
+    """
+    if not cumulative_text or not cumulative_text.strip():
+        return False
+    
+    now = _now_ms()
+    last_save = _LAST_AUTO_SAVE_AT.get(session_id, 0)
+    last_saved_text = _LAST_SAVED_TRANSCRIPT.get(session_id, "")
+    
+    # Check if we should save (time interval met OR force save OR new content)
+    time_to_save = (now - last_save) >= _AUTO_SAVE_INTERVAL_MS
+    has_new_content = cumulative_text != last_saved_text
+    
+    if not force and not time_to_save:
+        return False
+    
+    if not has_new_content:
+        return False
+    
+    try:
+        session = db.session.query(Session).filter_by(external_id=session_id).first()
+        if not session:
+            logger.warning(f"[auto-save] Session not found in DB: {session_id}")
+            return False
+        
+        # Check for existing interim segment to update, or create new one
+        existing_interim = db.session.query(Segment).filter_by(
+            session_id=session.id,
+            kind="interim"
+        ).first()
+        
+        if existing_interim:
+            # Update existing interim segment
+            existing_interim.text = cumulative_text
+            existing_interim.end_ms = int(now)
+            existing_interim.avg_confidence = 0.75
+            logger.info(f"💾 [auto-save] Updated interim segment for session {session_id} ({len(cumulative_text)} chars)")
+        else:
+            # Create new interim segment
+            segment = Segment(
+                session_id=session.id,
+                text=cumulative_text,
+                kind="interim",
+                start_ms=int(_LAST_AUTO_SAVE_AT.get(session_id, now)),
+                end_ms=int(now),
+                avg_confidence=0.75
+            )
+            db.session.add(segment)
+            logger.info(f"💾 [auto-save] Created interim segment for session {session_id} ({len(cumulative_text)} chars)")
+        
+        db.session.commit()
+        
+        # Update tracking state
+        _LAST_AUTO_SAVE_AT[session_id] = now
+        _LAST_SAVED_TRANSCRIPT[session_id] = cumulative_text
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ [auto-save] Failed to save transcript for {session_id}: {e}", exc_info=True)
+        db.session.rollback()
+        return False
+
+
+def _recover_interim_transcript(session_id: str) -> str:
+    """
+    Recover any existing interim transcript when reconnecting to a session.
+    
+    Args:
+        session_id: The external session ID
+    
+    Returns:
+        Recovered transcript text, or empty string if none found
+    """
+    try:
+        session = db.session.query(Session).filter_by(external_id=session_id).first()
+        if not session:
+            return ""
+        
+        interim_segment = db.session.query(Segment).filter_by(
+            session_id=session.id,
+            kind="interim"
+        ).first()
+        
+        if interim_segment and interim_segment.text:
+            logger.info(f"🔄 [recovery] Found interim transcript for session {session_id}: {len(interim_segment.text)} chars")
+            return interim_segment.text
+        
+        return ""
+        
+    except Exception as e:
+        logger.error(f"❌ [recovery] Failed to recover transcript for {session_id}: {e}")
+        return ""
+
+
 @socketio.on("join_session")
 def on_join_session(data):
     from flask_login import current_user
@@ -275,7 +386,18 @@ def on_join_session(data):
     # COST OPTIMIZATION: Reset incremental transcription state
     _TRANSCRIBED_POSITION[session_id] = 0
     _PENDING_CHUNKS[session_id] = bytearray()
-    _CUMULATIVE_TRANSCRIPT[session_id] = ""
+    
+    # AUTO-SAVE RECOVERY: Check for existing interim transcript and recover if found
+    recovered_transcript = _recover_interim_transcript(session_id)
+    if recovered_transcript:
+        _CUMULATIVE_TRANSCRIPT[session_id] = recovered_transcript
+        _LAST_SAVED_TRANSCRIPT[session_id] = recovered_transcript
+        logger.info(f"🔄 [recovery] Restored transcript for session {session_id}: {len(recovered_transcript)} chars")
+    else:
+        _CUMULATIVE_TRANSCRIPT[session_id] = ""
+    
+    # Initialize auto-save tracking
+    _LAST_AUTO_SAVE_AT[session_id] = _now_ms()
     
     # Initialize speaker diarization for this session
     try:
@@ -457,6 +579,9 @@ def on_audio_chunk(data):
             _CUMULATIVE_TRANSCRIPT[session_id] += " " + delta_text
         else:
             _CUMULATIVE_TRANSCRIPT[session_id] = delta_text
+        
+        # AUTO-SAVE: Periodically save transcript to prevent data loss on disconnect
+        _auto_save_transcript(session_id, _CUMULATIVE_TRANSCRIPT[session_id])
     
     # Enhanced: Process with speaker diarization
     speaker_info = None
@@ -577,6 +702,14 @@ def on_finalize(data):
     try:
         session = db.session.query(Session).filter_by(external_id=session_id).first()
         if session and final_text:
+            # AUTO-SAVE CLEANUP: Delete any interim segments now that we have final
+            deleted_count = db.session.query(Segment).filter_by(
+                session_id=session.id,
+                kind="interim"
+            ).delete()
+            if deleted_count > 0:
+                logger.info(f"🗑️ [finalize] Deleted {deleted_count} interim segment(s) for session {session_id}")
+            
             segment = Segment(
                 session_id=session.id,
                 text=final_text,
@@ -635,7 +768,12 @@ def on_finalize(data):
     _MULTI_SPEAKER_SYSTEMS.pop(session_id, None)
     _SESSION_SPEAKERS.pop(session_id, None)
     
-    logger.info(f"🎤 Cleared speaker diarization state for session: {session_id}")
+    # Clear auto-save tracking state
+    _LAST_AUTO_SAVE_AT.pop(session_id, None)
+    _LAST_SAVED_TRANSCRIPT.pop(session_id, None)
+    _CUMULATIVE_TRANSCRIPT.pop(session_id, None)
+    
+    logger.info(f"🎤 Cleared session state for: {session_id}")
 
 @socketio.on("get_session_speakers")
 def on_get_session_speakers(data):

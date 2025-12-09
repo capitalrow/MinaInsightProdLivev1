@@ -385,7 +385,7 @@
                         </div>
                         <div class="flex-1">
                             <h3 class="meeting-title">{{ meeting.title or 'Untitled Meeting' }}</h3>
-                            <p class="meeting-date">{{ meeting.created_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
+                            <p class="meeting-date">{{ (meeting.created_at or meeting.started_at).strftime('%B %d, %Y at %I:%M %p') if (meeting.created_at or meeting.started_at) else 'Date unknown' }}</p>
                             {% if meeting.summary %}
                             <p class="meeting-summary">{{ meeting.summary[:200] }}{% if meeting.summary|length > 200 %}...{% endif %}</p>
                             {% endif %}
@@ -684,7 +684,7 @@ function createArchivedMeetingCard(meeting, index) {
     card.dataset.meetingId = meeting.id;
     card.style.animationDelay = `${index * 0.1}s`;
     
-    const formattedDate = new Date(meeting.created_at).toLocaleDateString('en-US', {
+    const formattedDate = new Date(meeting.created_at || meeting.started_at).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -729,7 +729,7 @@ function createArchivedMeetingCard(meeting, index) {
   <button
     class="btn-archive"
     data-action="archive"
-    data-meeting-id="{{ meeting.id }}"
+    data-meeting-id="${meeting.id}"
     aria-label="Archive meeting"
     title="Archive meeting">
                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -741,7 +741,7 @@ function createArchivedMeetingCard(meeting, index) {
                   <button
                     class="btn-icon"
                     data-action="share"
-                    data-meeting-id="{{ meeting.id }}"
+                    data-meeting-id="${meeting.id}"
                     aria-label="Share meeting"
                     title="Share meeting">
                     <!-- Optional SVG icon -->

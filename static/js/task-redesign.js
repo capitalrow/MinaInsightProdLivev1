@@ -11,10 +11,10 @@
   'use strict';
 
   // ========================================
-  // MOBILE TAP EXPANSION
+  // TASK CARD EXPANSION (3-TIER PROGRESSIVE DISCLOSURE)
   // ========================================
   
-  function initMobileTapExpansion() {
+  function initTaskCardExpansion() {
     const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     
     function toggleExpand(taskCard, collapseOthers) {
@@ -26,17 +26,44 @@
         });
       }
       taskCard.classList.toggle('expanded');
+      
+      // Update aria-expanded for accessibility
+      const isExpanded = taskCard.classList.contains('expanded');
+      taskCard.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+      
+      // Update expand trigger icon rotation
+      const expandTrigger = taskCard.querySelector('.task-expand-trigger');
+      if (expandTrigger) {
+        expandTrigger.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        expandTrigger.setAttribute('title', isExpanded ? 'Hide details' : 'Show details');
+      }
     }
     
     function isInteractiveElement(target) {
       return target.closest('.task-checkbox') || 
              target.closest('.task-menu-trigger') ||
+             target.closest('.task-expand-trigger') ||
              target.closest('button') ||
              target.closest('a') ||
              target.closest('input') ||
              target.closest('select');
     }
     
+    // Handle expand trigger button click (desktop + mobile)
+    document.addEventListener('click', function(e) {
+      const expandTrigger = e.target.closest('.task-expand-trigger');
+      if (expandTrigger) {
+        e.preventDefault();
+        e.stopPropagation();
+        const taskCard = expandTrigger.closest('.task-card');
+        if (taskCard) {
+          toggleExpand(taskCard, true);
+        }
+        return;
+      }
+    });
+    
+    // Mobile: tap anywhere on card to expand (except interactive elements)
     if (isTouchDevice) {
       document.addEventListener('click', function(e) {
         const taskCard = e.target.closest('.task-card');
@@ -108,24 +135,75 @@
   }
 
   // ========================================
-  // VIEW TOGGLE FUNCTIONALITY
+  // PHASE 10: FILTER STATE PERSISTENCE
   // ========================================
   
-  const VIEW_STORAGE_KEY = 'mina_task_view_preference';
+  const STORAGE_KEYS = {
+    VIEW: 'mina_task_view_preference',
+    FILTER: 'mina_task_filter_preference',
+    SORT: 'mina_task_sort_preference'
+  };
   
-  function getViewPreference() {
+  const VALID_FILTERS = ['all', 'active', 'archived'];
+  const VALID_SORTS = ['default', 'priority', 'priority-reverse', 'due-date', 'due-date-reverse', 'created', 'created-reverse', 'title', 'title-reverse'];
+  const VALID_VIEWS = ['list', 'grid', 'bar'];
+  
+  function getPreference(key, validValues, defaultValue) {
     try {
-      return localStorage.getItem(VIEW_STORAGE_KEY) || 'list';
+      const stored = localStorage.getItem(key);
+      if (stored && validValues.includes(stored)) {
+        return stored;
+      }
+      return defaultValue;
     } catch (e) {
-      return 'list';
+      return defaultValue;
     }
   }
   
-  function setViewPreference(view) {
+  function setPreference(key, value) {
     try {
-      localStorage.setItem(VIEW_STORAGE_KEY, view);
+      localStorage.setItem(key, value);
     } catch (e) {
-      console.warn('[TaskRedesign] Could not save view preference');
+      console.warn('[TaskRedesign] Could not save preference:', key);
+    }
+  }
+  
+  // Filter persistence
+  function getFilterPreference() {
+    return getPreference(STORAGE_KEYS.FILTER, VALID_FILTERS, 'active');
+  }
+  
+  function setFilterPreference(filter) {
+    if (VALID_FILTERS.includes(filter)) {
+      setPreference(STORAGE_KEYS.FILTER, filter);
+      console.log('[TaskRedesign] Saved filter preference:', filter);
+    }
+  }
+  
+  // Sort persistence
+  function getSortPreference() {
+    return getPreference(STORAGE_KEYS.SORT, VALID_SORTS, 'default');
+  }
+  
+  function setSortPreference(sort) {
+    if (VALID_SORTS.includes(sort)) {
+      setPreference(STORAGE_KEYS.SORT, sort);
+      console.log('[TaskRedesign] Saved sort preference:', sort);
+    }
+  }
+  
+  // ========================================
+  // VIEW TOGGLE FUNCTIONALITY
+  // ========================================
+  
+  function getViewPreference() {
+    return getPreference(STORAGE_KEYS.VIEW, VALID_VIEWS, 'list');
+  }
+  
+  function setViewPreference(view) {
+    if (VALID_VIEWS.includes(view)) {
+      setPreference(STORAGE_KEYS.VIEW, view);
+      console.log('[TaskRedesign] Saved view preference:', view);
     }
   }
   
@@ -276,6 +354,10 @@
       filterTab.classList.add('active');
       
       const filter = filterTab.dataset.filter;
+      
+      // PHASE 10: Save filter preference to localStorage
+      setFilterPreference(filter);
+      
       applyFilter(filter);
     });
     
@@ -316,15 +398,26 @@
     const emptyState = document.getElementById('tasks-empty-state');
     const allDoneState = document.getElementById('tasks-all-done-state');
     const noResultsState = document.getElementById('tasks-no-results-state');
+    const archivedEmptyState = document.getElementById('tasks-archived-empty-state');
     const listContainer = document.getElementById('tasks-list-container');
     
     const hasVisibleTasks = visibleTasks.length > 0;
+    const allTasks = document.querySelectorAll('.task-card');
+    const hasAnyTasks = allTasks.length > 0;
+    const completedTasks = document.querySelectorAll('.task-card[data-status="completed"], .task-card[data-status="cancelled"], .task-card.completed');
+    const hasCompletedTasks = completedTasks.length > 0;
     
-    if (emptyState) emptyState.classList.toggle('hidden', hasVisibleTasks);
+    if (emptyState) {
+      const showMainEmpty = !hasAnyTasks;
+      emptyState.classList.toggle('hidden', !showMainEmpty);
+    }
     if (allDoneState) {
-      const showAllDone = !hasVisibleTasks && filter === 'active' && 
-                          document.querySelectorAll('.task-card.completed').length > 0;
+      const showAllDone = !hasVisibleTasks && filter === 'active' && hasCompletedTasks && hasAnyTasks;
       allDoneState.classList.toggle('hidden', !showAllDone);
+    }
+    if (archivedEmptyState) {
+      const showArchivedEmpty = !hasVisibleTasks && filter === 'archived' && !hasCompletedTasks && hasAnyTasks;
+      archivedEmptyState.classList.toggle('hidden', !showArchivedEmpty);
     }
     if (listContainer) listContainer.style.display = hasVisibleTasks ? '' : 'none';
   }
@@ -333,15 +426,155 @@
   // INITIALIZATION
   // ========================================
   
+  // ========================================
+  // MOBILE FAB (Floating Action Button)
+  // ========================================
+  
+  function initMobileFAB() {
+    const fab = document.getElementById('mobile-fab');
+    const newTaskBtn = document.getElementById('new-task-btn');
+    
+    if (!fab) return;
+    
+    fab.addEventListener('click', function(e) {
+      e.preventDefault();
+      fab.classList.add('fab-pressed');
+      setTimeout(() => fab.classList.remove('fab-pressed'), 300);
+      
+      // Trigger the same action as the "New" button
+      if (newTaskBtn) {
+        newTaskBtn.click();
+      } else if (window.TaskModalManager && typeof window.TaskModalManager.openCreateModal === 'function') {
+        window.TaskModalManager.openCreateModal();
+      } else {
+        // Fallback: dispatch custom event
+        document.dispatchEvent(new CustomEvent('task:create-new'));
+      }
+    });
+    
+    console.log('[TaskRedesign] Mobile FAB initialized');
+  }
+  
+  function initFilterResetButtons() {
+    document.querySelectorAll('.filter-reset-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const targetFilter = btn.dataset.filter || 'active';
+        
+        // Update filter tabs
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+          tab.classList.toggle('active', tab.dataset.filter === targetFilter);
+          tab.setAttribute('aria-selected', tab.dataset.filter === targetFilter ? 'true' : 'false');
+        });
+        
+        // PHASE 10: Save filter preference
+        setFilterPreference(targetFilter);
+        
+        // Apply filter
+        applyFilter(targetFilter);
+        
+        // Also trigger TaskSearchSort if available
+        if (window.taskSearchSort && typeof window.taskSearchSort.setFilter === 'function') {
+          window.taskSearchSort.setFilter(targetFilter);
+        }
+      });
+    });
+    
+    console.log('[TaskRedesign] Filter reset buttons initialized');
+  }
+  
+  // ========================================
+  // SORT PREFERENCE HANDLER
+  // ========================================
+  
+  function initSortHandler() {
+    const sortSelect = document.getElementById('task-sort-select');
+    if (!sortSelect) return;
+    
+    // Save sort preference when changed
+    sortSelect.addEventListener('change', function(e) {
+      const sort = e.target.value;
+      setSortPreference(sort);
+    });
+    
+    console.log('[TaskRedesign] Sort handler initialized');
+  }
+  
+  // ========================================
+  // RESTORE SAVED PREFERENCES ON PAGE LOAD
+  // ========================================
+  
+  function restoreSavedPreferences() {
+    console.log('[TaskRedesign] Restoring saved preferences...');
+    
+    // CROWN⁴.13 FIX: Do NOT restore filter preference on initial page load
+    // SSR renders with 'active' default - restoring a saved filter causes visible flicker
+    // Filter preference should only be restored on tab visibility changes (returning to tab)
+    // This matches Todoist/Linear behavior where fresh page loads always show default view
+    console.log('[TaskRedesign] Skipping filter preference restore on initial load (using SSR default)');
+    
+    // NOTE: We intentionally skip filter restoration here to prevent tab flicker
+    // The saved filter preference is preserved in localStorage for future use
+    
+    // Restore sort preference (sort doesn't cause flicker like filter does)
+    const savedSort = getSortPreference();
+    const sortSelect = document.getElementById('task-sort-select');
+    if (savedSort && savedSort !== 'default') {
+      // Update the select UI
+      if (sortSelect) {
+        sortSelect.value = savedSort;
+      }
+      
+      // Sync with TaskSearchSort and trigger proper sort application
+      if (window.taskSearchSort) {
+        window.taskSearchSort.currentSort = savedSort;
+        // Apply sort (filter stays at SSR default 'active')
+        if (typeof window.taskSearchSort.safeApplyFiltersAndSort === 'function') {
+          window.taskSearchSort.safeApplyFiltersAndSort();
+        }
+      }
+      
+      // Dispatch event for any other listeners
+      document.dispatchEvent(new CustomEvent('task:sort', { detail: { sort: savedSort } }));
+      
+      console.log('[TaskRedesign] Restored sort preference:', savedSort);
+    }
+    
+    // View preference is already restored in initViewToggles()
+    console.log('[TaskRedesign] Preference restoration complete');
+  }
+  
   function init() {
     console.log('[TaskRedesign] Initializing...');
     
-    initMobileTapExpansion();
+    initTaskCardExpansion();
     initViewToggles();
     initCheckboxHandlers();
+    initMobileFAB();
+    initFilterResetButtons();
+    initSortHandler();
     // CROWN⁴.12: Removed initFilterTabs() - now handled by task-page-master-init.js + TaskSearchSort
     // initFilterTabs();
     updateTaskCounts();
+    
+    // PHASE 10: Restore saved filter/sort preferences after hydration completes
+    // Listen for hydration event to ensure TaskSearchSort is fully ready
+    let preferencesRestored = false;
+    
+    const tryRestorePreferences = () => {
+      if (preferencesRestored) return;
+      if (window.taskSearchSort) {
+        preferencesRestored = true;
+        restoreSavedPreferences();
+      }
+    };
+    
+    // Try after hydration completes (best timing)
+    document.addEventListener('tasks:hydrated', tryRestorePreferences);
+    document.addEventListener('task:bootstrap:complete', tryRestorePreferences);
+    
+    // Fallback: try after 200ms if events don't fire
+    setTimeout(tryRestorePreferences, 200);
     
     const observer = new MutationObserver(function(mutations) {
       let shouldUpdate = false;
@@ -382,7 +615,13 @@
     updateCounts: updateTaskCounts,
     applyFilter: applyFilter,
     applyView: applyView,
-    getViewPreference: getViewPreference
+    getViewPreference: getViewPreference,
+    // PHASE 10: Exposed preference APIs
+    getFilterPreference: getFilterPreference,
+    setFilterPreference: setFilterPreference,
+    getSortPreference: getSortPreference,
+    setSortPreference: setSortPreference,
+    restoreSavedPreferences: restoreSavedPreferences
   };
   
 })();

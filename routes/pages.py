@@ -4,6 +4,26 @@ from flask_login import login_required, current_user
 
 pages_bp = Blueprint("pages", __name__)
 
+
+# Convenience redirects for common auth URLs
+@pages_bp.route("/login")
+def login_redirect():
+    """Convenience redirect: /login -> /auth/login"""
+    return redirect(url_for("auth.login"))
+
+
+@pages_bp.route("/register")
+def register_redirect():
+    """Convenience redirect: /register -> /auth/register"""
+    return redirect(url_for("auth.register"))
+
+
+@pages_bp.route("/signup")
+def signup_redirect():
+    """Convenience redirect: /signup -> /auth/register"""
+    return redirect(url_for("auth.register"))
+
+
 @pages_bp.route("/")
 def index():
     if current_user.is_authenticated:

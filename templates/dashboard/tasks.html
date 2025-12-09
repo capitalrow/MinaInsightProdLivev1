@@ -54,93 +54,139 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-mobile-gestures.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-empty-states.css') }}?v=1" media="print" data-async-css>
 <!-- REDESIGN: Clean design system - must load last to override -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-redesign.css') }}?v=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-redesign.css') }}?v=6">
 <script nonce="{{ csp_nonce }}">
 (function(){var a=document.querySelectorAll('link[data-async-css]');a.forEach(function(l){l.onload=function(){l.media='all'};if(l.sheet)l.media='all'})})();
 </script>
 {% endblock %}
 
 {% block content %}
-<div class="container tasks-container">
-    <!-- Header -->
-    <div class="tasks-header flex justify-between items-center">
-        <div>
-            <h1 class="tasks-title">Action Items</h1>
-            <p class="tasks-subtitle">Track and manage tasks from your meetings</p>
-        </div>
-        <div class="header-actions">
-            <!-- CROWN⁴.6: Stress Indicator -->
-            <div id="stress-indicator" class="stress-indicator hidden">
-                <div class="stress-dot"></div>
-                <div class="stress-tooltip">High workload</div>
-            </div>
-            
-            <button class="btn btn-secondary btn-generate-proposals" data-meeting-id="{{ meeting_id if meeting_id else '' }}">
-                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                </svg>
-                AI Proposals
+<!-- Skip to main content link for keyboard users -->
+<a href="#tasks-list-container" class="skip-to-content sr-only-focusable">Skip to task list</a>
+
+<!-- ARIA Live Region for dynamic announcements -->
+<div id="task-list-live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+<div class="container tasks-container" role="main" aria-label="Tasks page">
+    <!-- TRUE 2-ROW COMMAND BAR -->
+    <!-- ROW 1: Title + Filters -->
+    <div class="command-row-1" role="banner">
+        <h1 class="tasks-title-compact">Action Items</h1>
+        <!-- CROWN⁴.18: URL-based filter state - active tab matches current_filter from URL -->
+        <div class="task-filters-inline" role="tablist" aria-label="Task filters" data-current-filter="{{ current_filter }}">
+            <button class="filter-tab{% if current_filter == 'all' %} active{% endif %}" data-filter="all" role="tab" aria-selected="{{ 'true' if current_filter == 'all' else 'false' }}" aria-controls="tasks-list-container" id="filter-all-tab">
+                All
+                <span class="filter-counter filter-counter-all" data-counter="all" aria-label="{{ total_count }} total tasks">{{ total_count }}</span>
             </button>
-            <button id="new-task-btn" class="btn btn-primary">
-                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-                New Task
+            <button class="filter-tab{% if current_filter == 'active' %} active{% endif %}" data-filter="active" role="tab" aria-selected="{{ 'true' if current_filter == 'active' else 'false' }}" aria-controls="tasks-list-container" id="filter-active-tab">
+                Active
+                <span class="filter-counter filter-counter-active" data-counter="active" aria-label="{{ active_count }} active tasks">{{ active_count }}</span>
             </button>
-            
-            <!-- View Toggle Buttons -->
-            <div class="view-toggle-group" role="group" aria-label="View options">
-                <button class="view-toggle-btn active" data-view="list" title="List view" aria-label="List view">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                    </svg>
-                </button>
-                <button class="view-toggle-btn" data-view="grid" title="Grid view" aria-label="Grid view">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
-                    </svg>
-                </button>
-                <button class="view-toggle-btn" data-view="bar" title="Compact view" aria-label="Compact view">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-                    </svg>
-                </button>
-            </div>
+            <button class="filter-tab{% if current_filter == 'archived' %} active{% endif %}" data-filter="archived" role="tab" aria-selected="{{ 'true' if current_filter == 'archived' else 'false' }}" aria-controls="tasks-list-container" id="filter-archived-tab">
+                Archived
+                <span class="filter-counter filter-counter-archived" data-counter="archived" aria-label="{{ archived_count }} archived tasks">{{ archived_count }}</span>
+            </button>
         </div>
     </div>
-
-    <!-- Offline/Status Banner -->
-    <div id="connection-banner" class="connection-banner hidden">
-        <span class="connection-status-icon"></span>
-        <span class="connection-message"></span>
-        <span class="pending-count"></span>
+    
+    <!-- ROW 2: Search + Sort + View + Actions (all controls) -->
+    <div class="command-row-2">
+        <div class="search-wrapper-compact">
+            <button id="search-toggle-btn" class="search-toggle-btn" title="Search tasks (/)">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+            </button>
+            <div class="search-input-container collapsed">
+                <input type="text" 
+                       id="task-search-input" 
+                       class="search-input" 
+                       placeholder="Search tasks..."
+                       autocomplete="off"
+                       aria-label="Search tasks">
+                <button id="search-clear-btn" class="search-clear-btn hidden" aria-label="Clear search">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <select id="task-sort-select" class="sort-select-compact" aria-label="Sort tasks">
+            <option value="default">Default</option>
+            <option value="priority">Priority ↓</option>
+            <option value="priority-reverse">Priority ↑</option>
+            <option value="due-date">Due Soon</option>
+            <option value="due-date-reverse">Due Later</option>
+            <option value="created">Newest</option>
+            <option value="created-reverse">Oldest</option>
+            <option value="title">A → Z</option>
+            <option value="title-reverse">Z → A</option>
+        </select>
+        
+        <button id="meeting-intelligence-toggle" class="meeting-toggle-btn" title="Group by meeting">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+        </button>
+        
+        <div class="view-toggle-group" role="group" aria-label="View options">
+            <button class="view-toggle-btn active" data-view="list" title="List view" aria-label="List view">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+            <button class="view-toggle-btn" data-view="grid" title="Grid view" aria-label="Grid view">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+                </svg>
+            </button>
+            <button class="view-toggle-btn" data-view="bar" title="Compact view" aria-label="Compact view">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                </svg>
+            </button>
+        </div>
+        
+        <button class="btn btn-secondary btn-ai-compact" data-meeting-id="{{ meeting_id if meeting_id else '' }}" title="AI Proposals">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+        </button>
+        
+        <button id="new-task-btn" class="btn btn-primary btn-new-compact">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            <span class="btn-text-desktop">New</span>
+        </button>
+    </div>
+    
+    <!-- CROWN⁴.6: Stress Indicator (hidden by default) -->
+    <div id="stress-indicator" class="stress-indicator hidden">
+        <div class="stress-dot"></div>
+        <div class="stress-tooltip">High workload</div>
     </div>
 
-    <!-- Filters - All/Active/Archived Tabs (Linear-style) -->
-    <!-- CROWN⁴.6: Fixed counters to use status field (Task model has no archived_at column) -->
-    <!-- Active = todo, in_progress, pending, blocked (not completed/cancelled) -->
-    <!-- Archived = completed or cancelled tasks -->
-    <div class="task-filters">
-        <button class="filter-tab" data-filter="all">
-            All
-            <span class="filter-counter filter-counter-all" data-counter="all">
-                {{ tasks|length if tasks else 0 }}
-            </span>
+    <!-- Offline/Status Banner (CROWN⁴.9 Phase 9: Enhanced with retry) -->
+    <div id="connection-banner" class="connection-banner hidden" role="alert">
+        <span class="connection-status-icon" aria-hidden="true"></span>
+        <span class="connection-message">You're offline</span>
+        <button class="connection-retry-btn hidden" aria-label="Retry connection">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Retry
         </button>
-        <button class="filter-tab active" data-filter="active">
-            Active
-            <span class="filter-counter filter-counter-active" data-counter="active">
-                {{ tasks|rejectattr('status', 'equalto', 'completed')|rejectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 }}
-            </span>
-        </button>
-        <button class="filter-tab" data-filter="archived">
-            Archived
-            <span class="filter-counter filter-counter-archived" data-counter="archived">
-                {% set completed_count = tasks|selectattr('status', 'equalto', 'completed')|list|length if tasks else 0 %}
-                {% set cancelled_count = tasks|selectattr('status', 'equalto', 'cancelled')|list|length if tasks else 0 %}
-                {{ completed_count + cancelled_count }}
-            </span>
-        </button>
+        <span class="pending-count" aria-live="polite"></span>
+    </div>
+
+    <!-- Legacy task-filters div for JS compatibility (hidden, data synced) -->
+    <!-- CROWN⁴.18: Updated to use server-computed counts -->
+    <div class="task-filters" style="display: none !important;">
+        <button class="filter-tab{% if current_filter == 'all' %} active{% endif %}" data-filter="all">All<span class="filter-counter filter-counter-all" data-counter="all">{{ total_count }}</span></button>
+        <button class="filter-tab{% if current_filter == 'active' %} active{% endif %}" data-filter="active">Active<span class="filter-counter filter-counter-active" data-counter="active">{{ active_count }}</span></button>
+        <button class="filter-tab{% if current_filter == 'archived' %} active{% endif %}" data-filter="archived">Archived<span class="filter-counter filter-counter-archived" data-counter="archived">{{ archived_count }}</span></button>
     </div>
 
     <!-- Bulk Action Toolbar (appears when tasks selected) -->
@@ -170,60 +216,6 @@
             <button class="bulk-action-btn bulk-action-btn-cancel" id="bulk-cancel-btn">
                 Cancel
             </button>
-        </div>
-    </div>
-
-    <!-- Search & Sort Toolbar (CROWN⁴.5 Task 5) -->
-    <div class="search-sort-toolbar">
-        <div class="search-wrapper">
-            <svg class="search-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-            <input type="text" 
-                   id="task-search-input" 
-                   class="search-input" 
-                   placeholder="Search tasks..."
-                   autocomplete="off"
-                   aria-label="Search tasks">
-            <button id="search-clear-btn" class="search-clear-btn hidden" aria-label="Clear search">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-            <button id="semantic-search-toggle" class="semantic-search-toggle" title="AI Semantic Search - Find tasks by meaning, not just keywords">
-                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                </svg>
-                <span class="semantic-label">AI</span>
-            </button>
-        </div>
-        <div class="sort-wrapper">
-            <svg class="sort-icon" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
-            </svg>
-            <select id="task-sort-select" class="sort-select" aria-label="Sort tasks">
-                <option value="default">Sort: Default</option>
-                <option value="priority">Sort: Priority (High → Low)</option>
-                <option value="priority-reverse">Sort: Priority (Low → High)</option>
-                <option value="due-date">Sort: Due Date (Soonest first)</option>
-                <option value="due-date-reverse">Sort: Due Date (Latest first)</option>
-                <option value="created">Sort: Created (Newest first)</option>
-                <option value="created-reverse">Sort: Created (Oldest first)</option>
-                <option value="title">Sort: Title (A → Z)</option>
-                <option value="title-reverse">Sort: Title (Z → A)</option>
-            </select>
-        </div>
-        <button id="meeting-intelligence-toggle" class="meeting-intelligence-toggle" title="Group tasks by meeting">
-            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-            </svg>
-            <span class="toggle-label">Group by Meeting</span>
-        </button>
-        <div class="toolbar-stats">
-            <span id="visible-task-count">{{ tasks|length if tasks else 0 }}</span>
-            <span class="stats-label">of</span>
-            <span id="total-task-count">{{ tasks|length if tasks else 0 }}</span>
-            <span class="stats-label">tasks</span>
         </div>
     </div>
 
@@ -267,6 +259,43 @@
                 Create task manually
             </button>
         </div>
+        <!-- Workflow Hint: How Mina works -->
+        <div class="empty-state-workflow-hint">
+            <div class="workflow-hint-step">
+                <div class="workflow-hint-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                    </svg>
+                </div>
+                <span class="workflow-hint-label">Record</span>
+            </div>
+            <div class="workflow-hint-arrow">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </div>
+            <div class="workflow-hint-step">
+                <div class="workflow-hint-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                </div>
+                <span class="workflow-hint-label">AI Extracts</span>
+            </div>
+            <div class="workflow-hint-arrow">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </div>
+            <div class="workflow-hint-step">
+                <div class="workflow-hint-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                    </svg>
+                </div>
+                <span class="workflow-hint-label">Tasks Appear</span>
+            </div>
+        </div>
     </div>
     
     <!-- All Done State (CROWN⁴.8) -->
@@ -293,6 +322,20 @@
         <div class="empty-state-actions">
             <button class="empty-state-secondary-btn" id="search-clear-empty-btn">
                 Clear search
+            </button>
+        </div>
+    </div>
+    
+    <!-- Archived Empty State (CROWN⁴.8 Phase 7) -->
+    <div id="tasks-archived-empty-state" class="task-empty-state empty-state-archived hidden">
+        <div class="empty-state-illustration archived"></div>
+        <h3 class="empty-state-title">No archived tasks yet</h3>
+        <p class="empty-state-description">
+            Completed and cancelled tasks will appear here. Keep working on your active tasks!
+        </p>
+        <div class="empty-state-actions">
+            <button class="empty-state-secondary-btn filter-reset-btn" data-filter="active">
+                View active tasks
             </button>
         </div>
     </div>
@@ -356,6 +399,13 @@
             </button>
         </div>
     </div>
+    
+    <!-- PHASE 5: Mobile FAB (Floating Action Button) for new task -->
+    <button id="mobile-fab" class="mobile-fab" aria-label="Create new task">
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+    </button>
 </div>
 
 <!-- Task Creation Modal (CROWN Design System) -->
@@ -464,30 +514,34 @@
             <p class="text-secondary mb-4" id="snooze-task-title">Snooze this task until...</p>
             
             <div class="snooze-options">
-                <button class="snooze-option-btn" data-duration="1h">
+                <button class="snooze-option-btn" data-snooze-duration="later-today">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    <span>1 Hour</span>
+                    <span>Later Today</span>
                 </button>
-                <button class="snooze-option-btn" data-duration="4h">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <span>4 Hours</span>
-                </button>
-                <button class="snooze-option-btn" data-duration="tomorrow">
+                <button class="snooze-option-btn" data-snooze-duration="tomorrow">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
                     <span>Tomorrow</span>
                 </button>
-                <button class="snooze-option-btn" data-duration="1w">
+                <button class="snooze-option-btn" data-snooze-duration="next-week">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
-                    <span>1 Week</span>
+                    <span>Next Week</span>
                 </button>
+                <button class="snooze-option-btn" data-snooze-duration="next-month">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <span>Next Month</span>
+                </button>
+            </div>
+            
+            <div class="snooze-modal-footer">
+                <button class="btn-secondary snooze-cancel-btn">Cancel</button>
             </div>
         </div>
     </div>
@@ -498,7 +552,7 @@
     <div class="task-modal task-modal-medium">
         <div class="task-modal-header">
             <h2 class="task-modal-title">Merge Tasks</h2>
-            <button class="task-modal-close" id="merge-modal-close">
+            <button class="task-modal-close merge-cancel-btn" id="merge-modal-close">
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -506,15 +560,29 @@
         </div>
         
         <div class="modal-body">
-            <p class="text-secondary mb-4" id="merge-task-title">Select a task to merge with:</p>
+            <p class="text-secondary mb-4" id="merge-task-title">Combine selected tasks into one:</p>
             
-            <div id="merge-task-list" class="merge-task-list">
-                <!-- Task options will be populated dynamically -->
+            <!-- Preview of tasks to merge -->
+            <div class="merge-preview">
+                <!-- Will be populated by renderMergePreview() -->
             </div>
             
-            <div class="mt-6 text-sm text-secondary">
-                <p><strong>Note:</strong> The selected task will be merged into the current task. All labels, dates, and metadata will be combined.</p>
+            <div class="merge-info-box mt-4">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                </svg>
+                <span>The first task will be kept. Other tasks will be deleted and their labels merged.</span>
             </div>
+        </div>
+        
+        <div class="task-modal-footer">
+            <button class="btn-secondary merge-cancel-btn">Cancel</button>
+            <button class="btn-primary merge-confirm-btn">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+                Merge Tasks
+            </button>
         </div>
     </div>
 </div>
@@ -797,18 +865,24 @@ window.__FIRST_PAINT_START = performance.now();
 })();
 </script>
 
-<!-- CSRF Protection - MUST load before other scripts to patch window.fetch -->
-<script src="{{ url_for('static', filename='js/csrf.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- CSRF Protection - Deferred but ordered before other deferred scripts -->
+<script defer src="{{ url_for('static', filename='js/csrf.js') }}" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6 TaskStateStore - MUST load first as single source of truth -->
 <script defer src="{{ url_for('static', filename='js/task-state-store.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
+
+<!-- CROWN⁴.18 Shared Task Card Renderer - MUST load before other task scripts -->
+<script defer src="{{ url_for('static', filename='js/task-card-renderer.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.5 Frontend Modules - ALL deferred for <200ms First Paint -->
 <script defer src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-animation-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-cache.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-search-sort.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<!-- CROWN⁴.13 Task Action Lock - MUST load before sync modules to prevent overwrites -->
+<script defer src="{{ url_for('static', filename='js/task-action-lock.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-search-sort.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-command-bar.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-detail-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-grouping.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -817,8 +891,8 @@ window.__FIRST_PAINT_START = performance.now();
 <script defer src="{{ url_for('static', filename='js/task-render-scheduler.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-bootstrap.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-merge-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}?v=10" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-inline-editing.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}?v=12" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-inline-editing.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-confirmation-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-date-picker.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-priority-selector.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
@@ -832,19 +906,18 @@ window.__FIRST_PAINT_START = performance.now();
 <script defer src="{{ url_for('static', filename='js/task-menu-controller.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-actions-menu.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-bulk-operations.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-drag-drop.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-drag-drop.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-proposal-ui.js') }}?v=10" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-idle-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-idle-sync.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/predictive-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/cognitive-synchronizer.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-websocket-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-virtual-list.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/task-clustering.js') }}" nonce="{{ g.csp_nonce }}"></script>
 <script defer src="{{ url_for('static', filename='js/haptic-feedback.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-keyboard-shortcuts.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.5 Phase 2: Cache-First Architecture -->
 <script defer src="{{ url_for('static', filename='js/indexeddb-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
@@ -871,7 +944,7 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 
 <!-- Task page initialization -->
 <script defer src="{{ url_for('static', filename='js/task-page-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-page-master-init.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-page-master-init.js') }}?v=4" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Linear-Inspired Performance & Animations -->
 <script defer src="{{ url_for('static', filename='js/tasks-linear-inspired.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
@@ -891,11 +964,17 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 <!-- CROWN⁴.6 Task 5: Perfect Completion UX -->
 <script defer src="{{ url_for('static', filename='js/task-completion-ux.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
 
+<!-- CROWN⁴.8 Phase 8: Undo System -->
+<script defer src="{{ url_for('static', filename='js/task-undo-manager.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+
+<!-- CROWN⁴.9 Phase 9: Error States & Retry -->
+<script defer src="{{ url_for('static', filename='js/task-error-handler.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+
 <!-- CROWN⁴.8: Progressive Disclosure & Mobile UX -->
 <script defer src="{{ url_for('static', filename='js/task-progressive-disclosure.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- REDESIGN: Clean task page interactions -->
-<script defer src="{{ url_for('static', filename='js/task-redesign.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
+<script defer src="{{ url_for('static', filename='js/task-redesign.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
 
 <!-- CROWN⁴.6: Mobile Gestures (swipe-to-complete/snooze, long-press context) -->
 <script defer src="{{ url_for('static', filename='js/task-mobile-gestures.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>

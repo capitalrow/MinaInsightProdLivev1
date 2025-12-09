@@ -46,6 +46,8 @@
     
     /**
      * Initialize filter tabs (All/Active/Archived)
+     * CROWN⁴.19 FIX: Attach listeners directly to container to avoid
+     * stopPropagation issues from TaskRedesign's mobile tap handlers
      */
     function initFilterTabs() {
         if (window.__taskFilterTabsReady) return;
@@ -56,6 +58,7 @@
             if (!tab) return;
 
             e.preventDefault();
+            e.stopPropagation(); // Prevent TaskRedesign mobile handlers from interfering
 
             const filter = tab.dataset.filter;
             const filterTabs = document.querySelectorAll('.filter-tab');
@@ -69,6 +72,11 @@
 
             filterTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
+            
+            // PHASE 10: Save filter preference to localStorage
+            if (window.TaskRedesign?.setFilterPreference) {
+                window.TaskRedesign.setFilterPreference(filter);
+            }
 
             dispatchTaskEvent('filterChanged', { filter });
             dispatchTaskEvent('task:filter-changed', { filter });
@@ -78,6 +86,14 @@
             }
         };
 
+        // CROWN⁴.19 FIX: Attach directly to filter container instead of document
+        // This ensures clicks are captured before TaskRedesign's stopPropagation can block them
+        const filterContainers = document.querySelectorAll('.task-filters-inline');
+        filterContainers.forEach(container => {
+            container.addEventListener('click', handleFilterClick, { capture: true });
+        });
+        
+        // Fallback: Also attach to document for any dynamically added filter containers
         document.addEventListener('click', handleFilterClick);
         
         initState.filterTabs = true;
@@ -164,7 +180,9 @@
                 const taskId = card.dataset.taskId;
                 const completed = checkbox.checked;
 
-                console.log(`[Checkbox] Task ${taskId} completion toggled to: ${completed}`);
+                console.log(`\n${'='.repeat(60)}`);
+                console.log(`🖱️ [Checkbox] CLICK - Task ${taskId}, checked: ${completed}`);
+                console.log(`🔒 [Checkbox] Action lock status:`, window.taskActionLock?.getDebugInfo?.() || 'N/A');
 
                 dispatchTaskEvent('task_update:status_toggle', { taskId, completed });
                 
@@ -174,12 +192,14 @@
                         status: completed ? 'completed' : 'todo',
                         completed_at: completed ? new Date().toISOString() : null
                     };
+                    console.log(`📦 [Checkbox] Prepared updates:`, updates);
                     let updatedTask = null;
 
                     // Update via optimistic UI (ledger-backed + reconciliation aware)
                     if (window.optimisticUI?.toggleTaskStatus) {
+                        console.log(`🚀 [Checkbox] Calling optimisticUI.toggleTaskStatus(${taskId})...`);
                         updatedTask = await window.optimisticUI.toggleTaskStatus(taskId);
-                        console.log(`[Checkbox] ✅ Task ${taskId} toggled via optimisticUI.toggleTaskStatus`);
+                        console.log(`✅ [Checkbox] Task ${taskId} toggle returned:`, { status: updatedTask?.status });
                     } else if (window.optimisticUI?.updateTask) {
                         updatedTask = await window.optimisticUI.updateTask(taskId, updates);
                         console.log(`[Checkbox] ✅ Task ${taskId} updated successfully`);
@@ -751,6 +771,506 @@
     }
     
     /**
+     * Initialize TaskBulkOperations class (Task 5)
+     * Note: This is called from initializeAllFeatures after optimisticUI is ready
+     */
+    function initBulkOperations() {
+        if (window.__taskBulkOperationsReady) return true;
+        console.log('[MasterInit] Initializing TaskBulkOperations...');
+        
+        if (typeof TaskBulkOperations === 'undefined') {
+            console.warn('[MasterInit] TaskBulkOperations class not available');
+            return false;
+        }
+        
+        if (!window.optimisticUI) {
+            console.warn('[MasterInit] optimisticUI not available for bulk operations - will retry when ready');
+            return false;
+        }
+        
+        try {
+            window.taskBulkOperations = new TaskBulkOperations(window.optimisticUI);
+            window.__taskBulkOperationsReady = true;
+            console.log('[MasterInit] ✅ TaskBulkOperations initialized');
+            return true;
+        } catch (error) {
+            console.error('[MasterInit] Failed to initialize TaskBulkOperations:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Initialize Group by Meeting toggle (Task 6)
+     */
+    function initMeetingGroupToggle() {
+        if (window.__meetingGroupToggleReady) return;
+        console.log('[MasterInit] Initializing Meeting Group Toggle...');
+        
+        const toggle = document.getElementById('meeting-intelligence-toggle');
+        if (!toggle) {
+            console.warn('[MasterInit] Meeting intelligence toggle button not found');
+            return;
+        }
+        
+        let isGrouped = false;
+        
+        toggle.addEventListener('click', () => {
+            isGrouped = !isGrouped;
+            toggle.classList.toggle('active', isGrouped);
+            document.body.classList.toggle('meeting-grouping-active', isGrouped);
+            
+            if (isGrouped) {
+                groupTasksByMeeting();
+            } else {
+                ungroupTasks();
+            }
+            
+            dispatchTaskEvent('task:group-by-meeting-changed', { isGrouped });
+            
+            if (window.CROWNTelemetry) {
+                window.CROWNTelemetry.recordMetric('meeting_group_toggled', 1, { isGrouped });
+            }
+        });
+        
+        window.__meetingGroupToggleReady = true;
+        console.log('[MasterInit] ✅ Meeting Group Toggle initialized');
+    }
+    
+    /**
+     * Group tasks by their source meeting
+     * Preserves DOM nodes and event handlers by moving elements instead of recreating
+     */
+    function groupTasksByMeeting() {
+        const container = document.getElementById('tasks-list-container');
+        if (!container) return;
+        
+        // Get all task cards (including those without meeting-id)
+        const allTaskCards = Array.from(container.querySelectorAll('.task-card'));
+        if (allTaskCards.length === 0) return;
+        
+        // Group tasks by meeting ID
+        const meetingGroups = new Map();
+        const noMeetingTasks = [];
+        
+        allTaskCards.forEach(card => {
+            const meetingId = card.dataset.meetingId;
+            if (meetingId && meetingId.trim() !== '') {
+                if (!meetingGroups.has(meetingId)) {
+                    const provenanceBadge = card.querySelector('.provenance-compact');
+                    const meetingTitle = provenanceBadge?.dataset?.meetingTitle 
+                        || card.querySelector('.task-meta .meeting-name')?.textContent?.trim()
+                        || `Meeting ${meetingId.substring(0, 8)}`;
+                    meetingGroups.set(meetingId, {
+                        id: meetingId,
+                        title: meetingTitle,
+                        tasks: []
+                    });
+                }
+                meetingGroups.get(meetingId).tasks.push(card);
+            } else {
+                noMeetingTasks.push(card);
+            }
+        });
+        
+        // Remove existing group headers only (preserve task cards)
+        container.querySelectorAll('.meeting-group-header').forEach(h => h.remove());
+        
+        // Create a document fragment to batch DOM operations
+        const fragment = document.createDocumentFragment();
+        
+        // Add grouped tasks with headers (move existing DOM nodes, don't recreate)
+        meetingGroups.forEach(group => {
+            const header = document.createElement('div');
+            header.className = 'meeting-group-header';
+            header.dataset.meetingId = group.id;
+            
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'meeting-group-title';
+            titleDiv.innerHTML = `
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                </svg>
+            `;
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = group.title;
+            titleDiv.appendChild(titleSpan);
+            
+            const countSpan = document.createElement('span');
+            countSpan.className = 'meeting-group-count';
+            countSpan.textContent = `${group.tasks.length} task${group.tasks.length !== 1 ? 's' : ''}`;
+            titleDiv.appendChild(countSpan);
+            
+            header.appendChild(titleDiv);
+            fragment.appendChild(header);
+            
+            // Move existing task cards (preserves event handlers and state)
+            group.tasks.forEach(card => fragment.appendChild(card));
+        });
+        
+        // Add ungrouped tasks at the end
+        if (noMeetingTasks.length > 0) {
+            const header = document.createElement('div');
+            header.className = 'meeting-group-header no-meeting';
+            
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'meeting-group-title';
+            titleDiv.innerHTML = `
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+            `;
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = 'Manually Created';
+            titleDiv.appendChild(titleSpan);
+            
+            const countSpan = document.createElement('span');
+            countSpan.className = 'meeting-group-count';
+            countSpan.textContent = `${noMeetingTasks.length} task${noMeetingTasks.length !== 1 ? 's' : ''}`;
+            titleDiv.appendChild(countSpan);
+            
+            header.appendChild(titleDiv);
+            fragment.appendChild(header);
+            
+            noMeetingTasks.forEach(card => fragment.appendChild(card));
+        }
+        
+        // Single DOM update - append fragment to container
+        container.appendChild(fragment);
+        
+        console.log('[MasterInit] Tasks grouped by meeting:', meetingGroups.size, 'meetings');
+    }
+    
+    /**
+     * Remove meeting groups and show flat list
+     */
+    function ungroupTasks() {
+        const container = document.getElementById('tasks-list-container');
+        if (!container) return;
+        
+        // Remove body class
+        document.body.classList.remove('meeting-grouping-active');
+        
+        // Remove group headers
+        container.querySelectorAll('.meeting-group-header').forEach(h => h.remove());
+        
+        // Re-sort tasks by original order (could trigger refresh)
+        if (window.taskSearchSort?.refresh) {
+            window.taskSearchSort.refresh();
+        }
+        
+        console.log('[MasterInit] Task grouping removed');
+    }
+    
+    /**
+     * Initialize Connection Banner (Task 12)
+     */
+    function initConnectionBanner() {
+        if (window.__connectionBannerReady) return;
+        console.log('[MasterInit] Initializing Connection Banner...');
+        
+        const banner = document.getElementById('connection-banner');
+        if (!banner) {
+            console.warn('[MasterInit] Connection banner element not found');
+            return;
+        }
+        
+        const statusIcon = banner.querySelector('.connection-status-icon');
+        const message = banner.querySelector('.connection-message');
+        const pendingCount = banner.querySelector('.pending-count');
+        
+        const updateBanner = (status, msg, pending = 0) => {
+            banner.classList.remove('hidden', 'online', 'offline', 'reconnecting');
+            
+            if (status === 'online') {
+                banner.classList.add('hidden');
+            } else {
+                banner.classList.add(status);
+                if (message) message.textContent = msg;
+                if (pendingCount && pending > 0) {
+                    pendingCount.textContent = `${pending} pending`;
+                    pendingCount.style.display = 'inline';
+                } else if (pendingCount) {
+                    pendingCount.style.display = 'none';
+                }
+            }
+        };
+        
+        // Listen to WebSocket connection events
+        if (window.wsManager) {
+            window.wsManager.on('connected', () => updateBanner('online', ''));
+            window.wsManager.on('disconnected', () => updateBanner('offline', 'You are offline'));
+            window.wsManager.on('reconnecting', () => updateBanner('reconnecting', 'Reconnecting...'));
+        }
+        
+        // Listen to online/offline events
+        window.addEventListener('online', () => {
+            updateBanner('online', '');
+            if (window.toastManager) {
+                window.toastManager.show('You are back online', 'success', 2000);
+            }
+        });
+        
+        window.addEventListener('offline', () => {
+            updateBanner('offline', 'You are offline. Changes will sync when connected.');
+        });
+        
+        // Initial state
+        if (!navigator.onLine) {
+            updateBanner('offline', 'You are offline. Changes will sync when connected.');
+        }
+        
+        window.__connectionBannerReady = true;
+        console.log('[MasterInit] ✅ Connection Banner initialized');
+    }
+    
+    /**
+     * Initialize Snooze Modal (Task 10)
+     * Note: The primary snooze handler is in TaskActionHandlers.handleSnoozeTask
+     * which uses window.taskSnoozeModal (JS-generated modal with date picker).
+     * This function only sets up the server-rendered modal as a fallback.
+     */
+    function initSnoozeModal() {
+        if (window.__snoozeModalReady) return;
+        console.log('[MasterInit] Initializing Snooze Modal fallback...');
+        
+        const overlay = document.getElementById('snooze-modal-overlay');
+        if (!overlay) {
+            console.log('[MasterInit] Server-rendered snooze modal not found - using TaskSnoozeModal');
+            window.__snoozeModalReady = true;
+            return;
+        }
+        
+        let currentTaskId = null;
+        
+        // Note: Do NOT listen for task:snooze here - that's handled by TaskActionHandlers
+        // which opens the more robust TaskSnoozeModal with date picker.
+        // This fallback modal is only used if explicitly shown via showServerSnoozeModal()
+        
+        // Provide a way to show the server-rendered modal as fallback
+        window.showServerSnoozeModal = (taskId) => {
+            currentTaskId = taskId;
+            overlay.classList.remove('hidden');
+        };
+        
+        // Close modal on overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.classList.add('hidden');
+                currentTaskId = null;
+            }
+        });
+        
+        // Close button (support both header X and footer Cancel)
+        const closeButtons = overlay.querySelectorAll('.task-modal-close, .snooze-cancel-btn');
+        closeButtons.forEach(closeBtn => {
+            closeBtn.addEventListener('click', () => {
+                overlay.classList.add('hidden');
+                currentTaskId = null;
+            });
+        });
+        
+        // Snooze option buttons for server-rendered modal
+        overlay.querySelectorAll('[data-snooze-duration]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!currentTaskId) return;
+                
+                const duration = btn.dataset.snoozeDuration;
+                const snoozeUntil = calculateSnoozeDate(duration);
+                
+                try {
+                    if (window.optimisticUI?.updateTask) {
+                        await window.optimisticUI.updateTask(currentTaskId, {
+                            snoozed_until: snoozeUntil.toISOString()
+                        });
+                    }
+                    
+                    overlay.classList.add('hidden');
+                    
+                    if (window.toastManager) {
+                        window.toastManager.show(`Task snoozed until ${snoozeUntil.toLocaleDateString()}`, 'success', 3000);
+                    }
+                    
+                    if (window.CROWNTelemetry) {
+                        window.CROWNTelemetry.recordMetric('task_snoozed', 1, { duration, taskId: currentTaskId });
+                    }
+                } catch (error) {
+                    console.error('[Snooze] Failed to snooze task:', error);
+                    if (window.toastManager) {
+                        window.toastManager.show('Failed to snooze task', 'error', 3000);
+                    }
+                }
+                
+                currentTaskId = null;
+            });
+        });
+        
+        window.__snoozeModalReady = true;
+        console.log('[MasterInit] ✅ Snooze Modal fallback initialized');
+    }
+    
+    /**
+     * Calculate snooze until date based on duration string
+     */
+    function calculateSnoozeDate(duration) {
+        const now = new Date();
+        switch (duration) {
+            case 'later-today':
+                now.setHours(now.getHours() + 3);
+                break;
+            case 'tomorrow':
+                now.setDate(now.getDate() + 1);
+                now.setHours(9, 0, 0, 0);
+                break;
+            case 'next-week':
+                now.setDate(now.getDate() + 7);
+                now.setHours(9, 0, 0, 0);
+                break;
+            case 'next-month':
+                now.setMonth(now.getMonth() + 1);
+                now.setHours(9, 0, 0, 0);
+                break;
+            default:
+                now.setDate(now.getDate() + 1);
+        }
+        return now;
+    }
+    
+    /**
+     * Initialize Merge Modal (Task 9)
+     */
+    function initMergeModal() {
+        if (window.__mergeModalReady) return;
+        console.log('[MasterInit] Initializing Merge Modal...');
+        
+        const overlay = document.getElementById('merge-modal-overlay');
+        if (!overlay) {
+            console.warn('[MasterInit] Merge modal overlay not found');
+            return;
+        }
+        
+        let mergeTargets = [];
+        
+        // Listen for merge action from bulk actions or task menu
+        document.addEventListener('task:merge', (e) => {
+            mergeTargets = e.detail.taskIds || [];
+            if (mergeTargets.length < 2) {
+                if (window.toastManager) {
+                    window.toastManager.show('Select at least 2 tasks to merge', 'warning', 3000);
+                }
+                return;
+            }
+            overlay.classList.remove('hidden');
+            renderMergePreview(mergeTargets);
+        });
+        
+        // Close modal
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.classList.add('hidden');
+                mergeTargets = [];
+            }
+        });
+        
+        const closeBtn = overlay.querySelector('.modal-close, .merge-cancel-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                overlay.classList.add('hidden');
+                mergeTargets = [];
+            });
+        }
+        
+        // Merge confirm button
+        const confirmBtn = overlay.querySelector('.merge-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', async () => {
+                if (mergeTargets.length < 2) return;
+                
+                try {
+                    // Merge tasks - keep first, delete rest
+                    const primaryTaskId = mergeTargets[0];
+                    const tasksToDelete = mergeTargets.slice(1);
+                    
+                    // Get primary task title
+                    const primaryCard = document.querySelector(`[data-task-id="${primaryTaskId}"]`);
+                    const titleInput = overlay.querySelector('.merge-title-input');
+                    const newTitle = titleInput?.value || primaryCard?.querySelector('.task-title')?.textContent?.trim();
+                    
+                    // Update primary task if title changed
+                    if (newTitle && window.optimisticUI?.updateTask) {
+                        await window.optimisticUI.updateTask(primaryTaskId, { title: newTitle });
+                    }
+                    
+                    // Delete other tasks
+                    for (const taskId of tasksToDelete) {
+                        if (window.optimisticUI?.deleteTask) {
+                            await window.optimisticUI.deleteTask(taskId);
+                        }
+                    }
+                    
+                    overlay.classList.add('hidden');
+                    
+                    if (window.toastManager) {
+                        window.toastManager.show(`Merged ${mergeTargets.length} tasks into one`, 'success', 3000);
+                    }
+                    
+                    // Clear bulk selection if active
+                    if (window.taskBulkOperations?.clearSelection) {
+                        window.taskBulkOperations.clearSelection();
+                    }
+                    
+                    if (window.CROWNTelemetry) {
+                        window.CROWNTelemetry.recordMetric('tasks_merged', mergeTargets.length);
+                    }
+                } catch (error) {
+                    console.error('[Merge] Failed to merge tasks:', error);
+                    if (window.toastManager) {
+                        window.toastManager.show('Failed to merge tasks', 'error', 3000);
+                    }
+                }
+                
+                mergeTargets = [];
+            });
+        }
+        
+        window.__mergeModalReady = true;
+        console.log('[MasterInit] ✅ Merge Modal initialized');
+    }
+    
+    /**
+     * Render merge preview in the modal
+     */
+    function renderMergePreview(taskIds) {
+        const overlay = document.getElementById('merge-modal-overlay');
+        const previewContainer = overlay?.querySelector('.merge-preview');
+        if (!previewContainer) return;
+        
+        const tasks = taskIds.map(id => {
+            const card = document.querySelector(`[data-task-id="${id}"]`);
+            return {
+                id,
+                title: card?.querySelector('.task-title')?.textContent?.trim() || 'Untitled'
+            };
+        });
+        
+        previewContainer.innerHTML = `
+            <div class="merge-tasks-list">
+                ${tasks.map((t, i) => `
+                    <div class="merge-task-item ${i === 0 ? 'primary' : ''}">
+                        ${i === 0 ? '<span class="primary-badge">Keep</span>' : '<span class="delete-badge">Delete</span>'}
+                        <span class="merge-task-title">${t.title}</span>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="merge-title-field">
+                <label>Final task title:</label>
+                <input type="text" class="merge-title-input" value="${tasks[0]?.title || ''}" placeholder="Enter merged task title">
+            </div>
+        `;
+    }
+    
+    /**
      * Master initialization function
      */
     async function initializeAllFeatures() {
@@ -845,6 +1365,10 @@
         initDeleteHandlers();
         initTaskMenuHandlers();
         initTaskActionsMenu();
+        initMeetingGroupToggle();
+        initConnectionBanner();
+        initSnoozeModal();
+        initMergeModal();
 
         // 4. Initialize class-based features
         initTaskSearchSort();
@@ -854,6 +1378,7 @@
             initState.optimisticUI = true;
             initTaskInlineEditing();
             initTaskProposalUI();
+            initBulkOperations();
         } else {
             console.warn('[MasterInit] optimisticUI not available yet, waiting for event...');
             
@@ -863,6 +1388,7 @@
                 initState.optimisticUI = true;
                 initTaskInlineEditing();
                 initTaskProposalUI();
+                initBulkOperations();
             }, { once: true });
         }
         

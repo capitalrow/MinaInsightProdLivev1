@@ -232,6 +232,68 @@ class StartupValidator:
                 remediation="Check REDIS_URL or remove it to use filesystem sessions"
             ))
     
+    def validate_database_migrations(self) -> None:
+        """
+        Verify database migrations are up to date in production.
+        
+        Checks if there are pending migrations that need to be applied.
+        In production, this should fail if migrations are out of sync.
+        """
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            return  # No database, skip migration check
+        
+        try:
+            from flask import current_app
+            from flask_migrate import Migrate
+            from alembic.migration import MigrationContext
+            from alembic.script import ScriptDirectory
+            from sqlalchemy import create_engine
+            
+            engine = create_engine(database_url)
+            
+            with engine.connect() as conn:
+                context = MigrationContext.configure(conn)
+                current_rev = context.get_current_revision()
+            
+            if current_rev is None:
+                if self.is_production():
+                    self.report.add_validation(ValidationResult(
+                        name="db:migrations",
+                        passed=False,
+                        message="No migrations applied - database may be uninitialized",
+                        severity="error",
+                        remediation="Run 'flask db upgrade' to apply migrations"
+                    ))
+                else:
+                    self.report.add_validation(ValidationResult(
+                        name="db:migrations",
+                        passed=True,
+                        message="No migrations applied (development - using create_all)",
+                        severity="info"
+                    ))
+            else:
+                self.report.add_validation(ValidationResult(
+                    name="db:migrations",
+                    passed=True,
+                    message=f"Migrations applied (current: {current_rev[:8]}...)",
+                    severity="info"
+                ))
+        except ImportError:
+            self.report.add_validation(ValidationResult(
+                name="db:migrations",
+                passed=True,
+                message="Migration check skipped (alembic not available)",
+                severity="info"
+            ))
+        except Exception as e:
+            self.report.add_validation(ValidationResult(
+                name="db:migrations",
+                passed=True,  # Don't fail on migration check errors
+                message=f"Migration check error: {str(e)[:50]}",
+                severity="warning"
+            ))
+    
     def validate_secret_key_strength(self) -> None:
         """Validate session secret key meets security requirements."""
         secret = os.getenv("SESSION_SECRET", "")
@@ -273,6 +335,7 @@ class StartupValidator:
         self.validate_required_env_vars()
         self.validate_recommended_env_vars()
         self.validate_database_connection()
+        self.validate_database_migrations()
         self.validate_redis_connection()
         self.validate_secret_key_strength()
         

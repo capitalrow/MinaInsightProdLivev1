@@ -548,6 +548,73 @@
     border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* ============================================
+   CROWN⁴.6: PROVENANCE COMPACT BADGE (Task Card)
+   ============================================ */
+
+.provenance-compact {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.06));
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(165, 180, 252, 0.9);
+    cursor: pointer;
+    transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+}
+
+.provenance-compact:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.12));
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(99, 102, 241, 0.2);
+}
+
+.provenance-compact[data-has-context="true"]:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(139, 92, 246, 0.15));
+    border-color: rgba(99, 102, 241, 0.5);
+}
+
+.provenance-compact[data-has-context="true"]::after {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(139, 92, 246, 0.6);
+    margin-left: 2px;
+}
+
+.provenance-compact .provenance-icon {
+    width: 12px;
+    height: 12px;
+    opacity: 0.8;
+    flex-shrink: 0;
+}
+
+.provenance-compact > span:not(.confidence-dot) {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.provenance-compact .confidence-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.provenance-compact .confidence-dot.high {
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
 /* Mobile responsive */
 @media (max-width: 640px) {
     .provenance-modal {
@@ -561,5 +628,14 @@
         left: 12px !important;
         right: 12px;
         max-width: none !important;
+    }
+    
+    .provenance-compact {
+        padding: 3px 6px;
+        font-size: 10px;
+    }
+    
+    .provenance-compact > span:not(.confidence-dot) {
+        max-width: 80px;
     }
 }

@@ -30,11 +30,11 @@
   --touch-target-min: 48px;
   --touch-target-comfortable: 56px;
 
-  /* Typography */
-  --task-font-xs: 11px;
-  --task-font-sm: 13px;
-  --task-font-base: 15px;
-  --task-font-lg: 17px;
+  /* Typography - WCAG AA compliant sizes */
+  --task-font-xs: 12px;
+  --task-font-sm: 14px;
+  --task-font-base: 16px;
+  --task-font-lg: 18px;
   --task-font-xl: 20px;
   --task-font-2xl: 24px;
 
@@ -1294,17 +1294,61 @@
 }
 
 /* 5. TARGETED: Hide specific group headers */
-.meeting-group-header,
 .task-group-header,
 .task-group-wrapper,
 .clusters-header {
   display: none !important;
 }
 
+/* Hide meeting group headers by default - shown when mode is active */
+.meeting-group-header {
+  display: none;
+}
+
 /* Show cluster view only when explicitly enabled */
 body.clustering-active .clusters-header,
 body.clustering-active .task-cluster {
   display: block !important;
+}
+
+/* Show meeting group headers when meeting grouping is active */
+body.meeting-grouping-active .meeting-group-header {
+  display: flex !important;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0 0.5rem 0;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(59, 130, 246, 0.08));
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+body.meeting-grouping-active .meeting-group-header.no-meeting {
+  background: linear-gradient(135deg, rgba(156, 163, 175, 0.08), rgba(107, 114, 128, 0.08));
+  border-color: rgba(156, 163, 175, 0.15);
+}
+
+body.meeting-grouping-active .meeting-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+body.meeting-grouping-active .meeting-group-title svg {
+  color: var(--accent-purple, #8b5cf6);
+  opacity: 0.8;
+}
+
+body.meeting-grouping-active .meeting-group-count {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: rgba(139, 92, 246, 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
 }
 
 /* 6. TARGETED: Hide overdue progress bars (specific classes only) */
@@ -1493,5 +1537,4287 @@ body.clustering-active .cluster-view-container {
 }
 
 /* ========================================
- * END OF CRITICAL FIXES
+ * MERGE MODAL STYLES
  * ======================================== */
+
+.merge-preview {
+  background: var(--task-bg-elevated);
+  border-radius: var(--task-radius-lg);
+  padding: var(--task-space-4);
+  margin-bottom: var(--task-space-4);
+}
+
+.merge-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--task-space-2);
+  margin-bottom: var(--task-space-4);
+}
+
+.merge-task-item {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-3);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-md);
+  transition: all var(--task-transition-fast);
+}
+
+.merge-task-item.primary {
+  border-color: var(--task-accent-success);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.primary-badge {
+  padding: var(--task-space-1) var(--task-space-2);
+  background: var(--task-accent-success);
+  color: white;
+  border-radius: var(--task-radius-sm);
+  font-size: var(--task-font-xs);
+  font-weight: var(--task-weight-semibold);
+  text-transform: uppercase;
+}
+
+.delete-badge {
+  padding: var(--task-space-1) var(--task-space-2);
+  background: var(--task-accent-danger);
+  color: white;
+  border-radius: var(--task-radius-sm);
+  font-size: var(--task-font-xs);
+  font-weight: var(--task-weight-semibold);
+  text-transform: uppercase;
+}
+
+.merge-task-title {
+  flex: 1;
+  font-size: var(--task-font-sm);
+  color: var(--task-text-primary);
+}
+
+.merge-title-field {
+  margin-top: var(--task-space-4);
+}
+
+.merge-title-field label {
+  display: block;
+  font-size: var(--task-font-sm);
+  color: var(--task-text-secondary);
+  margin-bottom: var(--task-space-2);
+}
+
+.merge-title-input {
+  width: 100%;
+  padding: var(--task-space-3);
+  background: var(--task-bg-input);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-primary);
+  font-size: var(--task-font-base);
+}
+
+.merge-title-input:focus {
+  outline: none;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus);
+}
+
+.merge-info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--task-space-2);
+  padding: var(--task-space-3);
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: var(--task-radius-md);
+  font-size: var(--task-font-sm);
+  color: var(--task-accent-info);
+}
+
+.merge-info-box svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Task Modal Footer */
+.task-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--task-space-3);
+  padding: var(--task-space-4);
+  border-top: 1px solid var(--task-border-subtle);
+}
+
+.task-modal-footer .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-3) var(--task-space-4);
+  background: transparent;
+  color: var(--task-text-secondary);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-md);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.task-modal-footer .btn-secondary:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+.task-modal-footer .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-3) var(--task-space-4);
+  background: var(--task-accent-primary);
+  color: white;
+  border: none;
+  border-radius: var(--task-radius-md);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-semibold);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.task-modal-footer .btn-primary:hover {
+  background: var(--task-accent-primary-hover);
+  transform: translateY(-1px);
+}
+
+/* ========================================
+ * SNOOZE MODAL STYLES
+ * ======================================== */
+
+.snooze-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--task-space-3);
+}
+
+.snooze-option-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-4) var(--task-space-3);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-lg);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.snooze-option-btn:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-accent-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.snooze-option-btn svg {
+  color: var(--task-accent-primary);
+}
+
+.snooze-option-btn span {
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  color: var(--task-text-primary);
+}
+
+.snooze-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--task-space-4);
+  margin-top: var(--task-space-4);
+  border-top: 1px solid var(--task-border-default);
+}
+
+.snooze-modal-footer .btn-secondary {
+  padding: var(--task-space-2) var(--task-space-4);
+  background: transparent;
+  color: var(--task-text-secondary);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-md);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.snooze-modal-footer .btn-secondary:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+/* ========================================
+ * PHASE 1: CONTRAST & TYPOGRAPHY OVERRIDES
+ * Remove glassmorphism, ensure WCAG AA 4.5:1 contrast
+ * ======================================== */
+
+/* Override glass effects from tasks.css with solid backgrounds */
+.task-filters,
+.search-sort-toolbar,
+.task-item-enhanced,
+.task-card,
+.connection-banner,
+.priority-header {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Solid background overrides for better readability */
+.task-filters {
+  background: var(--task-bg-card) !important;
+  border: 1px solid var(--task-border-default) !important;
+}
+
+.search-sort-toolbar {
+  background: var(--task-bg-card) !important;
+  border: 1px solid var(--task-border-default) !important;
+}
+
+.task-item-enhanced,
+.task-card {
+  background: var(--task-bg-card) !important;
+  border: 1px solid var(--task-border-subtle) !important;
+}
+
+.task-item-enhanced:hover,
+.task-card:hover {
+  background: var(--task-bg-card-hover) !important;
+  border-color: var(--task-border-hover) !important;
+}
+
+/* Ensure task title uses 16px with high contrast */
+.task-title,
+.task-item-enhanced .task-title {
+  font-size: var(--task-font-base) !important;
+  color: var(--task-text-primary) !important;
+  font-weight: var(--task-weight-medium) !important;
+}
+
+/* Secondary text contrast - WCAG AA 4.5:1 */
+.task-meta,
+.task-metadata-row,
+.meta-text,
+.tasks-subtitle {
+  color: var(--task-text-secondary) !important;
+  font-size: var(--task-font-sm) !important;
+}
+
+/* Ensure filter tabs have proper contrast */
+.filter-tab {
+  color: var(--task-text-secondary) !important;
+  font-size: var(--task-font-sm) !important;
+}
+
+.filter-tab:hover {
+  color: var(--task-text-primary) !important;
+}
+
+.filter-tab.active {
+  color: white !important;
+  background: var(--task-accent-primary) !important;
+}
+
+/* Priority header - solid backgrounds */
+.priority-header {
+  background: var(--task-bg-elevated) !important;
+  border: 1px solid var(--task-border-subtle) !important;
+}
+
+.priority-header.priority-high {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+
+.priority-header.priority-medium {
+  background: rgba(251, 191, 36, 0.1) !important;
+  border-color: rgba(251, 191, 36, 0.25) !important;
+}
+
+.priority-header.priority-low {
+  background: rgba(156, 163, 175, 0.1) !important;
+  border-color: rgba(156, 163, 175, 0.2) !important;
+}
+
+/* Search input - solid background */
+.search-input {
+  background: var(--task-bg-input) !important;
+  border: 1px solid var(--task-border-default) !important;
+  color: var(--task-text-primary) !important;
+  font-size: var(--task-font-sm) !important;
+}
+
+.search-input::placeholder {
+  color: var(--task-text-tertiary) !important;
+}
+
+/* Sort select - solid background */
+.sort-select {
+  background: var(--task-bg-input) !important;
+  border: 1px solid var(--task-border-default) !important;
+  color: var(--task-text-primary) !important;
+}
+
+/* Ensure body has proper background */
+body,
+.tasks-container {
+  background-color: var(--task-bg-page) !important;
+}
+
+/* ========================================
+ * END OF PHASE 1 FIXES
+ * ======================================== */
+
+/* ========================================
+ * PHASE 2: CONSOLIDATED COMMAND BAR
+ * Merges 4 rows into 2 for cleaner UI
+ * ======================================== */
+
+/* Row 1: Header with inline filters */
+.tasks-header-consolidated {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--task-space-4);
+  padding: var(--task-space-3) 0;
+  margin-bottom: var(--task-space-4);
+  flex-wrap: wrap;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  flex-shrink: 0;
+}
+
+.header-left .tasks-title {
+  margin: 0;
+  font-size: var(--task-font-xl);
+  font-weight: var(--task-weight-bold);
+  color: var(--task-text-primary);
+}
+
+/* Remove subtitle for cleaner look */
+.tasks-subtitle {
+  display: none;
+}
+
+/* Inline filters - pill style */
+.task-filters-inline {
+  display: flex;
+  gap: var(--task-space-1);
+  padding: var(--task-space-1);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-lg);
+}
+
+.task-filters-inline .filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-2) var(--task-space-3);
+  min-height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-secondary);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  white-space: nowrap;
+}
+
+.task-filters-inline .filter-tab:hover {
+  color: var(--task-text-primary);
+  background: var(--task-bg-card-hover);
+}
+
+.task-filters-inline .filter-tab.active {
+  background: var(--task-accent-primary);
+  color: white;
+}
+
+.task-filters-inline .filter-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--task-space-1);
+  background: var(--task-bg-elevated);
+  border-radius: var(--task-radius-full);
+  font-size: 11px;
+  font-weight: var(--task-weight-semibold);
+}
+
+.task-filters-inline .filter-tab.active .filter-counter {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+/* Compact header actions */
+.header-actions-compact {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex-shrink: 0;
+}
+
+/* Icon-only button style */
+.btn-icon-only {
+  padding: var(--task-space-2) var(--task-space-3) !important;
+  min-height: 40px;
+}
+
+.btn-icon-only .btn-text {
+  display: none;
+}
+
+/* Show text on larger screens */
+@media (min-width: 768px) {
+  .btn-icon-only .btn-text {
+    display: inline;
+  }
+  
+  #new-task-btn .btn-text {
+    display: inline;
+  }
+}
+
+/* Mobile: hide button text */
+@media (max-width: 767px) {
+  #new-task-btn .btn-text {
+    display: none;
+  }
+  
+  #new-task-btn {
+    padding: var(--task-space-2) var(--task-space-3);
+  }
+}
+
+/* Row 2: Compact search & sort toolbar */
+.search-sort-toolbar-compact {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-2) var(--task-space-3);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-lg);
+  margin-bottom: var(--task-space-4);
+  min-height: 48px;
+}
+
+/* Collapsible search */
+.search-wrapper-compact {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.search-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  flex-shrink: 0;
+}
+
+.search-toggle-btn:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+.search-toggle-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Search input container - collapsible */
+.search-input-container {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: all var(--task-transition-base);
+}
+
+.search-input-container.expanded {
+  max-width: 400px;
+  opacity: 1;
+}
+
+.search-input-container .search-input {
+  width: 100%;
+  padding: var(--task-space-2) var(--task-space-3);
+  min-height: 36px;
+  background: var(--task-bg-input);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-primary);
+  font-size: var(--task-font-sm);
+}
+
+.search-input-container .search-input:focus {
+  outline: none;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus);
+}
+
+.search-input-container .search-clear-btn,
+.search-input-container .semantic-search-toggle {
+  position: absolute;
+  right: var(--task-space-2);
+  background: transparent;
+  border: none;
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  padding: var(--task-space-1);
+}
+
+.search-input-container {
+  position: relative;
+}
+
+.search-input-container .search-clear-btn {
+  right: 36px;
+}
+
+.search-input-container .semantic-search-toggle {
+  right: 8px;
+}
+
+/* Toolbar controls */
+.toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex-shrink: 0;
+}
+
+/* Compact sort select */
+.sort-select-compact {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: var(--task-space-2) var(--task-space-6) var(--task-space-2) var(--task-space-3);
+  min-height: 36px;
+  background: var(--task-bg-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a1a1aa'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") no-repeat right 8px center;
+  background-size: 14px;
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-secondary);
+  font-size: var(--task-font-sm);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.sort-select-compact:hover {
+  background-color: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+.sort-select-compact:focus {
+  outline: none;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Compact meeting toggle */
+.meeting-intelligence-toggle-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.meeting-intelligence-toggle-compact:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+.meeting-intelligence-toggle-compact.active {
+  background: var(--task-accent-primary);
+  border-color: var(--task-accent-primary);
+  color: white;
+}
+
+/* Inline stats */
+.toolbar-stats-inline {
+  font-size: var(--task-font-xs);
+  color: var(--task-text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Mobile responsive for Phase 2 */
+@media (max-width: 640px) {
+  .tasks-header-consolidated {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--task-space-3);
+  }
+  
+  .header-left {
+    justify-content: space-between;
+  }
+  
+  .task-filters-inline {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .task-filters-inline .filter-tab {
+    flex: 1;
+    justify-content: center;
+    padding: var(--task-space-2);
+  }
+  
+  .header-actions-compact {
+    justify-content: flex-end;
+  }
+  
+  .search-sort-toolbar-compact {
+    flex-wrap: wrap;
+  }
+  
+  .search-wrapper-compact {
+    width: 100%;
+    order: -1;
+  }
+  
+  .search-input-container.expanded {
+    max-width: 100%;
+  }
+  
+  .toolbar-controls {
+    flex: 1;
+  }
+  
+  .toolbar-stats-inline {
+    margin-left: auto;
+  }
+}
+
+/* Hide legacy elements */
+.tasks-header {
+  display: none !important;
+}
+
+/* ========================================
+ * END OF PHASE 2
+ * ======================================== */
+
+/* ========================================
+ * PHASE 3: 3-TIER PROGRESSIVE DISCLOSURE
+ * Scan → Glance → Detail
+ * ======================================== */
+
+/* Tier 1: SCAN - Always visible */
+.task-tier-1 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--task-space-3);
+}
+
+/* Expand trigger button */
+.task-expand-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  opacity: 0;
+}
+
+.task-card:hover .task-expand-trigger,
+.task-card:focus-within .task-expand-trigger {
+  opacity: 1;
+}
+
+.task-expand-trigger:hover {
+  background: var(--task-bg-elevated);
+  color: var(--task-text-primary);
+}
+
+.task-expand-trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--task-shadow-focus);
+}
+
+.task-expand-trigger .expand-icon {
+  transition: transform var(--task-transition-fast);
+}
+
+.task-card.expanded .task-expand-trigger .expand-icon {
+  transform: rotate(180deg);
+}
+
+/* Always show expand trigger on mobile */
+@media (hover: none) {
+  .task-expand-trigger {
+    opacity: 1;
+  }
+}
+
+/* Tier 2: GLANCE - Due date + Assignee on hover */
+.task-tier-2 {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  flex-wrap: wrap;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: all var(--task-transition-base);
+}
+
+/* Desktop: Reveal Tier 2 on hover */
+@media (hover: hover) {
+  .task-card:hover .task-tier-2 {
+    max-height: 40px;
+    opacity: 1;
+    margin-top: var(--task-space-2);
+  }
+}
+
+/* Mobile/Touch: Reveal Tier 2 on expanded */
+.task-card.expanded .task-tier-2 {
+  max-height: 40px;
+  opacity: 1;
+  margin-top: var(--task-space-2);
+}
+
+/* Tier 2 hint for cards with detail but no visible T2 content */
+.tier2-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+  font-size: var(--task-font-xs);
+  color: var(--task-text-muted);
+}
+
+/* Tier 3: DETAIL - Labels, Provenance, Notes on expand */
+.task-tier-3 {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--task-space-3);
+  flex-wrap: wrap;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: all var(--task-transition-slow);
+}
+
+/* Only reveal Tier 3 on explicit expand (not hover) */
+.task-card.expanded .task-tier-3 {
+  max-height: 200px;
+  opacity: 1;
+  margin-top: var(--task-space-3);
+  padding-top: var(--task-space-3);
+  border-top: 1px solid var(--task-border-subtle);
+}
+
+/* Label overflow style */
+.label-overflow {
+  background: var(--task-bg-elevated);
+  color: var(--task-text-tertiary);
+}
+
+/* Task description preview */
+.task-description-preview {
+  width: 100%;
+  margin-top: var(--task-space-2);
+}
+
+.task-description-preview .description-text {
+  font-size: var(--task-font-sm);
+  color: var(--task-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Compact mode: Simpler card for bar view */
+.task-card.compact-mode .task-tier-2,
+.task-card.compact-mode .task-tier-3,
+.task-card.compact-mode .task-expand-trigger {
+  display: none !important;
+}
+
+/* Mobile-first: Combined Tier 2+3 reveal on tap */
+@media (hover: none) {
+  .task-card.expanded .task-tier-2,
+  .task-card.expanded .task-tier-3 {
+    max-height: 200px;
+    opacity: 1;
+  }
+  
+  .task-card.expanded .task-tier-2 {
+    margin-top: var(--task-space-2);
+  }
+  
+  .task-card.expanded .task-tier-3 {
+    margin-top: var(--task-space-2);
+    padding-top: var(--task-space-2);
+    border-top: 1px solid var(--task-border-subtle);
+  }
+}
+
+/* Enhanced priority dot with tooltip on hover */
+.priority-dot {
+  position: relative;
+  cursor: help;
+}
+
+.priority-dot::after {
+  content: attr(title);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--task-space-1) var(--task-space-2);
+  background: var(--task-bg-elevated);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-sm);
+  font-size: var(--task-font-xs);
+  color: var(--task-text-secondary);
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--task-transition-fast);
+  z-index: 10;
+}
+
+.priority-dot:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Suppress default title tooltip */
+.priority-dot:hover {
+  position: relative;
+}
+
+/* Hide old task-secondary-row in favor of task-tier-2/3 */
+.task-secondary-row:not(.task-tier-2) {
+  display: none !important;
+}
+
+/* ========================================
+ * END OF PHASE 3
+ * ======================================== */
+
+/* ========================================
+ * PHASE 4: ACCESSIBILITY ENHANCEMENTS
+ * WCAG 2.1 AA Compliance
+ * ======================================== */
+
+/* Screen reader only utility class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Make sr-only content visible when focused (for skip links) */
+.sr-only-focusable:focus,
+.sr-only-focusable:active {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* ----------------------------------------
+ * ENHANCED FOCUS STATES
+ * High contrast focus rings for all interactive elements
+ * ---------------------------------------- */
+
+/* Global focus ring - high visibility */
+:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Remove default outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Task card focus state */
+.task-card:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Checkbox focus state - enhanced visibility */
+.task-checkbox:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 3px;
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Button focus states */
+button:focus-visible,
+.btn:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.filter-tab:focus-visible,
+.view-toggle-btn:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Expand trigger focus */
+.task-expand-trigger:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  border-radius: var(--task-radius-sm);
+  background: var(--task-bg-card-hover);
+}
+
+/* Menu trigger focus */
+.task-menu-trigger:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  background: var(--task-bg-elevated);
+  color: var(--task-text-primary);
+}
+
+/* Input focus states */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 0;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus);
+}
+
+/* Search input specific focus */
+.search-input:focus-visible {
+  outline: none;
+  border-color: var(--task-border-focus);
+  box-shadow: var(--task-shadow-focus), inset 0 0 0 1px var(--task-border-focus);
+}
+
+/* Menu items focus */
+.task-menu-item:focus-visible {
+  outline: none;
+  background: var(--task-bg-card-hover);
+  box-shadow: inset 0 0 0 2px var(--task-accent-primary);
+}
+
+/* Link focus */
+a:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  border-radius: var(--task-radius-sm);
+}
+
+/* Provenance/transcript buttons focus */
+.provenance-compact:focus-visible,
+.jump-to-transcript-btn:focus-visible {
+  outline: 2px solid var(--task-accent-primary);
+  outline-offset: 2px;
+  background: rgba(34, 197, 94, 0.25);
+}
+
+/* ----------------------------------------
+ * TOUCH TARGETS - 44px MINIMUM (WCAG 2.1)
+ * ---------------------------------------- */
+
+/* Ensure all interactive elements meet minimum touch target */
+.task-expand-trigger {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-md);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  margin: calc(-1 * var(--task-space-2));
+  padding: var(--task-space-2);
+}
+
+.task-expand-trigger:hover {
+  background: var(--task-bg-card-hover);
+}
+
+/* Expand icon rotation when expanded */
+.task-card.expanded .task-expand-trigger .expand-icon {
+  transform: rotate(180deg);
+}
+
+.expand-icon {
+  transition: transform var(--task-transition-base);
+}
+
+/* Filter tabs - ensure 44px height */
+.filter-tab {
+  min-height: 44px;
+  padding: var(--task-space-2) var(--task-space-4);
+}
+
+/* View toggle buttons - 44px touch target */
+.view-toggle-btn {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Sort select - 44px height */
+.sort-select-compact,
+.sort-select {
+  min-height: 44px;
+  padding: var(--task-space-2) var(--task-space-3);
+}
+
+/* Search toggle button */
+.search-toggle-btn {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Bulk action buttons */
+.bulk-action-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--task-space-2) var(--task-space-3);
+}
+
+/* Meeting intelligence toggle */
+.meeting-intelligence-toggle-compact,
+.meeting-intelligence-toggle {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* ----------------------------------------
+ * PRIORITY INDICATORS WITH TEXT LABELS
+ * Screen reader accessible priority information
+ * ---------------------------------------- */
+
+/* Priority dot with accessible label */
+.priority-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+}
+
+/* Priority dot retains visual appearance */
+.priority-dot {
+  position: relative;
+}
+
+/* Screen reader text for priority */
+.priority-dot .priority-sr-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ----------------------------------------
+ * ARIA LIVE REGIONS STYLING
+ * ---------------------------------------- */
+
+/* Status announcements container */
+.aria-live-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Task list updates announcement */
+#task-list-live-region {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* ----------------------------------------
+ * KEYBOARD NAVIGATION ENHANCEMENTS
+ * ---------------------------------------- */
+
+/* Task card keyboard focus indicator */
+.task-card[tabindex="0"]:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+/* Keyboard shortcut hints */
+.keyboard-shortcut-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--task-space-1);
+  margin-left: var(--task-space-2);
+  background: var(--task-bg-elevated);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-sm);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--task-text-tertiary);
+}
+
+/* Hide keyboard hints on touch devices */
+@media (hover: none) {
+  .keyboard-shortcut-hint {
+    display: none;
+  }
+}
+
+/* ----------------------------------------
+ * HIGH CONTRAST MODE SUPPORT
+ * ---------------------------------------- */
+
+@media (prefers-contrast: high) {
+  :root {
+    --task-border-subtle: rgba(255, 255, 255, 0.3);
+    --task-border-default: rgba(255, 255, 255, 0.5);
+    --task-border-hover: rgba(255, 255, 255, 0.7);
+    --task-shadow-focus: 0 0 0 4px rgba(99, 102, 241, 0.6);
+  }
+  
+  .task-card {
+    border-width: 2px;
+  }
+  
+  .task-card:focus-visible {
+    outline-width: 3px;
+  }
+  
+  .task-checkbox {
+    border-width: 3px;
+  }
+  
+  .priority-dot {
+    width: 12px;
+    height: 12px;
+    border: 2px solid currentColor;
+  }
+  
+  .priority-dot.priority-urgent {
+    border-color: var(--priority-urgent);
+  }
+  
+  .priority-dot.priority-high {
+    border-color: var(--priority-high);
+  }
+  
+  .priority-dot.priority-medium {
+    border-color: var(--priority-medium);
+  }
+  
+  .priority-dot.priority-low {
+    border-color: var(--priority-low);
+  }
+}
+
+/* ----------------------------------------
+ * REDUCED MOTION PREFERENCES
+ * ---------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .expand-icon {
+    transition: none;
+  }
+  
+  .task-card,
+  .task-expand-trigger,
+  .filter-tab,
+  .btn,
+  button {
+    transition: none;
+  }
+  
+  .task-secondary-row,
+  .task-tertiary-row,
+  .task-tier-2,
+  .task-tier-3 {
+    transition: none;
+  }
+}
+
+/* ----------------------------------------
+ * SKIP LINK - IMPROVED
+ * ---------------------------------------- */
+
+.skip-to-content {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  z-index: 9999;
+  padding: var(--task-space-3) var(--task-space-4);
+  background: var(--task-accent-primary);
+  color: white;
+  font-weight: var(--task-weight-semibold);
+  text-decoration: none;
+  border-radius: var(--task-radius-md);
+  transition: top 0.2s ease;
+}
+
+.skip-to-content:focus {
+  top: 16px;
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+/* ----------------------------------------
+ * SEMANTIC STRUCTURE HELPERS
+ * ---------------------------------------- */
+
+/* Landmark region borders for debugging (only in dev) */
+[role="main"],
+[role="navigation"],
+[role="region"],
+[role="complementary"] {
+  /* outline: 1px dashed rgba(99, 102, 241, 0.3); */ /* Uncomment for debugging */
+}
+
+/* Task list group */
+.tasks-list-container[role="list"] .task-card {
+  /* Implicit listitem role */
+}
+
+/* ========================================
+ * END OF PHASE 4: ACCESSIBILITY
+ * ======================================== */
+
+/* ========================================
+ * PHASE 5: MOBILE-FIRST LAYOUT
+ * ======================================== */
+
+/* ----------------------------------------
+ * FLOATING ACTION BUTTON (FAB)
+ * ---------------------------------------- */
+
+.mobile-fab {
+  display: none; /* Hidden by default on desktop */
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  right: 24px;
+  z-index: 100;
+  
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  
+  background: var(--task-accent-primary);
+  color: white;
+  
+  box-shadow: 
+    0 4px 12px rgba(99, 102, 241, 0.4),
+    0 0 0 0 rgba(99, 102, 241, 0);
+  
+  cursor: pointer;
+  transition: all var(--task-transition-base);
+  
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-fab svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.5;
+}
+
+.mobile-fab:hover {
+  background: var(--task-accent-primary-hover);
+  transform: scale(1.05);
+}
+
+.mobile-fab:active {
+  transform: scale(0.95);
+  box-shadow: 
+    0 2px 8px rgba(99, 102, 241, 0.3),
+    0 0 0 0 rgba(99, 102, 241, 0);
+}
+
+.mobile-fab:focus-visible {
+  outline: none;
+  box-shadow: 
+    0 4px 12px rgba(99, 102, 241, 0.4),
+    0 0 0 4px rgba(99, 102, 241, 0.3);
+}
+
+/* FAB ripple animation on press */
+.mobile-fab.fab-pressed {
+  animation: fabPulse 0.3s ease-out;
+}
+
+@keyframes fabPulse {
+  0% {
+    box-shadow: 
+      0 4px 12px rgba(99, 102, 241, 0.4),
+      0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+  100% {
+    box-shadow: 
+      0 4px 12px rgba(99, 102, 241, 0.4),
+      0 0 0 16px rgba(99, 102, 241, 0);
+  }
+}
+
+/* ----------------------------------------
+ * MOBILE BREAKPOINTS (<640px)
+ * ---------------------------------------- */
+
+@media (max-width: 640px) {
+  /* Show FAB on mobile */
+  .mobile-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Hide desktop new task button on mobile - FAB replaces it */
+  .header-actions-compact #new-task-btn,
+  .header-actions #new-task-btn {
+    display: none;
+  }
+  
+  /* Full-width container with minimal padding */
+  .tasks-container {
+    padding: var(--task-space-3);
+    padding-bottom: 100px; /* Space for FAB */
+  }
+  
+  /* Stacked header layout */
+  .tasks-header-consolidated {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--task-space-3);
+  }
+  
+  .header-left {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .tasks-title {
+    font-size: var(--task-font-xl);
+  }
+  
+  /* Scrollable filters */
+  .task-filters-inline {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    gap: var(--task-space-1);
+    padding-bottom: 2px; /* Prevent cut-off */
+  }
+  
+  .task-filters-inline::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .filter-tab {
+    flex-shrink: 0;
+    padding: var(--task-space-2) var(--task-space-3);
+    font-size: var(--task-font-sm);
+  }
+  
+  /* Compact header actions */
+  .header-actions-compact {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--task-space-2);
+  }
+  
+  .view-toggle-group {
+    display: none; /* Hide view toggles on mobile - list view only */
+  }
+  
+  /* Search toolbar - stacked */
+  .search-sort-toolbar-compact {
+    flex-wrap: wrap;
+    gap: var(--task-space-2);
+  }
+  
+  .search-wrapper-compact {
+    order: 1;
+    flex: 1 1 100%;
+  }
+  
+  .toolbar-controls {
+    order: 2;
+    flex: 1;
+  }
+  
+  .toolbar-stats-inline {
+    order: 3;
+    flex-shrink: 0;
+    font-size: var(--task-font-xs);
+  }
+  
+  /* Condensed card layout */
+  .task-card {
+    padding: var(--task-space-3);
+    margin-left: calc(-1 * var(--task-space-3));
+    margin-right: calc(-1 * var(--task-space-3));
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: 1px solid var(--task-border-subtle);
+    margin-bottom: 0;
+  }
+  
+  /* First card - rounded top */
+  .tasks-list-container .task-card:first-child {
+    border-top-left-radius: var(--task-radius-lg);
+    border-top-right-radius: var(--task-radius-lg);
+    margin-top: var(--task-space-2);
+  }
+  
+  /* Last card - rounded bottom */
+  .tasks-list-container .task-card:last-child {
+    border-bottom-left-radius: var(--task-radius-lg);
+    border-bottom-right-radius: var(--task-radius-lg);
+    border-bottom: 1px solid var(--task-border-subtle);
+  }
+  
+  /* Smaller checkbox wrapper on mobile */
+  .checkbox-wrapper {
+    width: 44px;
+    height: 44px;
+    margin: calc(-1 * var(--task-space-2));
+    margin-right: var(--task-space-1);
+  }
+  
+  /* Task title - single line on mobile */
+  .task-title {
+    font-size: var(--task-font-sm);
+    -webkit-line-clamp: 1;
+  }
+  
+  /* Always show actions on mobile (no hover) */
+  .task-actions {
+    opacity: 1;
+  }
+  
+  /* Smaller menu trigger on mobile */
+  .task-menu-trigger {
+    width: 44px;
+    height: 44px;
+    margin: calc(-1 * var(--task-space-2));
+  }
+  
+  /* Priority and due date inline */
+  .task-essential-meta {
+    gap: var(--task-space-1);
+  }
+  
+  .priority-dot {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .due-date-compact {
+    font-size: 11px;
+  }
+  
+  /* Hide secondary row content on mobile list view */
+  .task-secondary-row {
+    display: none;
+  }
+  
+  /* Show on expanded card */
+  .task-card.expanded .task-secondary-row {
+    display: flex;
+    max-height: none;
+    opacity: 1;
+    margin-top: var(--task-space-2);
+  }
+  
+  /* Empty states - mobile adjustments */
+  .task-empty-state {
+    padding: var(--task-space-8) var(--task-space-4);
+  }
+  
+  .empty-state-title {
+    font-size: var(--task-font-lg);
+  }
+  
+  .empty-state-description {
+    font-size: var(--task-font-sm);
+  }
+  
+  .empty-state-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .empty-state-primary-btn,
+  .empty-state-secondary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ----------------------------------------
+ * TABLET BREAKPOINTS (640px - 1024px)
+ * ---------------------------------------- */
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .tasks-container {
+    padding: var(--task-space-4);
+  }
+  
+  .tasks-header-consolidated {
+    flex-wrap: wrap;
+  }
+  
+  .task-filters-inline {
+    order: 2;
+    flex: 1 1 100%;
+    margin-top: var(--task-space-2);
+  }
+  
+  /* Show 2-column grid on tablet */
+  .tasks-list-container[data-view="grid"] {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ----------------------------------------
+ * SWIPE GESTURE TRANSFORMS
+ * ---------------------------------------- */
+
+.task-card {
+  position: relative;
+  touch-action: pan-y pinch-zoom;
+  will-change: transform;
+}
+
+/* Swipe container for gesture actions */
+.task-card.swiping {
+  transition: none !important;
+}
+
+.task-card.swipe-complete-threshold {
+  transform: translateX(-80px);
+}
+
+.task-card.swipe-snooze-threshold {
+  transform: translateX(80px);
+}
+
+/* Swipe reset animation */
+.task-card.swipe-reset {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(0);
+}
+
+/* Swipe action backgrounds (revealed behind card) */
+.task-card::before,
+.task-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* Complete action (swipe left reveals right side) */
+.task-card::after {
+  right: -80px;
+  background: linear-gradient(270deg, rgba(34, 197, 94, 0.15), transparent);
+}
+
+/* Snooze action (swipe right reveals left side) */
+.task-card::before {
+  left: -80px;
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.15), transparent);
+}
+
+.task-card.swiping::before,
+.task-card.swiping::after {
+  opacity: 1;
+}
+
+/* ----------------------------------------
+ * BOTTOM SHEET MODAL (Mobile)
+ * ---------------------------------------- */
+
+@media (max-width: 640px) {
+  /* Convert modals to bottom sheets on mobile */
+  .modal-overlay,
+  .task-modal-overlay {
+    align-items: flex-end;
+  }
+  
+  .modal,
+  .task-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 90vh;
+    margin: 0;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: calc(var(--task-space-4) + env(safe-area-inset-bottom, 0px));
+    animation: slideUpModal 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  @keyframes slideUpModal {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  
+  /* Bottom sheet handle indicator */
+  .modal::before,
+  .task-modal::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: var(--task-border-default);
+    border-radius: 2px;
+    margin: 0 auto var(--task-space-4);
+  }
+  
+  .modal-header,
+  .task-modal-header {
+    padding-top: 0;
+  }
+  
+  /* Stack form buttons on mobile */
+  .modal-footer {
+    flex-direction: column-reverse;
+    gap: var(--task-space-2);
+  }
+  
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ----------------------------------------
+ * TOUCH OPTIMIZATIONS
+ * ---------------------------------------- */
+
+@media (pointer: coarse) {
+  /* Larger hit areas for touch */
+  .filter-tab {
+    min-height: 44px;
+  }
+  
+  .sort-select-compact {
+    min-height: 44px;
+    padding: var(--task-space-2) var(--task-space-3);
+  }
+  
+  .meeting-intelligence-toggle-compact {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  /* Prevent text selection during swipe */
+  .task-card {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  
+  /* Remove hover states that don't apply to touch */
+  .task-card:hover {
+    background: var(--task-bg-card);
+    border-color: var(--task-border-subtle);
+  }
+  
+  .task-card:active {
+    background: var(--task-bg-card-hover);
+  }
+}
+
+/* ----------------------------------------
+ * LANDSCAPE MOBILE ADJUSTMENTS
+ * ---------------------------------------- */
+
+@media (max-width: 900px) and (orientation: landscape) {
+  .tasks-container {
+    padding-bottom: 80px;
+  }
+  
+  .mobile-fab {
+    bottom: 16px;
+    right: 16px;
+    width: 48px;
+    height: 48px;
+  }
+  
+  .mobile-fab svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* ----------------------------------------
+ * SAFE AREA INSETS (Notch/Home Indicator)
+ * ---------------------------------------- */
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 640px) {
+    .tasks-container {
+      padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+    }
+    
+    .mobile-fab {
+      bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    }
+  }
+}
+
+/* ========================================
+ * END OF PHASE 5: MOBILE-FIRST LAYOUT
+ * ======================================== */
+
+/* ========================================
+ * PHASE 6: MICRO-INTERACTIONS
+ * Satisfying animations that add delight
+ * ======================================== */
+
+/* ----------------------------------------
+ * COMPLETION ANIMATION - Satisfying Check
+ * ---------------------------------------- */
+
+/* Checkbox bounce effect when checked */
+@keyframes checkBounce {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(0.85);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  75% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Checkmark draw animation */
+@keyframes checkmarkDraw {
+  0% {
+    stroke-dashoffset: 14;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Enhanced checkbox with animation */
+.task-checkbox:checked {
+  animation: checkBounce 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Celebrating completion - card pulse */
+.task-card.celebrating-completion {
+  animation: celebratePulse 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes celebratePulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  30% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+/* Success glow on checkbox after completion */
+.task-checkbox:checked::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.2);
+  animation: successGlow 0.5s ease-out forwards;
+  z-index: -1;
+}
+
+@keyframes successGlow {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+/* ----------------------------------------
+ * CARD EXIT ANIMATIONS
+ * ---------------------------------------- */
+
+/* Smooth fade out when completing/archiving */
+@keyframes cardFadeOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(20px) scale(0.95);
+  }
+}
+
+.task-card.exiting {
+  animation: cardFadeOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+/* Delete animation - slide left with red tint */
+@keyframes cardDelete {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+    background: var(--task-bg-card);
+  }
+  50% {
+    background: rgba(239, 68, 68, 0.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+}
+
+.task-card.deleting {
+  animation: cardDelete 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+/* Archive animation - fade with slight shrink */
+@keyframes cardArchive {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
+    height: 0;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+.task-card.archiving {
+  animation: cardArchive 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ----------------------------------------
+ * UNDO REVERSAL ANIMATION
+ * ---------------------------------------- */
+
+@keyframes undoRestore {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px) scale(0.95);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.task-card.undoing-completion {
+  animation: undoRestore 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Reset transform after undo animation completes (class should be removed via JS animationend) */
+.task-card:not(.undoing-completion):not(.exiting):not(.deleting):not(.archiving):not(.entering) {
+  transform: none;
+}
+
+/* Flash effect to highlight restored task */
+.task-card.restored {
+  animation: restoreFlash 0.6s ease-out;
+}
+
+@keyframes restoreFlash {
+  0% {
+    background: rgba(99, 102, 241, 0.2);
+  }
+  100% {
+    background: var(--task-bg-card);
+  }
+}
+
+/* ----------------------------------------
+ * HOVER MICRO-ANIMATIONS
+ * ---------------------------------------- */
+
+/* Priority dot pulse on high priority */
+.priority-dot.priority-urgent {
+  animation: urgentPulse 2s ease-in-out infinite;
+}
+
+@keyframes urgentPulse {
+  0%, 100% {
+    box-shadow: 0 0 6px var(--priority-urgent);
+  }
+  50% {
+    box-shadow: 0 0 12px var(--priority-urgent), 0 0 20px rgba(239, 68, 68, 0.3);
+  }
+}
+
+/* Button hover lift effect */
+#new-task-btn,
+.btn-primary,
+.mobile-fab {
+  transition: 
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#new-task-btn:hover,
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+#new-task-btn:active,
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+}
+
+/* Filter tab smooth transitions */
+.filter-tab {
+  transition: 
+    background 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-tab:hover:not(.active) {
+  transform: translateY(-1px);
+}
+
+.filter-tab:active {
+  transform: translateY(0);
+}
+
+/* Menu item hover slide */
+.task-menu-item {
+  transition: 
+    background 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    padding-left 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.task-menu-item:hover {
+  padding-left: calc(var(--task-space-3) + 4px);
+}
+
+/* ----------------------------------------
+ * LOADING STATE ANIMATIONS
+ * ---------------------------------------- */
+
+/* Spinner for async operations */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.task-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--task-border-subtle);
+  border-top-color: var(--task-accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Card loading state - subtle shimmer */
+.task-card.loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.task-card.loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.03),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+  border-radius: inherit;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Button loading state - preserves dimensions, shows spinner */
+.btn-loading {
+  position: relative !important;
+  pointer-events: none;
+  cursor: wait;
+}
+
+/* Hide text visually using opacity - keeps accessible for screen readers */
+.btn-loading > *,
+.btn-loading .btn-text,
+.btn-loading svg:not(.btn-loading-spinner) {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* Restore opacity when loading ends (class removal restores visibility) */
+button:not(.btn-loading) > *,
+button:not(.btn-loading) .btn-text,
+button:not(.btn-loading) svg {
+  opacity: 1;
+}
+
+/* Announce loading state to assistive tech */
+.btn-loading[aria-busy="true"] {
+  /* State already announced via aria-busy */
+}
+
+.btn-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  z-index: 1;
+}
+
+/* Secondary/outline button loading - darker spinner */
+.btn-secondary.btn-loading::after,
+.btn-outline.btn-loading::after {
+  border-color: rgba(99, 102, 241, 0.3);
+  border-top-color: var(--task-accent-primary);
+}
+
+/* ----------------------------------------
+ * CARD ENTRY ANIMATIONS
+ * ---------------------------------------- */
+
+/* Staggered entry for new tasks */
+@keyframes slideInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.task-card.entering {
+  animation: slideInUp 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* New task highlight */
+.task-card.just-created {
+  animation: newTaskGlow 0.8s ease-out;
+}
+
+@keyframes newTaskGlow {
+  0% {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+}
+
+/* ----------------------------------------
+ * FOCUS TRANSITIONS
+ * ---------------------------------------- */
+
+/* Smooth focus ring appearance */
+.task-card,
+.task-checkbox,
+.task-menu-trigger,
+.filter-tab,
+#new-task-btn,
+.btn-primary,
+.search-input {
+  transition-property: box-shadow, border-color, background, transform, opacity;
+  transition-duration: 0.15s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced focus states */
+.task-card:focus-within {
+  box-shadow: var(--task-shadow-focus), var(--task-shadow-sm);
+}
+
+/* ----------------------------------------
+ * TOAST ANIMATIONS
+ * ---------------------------------------- */
+
+@keyframes toastSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+}
+
+/* Undo toast styles - explicit opacity states */
+.completion-undo-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--task-bg-elevated);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-lg);
+  padding: var(--task-space-3) var(--task-space-4);
+  box-shadow: var(--task-shadow-lg);
+  z-index: 1001;
+  opacity: 0 !important;
+  visibility: hidden;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.3s;
+}
+
+.completion-undo-toast.visible {
+  opacity: 1 !important;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.undo-toast-content {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+}
+
+.undo-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--task-accent-success);
+  border-radius: 50%;
+  color: white;
+  font-size: var(--task-font-sm);
+}
+
+.undo-message {
+  color: var(--task-text-primary);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+}
+
+.undo-button {
+  padding: var(--task-space-2) var(--task-space-3);
+  background: transparent;
+  border: 1px solid var(--task-accent-primary);
+  border-radius: var(--task-radius-md);
+  color: var(--task-accent-primary);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.undo-button:hover {
+  background: var(--task-accent-primary);
+  color: white;
+}
+
+/* Milestone toast - explicit opacity states */
+.milestone-toast,
+.all-done-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  background: var(--task-bg-elevated);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-xl);
+  padding: var(--task-space-6);
+  box-shadow: var(--task-shadow-lg);
+  z-index: 1002;
+  opacity: 0 !important;
+  visibility: hidden;
+  text-align: center;
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.4s;
+}
+
+.milestone-toast.visible,
+.all-done-toast.visible {
+  opacity: 1 !important;
+  visibility: visible;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.milestone-message,
+.all-done-message {
+  font-size: var(--task-font-lg);
+  font-weight: var(--task-weight-bold);
+  color: var(--task-text-primary);
+  margin-bottom: var(--task-space-2);
+}
+
+.milestone-subtext,
+.all-done-subtext {
+  font-size: var(--task-font-sm);
+  color: var(--task-text-tertiary);
+}
+
+.all-done-icon {
+  font-size: 48px;
+  margin-bottom: var(--task-space-3);
+}
+
+/* ----------------------------------------
+ * RECOMMENDATION CARD ANIMATION
+ * ---------------------------------------- */
+
+.recommendation-card {
+  position: fixed;
+  bottom: 100px;
+  right: 24px;
+  width: 320px;
+  max-width: calc(100vw - 48px);
+  background: var(--task-bg-elevated);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-xl);
+  box-shadow: var(--task-shadow-lg);
+  z-index: 1000;
+  opacity: 0 !important;
+  visibility: hidden;
+  transform: translateY(20px) scale(0.95);
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.3s;
+}
+
+.recommendation-card.visible {
+  opacity: 1 !important;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+.recommendation-header {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-4);
+  border-bottom: 1px solid var(--task-border-subtle);
+}
+
+.recommendation-header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: var(--task-font-base);
+  font-weight: var(--task-weight-semibold);
+  color: var(--task-text-primary);
+}
+
+.recommendation-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  font-size: var(--task-font-lg);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.recommendation-close:hover {
+  background: var(--task-bg-card-hover);
+  color: var(--task-text-primary);
+}
+
+.recommendation-list {
+  padding: var(--task-space-2);
+}
+
+.recommendation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--task-space-3);
+  padding: var(--task-space-3);
+  border-radius: var(--task-radius-md);
+  transition: background 0.15s ease;
+}
+
+.recommendation-item:hover {
+  background: var(--task-bg-card-hover);
+}
+
+.recommendation-task-title {
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  color: var(--task-text-primary);
+  margin-bottom: var(--task-space-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.recommendation-task-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  font-size: var(--task-font-xs);
+  color: var(--task-text-tertiary);
+}
+
+.recommendation-action {
+  padding: var(--task-space-2) var(--task-space-3);
+  background: var(--task-accent-primary);
+  border: none;
+  border-radius: var(--task-radius-md);
+  color: white;
+  font-size: var(--task-font-xs);
+  font-weight: var(--task-weight-semibold);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.recommendation-action:hover {
+  background: var(--task-accent-primary-hover);
+  transform: translateY(-1px);
+}
+
+/* ----------------------------------------
+ * PREFERS-REDUCED-MOTION SUPPORT
+ * Disable animations for accessibility
+ * ---------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .task-checkbox:checked {
+    animation: none;
+  }
+  
+  .task-card.celebrating-completion,
+  .task-card.exiting,
+  .task-card.deleting,
+  .task-card.archiving,
+  .task-card.entering,
+  .task-card.just-created {
+    animation: none;
+  }
+  
+  .priority-dot.priority-urgent {
+    animation: none;
+    box-shadow: 0 0 6px var(--priority-urgent);
+  }
+  
+  .task-loading-spinner {
+    animation: none;
+    border-top-color: var(--task-accent-primary);
+  }
+  
+  .task-card.loading::after {
+    animation: none;
+  }
+  
+  /* Button loading spinner - show static state */
+  .btn-loading::after {
+    animation: none;
+    border-color: rgba(255, 255, 255, 0.5);
+    border-top-color: white;
+  }
+  
+  /* Instant state changes instead of transitions */
+  .completion-undo-toast,
+  .milestone-toast,
+  .all-done-toast,
+  .recommendation-card {
+    transition: none !important;
+  }
+  
+  .completion-undo-toast.visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translateX(-50%) translateY(0);
+  }
+  
+  .milestone-toast.visible,
+  .all-done-toast.visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translate(-50%, -50%);
+  }
+  
+  .recommendation-card.visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ========================================
+ * END OF PHASE 6: MICRO-INTERACTIONS
+ * ======================================== */
+
+/* ========================================
+ * PHASE 7: MEETING-NATIVE EMPTY STATES
+ * Professional SVG illustrations, contextual messaging
+ * ======================================== */
+
+/* ----------------------------------------
+ * BASE EMPTY STATE - ENHANCED
+ * ---------------------------------------- */
+
+.task-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--task-space-12) var(--task-space-6);
+  text-align: center;
+  min-height: 300px;
+  animation: emptyStateSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes emptyStateSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ----------------------------------------
+ * EMPTY STATE ILLUSTRATIONS - SVG BASED
+ * ---------------------------------------- */
+
+.empty-state-illustration {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin-bottom: var(--task-space-6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state-illustration.meeting-native {
+  background: radial-gradient(
+    circle at center,
+    rgba(99, 102, 241, 0.12) 0%,
+    rgba(99, 102, 241, 0.04) 50%,
+    transparent 70%
+  );
+  border-radius: 50%;
+}
+
+.empty-state-illustration.meeting-native::before {
+  content: '';
+  width: 56px;
+  height: 56px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236366f1' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  animation: micPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes micPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+.empty-state-illustration.meeting-native::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 2px solid rgba(99, 102, 241, 0.25);
+  border-radius: 50%;
+  animation: soundWaveRipple 2.5s ease-out infinite;
+}
+
+@keyframes soundWaveRipple {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+
+.empty-state-illustration.all-done {
+  background: radial-gradient(
+    circle at center,
+    rgba(34, 197, 94, 0.12) 0%,
+    rgba(34, 197, 94, 0.04) 50%,
+    transparent 70%
+  );
+  border-radius: 50%;
+}
+
+.empty-state-illustration.all-done::before {
+  content: '';
+  width: 56px;
+  height: 56px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2322c55e' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  animation: checkmarkPop 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes checkmarkPop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.empty-state-illustration.no-results {
+  background: radial-gradient(
+    circle at center,
+    rgba(99, 102, 241, 0.08) 0%,
+    transparent 70%
+  );
+  border-radius: 50%;
+}
+
+.empty-state-illustration.no-results::before {
+  content: '';
+  width: 56px;
+  height: 56px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.7;
+}
+
+.empty-state-illustration.archived {
+  background: radial-gradient(
+    circle at center,
+    rgba(113, 113, 122, 0.1) 0%,
+    transparent 70%
+  );
+  border-radius: 50%;
+}
+
+.empty-state-illustration.archived::before {
+  content: '';
+  width: 56px;
+  height: 56px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.8;
+}
+
+/* ----------------------------------------
+ * EMPTY STATE TYPOGRAPHY - ENHANCED
+ * ---------------------------------------- */
+
+.empty-state-title {
+  font-size: var(--task-font-xl);
+  font-weight: var(--task-weight-semibold);
+  color: var(--task-text-primary);
+  margin: 0 0 var(--task-space-2);
+  line-height: 1.3;
+}
+
+.empty-state-description {
+  font-size: var(--task-font-base);
+  color: var(--task-text-secondary);
+  max-width: 340px;
+  line-height: 1.6;
+  margin: 0 0 var(--task-space-6);
+}
+
+.empty-state-highlight {
+  color: var(--task-accent-primary);
+  font-weight: var(--task-weight-semibold);
+}
+
+/* ----------------------------------------
+ * EMPTY STATE ACTIONS - ENHANCED
+ * ---------------------------------------- */
+
+.empty-state-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--task-space-3);
+}
+
+.empty-state-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-3) var(--task-space-6);
+  min-height: var(--touch-target-min);
+  background: var(--task-accent-primary);
+  color: white;
+  border: none;
+  border-radius: var(--task-radius-lg);
+  font-size: var(--task-font-base);
+  font-weight: var(--task-weight-semibold);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.empty-state-primary-btn:hover {
+  background: var(--task-accent-primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+}
+
+.empty-state-primary-btn:active {
+  transform: translateY(0);
+}
+
+.empty-state-primary-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.empty-state-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-2) var(--task-space-4);
+  min-height: 40px;
+  background: transparent;
+  color: var(--task-text-secondary);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-md);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.empty-state-secondary-btn:hover {
+  background: var(--task-bg-card-hover);
+  border-color: var(--task-border-hover);
+  color: var(--task-text-primary);
+}
+
+.empty-state-secondary-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* ----------------------------------------
+ * CONTEXTUAL EMPTY STATES
+ * ---------------------------------------- */
+
+.empty-state-all-done .empty-state-title {
+  color: var(--task-accent-success);
+}
+
+.empty-state-no-results .search-query {
+  color: var(--task-accent-primary);
+  font-weight: var(--task-weight-semibold);
+  background: rgba(99, 102, 241, 0.1);
+  padding: 2px 6px;
+  border-radius: var(--task-radius-sm);
+}
+
+/* Archived Filter Empty State */
+.empty-state-archived .empty-state-title {
+  color: var(--task-text-secondary);
+}
+
+/* ----------------------------------------
+ * MEETING WORKFLOW HINTS
+ * ---------------------------------------- */
+
+.empty-state-workflow-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-4);
+  margin-top: var(--task-space-6);
+  padding: var(--task-space-4);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-lg);
+  max-width: 380px;
+}
+
+.workflow-hint-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex: 1;
+  text-align: center;
+}
+
+.workflow-hint-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: var(--task-radius-md);
+  color: var(--task-accent-primary);
+}
+
+.workflow-hint-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.workflow-hint-label {
+  font-size: var(--task-font-xs);
+  color: var(--task-text-tertiary);
+  font-weight: var(--task-weight-medium);
+}
+
+.workflow-hint-arrow {
+  color: var(--task-text-muted);
+  flex-shrink: 0;
+}
+
+.workflow-hint-arrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ----------------------------------------
+ * MOBILE ADAPTATIONS
+ * ---------------------------------------- */
+
+@media (max-width: 640px) {
+  .task-empty-state {
+    padding: var(--task-space-8) var(--task-space-4);
+    min-height: 250px;
+  }
+  
+  .empty-state-illustration {
+    width: 120px;
+    height: 120px;
+    margin-bottom: var(--task-space-5);
+  }
+  
+  .empty-state-illustration::before {
+    width: 48px !important;
+    height: 48px !important;
+  }
+  
+  .empty-state-title {
+    font-size: var(--task-font-lg);
+  }
+  
+  .empty-state-description {
+    font-size: var(--task-font-sm);
+    max-width: 280px;
+  }
+  
+  .empty-state-actions {
+    width: 100%;
+    padding: 0 var(--task-space-4);
+  }
+  
+  .empty-state-primary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .empty-state-workflow-hint {
+    flex-direction: column;
+    gap: var(--task-space-2);
+    padding: var(--task-space-3);
+  }
+  
+  .workflow-hint-arrow {
+    transform: rotate(90deg);
+  }
+}
+
+/* ----------------------------------------
+ * REDUCED MOTION SUPPORT
+ * ---------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .task-empty-state {
+    animation: none;
+  }
+  
+  .empty-state-illustration.meeting-native::before {
+    animation: none;
+  }
+  
+  .empty-state-illustration.meeting-native::after {
+    animation: none;
+    opacity: 0.3;
+  }
+  
+  .empty-state-illustration.all-done::before {
+    animation: none;
+  }
+}
+
+/* ========================================
+ * END OF PHASE 7: MEETING-NATIVE EMPTY STATES
+ * ======================================== */
+
+/* ========================================
+ * PHASE 8: UNDO SYSTEM
+ * Enhanced toast notifications with undo buttons
+ * for delete, archive, and complete actions
+ * ======================================== */
+
+/* ----------------------------------------
+ * UNDO TOAST CONTAINER - Bottom-center positioning
+ * ---------------------------------------- */
+
+.undo-toast-container {
+  position: fixed;
+  bottom: var(--task-space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: var(--task-space-3);
+  max-width: 420px;
+  width: calc(100% - var(--task-space-8));
+  pointer-events: none;
+}
+
+/* ----------------------------------------
+ * UNDO TOAST - Glassmorphism card with action
+ * ---------------------------------------- */
+
+.undo-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-4);
+  background: rgba(30, 30, 40, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-lg);
+  box-shadow: var(--task-shadow-lg), 0 0 40px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.undo-toast.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.undo-toast.hiding {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+}
+
+/* Toast icon area */
+.undo-toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--task-radius-md);
+  flex-shrink: 0;
+}
+
+.undo-toast-icon.delete {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--task-accent-danger);
+}
+
+.undo-toast-icon.archive {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--task-accent-primary);
+}
+
+.undo-toast-icon.complete {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--task-accent-success);
+}
+
+.undo-toast-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Toast content area */
+.undo-toast-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.undo-toast-title {
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  color: var(--task-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.undo-toast-subtitle {
+  font-size: var(--task-font-xs);
+  color: var(--task-text-tertiary);
+}
+
+/* Toast actions area */
+.undo-toast-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex-shrink: 0;
+}
+
+.undo-toast-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--task-space-2) var(--task-space-4);
+  min-height: 36px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: var(--task-radius-md);
+  color: var(--task-accent-primary-hover);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-semibold);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.undo-toast-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.5);
+  transform: translateY(-1px);
+}
+
+.undo-toast-btn:active {
+  transform: translateY(0);
+}
+
+.undo-toast-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
+}
+
+.undo-toast-btn.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.undo-toast-btn.loading::after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  margin-left: var(--task-space-2);
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: undo-spin 0.6s linear infinite;
+}
+
+@keyframes undo-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Dismiss button */
+.undo-toast-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.undo-toast-dismiss:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--task-text-primary);
+}
+
+/* Progress bar for auto-dismiss */
+.undo-toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--task-accent-primary);
+  border-radius: 0 0 var(--task-radius-lg) var(--task-radius-lg);
+  transition: width linear;
+}
+
+/* ----------------------------------------
+ * UNDO TOAST QUEUE - Stacking multiple toasts
+ * ---------------------------------------- */
+
+.undo-toast-container .undo-toast:nth-child(2) {
+  transform: translateY(0) scale(0.95);
+  opacity: 0.8;
+}
+
+.undo-toast-container .undo-toast:nth-child(3) {
+  transform: translateY(0) scale(0.9);
+  opacity: 0.6;
+}
+
+.undo-toast-container .undo-toast:nth-child(n+4) {
+  display: none;
+}
+
+/* ----------------------------------------
+ * UNDO SUCCESS FEEDBACK
+ * ---------------------------------------- */
+
+.undo-toast.undo-success {
+  border-color: var(--task-accent-success);
+}
+
+.undo-toast.undo-success .undo-toast-icon {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--task-accent-success);
+}
+
+.undo-toast.undo-success .undo-toast-title::before {
+  content: '✓ ';
+}
+
+/* ----------------------------------------
+ * KEYBOARD SHORTCUT HINT
+ * ---------------------------------------- */
+
+.undo-keyboard-hint {
+  display: none;
+  align-items: center;
+  gap: var(--task-space-1);
+  font-size: var(--task-font-xs);
+  color: var(--task-text-muted);
+  margin-left: var(--task-space-2);
+}
+
+.undo-keyboard-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: 3px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 10px;
+  font-weight: var(--task-weight-medium);
+  color: var(--task-text-tertiary);
+}
+
+/* Show keyboard hint on desktop only */
+@media (hover: hover) and (min-width: 768px) {
+  .undo-keyboard-hint {
+    display: flex;
+  }
+}
+
+/* ----------------------------------------
+ * MOBILE ADAPTATIONS
+ * ---------------------------------------- */
+
+@media (max-width: 640px) {
+  .undo-toast-container {
+    bottom: var(--task-space-4);
+    max-width: none;
+    width: calc(100% - var(--task-space-6));
+  }
+  
+  .undo-toast {
+    padding: var(--task-space-3);
+  }
+  
+  .undo-toast-icon {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .undo-toast-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .undo-toast-btn {
+    padding: var(--task-space-2) var(--task-space-3);
+    min-height: 32px;
+    font-size: var(--task-font-xs);
+  }
+}
+
+/* ----------------------------------------
+ * REDUCED MOTION SUPPORT
+ * ---------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .undo-toast {
+    transition: opacity 0.15s ease;
+    transform: none !important;
+  }
+  
+  .undo-toast.visible {
+    transform: none !important;
+  }
+  
+  .undo-toast.hiding {
+    transform: none !important;
+  }
+  
+  .undo-toast-btn.loading::after {
+    animation: none;
+  }
+}
+
+/* ========================================
+ * END OF PHASE 8: UNDO SYSTEM
+ * ======================================== */
+
+/* ========================================
+ * PHASE 9: ERROR STATES & RETRY
+ * Inline error messages with retry buttons
+ * Graceful degradation when operations fail
+ * ======================================== */
+
+/* ----------------------------------------
+ * INLINE ERROR MESSAGE ON TASK CARD
+ * Shows when an action fails with retry option
+ * ---------------------------------------- */
+
+.task-error-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-2) var(--task-space-3);
+  margin-top: var(--task-space-2);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--task-radius-md);
+  animation: error-slide-in 0.2s ease-out;
+}
+
+@keyframes error-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.task-error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--task-accent-danger);
+}
+
+.task-error-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.task-error-text {
+  flex: 1;
+  font-size: var(--task-font-xs);
+  color: var(--task-accent-danger);
+  line-height: 1.4;
+}
+
+.task-error-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+  padding: var(--task-space-1) var(--task-space-2);
+  min-height: 28px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--task-radius-sm);
+  color: var(--task-accent-danger);
+  font-size: var(--task-font-xs);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  white-space: nowrap;
+}
+
+.task-error-retry-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.task-error-retry-btn:active {
+  transform: scale(0.98);
+}
+
+.task-error-retry-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+}
+
+.task-error-retry-btn.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.task-error-retry-btn.loading::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  margin-left: var(--task-space-1);
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: error-retry-spin 0.6s linear infinite;
+}
+
+@keyframes error-retry-spin {
+  to { transform: rotate(360deg); }
+}
+
+.task-error-dismiss-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  flex-shrink: 0;
+}
+
+.task-error-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--task-text-secondary);
+}
+
+/* ----------------------------------------
+ * CONNECTION STATUS BANNER (enhanced)
+ * ---------------------------------------- */
+
+.connection-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-3) var(--task-space-4);
+  margin-bottom: var(--task-space-4);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--task-radius-lg);
+  animation: banner-slide-down 0.3s ease-out;
+}
+
+@keyframes banner-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.connection-banner.hidden {
+  display: none;
+}
+
+.connection-banner.offline {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.connection-banner.offline .connection-status-icon::before {
+  background: var(--task-accent-danger);
+}
+
+.connection-banner.reconnecting {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.connection-banner.reconnecting .connection-status-icon::before {
+  background: var(--task-accent-warning);
+  animation: connection-pulse 1s infinite;
+}
+
+.connection-banner.online {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.connection-banner.online .connection-status-icon::before {
+  background: var(--task-accent-success);
+}
+
+.connection-status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  position: relative;
+}
+
+.connection-status-icon::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: var(--task-accent-warning);
+  border-radius: 50%;
+}
+
+@keyframes connection-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.connection-message {
+  flex: 1;
+  font-size: var(--task-font-sm);
+  color: var(--task-text-primary);
+}
+
+.connection-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+  padding: var(--task-space-2) var(--task-space-3);
+  min-height: 32px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--task-border-default);
+  border-radius: var(--task-radius-md);
+  color: var(--task-text-primary);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.connection-retry-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--task-border-hover);
+}
+
+.pending-count {
+  font-size: var(--task-font-xs);
+  color: var(--task-text-tertiary);
+  white-space: nowrap;
+}
+
+/* ----------------------------------------
+ * TASK CARD ERROR STATE
+ * Visual indicator that task has error
+ * ---------------------------------------- */
+
+.task-card.has-error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: linear-gradient(
+    135deg,
+    var(--task-bg-card) 0%,
+    rgba(239, 68, 68, 0.05) 100%
+  );
+}
+
+.task-card.has-error:hover {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+/* ----------------------------------------
+ * NETWORK ERROR TOAST (global)
+ * For network-wide issues
+ * ---------------------------------------- */
+
+.network-error-toast {
+  position: fixed;
+  top: var(--task-space-4);
+  left: 50%;
+  transform: translateX(-50%) translateY(-100%);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-3) var(--task-space-4);
+  max-width: 480px;
+  width: calc(100% - var(--task-space-8));
+  background: var(--task-bg-elevated);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: var(--task-radius-lg);
+  box-shadow: var(--task-shadow-lg);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.network-error-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.network-error-toast.hiding {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+.network-error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: rgba(239, 68, 68, 0.2);
+  border-radius: var(--task-radius-md);
+  color: var(--task-accent-danger);
+  flex-shrink: 0;
+}
+
+.network-error-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.network-error-title {
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-semibold);
+  color: var(--task-text-primary);
+  margin-bottom: 2px;
+}
+
+.network-error-message {
+  font-size: var(--task-font-xs);
+  color: var(--task-text-secondary);
+}
+
+.network-error-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  flex-shrink: 0;
+}
+
+.network-error-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+  padding: var(--task-space-2) var(--task-space-3);
+  min-height: 32px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--task-radius-md);
+  color: var(--task-accent-danger);
+  font-size: var(--task-font-sm);
+  font-weight: var(--task-weight-medium);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.network-error-retry:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.network-error-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.network-error-dismiss:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--task-text-primary);
+}
+
+/* ----------------------------------------
+ * GRACEFUL DEGRADATION INDICATOR
+ * Shows when running in offline/degraded mode
+ * ---------------------------------------- */
+
+.degraded-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--task-space-1);
+  padding: var(--task-space-1) var(--task-space-2);
+  background: rgba(245, 158, 11, 0.15);
+  border-radius: var(--task-radius-full);
+  font-size: var(--task-font-xs);
+  color: var(--task-accent-warning);
+}
+
+.degraded-mode-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--task-accent-warning);
+  border-radius: 50%;
+}
+
+/* ----------------------------------------
+ * LOADING STATE FOR RETRY
+ * Skeleton shimmer during retry
+ * ---------------------------------------- */
+
+.task-card.retrying {
+  position: relative;
+  overflow: hidden;
+}
+
+.task-card.retrying::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 100%
+  );
+  animation: retry-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes retry-shimmer {
+  from { left: -100%; }
+  to { left: 100%; }
+}
+
+/* ----------------------------------------
+ * MOBILE ADAPTATIONS FOR ERROR STATES
+ * ---------------------------------------- */
+
+@media (max-width: 640px) {
+  .task-error-inline {
+    flex-wrap: wrap;
+    gap: var(--task-space-2);
+  }
+  
+  .task-error-text {
+    flex: 1 1 100%;
+    order: 1;
+  }
+  
+  .task-error-icon {
+    order: 0;
+  }
+  
+  .task-error-retry-btn {
+    order: 2;
+    flex: 1;
+    justify-content: center;
+  }
+  
+  .task-error-dismiss-btn {
+    order: 3;
+  }
+  
+  .network-error-toast {
+    flex-wrap: wrap;
+    width: calc(100% - var(--task-space-4));
+  }
+  
+  .network-error-content {
+    flex: 1 1 calc(100% - 50px);
+  }
+  
+  .network-error-actions {
+    flex: 1 1 100%;
+    margin-top: var(--task-space-2);
+  }
+  
+  .network-error-retry {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+/* ----------------------------------------
+ * REDUCED MOTION FOR ERROR STATES
+ * ---------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .task-error-inline,
+  .connection-banner,
+  .network-error-toast {
+    animation: none;
+  }
+  
+  .task-card.retrying::after {
+    animation: none;
+    display: none;
+  }
+  
+  .connection-banner.reconnecting .connection-status-icon::before {
+    animation: none;
+  }
+  
+  .task-error-retry-btn.loading::after {
+    animation: none;
+  }
+}
+
+/* ========================================
+ * END OF PHASE 9: ERROR STATES & RETRY
+ * ======================================== */
+
+/* ========================================
+ * TRUE 2-ROW COMMAND BAR LAYOUT
+ * Fixes the 3+ row issue on mobile
+ * ======================================== */
+
+/* ROW 1: Title + Filter Tabs */
+.command-row-1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--task-space-3);
+  padding: var(--task-space-2) 0;
+  margin-bottom: var(--task-space-2);
+}
+
+.tasks-title-compact {
+  font-size: var(--task-font-lg);
+  font-weight: var(--task-weight-bold);
+  color: var(--task-text-primary);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* ROW 2: All Controls */
+.command-row-2 {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-2);
+  padding: var(--task-space-2) var(--task-space-3);
+  background: var(--task-bg-card);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-lg);
+  margin-bottom: var(--task-space-4);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.command-row-2::-webkit-scrollbar {
+  display: none;
+}
+
+/* Compact search */
+.command-row-2 .search-wrapper-compact {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.command-row-2 .search-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.command-row-2 .search-toggle-btn:hover {
+  background: var(--task-bg-card-hover);
+  color: var(--task-text-primary);
+}
+
+.command-row-2 .search-input-container {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition: all var(--task-transition-base);
+}
+
+.command-row-2 .search-input-container.expanded {
+  max-width: 200px;
+  opacity: 1;
+  margin-left: var(--task-space-2);
+}
+
+.command-row-2 .search-input {
+  width: 180px;
+  padding: var(--task-space-2);
+  background: var(--task-bg-input);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-primary);
+  font-size: var(--task-font-sm);
+}
+
+/* Sort dropdown */
+.command-row-2 .sort-select-compact {
+  padding: var(--task-space-2) var(--task-space-3);
+  background: var(--task-bg-input);
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-secondary);
+  font-size: var(--task-font-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Meeting toggle with calendar icon */
+.meeting-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 1px solid var(--task-border-subtle);
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  flex-shrink: 0;
+}
+
+.meeting-toggle-btn:hover {
+  background: var(--task-bg-card-hover);
+  color: var(--task-text-primary);
+}
+
+.meeting-toggle-btn.active {
+  background: var(--task-accent-primary);
+  border-color: var(--task-accent-primary);
+  color: white;
+}
+
+/* View toggle group */
+.command-row-2 .view-toggle-group {
+  display: flex;
+  gap: 1px;
+  background: var(--task-bg-input);
+  border-radius: var(--task-radius-sm);
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.command-row-2 .view-toggle-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--task-radius-sm);
+  color: var(--task-text-tertiary);
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+}
+
+.command-row-2 .view-toggle-btn:hover {
+  color: var(--task-text-primary);
+}
+
+.command-row-2 .view-toggle-btn.active {
+  background: var(--task-accent-primary);
+  color: white;
+}
+
+/* AI button compact */
+.btn-ai-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 1px solid var(--task-border-subtle) !important;
+  border-radius: var(--task-radius-sm) !important;
+  color: var(--task-text-tertiary) !important;
+  cursor: pointer;
+  transition: all var(--task-transition-fast);
+  flex-shrink: 0;
+}
+
+.btn-ai-compact:hover {
+  background: var(--task-bg-card-hover) !important;
+  color: var(--task-accent-primary) !important;
+}
+
+/* New button compact */
+.btn-new-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--task-space-1);
+  padding: var(--task-space-2) var(--task-space-3) !important;
+  min-height: 36px;
+  font-size: var(--task-font-sm);
+  flex-shrink: 0;
+}
+
+.btn-new-compact .btn-text-desktop {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .btn-new-compact .btn-text-desktop {
+    display: inline;
+  }
+}
+
+/* Mobile optimizations for 2-row layout */
+@media (max-width: 640px) {
+  .command-row-1 {
+    flex-wrap: wrap;
+    gap: var(--task-space-2);
+  }
+  
+  .tasks-title-compact {
+    font-size: var(--task-font-base);
+  }
+  
+  .task-filters-inline {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .task-filters-inline .filter-tab {
+    padding: var(--task-space-1) var(--task-space-2);
+    font-size: 13px;
+  }
+  
+  .task-filters-inline .filter-counter {
+    font-size: 10px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+  }
+  
+  .command-row-2 {
+    padding: var(--task-space-2);
+    gap: var(--task-space-1);
+  }
+  
+  .command-row-2 .sort-select-compact {
+    padding: var(--task-space-1) var(--task-space-2);
+    font-size: 12px;
+    max-width: 80px;
+  }
+  
+  /* Hide view toggles and AI on mobile - use FAB for new task */
+  .command-row-2 .view-toggle-group,
+  .command-row-2 .btn-ai-compact {
+    display: none;
+  }
+  
+  .command-row-2 .btn-new-compact {
+    display: none;
+  }
+}
+
+/* Ensure old elements are hidden */
+.tasks-header-consolidated,
+.search-sort-toolbar-compact,
+.header-actions-compact {
+  display: none !important;
+}
+
+/* ========================================
+ * END OF 2-ROW COMMAND BAR
+ * ======================================== */
+
+/* ========================================
+ * CROWN⁴.13 MOBILE PROGRESSIVE DISCLOSURE
+ * Show Tier 2 content (due date, assignee) by default on mobile
+ * since hover doesn't work on touch devices
+ * ======================================== */
+
+@media (hover: none), (max-width: 640px) {
+  /* Show secondary row by default on mobile/touch devices */
+  .task-card .task-secondary-row {
+    max-height: 100px;
+    opacity: 1;
+    margin-top: var(--task-space-2);
+    overflow: visible;
+  }
+  
+  /* Also show task actions by default on mobile */
+  .task-card .task-actions {
+    opacity: 1;
+  }
+}
+
+/* ========================================
+ * CROWN⁴.13 BAR VIEW ACTION ICONS FIX
+ * Ensure action icons are visible and consistent in bar view
+ * ======================================== */
+
+.view-bar .task-card .task-actions {
+  opacity: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-1);
+}
+
+.view-bar .task-card .task-menu-trigger {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  margin: 0;
+}
+
+/* Compact bar view - tighter spacing for action icons */
+.view-bar .task-card {
+  padding: var(--task-space-2) var(--task-space-3);
+}
+
+.view-bar .task-card .checkbox-wrapper {
+  width: 36px;
+  height: 36px;
+  margin: calc(-1 * var(--task-space-2));
+  margin-right: 0;
+}
+
+.view-bar .task-card .task-checkbox {
+  width: 18px;
+  height: 18px;
+}
+
+/* ========================================
+ * CROWN⁴.14 MOBILE UX IMPROVEMENTS
+ * Based on user feedback - December 2025
+ * ======================================== */
+
+/* 1. MOBILE TASK TEXT VISIBILITY - Show 3 lines on mobile */
+/* CROWN⁴.15 FIX: Use !important to override earlier single-line rule (line 3074) */
+@media (max-width: 640px) {
+  .task-title {
+    -webkit-line-clamp: 3 !important;
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+  }
+  
+  /* Increase card padding for better touch targets */
+  .task-card {
+    padding: var(--task-space-4) var(--task-space-4);
+    margin-bottom: var(--task-space-3);
+  }
+  
+  /* More breathing room between cards */
+  .tasks-list-container {
+    gap: var(--task-space-3);
+  }
+}
+
+/* 2. PRIORITY VISUAL HIERARCHY - Color-coded left border */
+/* CROWN⁴.15 FIX: Use !important to override PHASE 1 border shorthand (line 1789) */
+.task-card {
+  border-left: 3px solid transparent !important;
+}
+
+.task-card[data-priority="urgent"] {
+  border-left-color: var(--priority-urgent) !important;
+}
+
+.task-card[data-priority="high"] {
+  border-left-color: var(--priority-high) !important;
+}
+
+.task-card[data-priority="medium"] {
+  border-left-color: var(--priority-medium) !important;
+}
+
+.task-card[data-priority="low"] {
+  border-left-color: var(--priority-low) !important;
+}
+
+/* Completed tasks have subtle border */
+.task-card.completed {
+  border-left-color: var(--task-border-subtle) !important;
+}
+
+/* 3. COMPLETED TASKS STYLING - More distinct separation */
+.task-card.completed {
+  opacity: 0.5;
+  background: rgba(22, 22, 30, 0.7);
+}
+
+/* Visual separator before completed section (added via JS) */
+.completed-section-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--task-space-3);
+  padding: var(--task-space-4) 0;
+  margin-top: var(--task-space-3);
+  color: var(--task-text-tertiary);
+  font-size: var(--task-font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.completed-section-divider::before,
+.completed-section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--task-border-subtle);
+}
+
+.completed-section-divider svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.6;
+}
+
+/* 4. MOBILE TOUCH TARGET IMPROVEMENTS */
+@media (max-width: 640px) {
+  /* Larger checkbox wrapper for easier tapping */
+  .checkbox-wrapper {
+    width: 52px;
+    height: 52px;
+  }
+  
+  /* Larger action buttons */
+  .task-actions .task-menu-trigger {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+  
+  /* Priority icons more visible */
+  .priority-dot {
+    width: 10px;
+    height: 10px;
+  }
+  
+  /* Action icons spacing */
+  .task-actions {
+    gap: var(--task-space-2);
+  }
+}

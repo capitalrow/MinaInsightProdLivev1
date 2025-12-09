@@ -415,6 +415,18 @@ class TaskMenuController {
                 detail: { taskId, updates: { status: newStatus }, source: 'menu' }
             }));
             
+            // CROWN⁴.8 Phase 8: Dispatch undo event for completed tasks
+            if (newStatus === 'completed') {
+                const taskData = data.task || { id: taskId, title: taskCard?.querySelector('.task-title')?.textContent?.trim() };
+                window.dispatchEvent(new CustomEvent('task:completed', {
+                    detail: { 
+                        taskId, 
+                        task: { ...taskData, previousStatus: currentStatus },
+                        showUndo: true 
+                    }
+                }));
+            }
+            
             window.toast?.success(`Task marked as ${newStatus}`);
             
         } catch (error) {
@@ -432,7 +444,15 @@ class TaskMenuController {
                 }
             }
             
-            window.toast?.error('Failed to update status. Please try again.');
+            // CROWN⁴.9 Phase 9: Use error handler with retry
+            const retryFn = () => this.handleToggleStatus(taskId);
+            if (window.taskErrorHandler) {
+                window.dispatchEvent(new CustomEvent('task:operation-failed', {
+                    detail: { taskId, action: 'toggle-status', error, retryFn }
+                }));
+            } else {
+                window.toast?.error('Failed to update status. Please try again.');
+            }
         }
     }
 
@@ -1203,6 +1223,16 @@ class TaskMenuController {
                 await window.optimisticUI.cache.saveTask(data.task);
             }
             
+            // CROWN⁴.8 Phase 8: Dispatch undo event for archived tasks
+            const taskData = data.task || { id: taskId, title: task?.title };
+            window.dispatchEvent(new CustomEvent('task:archived', {
+                detail: { 
+                    taskId, 
+                    task: { ...taskData, previousStatus: task?.status || 'todo' },
+                    showUndo: true 
+                }
+            }));
+            
             // Remove from DOM
             if (taskCard) {
                 taskCard.remove();
@@ -1217,7 +1247,16 @@ class TaskMenuController {
                 taskCard.style.opacity = '';
                 taskCard.style.pointerEvents = '';
             }
-            this.showToast('Failed to archive task', 'error');
+            
+            // CROWN⁴.9 Phase 9: Use error handler with retry
+            const retryFn = () => this.handleArchive(taskId);
+            if (window.taskErrorHandler) {
+                window.dispatchEvent(new CustomEvent('task:operation-failed', {
+                    detail: { taskId, action: 'archive', error, retryFn }
+                }));
+            } else {
+                this.showToast('Failed to archive task', 'error');
+            }
         }
     }
 
@@ -1315,6 +1354,15 @@ class TaskMenuController {
                 await window.optimisticUI.cache.deleteTask(taskId);
             }
             
+            // CROWN⁴.8 Phase 8: Dispatch undo event for deleted tasks
+            window.dispatchEvent(new CustomEvent('task:deleted', {
+                detail: { 
+                    taskId, 
+                    task: { id: taskId, title: task?.title, status: task?.status, priority: task?.priority },
+                    showUndo: true 
+                }
+            }));
+            
             // Remove from DOM
             if (taskCard) {
                 taskCard.remove();
@@ -1324,13 +1372,22 @@ class TaskMenuController {
             console.log('[TaskMenuController] Delete successful');
         } catch (error) {
             console.error('[TaskMenuController] Delete failed with error:', error);
-            this.showToast('Failed to delete task', 'error');
             
             // Rollback UI changes
             const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
             if (taskCard) {
                 taskCard.style.opacity = '';
                 taskCard.style.pointerEvents = '';
+            }
+            
+            // CROWN⁴.9 Phase 9: Use error handler with retry
+            const retryFn = () => this.handleDelete(taskId);
+            if (window.taskErrorHandler) {
+                window.dispatchEvent(new CustomEvent('task:operation-failed', {
+                    detail: { taskId, action: 'delete', error, retryFn }
+                }));
+            } else {
+                this.showToast('Failed to delete task', 'error');
             }
         }
     }

@@ -37,7 +37,7 @@ def with_etag(f: Callable) -> Callable:
     
     Automatically:
     1. Generates ETag from response data
-    2. Adds ETag header to response
+    2. Adds ETag header to response (ALWAYS, including HEAD requests)
     3. Returns 304 Not Modified if If-None-Match matches
     
     Usage:
@@ -50,6 +50,7 @@ def with_etag(f: Callable) -> Callable:
     def decorated_function(*args, **kwargs):
         # Check If-None-Match header
         if_none_match = request.headers.get('If-None-Match')
+        is_head_request = request.method == 'HEAD'
         
         # Call original function
         response = f(*args, **kwargs)
@@ -58,24 +59,24 @@ def with_etag(f: Callable) -> Callable:
         if isinstance(response, tuple):
             data, status_code = response if len(response) == 2 else (response[0], 200)
         elif isinstance(response, Response):
-            # Already a Flask Response object
-            if if_none_match:
-                # Try to extract data from JSON response
-                try:
-                    if response.is_json:
-                        data = response.get_json()
-                        etag = generate_etag(data)
-                        
-                        if if_none_match == etag:
-                            # Return 304 Not Modified
-                            not_modified = make_response('', 304)
-                            not_modified.headers['ETag'] = etag
-                            return not_modified
-                        
-                        # Add ETag header
-                        response.headers['ETag'] = etag
-                except:
-                    pass
+            # Already a Flask Response object - ALWAYS try to add ETag
+            try:
+                if response.is_json:
+                    data = response.get_json()
+                    etag = generate_etag(data)
+                    
+                    # Check if client's ETag matches (304 Not Modified)
+                    if if_none_match and if_none_match == etag:
+                        not_modified = make_response('', 304)
+                        not_modified.headers['ETag'] = etag
+                        not_modified.headers['Cache-Control'] = 'no-cache'
+                        return not_modified
+                    
+                    # ALWAYS add ETag header (fixes HEAD request issue)
+                    response.headers['ETag'] = etag
+                    response.headers['Cache-Control'] = 'no-cache'
+            except Exception:
+                pass
             
             return response
         else:
@@ -95,7 +96,7 @@ def with_etag(f: Callable) -> Callable:
         etag = generate_etag(response_data)
         
         # Check if client's ETag matches
-        if if_none_match == etag:
+        if if_none_match and if_none_match == etag:
             # Return 304 Not Modified
             not_modified = make_response('', 304)
             not_modified.headers['ETag'] = etag

@@ -25,7 +25,7 @@ class TaskDragDrop {
             this.makeTasksDraggable();
         });
 
-        console.log('✅ TaskDragDrop initialized');
+        console.log('[DragDrop] ✅ TaskDragDrop initialized');
     }
 
     createPlaceholder() {
@@ -72,6 +72,10 @@ class TaskDragDrop {
         this.draggedElement = e.currentTarget;
         this.draggedTaskId = parseInt(this.draggedElement.dataset.taskId);
         this.draggedIndex = parseInt(this.draggedElement.dataset.dragIndex);
+        
+        console.log('[DragDrop] 🎯 DRAG START');
+        console.log('[DragDrop] Task ID:', this.draggedTaskId);
+        console.log('[DragDrop] Original index:', this.draggedIndex);
         
         // Set drag data
         e.dataTransfer.effectAllowed = 'move';
@@ -148,6 +152,9 @@ class TaskDragDrop {
         
         if (!this.isDragging) return;
         
+        console.log('[DragDrop] 📍 DROP EVENT');
+        console.log('[DragDrop] Task being dropped:', this.draggedTaskId);
+        
         // Calculate new index BEFORE removing placeholder
         // Find placeholder position among all cards
         const parent = this.draggedElement.parentNode;
@@ -173,8 +180,13 @@ class TaskDragDrop {
             newIndex = allCards.indexOf(this.draggedElement);
         }
         
+        console.log('[DragDrop] Position change:', this.draggedIndex, '→', newIndex);
+        
         if (newIndex !== -1 && newIndex !== this.draggedIndex) {
+            console.log('[DragDrop] Calling reorderTask()');
             await this.reorderTask(this.draggedTaskId, this.draggedIndex, newIndex);
+        } else {
+            console.log('[DragDrop] No position change, skipping reorder');
         }
     }
 
@@ -215,10 +227,14 @@ class TaskDragDrop {
     }
 
     async reorderTask(taskId, oldIndex, newIndex) {
+        console.log('[DragDrop] 🔄 REORDER START');
+        console.log('[DragDrop] Task:', taskId, '| From:', oldIndex, '→ To:', newIndex);
+        
         try {
             // Get all tasks in current order
             const allCards = Array.from(document.querySelectorAll('.task-card, .task-item-enhanced'));
             const taskOrder = allCards.map(card => parseInt(card.dataset.taskId));
+            console.log('[DragDrop] Current task order:', taskOrder);
             
             // Calculate new positions for affected tasks
             const updates = [];
@@ -260,6 +276,7 @@ class TaskDragDrop {
             }
             
             // Persist to backend
+            console.log('[DragDrop] 📤 POST /api/tasks/reorder with', updates.length, 'updates');
             const response = await fetch('/api/tasks/reorder', {
                 method: 'POST',
                 headers: {
@@ -269,10 +286,12 @@ class TaskDragDrop {
             });
             
             if (!response.ok) {
+                console.error('[DragDrop] ❌ Reorder API failed:', response.status);
                 throw new Error('Failed to reorder tasks');
             }
             
             const result = await response.json();
+            console.log('[DragDrop] ✅ Server confirmed reorder:', result);
             
             // Show success feedback
             if (window.toastManager) {

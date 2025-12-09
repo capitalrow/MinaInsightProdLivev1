@@ -6,6 +6,9 @@
     <meta name="description" content="{% block meta_description %}Mina - Transform meetings into actionable moments with AI-powered transcription and insights{% endblock %}">
     <meta name="theme-color" content="#0f172a">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {% if current_user.is_authenticated and current_user.workspace_id %}
+    <meta name="workspace-id" content="{{ current_user.workspace_id }}">
+    {% endif %}
     
     <title>{% block title %}Mina - Meeting Insights & Action{% endblock %}</title>
     
@@ -215,6 +218,8 @@
     <script src="{{ url_for('static', filename='js/cache-bootstrap.js') }}" defer nonce="{{ g.csp_nonce }}"></script>
     <script src="{{ url_for('static', filename='js/broadcast-sync.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/indexeddb-cache.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/unified-sync-init.js') }}" defer></script>
     
     <!-- CROWN⁴ Telemetry & Performance (defer - monitoring tools) -->
     <script src="{{ url_for('static', filename='js/crown-telemetry.js') }}" defer></script>

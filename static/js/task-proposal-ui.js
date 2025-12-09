@@ -5,6 +5,17 @@ class TaskProposalUI {
         this.currentAbortController = null;
         this.proposalContainer = null;
         this.acceptedProposals = new Map();
+        this.proposalMap = new Map();
+        this.pendingProposals = [];
+        this.acceptedProposalIds = new Set();
+        this.processingProposalIds = new Set();
+        this.meetingId = null;
+        this.meetingTitle = null;
+        this.buttonMeetingId = null;
+        this.metadataReceived = false;
+        this.isStreaming = false;
+        this.streamTimeout = null;
+        this.STREAM_TIMEOUT_MS = 30000;
         this.init();
         this._bindGenerateButtons();
         this._registerReconciliationHandlers();
@@ -142,11 +153,35 @@ class TaskProposalUI {
         });
     }
 
-    async startProposalStream(button) {
-        const meetingId = button.dataset.meetingId;
+    openModal() {
+        if (!this.modal) {
+            console.error('[TaskProposalUI] Modal not created');
+            return;
+        }
+        this.modal.classList.add('visible');
+        document.body.style.overflow = 'hidden';
         
         const firstFocusable = this.modal.querySelector('button');
         if (firstFocusable) firstFocusable.focus();
+    }
+
+    showStreamingState() {
+        const content = this.modal.querySelector('.ai-proposals-content');
+        if (!content) return;
+        
+        content.innerHTML = `
+            <div class="ai-proposals-streaming">
+                <div class="streaming-indicator">
+                    <div class="streaming-dot"></div>
+                    <div class="streaming-dot"></div>
+                    <div class="streaming-dot"></div>
+                </div>
+                <p class="streaming-text">Analyzing your meetings for action items...</p>
+            </div>
+        `;
+        
+        const footer = this.modal.querySelector('.ai-proposals-footer');
+        if (footer) footer.style.display = 'none';
     }
 
     closeModal() {

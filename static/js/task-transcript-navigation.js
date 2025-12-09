@@ -16,24 +16,11 @@ class TaskTranscriptNavigation {
 
         // Listen for "jump-to-transcript" actions from task menus
         document.addEventListener('click', (e) => {
-            const jumpBtn = e.target.closest('[data-action="jump-to-transcript"]');
-            if (!jumpBtn) return;
-
-            e.preventDefault();
-            this.handleJumpClick(jumpBtn);
             const jumpBtn = e.target.closest('[data-action="jump-to-transcript"], .jump-to-transcript-btn');
             if (!jumpBtn) return;
 
             e.preventDefault();
-
-            const taskId = jumpBtn.dataset.taskId
-                || jumpBtn.closest('[data-task-id]')?.dataset.taskId
-                || jumpBtn.closest('.task-menu')?.dataset.taskId;
-
-            if (!taskId) return;
-
-            this.emitJumpEvent(taskId);
-            this.jumpToTranscript(taskId);
+            this.handleJumpClick(jumpBtn);
         });
 
         console.log('[TaskTranscriptNavigation] Initialized successfully');
@@ -46,7 +33,7 @@ class TaskTranscriptNavigation {
 
         if (!taskId) {
             console.warn('[TaskTranscriptNavigation] Missing taskId on jump action');
-            this.showToast('❌ Unable to jump to transcript (missing task id)', 'error');
+            this.showToast('Unable to jump to transcript (missing task id)', 'error');
             return;
         }
 
@@ -56,6 +43,7 @@ class TaskTranscriptNavigation {
         const optimisticSpan = this.parseSpanFromDataset(jumpBtn.dataset, jumpBtn.closest('[data-transcript-start-ms]'));
 
         this.saveReturnState(taskId);
+        this.emitJumpEvent(taskId);
         this.jumpToTranscript(taskId, {
             meetingId: optimisticMeetingId,
             transcriptSpan: optimisticSpan
@@ -93,6 +81,9 @@ class TaskTranscriptNavigation {
             }
         } catch (err) {
             console.warn('[TaskTranscriptNavigation] Unable to persist return state', err);
+        }
+    }
+
     emitJumpEvent(taskId) {
         document.dispatchEvent(new CustomEvent('task:jump-to-transcript', {
             detail: { taskId }
@@ -117,7 +108,7 @@ class TaskTranscriptNavigation {
         try {
             console.log(`[TaskTranscriptNavigation] Jumping to transcript for task: ${taskId}`);
 
-            this.showToast('📍 Preparing transcript jump...', 'info', 1200);
+            this.showToast('Preparing transcript jump...', 'info', 1200);
 
             const resolved = await this.resolveNavigationTarget(taskId, optimisticContext);
             if (!resolved) return;
@@ -128,7 +119,7 @@ class TaskTranscriptNavigation {
             console.log(`[TaskTranscriptNavigation] Navigating to: ${targetUrl}`);
 
             this.pendingNavigation = { targetUrl, reconciledWith: source };
-            this.showToast('⚡ Jumping to transcript...', 'success', 1800);
+            this.showToast('Jumping to transcript...', 'success', 1800);
 
             setTimeout(() => {
                 window.location.href = targetUrl;
@@ -145,7 +136,7 @@ class TaskTranscriptNavigation {
 
         } catch (error) {
             console.error('[TaskTranscriptNavigation] Error:', error);
-            this.showToast('❌ Failed to jump to transcript', 'error');
+            this.showToast('Failed to jump to transcript', 'error');
             
             if (window.CROWNTelemetry) {
                 window.CROWNTelemetry.recordMetric('task_jump_to_transcript_error', 1, {
@@ -189,13 +180,13 @@ class TaskTranscriptNavigation {
 
         // Check if meeting_id exists
         if (!task.meeting_id) {
-            this.showToast('❌ No meeting associated with this task', 'error');
+            this.showToast('No meeting associated with this task', 'error');
             return null;
         }
 
         if (optimisticMeetingId && optimisticSpan?.start_ms !== undefined) {
             if (optimisticMeetingId !== task.meeting_id || optimisticSpan.start_ms !== task.transcript_span.start_ms) {
-                this.showToast('ℹ️ Transcript location updated from server', 'info', 2000);
+                this.showToast('Transcript location updated from server', 'info', 2000);
             }
         }
 
@@ -229,8 +220,8 @@ class TaskTranscriptNavigation {
      */
     showNoTranscriptToast(task) {
         const message = task.extracted_by_ai 
-            ? '📝 This task was created manually - no transcript available'
-            : '📝 Transcript not available for this task';
+            ? 'This task was AI-extracted but no transcript available'
+            : 'Transcript not available for this task';
         
         this.showToast(message, 'warning', 3000);
     }

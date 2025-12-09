@@ -266,6 +266,10 @@ class OptimisticUI {
                 detail: { taskId: tempId, task: optimisticTask }
             }));
             
+            // CROWN⁴.15: Update TaskStateStore for counter synchronization
+            // Temp tasks tracked separately - pass isTemp=true
+            window.taskStateStore?.upsertTask(optimisticTask, true);
+            
             // Step 3: Queue event and offline operation via OfflineQueueManager
             await this.cache.addEvent({
                 event_type: 'task_create',
@@ -316,19 +320,34 @@ class OptimisticUI {
 
     /**
      * Update task optimistically
+     * CROWN⁴.13: Acquires action lock to prevent sync overwrites
      * @param {number|string} taskId
      * @param {Object} updates
      * @returns {Promise<Object>} Updated task
      */
     async updateTask(taskId, updates) {
+        console.log(`\n📥 [UpdateTask] START - Task ${taskId}`, updates);
         const opId = this._generateOperationId();
+        console.log(`🔑 [UpdateTask] Generated operation ID: ${opId}`);
+        
+        // CROWN⁴.13: Acquire action lock to prevent sync overwrites
+        let lockId = null;
+        if (window.taskActionLock) {
+            lockId = window.taskActionLock.acquire(taskId, `update:${Object.keys(updates).join(',')}`);
+            console.log(`🔒 [UpdateTask] Lock acquired: ${lockId}`);
+        } else {
+            console.warn(`⚠️ [UpdateTask] taskActionLock not available - sync protection disabled!`);
+        }
         
         try {
             // Get current task
             const currentTask = await this.cache.getTask(taskId);
             if (!currentTask) {
+                console.error(`❌ [UpdateTask] Task ${taskId} not found in cache`);
+                if (lockId) window.taskActionLock.release(lockId);
                 throw new Error('Task not found');
             }
+            console.log(`📋 [UpdateTask] Current task state:`, { id: currentTask.id, status: currentTask.status });
 
             // Create optimistic version
             const optimisticTask = {
@@ -349,6 +368,10 @@ class OptimisticUI {
             window.dispatchEvent(new CustomEvent('task:updated', {
                 detail: { taskId, updates, task: optimisticTask }
             }));
+            
+            // CROWN⁴.15: Update TaskStateStore for counter synchronization
+            // This handles status changes (active<->archived) and completion
+            window.taskStateStore?.upsertTask(optimisticTask);
             
             // Step 3: Queue event via OfflineQueueManager
             await this.cache.addEvent({
@@ -379,7 +402,8 @@ class OptimisticUI {
                 updates,  // Clean updates data for retry
                 data: updates,  // Explicit clean data reference
                 queueId,  // Store queue ID to remove on success
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                lockId  // CROWN⁴.13: Store lock ID for release on completion
             };
             this.pendingOperations.set(opId, operation);
             
@@ -388,11 +412,18 @@ class OptimisticUI {
                 console.error('❌ Failed to persist pending operation:', err);
             });
             
+            console.log(`📤 [UpdateTask] Calling _syncToServer() for task ${taskId}...`);
             this._syncToServer(opId, 'update', updates, taskId);
+            console.log(`📨 [UpdateTask] _syncToServer() initiated (async) - returning optimistic task`);
 
             return optimisticTask;
         } catch (error) {
-            console.error('❌ Optimistic update failed:', error);
+            console.error('❌ [UpdateTask] FAILED:', error);
+            // CROWN⁴.13: Release lock on error
+            if (lockId && window.taskActionLock) {
+                window.taskActionLock.release(lockId);
+                console.log(`🔓 [UpdateTask] Lock ${lockId} released after error`);
+            }
             throw error;
         }
     }
@@ -434,6 +465,10 @@ class OptimisticUI {
             window.dispatchEvent(new CustomEvent('task:deleted', {
                 detail: { taskId, task: updatedTask }
             }));
+            
+            // CROWN⁴.15: Update TaskStateStore for counter synchronization
+            // Remove from store so counters update immediately
+            window.taskStateStore?.removeTask(taskId);
             
             // Step 3: Queue event via OfflineQueueManager
             await this.cache.addEvent({
@@ -608,20 +643,32 @@ class OptimisticUI {
 
     /**
      * Toggle task status optimistically
+     * CROWN⁴.13: Complete flow logging for debugging persistence issues
      * @param {number|string} taskId
      * @returns {Promise<Object>}
      */
     async toggleTaskStatus(taskId) {
+        console.log(`🔄 [ToggleStatus] START - Task ${taskId}`);
+        
         const task = await this.cache.getTask(taskId);
-        if (!task) return;
+        if (!task) {
+            console.warn(`⚠️ [ToggleStatus] Task ${taskId} not found in cache`);
+            return;
+        }
 
-        const newStatus = task.status === 'completed' ? 'todo' : 'completed';
+        const oldStatus = task.status;
+        const newStatus = oldStatus === 'completed' ? 'todo' : 'completed';
+        console.log(`📝 [ToggleStatus] Task ${taskId}: ${oldStatus} → ${newStatus}`);
+        
         const updates = {
             status: newStatus,
             completed_at: newStatus === 'completed' ? new Date().toISOString() : null
         };
+        console.log(`📦 [ToggleStatus] Update payload:`, updates);
 
         const result = await this.updateTask(taskId, updates);
+        console.log(`✅ [ToggleStatus] updateTask() returned for task ${taskId}`);
+        console.log(`📊 [ToggleStatus] Result:`, { id: result?.id, status: result?.status });
 
         if (newStatus === 'completed') {
             if (window.emotionalAnimations) {
@@ -1395,7 +1442,24 @@ class OptimisticUI {
                 eventName = 'task_update';
                 let updateType = 'title'; // default
                 
-                if (data.status !== undefined) {
+                // CRITICAL FIX: deleted_at (archive/soft-delete) uses HTTP fallback
+                // WebSocket doesn't have dedicated archive event, but HTTP PUT supports deleted_at
+                if (data.deleted_at !== undefined) {
+                    console.log(`🔄 [Archive] Using HTTP fallback for deleted_at update`);
+                    try {
+                        const result = await this._syncViaHTTP(opId, type, data, taskId);
+                        await this._reconcileSuccess(opId, type, result, taskId);
+                        console.log(`✅ [Archive] HTTP update succeeded`);
+                        return;
+                    } catch (httpError) {
+                        console.error(`❌ [Archive] HTTP fallback failed:`, httpError);
+                        await this._reconcileFailure(opId, type, taskId, httpError);
+                        if (window.toast) {
+                            window.toast.error(`Failed to archive: ${httpError.message || 'Network error'}`);
+                        }
+                        return;
+                    }
+                } else if (data.status !== undefined) {
                     updateType = 'status_toggle';
                 } else if (data.priority !== undefined) {
                     updateType = 'priority';
@@ -1440,6 +1504,14 @@ class OptimisticUI {
 
             const reconcileTime = performance.now() - startTime;
             console.log(`✅ Server acknowledged ${type} in ${reconcileTime.toFixed(2)}ms, response:`, result);
+
+            // CROWN⁴.13 FIX: Check if server returned success=false and trigger rollback
+            // This handles cases where WebSocket ACK is received but the operation failed server-side
+            if (result?.success === false || result?.result?.success === false) {
+                const errorMessage = result?.error || result?.result?.error || 'Server rejected operation';
+                console.error(`❌ [_syncToServer] Server returned failure:`, errorMessage);
+                throw new Error(errorMessage);
+            }
 
             // Reconcile with server data
             await this._reconcileSuccess(opId, type, result, taskId);
@@ -1650,6 +1722,12 @@ class OptimisticUI {
             }
         }
 
+        // CROWN⁴.13: Release action lock on successful sync
+        if (operation.lockId && window.taskActionLock) {
+            window.taskActionLock.release(operation.lockId);
+            console.log(`🔓 [Reconcile] Released action lock ${operation.lockId}`);
+        }
+
         // Remove operation from in-memory map
         this.pendingOperations.delete(opId);
 
@@ -1784,6 +1862,12 @@ class OptimisticUI {
             // Restore deleted task
             await this.cache.saveTask(operation.task);
             this._addTaskToDOM(operation.task);
+        }
+
+        // CROWN⁴.13: Release action lock on failure (don't block future syncs)
+        if (operation.lockId && window.taskActionLock) {
+            window.taskActionLock.release(operation.lockId);
+            console.log(`🔓 [Reconcile] Released action lock ${operation.lockId} after failure`);
         }
 
         // CRITICAL FIX: DO NOT delete operation from pendingOperations

@@ -40,9 +40,10 @@ def auth_rate_limit(limit_string):
                     except RateLimitExceeded:
                         flash('Too many attempts. Please wait a moment and try again.', 'error')
                         # Return to the appropriate template
-                        if 'login' in request.endpoint:
+                        endpoint = request.endpoint or ''
+                        if 'login' in endpoint:
                             return render_template('auth/login.html')
-                        elif 'register' in request.endpoint:
+                        elif 'register' in endpoint:
                             return render_template('auth/register.html')
             except Exception as e:
                 # Log but don't block - graceful degradation
@@ -702,7 +703,7 @@ def delete_account():
     - All tasks and action items
     - Workspace memberships
     """
-    from models import Meeting, Task, Transcript
+    from models import Meeting, Task
     
     try:
         user_id = current_user.id

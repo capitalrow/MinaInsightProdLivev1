@@ -10,10 +10,10 @@ and invalidates cached analytics/dashboard data.
 """
 
 from flask import Blueprint, jsonify, request
-# If you do NOT have extensions.cache or library.log:
+from flask_login import login_required, current_user
 from flask import current_app as app
 from models import db
-from services.cache import cache  # or wherever your cache is; if none, stub out cache.delete_prefix
+from services.cache import cache
 from datetime import datetime
 from sqlalchemy import func
 from models import Session, Segment
@@ -25,6 +25,7 @@ api_session_finalize_bp = Blueprint("api_session_finalize", __name__, url_prefix
 
 
 @api_session_finalize_bp.route("/<external_id>/complete", methods=["POST"])
+@login_required
 def finalize_session(external_id: str):
     """
     🎯 Finalize a transcription session and update analytics visibility.
