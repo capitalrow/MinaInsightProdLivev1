@@ -13,6 +13,25 @@ class TaskDragDrop {
         this.dropZoneElement = null;
         this.placeholder = null;
         this.isDragging = false;
+        
+        // Touch-specific state
+        this.touchClone = null;
+        this.touchStartY = 0;
+        this.touchStartX = 0;
+        this.longPressTimer = null;
+        this.longPressDelay = 300; // ms to hold before drag starts
+        this.touchScrollThreshold = 10; // px movement before canceling long press
+        this.isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        
+        // Bound handler references for proper cleanup
+        this._boundTouchStart = this.handleTouchStart.bind(this);
+        this._boundTouchMove = this.handleTouchMove.bind(this);
+        this._boundTouchEnd = this.handleTouchEnd.bind(this);
+        this._boundTouchCancel = this.handleTouchCancel.bind(this);
+        this._boundDragStart = this.handleDragStart.bind(this);
+        this._boundDragEnter = this.handleDragEnter.bind(this);
+        this._boundDragLeave = this.handleDragLeave.bind(this);
+        
         this.init();
     }
 
@@ -51,19 +70,32 @@ class TaskDragDrop {
         const taskCards = document.querySelectorAll('.task-card, .task-item-enhanced');
         
         taskCards.forEach((card, index) => {
-            // Make card draggable
+            // Make card draggable (desktop only - touch uses long-press)
             card.setAttribute('draggable', 'true');
             card.dataset.dragIndex = index;
             
-            // Remove existing listeners to avoid duplicates
-            card.removeEventListener('dragstart', this.handleDragStart);
-            card.removeEventListener('dragenter', this.handleDragEnter);
-            card.removeEventListener('dragleave', this.handleDragLeave);
+            // Remove existing listeners to avoid duplicates (using stored bound refs)
+            card.removeEventListener('dragstart', this._boundDragStart);
+            card.removeEventListener('dragenter', this._boundDragEnter);
+            card.removeEventListener('dragleave', this._boundDragLeave);
             
-            // Add drag event listeners
-            card.addEventListener('dragstart', this.handleDragStart.bind(this));
-            card.addEventListener('dragenter', this.handleDragEnter.bind(this));
-            card.addEventListener('dragleave', this.handleDragLeave.bind(this));
+            // Add drag event listeners (desktop)
+            card.addEventListener('dragstart', this._boundDragStart);
+            card.addEventListener('dragenter', this._boundDragEnter);
+            card.addEventListener('dragleave', this._boundDragLeave);
+            
+            // Add touch event listeners (mobile) - remove first to avoid duplicates
+            if (this.isTouchDevice) {
+                card.removeEventListener('touchstart', this._boundTouchStart);
+                card.removeEventListener('touchmove', this._boundTouchMove);
+                card.removeEventListener('touchend', this._boundTouchEnd);
+                card.removeEventListener('touchcancel', this._boundTouchCancel);
+                
+                card.addEventListener('touchstart', this._boundTouchStart, { passive: false });
+                card.addEventListener('touchmove', this._boundTouchMove, { passive: false });
+                card.addEventListener('touchend', this._boundTouchEnd, { passive: false });
+                card.addEventListener('touchcancel', this._boundTouchCancel, { passive: false });
+            }
         });
     }
 
@@ -224,6 +256,332 @@ class TaskDragDrop {
         this.draggedElement = null;
         this.draggedTaskId = null;
         this.draggedIndex = null;
+    }
+
+    // ========== TOUCH EVENT HANDLERS ==========
+    
+    handleTouchStart(e) {
+        // Only handle single touch
+        if (e.touches.length !== 1) return;
+        
+        const touch = e.touches[0];
+        const card = e.currentTarget;
+        
+        // Store touch start position
+        this.touchStartX = touch.clientX;
+        this.touchStartY = touch.clientY;
+        this._touchStartCard = card; // Store for use in timer
+        
+        // Prevent text selection on long press (iOS Safari)
+        card.style.webkitUserSelect = 'none';
+        card.style.userSelect = 'none';
+        
+        // Add temporary contextmenu handler to prevent native menu on long press
+        this._contextMenuHandler = (evt) => evt.preventDefault();
+        card.addEventListener('contextmenu', this._contextMenuHandler);
+        
+        // Start long press timer
+        this.longPressTimer = setTimeout(() => {
+            this.startTouchDrag(this._touchStartCard, touch);
+        }, this.longPressDelay);
+        
+        console.log('[DragDrop] 👆 Touch start on task:', card.dataset.taskId);
+    }
+    
+    handleTouchMove(e) {
+        const touch = e.touches[0];
+        
+        // If not dragging yet, check if we should cancel the long press
+        if (!this.isDragging && this.longPressTimer) {
+            const deltaX = Math.abs(touch.clientX - this.touchStartX);
+            const deltaY = Math.abs(touch.clientY - this.touchStartY);
+            
+            // If moved too much, cancel long press (user is scrolling)
+            if (deltaX > this.touchScrollThreshold || deltaY > this.touchScrollThreshold) {
+                this.cancelLongPress();
+                return;
+            }
+        }
+        
+        // If actively dragging, handle the move
+        if (this.isDragging) {
+            e.preventDefault(); // Prevent scrolling while dragging
+            this.updateTouchDrag(touch);
+        }
+    }
+    
+    handleTouchEnd(e) {
+        // Cancel any pending long press
+        this.cancelLongPress();
+        
+        if (!this.isDragging) return;
+        
+        // Prevent the synthetic click that browsers emit after touch
+        e.preventDefault();
+        e.stopPropagation();
+        
+        console.log('[DragDrop] 👆 Touch end');
+        
+        // Add one-time click capture to suppress the synthetic click
+        // (some browsers still emit click even with preventDefault on touchend)
+        if (this._touchDragActivated) {
+            const clickSuppressor = (evt) => {
+                evt.preventDefault();
+                evt.stopPropagation();
+                evt.stopImmediatePropagation();
+            };
+            document.addEventListener('click', clickSuppressor, { capture: true, once: true });
+            
+            // Safety cleanup - remove after short delay if not triggered
+            setTimeout(() => {
+                document.removeEventListener('click', clickSuppressor, { capture: true });
+            }, 100);
+        }
+        
+        // Complete the drag operation
+        this.completeTouchDrag();
+    }
+    
+    handleTouchCancel(e) {
+        console.log('[DragDrop] 👆 Touch cancel');
+        this.cancelLongPress();
+        this.cancelTouchDrag();
+    }
+    
+    cancelLongPress() {
+        if (this.longPressTimer) {
+            clearTimeout(this.longPressTimer);
+            this.longPressTimer = null;
+        }
+        
+        // Clean up contextmenu handler if it was added
+        if (this._touchStartCard && this._contextMenuHandler) {
+            this._touchStartCard.removeEventListener('contextmenu', this._contextMenuHandler);
+            // Restore user select
+            this._touchStartCard.style.webkitUserSelect = '';
+            this._touchStartCard.style.userSelect = '';
+        }
+        this._contextMenuHandler = null;
+    }
+    
+    startTouchDrag(card, touch) {
+        this.isDragging = true;
+        this._touchDragActivated = true; // Flag to suppress synthetic click
+        this.draggedElement = card;
+        this.draggedTaskId = parseInt(card.dataset.taskId);
+        this.draggedIndex = parseInt(card.dataset.dragIndex);
+        
+        console.log('[DragDrop] 🎯 TOUCH DRAG START');
+        console.log('[DragDrop] Task ID:', this.draggedTaskId);
+        
+        // Create visual clone for dragging
+        this.createTouchClone(card, touch);
+        
+        // Add dragging class to original
+        card.classList.add('task-dragging');
+        
+        // Animate original to semi-transparent
+        if (window.gsap) {
+            gsap.to(card, {
+                opacity: 0.4,
+                scale: 0.98,
+                duration: 0.2,
+                ease: 'power2.out'
+            });
+        }
+        
+        // Haptic feedback
+        if (window.hapticFeedback) {
+            window.hapticFeedback.trigger('medium');
+        } else if (navigator.vibrate) {
+            navigator.vibrate(50); // Fallback vibration
+        }
+        
+        // Track telemetry
+        if (window.telemetry) {
+            window.telemetry.track('task_touch_drag_start', { task_id: this.draggedTaskId });
+        }
+    }
+    
+    createTouchClone(card, touch) {
+        // Remove existing clone if any
+        this.removeTouchClone();
+        
+        // Clone the card
+        this.touchClone = card.cloneNode(true);
+        this.touchClone.className = 'task-drag-clone';
+        
+        // Style the clone
+        const rect = card.getBoundingClientRect();
+        Object.assign(this.touchClone.style, {
+            position: 'fixed',
+            top: `${rect.top}px`,
+            left: `${rect.left}px`,
+            width: `${rect.width}px`,
+            height: `${rect.height}px`,
+            zIndex: '10000',
+            pointerEvents: 'none',
+            opacity: '0.9',
+            transform: 'rotate(2deg) scale(1.02)',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+            transition: 'none',
+            willChange: 'transform'
+        });
+        
+        document.body.appendChild(this.touchClone);
+        
+        // Store offset from touch point to card origin
+        this.touchOffsetX = touch.clientX - rect.left;
+        this.touchOffsetY = touch.clientY - rect.top;
+    }
+    
+    updateTouchDrag(touch) {
+        // Move the clone
+        if (this.touchClone) {
+            const x = touch.clientX - this.touchOffsetX;
+            const y = touch.clientY - this.touchOffsetY;
+            this.touchClone.style.left = `${x}px`;
+            this.touchClone.style.top = `${y}px`;
+        }
+        
+        // Find element under touch point (ignoring the clone)
+        // Guard against missing clone
+        if (!this.touchClone) return;
+        
+        this.touchClone.style.display = 'none';
+        const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+        this.touchClone.style.display = '';
+        
+        // Guard against null elementBelow (touch is outside viewport or on non-element)
+        if (!elementBelow) {
+            // Clear drop zone styling but don't try to update placeholder
+            document.querySelectorAll('.task-drag-over').forEach(el => {
+                el.classList.remove('task-drag-over');
+            });
+            return;
+        }
+        
+        // Find the task card under the touch
+        const dropTarget = elementBelow.closest('.task-card, .task-item-enhanced');
+        
+        // Update drop zone styling
+        document.querySelectorAll('.task-drag-over').forEach(el => {
+            if (el !== dropTarget) {
+                el.classList.remove('task-drag-over');
+            }
+        });
+        
+        if (dropTarget && dropTarget !== this.draggedElement) {
+            dropTarget.classList.add('task-drag-over');
+            this.dropZoneElement = dropTarget;
+            
+            // Position placeholder - guard against missing parent
+            if (dropTarget.parentNode) {
+                const rect = dropTarget.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                
+                if (touch.clientY < midpoint) {
+                    dropTarget.parentNode.insertBefore(this.placeholder, dropTarget);
+                } else {
+                    dropTarget.parentNode.insertBefore(this.placeholder, dropTarget.nextSibling);
+                }
+                
+                // Render feather icons in placeholder
+                if (window.feather) {
+                    feather.replace();
+                }
+            }
+        }
+    }
+    
+    async completeTouchDrag() {
+        console.log('[DragDrop] 📍 TOUCH DROP');
+        
+        // Calculate new index from placeholder position
+        const parent = this.draggedElement.parentNode;
+        const allChildren = Array.from(parent.children);
+        let placeholderIndex = -1;
+        
+        if (this.placeholder && this.placeholder.parentNode) {
+            placeholderIndex = allChildren.indexOf(this.placeholder);
+            this.placeholder.parentNode.removeChild(this.placeholder);
+        }
+        
+        let newIndex = placeholderIndex;
+        if (newIndex > this.draggedIndex) {
+            newIndex--;
+        }
+        
+        // Fallback
+        if (newIndex === -1) {
+            const allCards = Array.from(document.querySelectorAll('.task-card, .task-item-enhanced'));
+            newIndex = allCards.indexOf(this.draggedElement);
+        }
+        
+        console.log('[DragDrop] Position change:', this.draggedIndex, '→', newIndex);
+        
+        // Clean up visual state
+        this.cleanupTouchDrag();
+        
+        // Execute reorder if position changed
+        if (newIndex !== -1 && newIndex !== this.draggedIndex) {
+            await this.reorderTask(this.draggedTaskId, this.draggedIndex, newIndex);
+        }
+        
+        // Reset state
+        this.resetTouchState();
+    }
+    
+    cancelTouchDrag() {
+        this.cleanupTouchDrag();
+        this.resetTouchState();
+    }
+    
+    cleanupTouchDrag() {
+        // Remove clone
+        this.removeTouchClone();
+        
+        // Restore original card
+        if (this.draggedElement) {
+            this.draggedElement.classList.remove('task-dragging');
+            
+            if (window.gsap) {
+                gsap.to(this.draggedElement, {
+                    opacity: 1,
+                    scale: 1,
+                    duration: 0.3,
+                    ease: 'elastic.out(1, 0.5)'
+                });
+            }
+        }
+        
+        // Remove drop zone styling
+        document.querySelectorAll('.task-drag-over').forEach(el => {
+            el.classList.remove('task-drag-over');
+        });
+        
+        // Remove placeholder
+        if (this.placeholder && this.placeholder.parentNode) {
+            this.placeholder.parentNode.removeChild(this.placeholder);
+        }
+    }
+    
+    removeTouchClone() {
+        if (this.touchClone && this.touchClone.parentNode) {
+            this.touchClone.parentNode.removeChild(this.touchClone);
+        }
+        this.touchClone = null;
+    }
+    
+    resetTouchState() {
+        this.isDragging = false;
+        this._touchDragActivated = false;
+        this.draggedElement = null;
+        this.draggedTaskId = null;
+        this.draggedIndex = null;
+        this.dropZoneElement = null;
+        this.touchOffsetX = 0;
+        this.touchOffsetY = 0;
     }
 
     async reorderTask(taskId, oldIndex, newIndex) {
