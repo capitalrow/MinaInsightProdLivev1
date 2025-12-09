@@ -355,12 +355,13 @@ class TaskCache {
     /**
      * MIGRATION: Fix existing corrupted records in IndexedDB
      * Runs once on init to sanitize any records that have non-serializable data
+     * SAFETY: Only marks complete if migration succeeds with no errors
      * @returns {Promise<{fixed: number, errors: number}>}
      */
     async _migrateCorruptedRecords() {
         const migrationKey = 'mina_migration_v1_complete';
         
-        // Check if migration already completed
+        // Check if migration already completed successfully
         if (localStorage.getItem(migrationKey) === 'true') {
             console.log('✅ [Migration] Already completed, skipping');
             return { fixed: 0, errors: 0 };
@@ -376,24 +377,31 @@ class TaskCache {
             fixed += tasksResult.fixed;
             errors += tasksResult.errors;
             
-            // Migrate temp_tasks store
+            // Migrate temp_tasks store  
             const tempResult = await this._migrateStore('temp_tasks');
             fixed += tempResult.fixed;
             errors += tempResult.errors;
             
-            // Mark migration complete
-            localStorage.setItem(migrationKey, 'true');
-            console.log(`✅ [Migration] Complete: ${fixed} records fixed, ${errors} errors`);
+            // SAFETY: Only mark complete if no errors occurred
+            if (errors === 0) {
+                localStorage.setItem(migrationKey, 'true');
+                console.log(`✅ [Migration] Complete: ${fixed} records fixed`);
+            } else {
+                console.warn(`⚠️ [Migration] Completed with ${errors} errors, will retry on next init`);
+            }
             
             return { fixed, errors };
         } catch (error) {
             console.error('❌ [Migration] Failed:', error);
+            // Don't set flag - allow retry on next init
             return { fixed, errors: errors + 1 };
         }
     }
     
     /**
      * Migrate a single IndexedDB store by sanitizing all records
+     * SAFETY: Never deletes records - only updates in-place with sanitized version
+     * Always preserves original ID to prevent data loss
      * @param {string} storeName - Name of the store to migrate
      * @returns {Promise<{fixed: number, errors: number}>}
      */
@@ -401,20 +409,52 @@ class TaskCache {
         return new Promise((resolve) => {
             let fixed = 0;
             let errors = 0;
+            let skipped = 0;
             
             try {
                 const tx = this.db.transaction(storeName, 'readwrite');
                 const store = tx.objectStore(storeName);
                 const request = store.openCursor();
                 
+                tx.onerror = (e) => {
+                    console.error(`  ❌ [Migration] Transaction error for ${storeName}:`, e.target.error);
+                };
+                
+                tx.oncomplete = () => {
+                    console.log(`  ✓ [Migration] ${storeName}: ${fixed} fixed, ${skipped} skipped, ${errors} errors`);
+                    resolve({ fixed, errors });
+                };
+                
                 request.onsuccess = (event) => {
                     const cursor = event.target.result;
                     if (cursor) {
                         try {
                             const original = cursor.value;
+                            const originalId = original?.id;
+                            
+                            // SAFETY: Skip records without a valid ID
+                            if (originalId === undefined || originalId === null) {
+                                console.warn(`  ⚠️ [Migration] Skipping record without ID in ${storeName}`);
+                                skipped++;
+                                cursor.continue();
+                                return;
+                            }
+                            
                             const sanitized = this._sanitizeTaskForStorage(original);
                             
-                            if (sanitized && JSON.stringify(original) !== JSON.stringify(sanitized)) {
+                            // SAFETY: Only update if sanitization succeeded AND preserved the ID
+                            if (!sanitized) {
+                                console.warn(`  ⚠️ [Migration] Sanitization failed for ${originalId}, keeping original`);
+                                skipped++;
+                                cursor.continue();
+                                return;
+                            }
+                            
+                            // CRITICAL: Always preserve the original ID
+                            sanitized.id = originalId;
+                            
+                            // Only update if there are actual differences
+                            if (JSON.stringify(original) !== JSON.stringify(sanitized)) {
                                 cursor.update(sanitized);
                                 fixed++;
                                 console.log(`  ✓ [Migration] Fixed record ${sanitized.id} in ${storeName}`);
@@ -424,9 +464,6 @@ class TaskCache {
                             console.warn(`  ⚠️ [Migration] Error processing record in ${storeName}:`, e.message);
                         }
                         cursor.continue();
-                    } else {
-                        console.log(`  ✓ [Migration] ${storeName}: ${fixed} fixed, ${errors} errors`);
-                        resolve({ fixed, errors });
                     }
                 };
                 
