@@ -360,9 +360,16 @@ class OptimisticUI {
 
             // Step 1: Update DOM immediately
             this._updateTaskInDOM(taskId, optimisticTask);
+            console.log(`✅ [UpdateTask] Step 1 complete: DOM updated`);
             
             // Step 2: Update IndexedDB
-            await this.cache.saveTask(optimisticTask);
+            try {
+                await this.cache.saveTask(optimisticTask);
+                console.log(`✅ [UpdateTask] Step 2 complete: Task saved to IndexedDB`);
+            } catch (cacheError) {
+                console.error(`❌ [UpdateTask] Step 2 FAILED (saveTask):`, cacheError?.name, cacheError?.message, cacheError);
+                throw cacheError;
+            }
             
             // Dispatch update event for haptics/animations
             window.dispatchEvent(new CustomEvent('task:updated', {
@@ -374,23 +381,35 @@ class OptimisticUI {
             window.taskStateStore?.upsertTask(optimisticTask);
             
             // Step 3: Queue event via OfflineQueueManager
-            await this.cache.addEvent({
-                event_type: 'task_update',
-                task_id: taskId,
-                data: updates,
-                timestamp: Date.now()
-            });
+            try {
+                await this.cache.addEvent({
+                    event_type: 'task_update',
+                    task_id: taskId,
+                    data: updates,
+                    timestamp: Date.now()
+                });
+                console.log(`✅ [UpdateTask] Step 3 complete: Event added to ledger`);
+            } catch (eventError) {
+                console.error(`❌ [UpdateTask] Step 3 FAILED (addEvent):`, eventError?.name, eventError?.message, eventError);
+                throw eventError;
+            }
 
             // Use OfflineQueueManager for proper session tracking and replay
             let queueId = null;
             if (window.offlineQueue) {
-                queueId = await window.offlineQueue.queueOperation({
-                    type: 'task_update',
-                    task_id: taskId,
-                    data: updates,
-                    priority: 5,
-                    operation_id: opId  // Link queue entry to operation
-                });
+                try {
+                    queueId = await window.offlineQueue.queueOperation({
+                        type: 'task_update',
+                        task_id: taskId,
+                        data: updates,
+                        priority: 5,
+                        operation_id: opId  // Link queue entry to operation
+                    });
+                    console.log(`✅ [UpdateTask] Step 3b complete: Operation queued (queueId: ${queueId})`);
+                } catch (queueError) {
+                    console.error(`❌ [UpdateTask] Step 3b FAILED (queueOperation):`, queueError?.name, queueError?.message, queueError);
+                    throw queueError;
+                }
             }
 
             // Step 4: Sync to server
@@ -409,8 +428,9 @@ class OptimisticUI {
             
             // ENTERPRISE-GRADE: Persist to IndexedDB for rehydration after refresh
             await this.cache.savePendingOperation(opId, operation).catch(err => {
-                console.error('❌ Failed to persist pending operation:', err);
+                console.error('❌ Failed to persist pending operation:', err?.name, err?.message, err);
             });
+            console.log(`✅ [UpdateTask] Step 4 complete: Pending operation saved`);
             
             console.log(`📤 [UpdateTask] Calling _syncToServer() for task ${taskId}...`);
             this._syncToServer(opId, 'update', updates, taskId);
@@ -418,7 +438,14 @@ class OptimisticUI {
 
             return optimisticTask;
         } catch (error) {
-            console.error('❌ [UpdateTask] FAILED:', error);
+            // Properly serialize error for debugging (IndexedDB errors don't stringify well)
+            const errorInfo = {
+                name: error?.name || 'Unknown',
+                message: error?.message || String(error),
+                stack: error?.stack?.split('\n').slice(0, 3).join('\n')
+            };
+            console.error('❌ [UpdateTask] FAILED:', errorInfo.name, '-', errorInfo.message);
+            console.error('❌ [UpdateTask] Stack:', errorInfo.stack);
             // CROWN⁴.13: Release lock on error
             if (lockId && window.taskActionLock) {
                 window.taskActionLock.release(lockId);
