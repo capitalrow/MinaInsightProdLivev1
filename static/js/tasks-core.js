@@ -11,6 +11,7 @@
     let tasksData = [];
     let undoQueue = [];
     let contextMenuTaskId = null;
+    let groupByMeeting = localStorage.getItem('tasks_group_by_meeting') === 'true';
 
     // Initialize on DOM ready
     document.addEventListener('DOMContentLoaded', init);
@@ -20,6 +21,7 @@
         loadMeetingHeatmap();
         bindEventListeners();
         initializeKeyboardShortcuts();
+        initGroupingToggle();
     }
 
     function loadTasksData() {
@@ -70,6 +72,9 @@
         document.querySelectorAll('.action-btn').forEach(btn => {
             btn.addEventListener('click', handleActionClick);
         });
+
+        // Mobile long-press for transcript preview
+        initTranscriptLongPress();
 
         // New task button
         const newTaskBtn = document.getElementById('new-task-btn');
@@ -538,6 +543,269 @@
 
     function showKeyboardShortcuts() {
         alert('Keyboard Shortcuts:\n\nN - New task\n/ or S - Search\n? - Show shortcuts\nEsc - Close modal');
+    }
+
+    // Transcript Long-Press for Mobile
+    let longPressTimer = null;
+    let longPressActiveCard = null;
+
+    function initTranscriptLongPress() {
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        if (!isTouchDevice) return;
+
+        document.querySelectorAll('.task-card').forEach(card => {
+            const preview = card.querySelector('.transcript-preview');
+            if (!preview) return;
+
+            card.addEventListener('touchstart', (e) => {
+                if (e.target.closest('.task-checkbox, .action-btn, .provenance-meeting')) return;
+                
+                longPressTimer = setTimeout(() => {
+                    showTranscriptPreview(card, preview);
+                    longPressActiveCard = card;
+                    navigator.vibrate?.(50);
+                }, 500);
+            }, { passive: true });
+
+            card.addEventListener('touchend', () => {
+                clearTimeout(longPressTimer);
+                if (longPressActiveCard) {
+                    hideTranscriptPreview(longPressActiveCard);
+                    longPressActiveCard = null;
+                }
+            });
+
+            card.addEventListener('touchmove', () => {
+                clearTimeout(longPressTimer);
+            }, { passive: true });
+
+            card.addEventListener('touchcancel', () => {
+                clearTimeout(longPressTimer);
+                if (longPressActiveCard) {
+                    hideTranscriptPreview(longPressActiveCard);
+                    longPressActiveCard = null;
+                }
+            });
+        });
+    }
+
+    function showTranscriptPreview(card, preview) {
+        card.classList.add('transcript-active');
+        preview.classList.add('visible');
+    }
+
+    function hideTranscriptPreview(card) {
+        card.classList.remove('transcript-active');
+        const preview = card.querySelector('.transcript-preview');
+        if (preview) preview.classList.remove('visible');
+    }
+
+    // Archive task
+    async function archiveTask(taskId) {
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        if (card) card.style.opacity = '0.5';
+
+        try {
+            const response = await fetch(`${API_BASE}/${taskId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCSRFToken()
+                },
+                body: JSON.stringify({ status: 'archived' })
+            });
+
+            if (response.ok) {
+                if (currentFilter === 'active') {
+                    if (card) {
+                        card.style.transition = 'all 0.3s ease';
+                        card.style.transform = 'translateX(-100%)';
+                        card.style.opacity = '0';
+                        setTimeout(() => card.remove(), 300);
+                    }
+                }
+                showUndoToast('Task archived');
+            } else {
+                if (card) card.style.opacity = '1';
+            }
+        } catch (err) {
+            if (card) card.style.opacity = '1';
+            console.error('[Tasks] Archive failed:', err);
+        }
+    }
+
+    // Duplicate task
+    async function duplicateTask(taskId) {
+        try {
+            const response = await fetch(`${API_BASE}/${taskId}/duplicate`, {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': getCSRFToken() }
+            });
+
+            if (response.ok) {
+                showUndoToast('Task duplicated');
+                window.location.reload();
+            } else {
+                console.error('[Tasks] Duplicate failed');
+            }
+        } catch (err) {
+            console.error('[Tasks] Duplicate error:', err);
+        }
+    }
+
+    // Open edit modal (placeholder)
+    function openEditModal(taskId) {
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        const title = card?.querySelector('.task-title')?.textContent || '';
+        const newTitle = prompt('Edit task title:', title);
+        if (newTitle && newTitle !== title) {
+            updateTaskTitle(taskId, newTitle);
+        }
+    }
+
+    async function updateTaskTitle(taskId, newTitle) {
+        try {
+            const response = await fetch(`${API_BASE}/${taskId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCSRFToken()
+                },
+                body: JSON.stringify({ title: newTitle })
+            });
+
+            if (response.ok) {
+                const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+                const titleEl = card?.querySelector('.task-title');
+                if (titleEl) titleEl.textContent = newTitle;
+                showUndoToast('Task updated');
+            }
+        } catch (err) {
+            console.error('[Tasks] Update title failed:', err);
+        }
+    }
+
+    // Meeting Intelligence Mode - Group by Meeting Toggle
+    function initGroupingToggle() {
+        const toggleBtn = document.getElementById('toggle-grouping');
+        if (!toggleBtn) return;
+
+        updateGroupingButtonState(toggleBtn);
+        
+        if (groupByMeeting) {
+            renderGroupedByMeeting();
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            groupByMeeting = !groupByMeeting;
+            localStorage.setItem('tasks_group_by_meeting', groupByMeeting);
+            updateGroupingButtonState(toggleBtn);
+            
+            if (groupByMeeting) {
+                renderGroupedByMeeting();
+            } else {
+                renderFlatList();
+            }
+        });
+    }
+
+    function updateGroupingButtonState(btn) {
+        if (groupByMeeting) {
+            btn.classList.add('active');
+            btn.title = 'Switch to flat list';
+        } else {
+            btn.classList.remove('active');
+            btn.title = 'Group by meeting';
+        }
+    }
+
+    function renderGroupedByMeeting() {
+        const taskList = document.getElementById('task-list');
+        const taskGroups = document.getElementById('task-groups');
+        if (!taskList || !taskGroups) return;
+
+        const cards = Array.from(taskList.querySelectorAll('.task-card'));
+        if (cards.length === 0) return;
+
+        const meetingGroups = new Map();
+        const noMeetingTasks = [];
+
+        cards.forEach(card => {
+            const meetingId = card.dataset.meetingId;
+            if (meetingId) {
+                if (!meetingGroups.has(meetingId)) {
+                    const meetingLink = card.querySelector('.provenance-meeting');
+                    const meetingTitle = meetingLink?.textContent.trim() || 'Unknown Meeting';
+                    meetingGroups.set(meetingId, { title: meetingTitle, cards: [] });
+                }
+                meetingGroups.get(meetingId).cards.push(card);
+            } else {
+                noMeetingTasks.push(card);
+            }
+        });
+
+        taskList.innerHTML = '';
+        taskGroups.innerHTML = '';
+
+        meetingGroups.forEach((group, meetingId) => {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'meeting-group';
+            groupEl.innerHTML = `
+                <div class="meeting-group-header">
+                    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    <span class="group-title">${escapeHtml(group.title)}</span>
+                    <span class="group-count">${group.cards.length}</span>
+                </div>
+                <div class="meeting-group-tasks" data-meeting-id="${meetingId}"></div>
+            `;
+            
+            const tasksContainer = groupEl.querySelector('.meeting-group-tasks');
+            group.cards.forEach(card => tasksContainer.appendChild(card));
+            taskGroups.appendChild(groupEl);
+        });
+
+        if (noMeetingTasks.length > 0) {
+            const manualGroup = document.createElement('div');
+            manualGroup.className = 'meeting-group';
+            manualGroup.innerHTML = `
+                <div class="meeting-group-header">
+                    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    <span class="group-title">Manual Tasks</span>
+                    <span class="group-count">${noMeetingTasks.length}</span>
+                </div>
+                <div class="meeting-group-tasks"></div>
+            `;
+            
+            const tasksContainer = manualGroup.querySelector('.meeting-group-tasks');
+            noMeetingTasks.forEach(card => tasksContainer.appendChild(card));
+            taskGroups.appendChild(manualGroup);
+        }
+
+        taskGroups.classList.add('grouped-view');
+    }
+
+    function renderFlatList() {
+        const taskGroups = document.getElementById('task-groups');
+        const taskList = document.getElementById('task-list');
+        if (!taskGroups) return;
+
+        const allCards = Array.from(taskGroups.querySelectorAll('.task-card'));
+        
+        allCards.sort((a, b) => {
+            const posA = parseInt(a.dataset.position) || 0;
+            const posB = parseInt(b.dataset.position) || 0;
+            return posA - posB;
+        });
+
+        taskGroups.innerHTML = '';
+        
+        const newList = document.createElement('div');
+        newList.className = 'task-list';
+        newList.id = 'task-list';
+        
+        allCards.forEach(card => newList.appendChild(card));
+        taskGroups.appendChild(newList);
+        taskGroups.classList.remove('grouped-view');
     }
 
     // Utilities
