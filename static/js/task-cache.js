@@ -263,10 +263,18 @@ class TaskCache {
                 reject(request.error);
             };
 
-            request.onsuccess = () => {
+            request.onsuccess = async () => {
                 this.db = request.result;
                 this.ready = true;
                 console.log('✅ TaskCache IndexedDB initialized');
+                
+                // Run migration to fix corrupted records
+                try {
+                    await this._migrateCorruptedRecords();
+                } catch (migrationError) {
+                    console.error('⚠️ Migration completed with errors:', migrationError);
+                }
+                
                 resolve(this.db);
             };
 
@@ -342,6 +350,95 @@ class TaskCache {
         });
 
         return this.initPromise;
+    }
+    
+    /**
+     * MIGRATION: Fix existing corrupted records in IndexedDB
+     * Runs once on init to sanitize any records that have non-serializable data
+     * @returns {Promise<{fixed: number, errors: number}>}
+     */
+    async _migrateCorruptedRecords() {
+        const migrationKey = 'mina_migration_v1_complete';
+        
+        // Check if migration already completed
+        if (localStorage.getItem(migrationKey) === 'true') {
+            console.log('✅ [Migration] Already completed, skipping');
+            return { fixed: 0, errors: 0 };
+        }
+        
+        console.log('🔧 [Migration] Starting corrupted record migration...');
+        let fixed = 0;
+        let errors = 0;
+        
+        try {
+            // Migrate tasks store
+            const tasksResult = await this._migrateStore('tasks');
+            fixed += tasksResult.fixed;
+            errors += tasksResult.errors;
+            
+            // Migrate temp_tasks store
+            const tempResult = await this._migrateStore('temp_tasks');
+            fixed += tempResult.fixed;
+            errors += tempResult.errors;
+            
+            // Mark migration complete
+            localStorage.setItem(migrationKey, 'true');
+            console.log(`✅ [Migration] Complete: ${fixed} records fixed, ${errors} errors`);
+            
+            return { fixed, errors };
+        } catch (error) {
+            console.error('❌ [Migration] Failed:', error);
+            return { fixed, errors: errors + 1 };
+        }
+    }
+    
+    /**
+     * Migrate a single IndexedDB store by sanitizing all records
+     * @param {string} storeName - Name of the store to migrate
+     * @returns {Promise<{fixed: number, errors: number}>}
+     */
+    async _migrateStore(storeName) {
+        return new Promise((resolve) => {
+            let fixed = 0;
+            let errors = 0;
+            
+            try {
+                const tx = this.db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                const request = store.openCursor();
+                
+                request.onsuccess = (event) => {
+                    const cursor = event.target.result;
+                    if (cursor) {
+                        try {
+                            const original = cursor.value;
+                            const sanitized = this._sanitizeTaskForStorage(original);
+                            
+                            if (sanitized && JSON.stringify(original) !== JSON.stringify(sanitized)) {
+                                cursor.update(sanitized);
+                                fixed++;
+                                console.log(`  ✓ [Migration] Fixed record ${sanitized.id} in ${storeName}`);
+                            }
+                        } catch (e) {
+                            errors++;
+                            console.warn(`  ⚠️ [Migration] Error processing record in ${storeName}:`, e.message);
+                        }
+                        cursor.continue();
+                    } else {
+                        console.log(`  ✓ [Migration] ${storeName}: ${fixed} fixed, ${errors} errors`);
+                        resolve({ fixed, errors });
+                    }
+                };
+                
+                request.onerror = () => {
+                    console.error(`  ❌ [Migration] Error opening cursor for ${storeName}`);
+                    resolve({ fixed, errors: errors + 1 });
+                };
+            } catch (e) {
+                console.error(`  ❌ [Migration] Failed to start migration for ${storeName}:`, e);
+                resolve({ fixed, errors: 1 });
+            }
+        });
     }
 
     /**
