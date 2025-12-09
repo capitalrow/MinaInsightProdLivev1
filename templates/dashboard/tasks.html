@@ -5,84 +5,56 @@
 
 {% block extra_css %}
 <style>
-/* CROWN⁴.14: Enhanced Critical CSS for <200ms First Paint - NO external CSS blocking */
-:root{--bg-primary:#0f172a;--bg-secondary:#1e293b;--bg-card:#1e293b;--text-primary:#f8fafc;--text-secondary:#94a3b8;--primary:#6366f1;--border:#334155}
-[data-theme="light"]{--bg-primary:#f8fafc;--bg-secondary:#f1f5f9;--bg-card:#fff;--text-primary:#1a1a2e;--text-secondary:#6b7280;--border:#e0e0e0}
-body{background:var(--bg-primary);color:var(--text-primary);font-family:system-ui,-apple-system,sans-serif;margin:0}
-.container{max-width:1200px;margin:0 auto;padding:0 1rem}
+/* CROWN⁴.6: Critical CSS for <200ms First Paint */
 .tasks-container{max-width:1200px;margin:0 auto;padding:1.5rem}
 .tasks-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
-.tasks-title,.tasks-title-compact{font-size:1.75rem;font-weight:700;color:var(--text-primary)}
-.task-filters,.task-filters-inline{display:flex;gap:0.5rem;margin-bottom:1rem}
-.filter-tab{padding:0.5rem 1rem;border-radius:8px;border:none;background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;transition:all 0.15s;font-size:0.875rem}
-.filter-tab.active{background:var(--primary);color:white}
-.filter-counter{margin-left:0.5rem;opacity:0.7;font-size:0.75rem}
-.tasks-list-container{min-height:200px;display:flex;flex-direction:column;gap:0.5rem}
-/* CROWN⁴.13: Hide completed/cancelled tasks by default for flicker-free SSR */
+.tasks-title{font-size:1.75rem;font-weight:700;color:var(--text-primary,#1a1a2e)}
+.task-filters{display:flex;gap:0.5rem;margin-bottom:1rem}
+.filter-tab{padding:0.5rem 1rem;border-radius:8px;border:none;background:var(--bg-secondary,#f5f5f7);cursor:pointer;transition:all 0.15s}
+.filter-tab.active{background:var(--primary,#6366f1);color:white}
+.tasks-list-container{min-height:200px}
+/* CROWN⁴.13: Hide completed/cancelled tasks by default for flicker-free SSR with Active filter */
+/* The "Active" tab shows todo, in_progress, pending, blocked. "Archived" = completed, cancelled */
+/* JS can override by adding/removing .is-hidden class - doesn't force display value */
 .task-card[data-status="completed"]:not(.is-visible),.task-card[data-status="cancelled"]:not(.is-visible){display:none}
+/* CROWN⁴.13: Class-based visibility control - hidden class hides, visible class overrides default hiding */
 .task-card.is-hidden{display:none!important}
-.task-card{display:flex;align-items:flex-start;padding:1rem;background:var(--bg-card);border-radius:12px;margin-bottom:0.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.1);border:1px solid var(--border)}
-.task-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.15)}
-.checkbox-wrapper{flex-shrink:0;margin-right:0.75rem}
-.task-checkbox{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);cursor:pointer;appearance:none;background:transparent}
-.task-checkbox:checked{background:var(--primary);border-color:var(--primary)}
-.task-content{flex:1;min-width:0}
-.task-primary-row{display:flex;align-items:center;justify-content:space-between}
-.task-title{font-weight:500;color:var(--text-primary);font-size:0.9375rem;line-height:1.4;margin:0}
-.task-essential-meta{display:flex;align-items:center;gap:0.5rem}
-.priority-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.priority-dot.priority-low{background:#22c55e}
-.priority-dot.priority-medium{background:#eab308}
-.priority-dot.priority-high{background:#f97316}
-.priority-dot.priority-urgent{background:#ef4444}
-.task-secondary-row,.task-tertiary-row{display:none}
-.task-actions{flex-shrink:0;margin-left:0.5rem}
-.task-menu-trigger{background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:0.25rem;opacity:0;transition:opacity 0.15s}
-.task-card:hover .task-menu-trigger{opacity:1}
-/* Command bar */
-.command-row-1{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
-.command-row-2{display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
-.btn{padding:0.5rem 1rem;border-radius:8px;border:none;cursor:pointer;font-size:0.875rem;display:inline-flex;align-items:center;gap:0.5rem}
-.btn-primary{background:var(--primary);color:white}
-.btn-secondary{background:var(--bg-secondary);color:var(--text-primary)}
-/* Loading states */
-.hidden{display:none!important}
+.task-card.is-visible{}
+.task-card{display:flex;align-items:flex-start;padding:1rem;background:var(--card-bg,#fff);border-radius:12px;margin-bottom:0.75rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);transition:transform 0.15s,box-shadow 0.15s}
+.task-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.task-checkbox{width:20px;height:20px;border-radius:50%;border:2px solid var(--border,#e0e0e0);margin-right:1rem;cursor:pointer;flex-shrink:0}
+.task-title{font-weight:500;color:var(--text-primary,#1a1a2e);margin-bottom:0.25rem}
+.task-meta{font-size:0.875rem;color:var(--text-secondary,#6b7280)}
 .skeleton-pulse{animation:skeleton-pulse 1.5s ease-in-out infinite}
 @keyframes skeleton-pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-.task-skeleton{display:flex;align-items:center;padding:1rem;background:var(--bg-card);border-radius:12px;margin-bottom:0.5rem}
-.skeleton-checkbox{width:20px;height:20px;border-radius:50%;background:var(--bg-secondary);margin-right:1rem}
+.task-skeleton{display:flex;align-items:center;padding:1rem;background:#fff;border-radius:12px;margin-bottom:0.75rem}
+.skeleton-checkbox{width:20px;height:20px;border-radius:50%;background:#e5e7eb;margin-right:1rem}
 .skeleton-content{flex:1}
-.skeleton-title{height:18px;background:var(--bg-secondary);border-radius:4px;width:70%;margin-bottom:8px}
-.skeleton-meta{height:14px;background:var(--bg-secondary);border-radius:4px;width:40%}
+.skeleton-title{height:18px;background:#e5e7eb;border-radius:4px;width:70%;margin-bottom:8px}
+.skeleton-meta{height:14px;background:#e5e7eb;border-radius:4px;width:40%}
 </style>
-<!-- CROWN⁴.14: ALL external CSS is async - inline critical CSS above handles first paint -->
-<!-- Core task styles - high priority async load (preload + async pattern) -->
-<link rel="preload" href="{{ url_for('static', filename='css/tasks.css') }}?v=8" as="style" onload="this.onload=null;this.rel='stylesheet'">
-<link rel="preload" href="{{ url_for('static', filename='css/task-redesign.css') }}?v=8" as="style" onload="this.onload=null;this.rel='stylesheet'">
-<link rel="preload" href="{{ url_for('static', filename='css/task-progressive-disclosure.css') }}?v=3" as="style" onload="this.onload=null;this.rel='stylesheet'">
-<noscript>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=8">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-redesign.css') }}?v=8">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-progressive-disclosure.css') }}?v=3">
-</noscript>
-<!-- NON-CRITICAL: Modals, panels, animations - load after first paint -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/ai-proposals-modal.css') }}?v=4" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=6">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ai-proposals-modal.css') }}?v=4">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/linear-inspired-animations.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-heatmap.css') }}?v=2" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-heatmap.css') }}?v=2">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-context-preview.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-intelligence-mode.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/semantic-search.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/stress-indicators.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/dev-performance-panel.css') }}?v=2" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dev-performance-panel.css') }}?v=2">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-completion-ux.css') }}?v=3" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-confirmation-modal.css') }}?v=2" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-confirmation-modal.css') }}?v=2">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-date-picker.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-priority-selector.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-sheets.css') }}?v=2" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-action-modals.css') }}?v=2" media="print" data-async-css>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-sheets.css') }}?v=2">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-action-modals.css') }}?v=2">
+<!-- CROWN⁴.8: Progressive Disclosure & Mobile UX -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-progressive-disclosure.css') }}?v=1">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-mobile-gestures.css') }}?v=1" media="print" data-async-css>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/task-empty-states.css') }}?v=1" media="print" data-async-css>
+<!-- REDESIGN: Clean design system - must load last to override -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task-redesign.css') }}?v=6">
 <script nonce="{{ csp_nonce }}">
 (function(){var a=document.querySelectorAll('link[data-async-css]');a.forEach(function(l){l.onload=function(){l.media='all'};if(l.sheet)l.media='all'})})();
 </script>
@@ -855,7 +827,13 @@ body{background:var(--bg-primary);color:var(--text-primary);font-family:system-u
     </button>
 </div>
 
-<!-- CROWN⁴.14: First Paint measurement - must be inline for accuracy -->
+<!-- CROWN⁴.6: Populate task data for spoken provenance -->
+<script nonce="{{ g.csp_nonce }}">
+// Serialize tasks with all relationships for spoken provenance UI
+window.tasks = {{ tasks_json|tojson|safe if tasks_json else '[]' }};
+console.log('[CROWN⁴.6] Loaded', window.tasks.length, 'tasks for provenance UI');
+</script>
+
 <!-- CROWN⁴.6: Accurate First Paint measurement using PerformanceObserver -->
 <script nonce="{{ g.csp_nonce }}">
 window.__FIRST_PAINT_START = performance.now();
@@ -952,16 +930,7 @@ window.__FIRST_PAINT_START = performance.now();
 window.CURRENT_USER_ID = {{ current_user.id if current_user.is_authenticated else 'null' }};
 window.WORKSPACE_ID = {{ current_user.workspace_id if current_user.workspace_id else 'null' }};
 window.CURRENT_SESSION_ID = null;
-// CROWN⁴.14: Defer task data loading until after first paint (idle callback)
-window.tasks = [];
-(function loadTaskData() {
-    var data = {{ tasks_json|tojson|safe if tasks_json else '[]' }};
-    if ('requestIdleCallback' in window) {
-        requestIdleCallback(function() { window.tasks = data; }, { timeout: 100 });
-    } else {
-        setTimeout(function() { window.tasks = data; }, 0);
-    }
-})();
+console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, workspaceId: window.WORKSPACE_ID });
 </script>
 
 <!-- Global Modal Manager - Prevents modal stacking on mobile -->
