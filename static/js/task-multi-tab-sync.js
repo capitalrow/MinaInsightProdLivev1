@@ -163,15 +163,18 @@ class MultiTabSync {
                 break;
 
             case 'task_created':
-                this._handleTaskCreated(data.task);
+                // TASK 5: Pass event_id for deduplication
+                this._handleTaskCreated(data.task, data.event_id);
                 break;
 
             case 'task_updated':
-                this._handleTaskUpdated(data.task);
+                // TASK 5: Pass event_id for deduplication
+                this._handleTaskUpdated(data.task, data.event_id);
                 break;
 
             case 'task_deleted':
-                this._handleTaskDeleted(data.task_id);
+                // TASK 5: Pass event_id for deduplication
+                this._handleTaskDeleted(data.task_id, data.event_id);
                 break;
 
             case 'filter_changed':
@@ -197,33 +200,39 @@ class MultiTabSync {
     /**
      * Broadcast task creation
      * @param {Object} task
+     * @param {Object} metadata - Optional CROWN metadata for deduplication
      */
-    broadcastTaskCreated(task) {
+    broadcastTaskCreated(task, metadata = {}) {
         this._broadcast({
             type: 'task_created',
-            task: task
+            task: task,
+            event_id: metadata.event_id || task._crown_event_id
         });
     }
 
     /**
      * Broadcast task update
      * @param {Object} task
+     * @param {Object} metadata - Optional CROWN metadata for deduplication
      */
-    broadcastTaskUpdated(task) {
+    broadcastTaskUpdated(task, metadata = {}) {
         this._broadcast({
             type: 'task_updated',
-            task: task
+            task: task,
+            event_id: metadata.event_id || task._crown_event_id
         });
     }
 
     /**
      * Broadcast task deletion
      * @param {number} taskId
+     * @param {Object} metadata - Optional CROWN metadata for deduplication
      */
-    broadcastTaskDeleted(taskId) {
+    broadcastTaskDeleted(taskId, metadata = {}) {
         this._broadcast({
             type: 'task_deleted',
-            task_id: taskId
+            task_id: taskId,
+            event_id: metadata.event_id
         });
     }
 
@@ -250,8 +259,19 @@ class MultiTabSync {
     /**
      * Handle task created in another tab
      * @param {Object} task
+     * @param {string} eventId - Optional CROWN event_id for deduplication
      */
-    async _handleTaskCreated(task) {
+    async _handleTaskCreated(task, eventId) {
+        // TASK 5: Event deduplication - use passed event_id for consistent dedup
+        if (window.taskEventDeduplicator) {
+            const dedupData = eventId ? { event_id: eventId, task } : { task };
+            const { isNew } = window.taskEventDeduplicator.checkAndMark('task_created', dedupData, 'broadcast');
+            if (!isNew) {
+                console.log('⏭️ [BroadcastChannel] Skipping duplicate task_created event');
+                return;
+            }
+        }
+        
         // Save to cache
         await window.taskCache.saveTask(task);
 
@@ -274,8 +294,19 @@ class MultiTabSync {
     /**
      * Handle task updated in another tab
      * @param {Object} task
+     * @param {string} eventId - Optional CROWN event_id for deduplication
      */
-    async _handleTaskUpdated(task) {
+    async _handleTaskUpdated(task, eventId) {
+        // TASK 5: Event deduplication - use passed event_id for consistent dedup
+        if (window.taskEventDeduplicator) {
+            const dedupData = eventId ? { event_id: eventId, task } : { task };
+            const { isNew } = window.taskEventDeduplicator.checkAndMark('task_updated', dedupData, 'broadcast');
+            if (!isNew) {
+                console.log('⏭️ [BroadcastChannel] Skipping duplicate task_updated event');
+                return;
+            }
+        }
+        
         // Update cache
         await window.taskCache.saveTask(task);
 
@@ -293,8 +324,19 @@ class MultiTabSync {
     /**
      * Handle task deleted in another tab
      * @param {number} taskId
+     * @param {string} eventId - Optional CROWN event_id for deduplication
      */
-    async _handleTaskDeleted(taskId) {
+    async _handleTaskDeleted(taskId, eventId) {
+        // TASK 5: Event deduplication - use passed event_id for consistent dedup
+        if (window.taskEventDeduplicator) {
+            const dedupData = eventId ? { event_id: eventId, task_id: taskId } : { task_id: taskId };
+            const { isNew } = window.taskEventDeduplicator.checkAndMark('task_deleted', dedupData, 'broadcast');
+            if (!isNew) {
+                console.log('⏭️ [BroadcastChannel] Skipping duplicate task_deleted event');
+                return;
+            }
+        }
+        
         // Remove from cache
         await window.taskCache.deleteTask(taskId);
 
