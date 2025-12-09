@@ -380,6 +380,7 @@ def tasks():
     
     logging.info(f"[CROWN⁴.13] SSR filter={current_filter}, rendering {len(filtered_tasks)}/{len(all_tasks)} tasks (minimal JSON)")
     
+    from datetime import date as date_class
     return render_template('dashboard/tasks.html',
                          tasks=filtered_tasks,  # CROWN⁴.18: Only filtered tasks for SSR
                          all_tasks=all_tasks,   # Full list for JS hydration
@@ -390,7 +391,8 @@ def tasks():
                          current_filter=current_filter,  # CROWN⁴.18: Pass filter to template
                          active_count=active_count,
                          archived_count=archived_count,
-                         total_count=total_count)
+                         total_count=total_count,
+                         today_date=date_class.today())
 
 
 @dashboard_bp.route('/tasks/<int:task_id>')
