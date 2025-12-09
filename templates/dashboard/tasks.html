@@ -984,4 +984,6 @@ console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, works
 
 <!-- CROWN⁴.6: Task Page Orchestrator - MUST BE LAST to coordinate module initialization -->
 <script defer src="{{ url_for('static', filename='js/task-page-orchestrator.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
+
+<script src="/static/js/task-ui-orchestrator.js"></script>
 {% endblock %}
