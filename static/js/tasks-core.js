@@ -11,7 +11,8 @@
     let tasksData = [];
     let undoQueue = [];
     let contextMenuTaskId = null;
-    let groupByMeeting = localStorage.getItem('tasks_group_by_meeting') === 'true';
+    let currentGroupBy = localStorage.getItem('tasks_group_by') || 'none';
+    let collapsedGroups = JSON.parse(localStorage.getItem('tasks_collapsed_groups') || '{}');
 
     // Initialize on DOM ready
     document.addEventListener('DOMContentLoaded', init);
@@ -1063,108 +1064,316 @@
         }
     }
 
-    // Meeting Intelligence Mode - Group by Meeting Toggle
+    // Enhanced Group By Dropdown
     function initGroupingToggle() {
-        const toggleBtn = document.getElementById('toggle-grouping');
-        if (!toggleBtn) return;
+        const dropdown = document.getElementById('group-by-dropdown');
+        const btn = document.getElementById('group-by-btn');
+        const menu = document.getElementById('group-by-menu');
+        if (!dropdown || !btn || !menu) return;
 
-        updateGroupingButtonState(toggleBtn);
-        
-        if (groupByMeeting) {
-            renderGroupedByMeeting();
+        // Set initial state from localStorage
+        updateGroupBySelection(currentGroupBy);
+        if (currentGroupBy !== 'none') {
+            renderGrouped(currentGroupBy);
         }
 
-        toggleBtn.addEventListener('click', () => {
-            groupByMeeting = !groupByMeeting;
-            localStorage.setItem('tasks_group_by_meeting', groupByMeeting);
-            updateGroupingButtonState(toggleBtn);
-            
-            if (groupByMeeting) {
-                renderGroupedByMeeting();
-            } else {
-                renderFlatList();
+        // Toggle dropdown
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('open');
+            btn.setAttribute('aria-expanded', dropdown.classList.contains('open'));
+        });
+
+        // Handle option selection
+        menu.querySelectorAll('.group-by-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const groupBy = option.dataset.group;
+                setGroupBy(groupBy);
+                dropdown.classList.remove('open');
+                btn.setAttribute('aria-expanded', 'false');
+            });
+        });
+
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!dropdown.contains(e.target)) {
+                dropdown.classList.remove('open');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        // Close on Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && dropdown.classList.contains('open')) {
+                dropdown.classList.remove('open');
+                btn.setAttribute('aria-expanded', 'false');
             }
         });
     }
 
-    function updateGroupingButtonState(btn) {
-        if (groupByMeeting) {
+    function setGroupBy(groupBy) {
+        currentGroupBy = groupBy;
+        localStorage.setItem('tasks_group_by', groupBy);
+        updateGroupBySelection(groupBy);
+        
+        if (groupBy === 'none') {
+            renderFlatList();
+        } else {
+            renderGrouped(groupBy);
+        }
+    }
+
+    function updateGroupBySelection(groupBy) {
+        const menu = document.getElementById('group-by-menu');
+        const btn = document.getElementById('group-by-btn');
+        if (!menu || !btn) return;
+
+        menu.querySelectorAll('.group-by-option').forEach(option => {
+            const isActive = option.dataset.group === groupBy;
+            option.classList.toggle('active', isActive);
+            option.setAttribute('aria-selected', isActive);
+        });
+
+        // Update button state
+        if (groupBy !== 'none') {
             btn.classList.add('active');
-            btn.title = 'Switch to flat list';
         } else {
             btn.classList.remove('active');
-            btn.title = 'Group by meeting';
         }
     }
 
-    function renderGroupedByMeeting() {
+    function renderGrouped(groupBy) {
         const taskList = document.getElementById('task-list');
         const taskGroups = document.getElementById('task-groups');
-        if (!taskList || !taskGroups) return;
+        if (!taskGroups) return;
 
-        const cards = Array.from(taskList.querySelectorAll('.task-card'));
+        const cards = Array.from(taskGroups.querySelectorAll('.task-card'));
         if (cards.length === 0) return;
 
-        const meetingGroups = new Map();
-        const noMeetingTasks = [];
+        const groups = groupTaskCards(cards, groupBy);
+        const groupOrder = getGroupOrder(groupBy);
+        const groupLabels = getGroupLabels(groupBy);
+        const groupIcons = getGroupIcons(groupBy);
 
-        cards.forEach(card => {
-            const meetingId = card.dataset.meetingId;
-            if (meetingId) {
-                if (!meetingGroups.has(meetingId)) {
-                    const meetingLink = card.querySelector('.provenance-meeting');
-                    const meetingTitle = meetingLink?.textContent.trim() || 'Unknown Meeting';
-                    meetingGroups.set(meetingId, { title: meetingTitle, cards: [] });
-                }
-                meetingGroups.get(meetingId).cards.push(card);
-            } else {
-                noMeetingTasks.push(card);
-            }
-        });
-
-        taskList.innerHTML = '';
         taskGroups.innerHTML = '';
 
-        meetingGroups.forEach((group, meetingId) => {
-            const groupEl = document.createElement('div');
-            groupEl.className = 'meeting-group';
-            groupEl.innerHTML = `
-                <div class="meeting-group-header">
-                    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                    <span class="group-title">${escapeHtml(group.title)}</span>
-                    <span class="group-count">${group.cards.length}</span>
-                </div>
-                <div class="meeting-group-tasks" data-meeting-id="${meetingId}"></div>
-            `;
-            
-            const tasksContainer = groupEl.querySelector('.meeting-group-tasks');
-            group.cards.forEach(card => tasksContainer.appendChild(card));
+        groupOrder.forEach(key => {
+            const group = groups.get(key);
+            if (!group || group.length === 0) return;
+
+            const groupEl = createCollapsibleGroup(
+                groupBy, 
+                key, 
+                groupLabels[key] || key, 
+                groupIcons[key] || groupIcons.default, 
+                group
+            );
             taskGroups.appendChild(groupEl);
         });
 
-        if (noMeetingTasks.length > 0) {
-            const manualGroup = document.createElement('div');
-            manualGroup.className = 'meeting-group';
-            manualGroup.innerHTML = `
-                <div class="meeting-group-header">
-                    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    <span class="group-title">Manual Tasks</span>
-                    <span class="group-count">${noMeetingTasks.length}</span>
-                </div>
-                <div class="meeting-group-tasks"></div>
-            `;
-            
-            const tasksContainer = manualGroup.querySelector('.meeting-group-tasks');
-            noMeetingTasks.forEach(card => tasksContainer.appendChild(card));
-            taskGroups.appendChild(manualGroup);
-        }
+        // Add "other" group for items not matching standard keys
+        const otherKeys = Array.from(groups.keys()).filter(k => !groupOrder.includes(k));
+        otherKeys.forEach(key => {
+            const group = groups.get(key);
+            if (!group || group.length === 0) return;
+
+            const groupEl = createCollapsibleGroup(
+                groupBy, 
+                key, 
+                groupLabels[key] || key, 
+                groupIcons[key] || groupIcons.default, 
+                group
+            );
+            taskGroups.appendChild(groupEl);
+        });
 
         taskGroups.classList.add('grouped-view');
     }
 
+    function groupTaskCards(cards, groupBy) {
+        const groups = new Map();
+
+        cards.forEach(card => {
+            let key;
+            switch (groupBy) {
+                case 'meeting':
+                    const meetingId = card.dataset.meetingId;
+                    if (meetingId) {
+                        key = meetingId;
+                        if (!groups.has(key)) {
+                            const meetingLink = card.querySelector('.provenance-meeting');
+                            groups.set(key, { title: meetingLink?.textContent.trim() || 'Unknown Meeting', cards: [] });
+                        }
+                        groups.get(key).cards.push(card);
+                    } else {
+                        key = 'manual';
+                        if (!groups.has(key)) groups.set(key, { title: 'Manual Tasks', cards: [] });
+                        groups.get(key).cards.push(card);
+                    }
+                    return;
+                case 'priority':
+                    key = card.dataset.priority || 'low';
+                    break;
+                case 'status':
+                    key = card.dataset.status || 'todo';
+                    break;
+                case 'due':
+                    key = getDueDateGroup(card.dataset.dueDate);
+                    break;
+                default:
+                    key = 'all';
+            }
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(card);
+        });
+
+        return groups;
+    }
+
+    function getDueDateGroup(dateStr) {
+        if (!dateStr) return 'no_date';
+        const dueDate = new Date(dateStr);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+
+        if (dueDate < today) return 'overdue';
+        if (dueDate.toDateString() === today.toDateString()) return 'today';
+        if (dueDate < weekEnd) return 'this_week';
+        return 'later';
+    }
+
+    function getGroupOrder(groupBy) {
+        switch (groupBy) {
+            case 'priority':
+                return ['urgent', 'high', 'medium', 'low'];
+            case 'status':
+                return ['todo', 'in_progress', 'blocked', 'completed'];
+            case 'due':
+                return ['overdue', 'today', 'this_week', 'later', 'no_date'];
+            case 'meeting':
+                return []; // Dynamic based on meetings
+            default:
+                return [];
+        }
+    }
+
+    function getGroupLabels(groupBy) {
+        switch (groupBy) {
+            case 'priority':
+                return { urgent: 'Urgent', high: 'High Priority', medium: 'Medium Priority', low: 'Low Priority' };
+            case 'status':
+                return { todo: 'To Do', in_progress: 'In Progress', blocked: 'Blocked', completed: 'Completed' };
+            case 'due':
+                return { overdue: 'Overdue', today: 'Today', this_week: 'This Week', later: 'Later', no_date: 'No Due Date' };
+            case 'meeting':
+                return { manual: 'Manual Tasks' };
+            default:
+                return {};
+        }
+    }
+
+    function getGroupIcons(groupBy) {
+        const icons = {
+            priority: {
+                urgent: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+                high: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+                medium: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+                low: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+                default: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>'
+            },
+            status: {
+                todo: '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10"/></svg>',
+                in_progress: '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+                blocked: '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>',
+                completed: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+                default: '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10"/></svg>'
+            },
+            due: {
+                overdue: '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+                today: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+                this_week: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+                later: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+                no_date: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="15" x2="15" y2="15"/></svg>',
+                default: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'
+            },
+            meeting: {
+                manual: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+                default: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'
+            }
+        };
+        return icons[groupBy] || { default: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' };
+    }
+
+    function createCollapsibleGroup(groupType, key, label, icon, items) {
+        // Handle meeting groups which have a different structure
+        const cards = Array.isArray(items) ? items : (items.cards || []);
+        const title = Array.isArray(items) ? label : (items.title || label);
+        
+        const groupEl = document.createElement('div');
+        groupEl.className = 'task-group';
+        groupEl.dataset.groupType = groupType;
+        groupEl.dataset.groupKey = key;
+        
+        // Check if this group is collapsed
+        const groupId = `${groupType}_${key}`;
+        if (collapsedGroups[groupId]) {
+            groupEl.classList.add('collapsed');
+        }
+
+        groupEl.innerHTML = `
+            <div class="task-group-header" role="button" aria-expanded="${!collapsedGroups[groupId]}" tabindex="0">
+                <svg class="collapse-icon" viewBox="0 0 24 24" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
+                <span class="group-icon">${icon}</span>
+                <span class="group-title">${escapeHtml(title)}</span>
+                <span class="group-count">${cards.length}</span>
+            </div>
+            <div class="task-group-content"></div>
+        `;
+
+        const header = groupEl.querySelector('.task-group-header');
+        const content = groupEl.querySelector('.task-group-content');
+
+        // Add click handler for collapse/expand
+        header.addEventListener('click', () => toggleGroupCollapse(groupEl, groupId));
+        header.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleGroupCollapse(groupEl, groupId);
+            }
+        });
+
+        // Append cards
+        cards.forEach(card => content.appendChild(card));
+
+        return groupEl;
+    }
+
+    function toggleGroupCollapse(groupEl, groupId) {
+        const isCollapsed = groupEl.classList.toggle('collapsed');
+        const header = groupEl.querySelector('.task-group-header');
+        header.setAttribute('aria-expanded', !isCollapsed);
+        
+        // Persist state
+        collapsedGroups[groupId] = isCollapsed;
+        localStorage.setItem('tasks_collapsed_groups', JSON.stringify(collapsedGroups));
+        
+        // Broadcast to other tabs
+        if (window.BroadcastChannel) {
+            try {
+                const channel = new BroadcastChannel('mina_tasks_sync');
+                channel.postMessage({ type: 'group_collapse', groupId, isCollapsed });
+                channel.close();
+            } catch (e) {}
+        }
+    }
+
     function renderFlatList() {
         const taskGroups = document.getElementById('task-groups');
-        const taskList = document.getElementById('task-list');
         if (!taskGroups) return;
 
         const allCards = Array.from(taskGroups.querySelectorAll('.task-card'));
@@ -1184,6 +1393,23 @@
         allCards.forEach(card => newList.appendChild(card));
         taskGroups.appendChild(newList);
         taskGroups.classList.remove('grouped-view');
+    }
+
+    // Listen for group collapse updates from other tabs
+    if (window.BroadcastChannel) {
+        try {
+            const syncChannel = new BroadcastChannel('mina_tasks_sync');
+            syncChannel.onmessage = (e) => {
+                if (e.data.type === 'group_collapse') {
+                    collapsedGroups[e.data.groupId] = e.data.isCollapsed;
+                    const groupEl = document.querySelector(`.task-group[data-group-type="${e.data.groupId.split('_')[0]}"][data-group-key="${e.data.groupId.split('_').slice(1).join('_')}"]`);
+                    if (groupEl) {
+                        groupEl.classList.toggle('collapsed', e.data.isCollapsed);
+                        groupEl.querySelector('.task-group-header')?.setAttribute('aria-expanded', !e.data.isCollapsed);
+                    }
+                }
+            };
+        } catch (e) {}
     }
 
     // Utilities
