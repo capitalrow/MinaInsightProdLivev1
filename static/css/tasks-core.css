@@ -173,6 +173,15 @@
     background: rgba(255, 255, 255, 0.08);
 }
 
+.view-btn.active {
+    background: var(--tasks-accent);
+    color: white;
+}
+
+.view-btn.active:hover {
+    filter: brightness(1.1);
+}
+
 .view-btn svg, .new-task-btn svg {
     width: 16px;
     height: 16px;

@@ -569,10 +569,6 @@
 
             card.addEventListener('touchend', () => {
                 clearTimeout(longPressTimer);
-                if (longPressActiveCard) {
-                    hideTranscriptPreview(longPressActiveCard);
-                    longPressActiveCard = null;
-                }
             });
 
             card.addEventListener('touchmove', () => {
@@ -581,12 +577,15 @@
 
             card.addEventListener('touchcancel', () => {
                 clearTimeout(longPressTimer);
-                if (longPressActiveCard) {
-                    hideTranscriptPreview(longPressActiveCard);
-                    longPressActiveCard = null;
-                }
             });
         });
+
+        document.addEventListener('touchstart', (e) => {
+            if (longPressActiveCard && !e.target.closest('.transcript-preview')) {
+                hideTranscriptPreview(longPressActiveCard);
+                longPressActiveCard = null;
+            }
+        }, { passive: true });
     }
 
     function showTranscriptPreview(card, preview) {
