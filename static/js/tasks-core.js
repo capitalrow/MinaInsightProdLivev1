@@ -262,20 +262,36 @@
 
         contextMenuTaskId = taskId;
         
-        // Position menu
-        const rect = e.currentTarget.getBoundingClientRect();
-        menu.style.left = `${rect.left}px`;
-        menu.style.top = `${rect.bottom + 4}px`;
+        // Make menu visible first to calculate its dimensions
+        menu.style.visibility = 'hidden';
         menu.style.display = 'block';
-
-        // Adjust if off screen
+        
         const menuRect = menu.getBoundingClientRect();
-        if (menuRect.right > window.innerWidth) {
-            menu.style.left = `${window.innerWidth - menuRect.width - 16}px`;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const padding = 12;
+        
+        // Calculate initial position (try to position below and left-aligned)
+        let left = rect.left;
+        let top = rect.bottom + 4;
+        
+        // Ensure menu fits horizontally - prefer left-aligned but shift left if needed
+        const maxLeft = window.innerWidth - menuRect.width - padding;
+        if (left > maxLeft) {
+            left = Math.max(padding, maxLeft);
         }
-        if (menuRect.bottom > window.innerHeight) {
-            menu.style.top = `${rect.top - menuRect.height - 4}px`;
+        
+        // Ensure menu fits vertically - flip above if needed
+        if (top + menuRect.height > window.innerHeight - padding) {
+            top = rect.top - menuRect.height - 4;
+            // If still off screen, position at top with some padding
+            if (top < padding) {
+                top = padding;
+            }
         }
+        
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+        menu.style.visibility = 'visible';
     }
 
     async function handleContextMenuAction(e) {
