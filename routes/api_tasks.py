@@ -1196,6 +1196,57 @@ def update_task(task_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@api_tasks_bp.route('/<int:task_id>/duplicate', methods=['POST'])
+@login_required
+def duplicate_task(task_id):
+    """Create a copy of an existing task."""
+    try:
+        task = db.session.query(Task).outerjoin(Meeting).filter(
+            Task.id == task_id,
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
+        ).first()
+        
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # Create duplicate task
+        new_task = Task(
+            title=f"{task.title} [Copy]",
+            description=task.description,
+            task_type=task.task_type,
+            priority=task.priority,
+            status='todo',
+            category=task.category,
+            due_date=task.due_date,
+            labels=task.labels.copy() if task.labels else [],
+            meeting_id=task.meeting_id,
+            workspace_id=task.workspace_id,
+            created_by_user_id=current_user.id,
+            extraction_context=task.extraction_context,
+            transcript_span=task.transcript_span,
+            confidence_score=task.confidence_score
+        )
+        
+        db.session.add(new_task)
+        db.session.commit()
+        
+        logger.info(f"[API] Task {task_id} duplicated as {new_task.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Task duplicated successfully',
+            'task': new_task.to_dict()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Failed to duplicate task {task_id}: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @api_tasks_bp.route('/<int:task_id>', methods=['DELETE'])
 @login_required
 def delete_task(task_id):
