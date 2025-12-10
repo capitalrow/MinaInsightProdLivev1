@@ -23,6 +23,7 @@
         bindEventListeners();
         initializeKeyboardShortcuts();
         initGroupingToggle();
+        initContextBubble();
         
         // Initialize quick action modals
         initAssignModal();
@@ -635,6 +636,142 @@
         card.classList.remove('transcript-active');
         const preview = card.querySelector('.transcript-preview');
         if (preview) preview.classList.remove('visible');
+    }
+
+    // Transcript Context Bubble (CROWN⁴.6 Section 7)
+    let contextBubble = null;
+    let contextBubbleTimeout = null;
+
+    function initContextBubble() {
+        // Create the context bubble element
+        if (!contextBubble) {
+            contextBubble = document.createElement('div');
+            contextBubble.className = 'transcript-context-bubble';
+            contextBubble.id = 'transcript-context-bubble';
+            document.body.appendChild(contextBubble);
+        }
+
+        // Bind hover/click events to context triggers (timestamp buttons)
+        document.querySelectorAll('.context-trigger').forEach(trigger => {
+            // Hover for desktop
+            trigger.addEventListener('mouseenter', (e) => showContextBubble(e.target));
+            trigger.addEventListener('mouseleave', () => scheduleHideBubble());
+            
+            // Click for mobile
+            trigger.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleContextBubble(e.target);
+            });
+        });
+
+        // Keep bubble visible when hovering over it
+        contextBubble.addEventListener('mouseenter', () => clearTimeout(contextBubbleTimeout));
+        contextBubble.addEventListener('mouseleave', () => hideBubble());
+
+        // Close bubble on outside click
+        document.addEventListener('click', (e) => {
+            if (contextBubble.classList.contains('visible') && 
+                !contextBubble.contains(e.target) && 
+                !e.target.closest('.context-trigger')) {
+                hideBubble();
+            }
+        });
+    }
+
+    function showContextBubble(trigger) {
+        clearTimeout(contextBubbleTimeout);
+        
+        const card = trigger.closest('.task-card');
+        const provenance = trigger.closest('.task-provenance');
+        if (!card || !provenance) return;
+
+        // Get transcript data
+        const taskId = card.dataset.taskId;
+        const sessionId = provenance.dataset.sessionId;
+        const startMs = parseInt(provenance.dataset.transcriptStart) || 0;
+        const endMs = parseInt(provenance.dataset.transcriptEnd) || startMs + 10000;
+        const transcriptText = provenance.dataset.transcriptText;
+        
+        // Get speaker info
+        const speakerEl = provenance.querySelector('.provenance-speaker');
+        const speaker = speakerEl?.dataset.speaker || 'Speaker';
+        const speakerInitials = speaker.slice(0, 2).toUpperCase();
+
+        // Get meeting link
+        const meetingLink = provenance.querySelector('.jump-to-transcript');
+        const meetingUrl = meetingLink?.href || '#';
+        const meetingTitle = meetingLink?.textContent.trim() || '';
+
+        // Format timestamp
+        const mins = Math.floor(startMs / 60000);
+        const secs = Math.floor((startMs / 1000) % 60);
+        const timestamp = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+        // Build bubble content
+        const displayText = transcriptText || 'View the full transcript for context around this task.';
+        
+        contextBubble.innerHTML = `
+            <div class="context-bubble-header">
+                <div class="context-bubble-speaker">
+                    <span class="speaker-avatar">${escapeHtml(speakerInitials)}</span>
+                    ${escapeHtml(speaker)}
+                </div>
+                <span class="context-bubble-time">${timestamp}</span>
+            </div>
+            <div class="context-bubble-text">
+                "${escapeHtml(displayText)}"
+            </div>
+            <div class="context-bubble-footer">
+                <a href="${meetingUrl}" class="context-bubble-link">
+                    <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    Jump to transcript
+                </a>
+            </div>
+        `;
+
+        // Position bubble
+        const triggerRect = trigger.getBoundingClientRect();
+        const bubbleWidth = 340;
+        
+        let left = triggerRect.left;
+        let top = triggerRect.bottom + 8;
+
+        // Adjust if off-screen
+        if (left + bubbleWidth > window.innerWidth - 20) {
+            left = window.innerWidth - bubbleWidth - 20;
+        }
+        if (left < 20) left = 20;
+
+        // Check if bubble would go below viewport
+        if (top + 200 > window.innerHeight) {
+            top = triggerRect.top - 200 - 8;
+            contextBubble.classList.add('above');
+        } else {
+            contextBubble.classList.remove('above');
+        }
+
+        contextBubble.style.left = `${left}px`;
+        contextBubble.style.top = `${top}px`;
+        contextBubble.classList.add('visible');
+    }
+
+    function toggleContextBubble(trigger) {
+        if (contextBubble.classList.contains('visible')) {
+            hideBubble();
+        } else {
+            showContextBubble(trigger);
+        }
+    }
+
+    function scheduleHideBubble() {
+        contextBubbleTimeout = setTimeout(() => hideBubble(), 300);
+    }
+
+    function hideBubble() {
+        if (contextBubble) {
+            contextBubble.classList.remove('visible');
+        }
     }
 
     // Archive task

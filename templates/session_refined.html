@@ -383,6 +383,29 @@
   transform: translateX(4px);
 }
 
+/* CROWN⁴.6: Highlight pulse for jump-to-transcript */
+.segment-item.segment-highlight-pulse {
+  animation: segmentPulse 2s ease-out;
+  background: rgba(99, 102, 241, 0.15);
+  border-left-color: var(--color-primary);
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+@keyframes segmentPulse {
+  0% {
+    background: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.5);
+  }
+  50% {
+    background: rgba(99, 102, 241, 0.2);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+  }
+  100% {
+    background: rgba(99, 102, 241, 0.15);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  }
+}
+
 .segment-header {
   display: flex;
   flex-wrap: wrap;
@@ -704,15 +727,19 @@
     <div class="tab-panel">
       <h2 style="margin-bottom: var(--space-4); color: var(--color-primary);">Full Transcript</h2>
       {% if segments %}
-      <div class="segment-list">
+      <div class="segment-list" id="segment-list">
         {% for segment in segments %}
-        <div class="segment-item">
+        <div class="segment-item" 
+             id="segment-{{ segment.id if segment.id else loop.index }}"
+             data-segment-id="{{ segment.id if segment.id else loop.index }}"
+             data-start-ms="{{ segment.start_ms or 0 }}"
+             data-end-ms="{{ segment.end_ms or 0 }}">
           <div class="segment-header">
             {% if segment.speaker_id %}
             <span class="segment-speaker">{{ segment.speaker_id }}</span>
             {% endif %}
             {% if segment.start_ms %}
-            <span>{{ (segment.start_ms / 1000)|round(1) }}s</span>
+            <span class="segment-timestamp" data-ms="{{ segment.start_ms }}">{{ (segment.start_ms / 1000)|round(1) }}s</span>
             {% endif %}
             {% if segment.avg_confidence %}
             <span>Confidence: {{ (segment.avg_confidence * 100)|round }}%</span>
@@ -1349,6 +1376,63 @@
         }
       });
     }, LOADING_TIMEOUT_MS);
+  })();
+  
+  // CROWN⁴.6 Section 7: Jump to Transcript Segment
+  // Handles incoming timestamp parameter and scrolls to the relevant segment
+  (function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const timestampMs = parseInt(urlParams.get('t'));
+    
+    if (!timestampMs || isNaN(timestampMs)) return;
+    
+    // Wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', function() {
+      // Make sure we're on the transcript tab
+      const transcriptTab = document.getElementById('transcript-tab');
+      const transcriptButton = document.querySelector('[data-tab="transcript"]');
+      
+      if (transcriptTab && transcriptButton) {
+        // Activate transcript tab
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-button').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-selected', 'false');
+        });
+        transcriptTab.classList.add('active');
+        transcriptButton.classList.add('active');
+        transcriptButton.setAttribute('aria-selected', 'true');
+      }
+      
+      // Find the segment closest to the timestamp
+      const segments = document.querySelectorAll('.segment-item[data-start-ms]');
+      let targetSegment = null;
+      let closestDiff = Infinity;
+      
+      segments.forEach(function(segment) {
+        const segmentStart = parseInt(segment.dataset.startMs) || 0;
+        const diff = Math.abs(segmentStart - timestampMs);
+        if (diff < closestDiff) {
+          closestDiff = diff;
+          targetSegment = segment;
+        }
+      });
+      
+      if (targetSegment) {
+        // Scroll to segment with smooth animation
+        setTimeout(function() {
+          targetSegment.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // Add highlight pulse effect
+          targetSegment.classList.add('segment-highlight-pulse');
+          
+          // Remove highlight after animation
+          setTimeout(function() {
+            targetSegment.classList.remove('segment-highlight-pulse');
+          }, 3000);
+        }, 300);
+      }
+    });
   })();
 </script>
 <script src="{{ url_for('static', filename='js/tabs.js') }}"></script>
