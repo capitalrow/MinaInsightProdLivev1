@@ -675,17 +675,25 @@
         try {
             const response = await fetch(`${API_BASE}/${taskId}/duplicate`, {
                 method: 'POST',
-                headers: { 'X-CSRF-Token': getCSRFToken() }
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCSRFToken() 
+                }
             });
 
-            if (response.ok) {
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
                 showUndoToast('Task duplicated');
+                // Reload to show the new task
                 window.location.reload();
             } else {
-                console.error('[Tasks] Duplicate failed');
+                console.error('[Tasks] Duplicate failed:', data.message || 'Unknown error');
+                showUndoToast('Failed to duplicate task');
             }
         } catch (err) {
             console.error('[Tasks] Duplicate error:', err);
+            showUndoToast('Failed to duplicate task');
         }
     }
 
