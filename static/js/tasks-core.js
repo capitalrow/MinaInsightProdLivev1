@@ -22,6 +22,12 @@
         bindEventListeners();
         initializeKeyboardShortcuts();
         initGroupingToggle();
+        
+        // Initialize quick action modals
+        initAssignModal();
+        initDueDateModal();
+        initPriorityModal();
+        initLabelsModal();
     }
 
     function loadTasksData() {
@@ -742,43 +748,244 @@
         if (titleEl) startInlineEdit(titleEl);
     }
 
+    // ===== Quick Action Modals =====
+    let currentModalTaskId = null;
+    let currentLabels = [];
+
     // Context Menu - Assign
-    function openAssignModal(taskId) {
-        const assignee = prompt('Enter assignee name:');
-        if (assignee) {
-            updateTaskField(taskId, { assignee });
+    async function openAssignModal(taskId) {
+        currentModalTaskId = taskId;
+        const modal = document.getElementById('assign-modal');
+        const userList = document.getElementById('user-list');
+        modal.style.display = 'flex';
+        userList.innerHTML = 'Loading...';
+
+        try {
+            const response = await fetch(`${API_BASE}/workspace-users`);
+            const data = await response.json();
+            if (data.success && data.users) {
+                userList.innerHTML = data.users.map(user => `
+                    <button class="user-item ${user.is_current_user ? 'current' : ''}" data-user-id="${user.id}">
+                        <span class="user-avatar">${(user.display_name || user.username).slice(0, 2).toUpperCase()}</span>
+                        <div class="user-info">
+                            <div class="user-name">${user.display_name || user.username}</div>
+                            <div class="user-email">${user.email || ''}</div>
+                        </div>
+                    </button>
+                `).join('') + `<button class="user-item" data-user-id=""><span class="user-avatar">—</span><div class="user-info"><div class="user-name">Unassign</div></div></button>`;
+                
+                userList.querySelectorAll('.user-item').forEach(item => {
+                    item.addEventListener('click', () => selectAssignee(item.dataset.userId));
+                });
+            }
+        } catch (err) {
+            userList.innerHTML = '<p>Failed to load users</p>';
         }
+    }
+
+    function selectAssignee(userId) {
+        const modal = document.getElementById('assign-modal');
+        modal.style.display = 'none';
+        if (currentModalTaskId) {
+            const value = userId ? parseInt(userId) : null;
+            updateTaskField(currentModalTaskId, { assigned_to_id: value });
+            updateAssigneeUI(currentModalTaskId, userId);
+        }
+    }
+
+    function updateAssigneeUI(taskId, userId) {
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        if (!card) return;
+        let meta = card.querySelector('.task-meta');
+        let assigneeEl = meta?.querySelector('.meta-item.assignee');
+        
+        if (!userId) {
+            if (assigneeEl) assigneeEl.remove();
+            return;
+        }
+        
+        // We don't have user name here - will update on page refresh
+        showUndoToast('Assignee updated');
     }
 
     // Context Menu - Set Due Date
     function openDueDateModal(taskId) {
+        currentModalTaskId = taskId;
+        const modal = document.getElementById('due-date-modal');
+        const input = document.getElementById('due-date-input');
         const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
-        const currentDue = card?.dataset.dueDate || '';
-        const dueDate = prompt('Enter due date (YYYY-MM-DD):', currentDue);
-        if (dueDate !== null) {
-            updateTaskField(taskId, { due_date: dueDate || null });
-        }
+        input.value = card?.dataset.dueDate || '';
+        modal.style.display = 'flex';
+    }
+
+    function initDueDateModal() {
+        document.getElementById('due-date-cancel')?.addEventListener('click', () => {
+            document.getElementById('due-date-modal').style.display = 'none';
+        });
+        
+        document.getElementById('due-date-save')?.addEventListener('click', () => {
+            const input = document.getElementById('due-date-input');
+            const modal = document.getElementById('due-date-modal');
+            modal.style.display = 'none';
+            if (currentModalTaskId) {
+                updateTaskField(currentModalTaskId, { due_date: input.value || null });
+                updateDueDateUI(currentModalTaskId, input.value);
+            }
+        });
+        
+        document.querySelectorAll('.date-shortcut').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const days = parseInt(btn.dataset.days);
+                const input = document.getElementById('due-date-input');
+                if (days === -1) {
+                    input.value = '';
+                } else {
+                    const d = new Date();
+                    d.setDate(d.getDate() + days);
+                    input.value = d.toISOString().split('T')[0];
+                }
+            });
+        });
+    }
+
+    function updateDueDateUI(taskId, dueDate) {
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        if (!card) return;
+        card.dataset.dueDate = dueDate || '';
+        showUndoToast('Due date updated');
     }
 
     // Context Menu - Set Priority
     function openPriorityModal(taskId) {
-        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
-        const currentPriority = card?.dataset.priority || 'medium';
-        const priority = prompt('Enter priority (low, medium, high, urgent):', currentPriority);
-        if (priority && ['low', 'medium', 'high', 'urgent'].includes(priority.toLowerCase())) {
-            updateTaskField(taskId, { priority: priority.toLowerCase() });
-            updatePriorityUI(card, priority.toLowerCase());
-        }
+        currentModalTaskId = taskId;
+        const modal = document.getElementById('priority-modal');
+        modal.style.display = 'flex';
+    }
+
+    function initPriorityModal() {
+        document.getElementById('priority-cancel')?.addEventListener('click', () => {
+            document.getElementById('priority-modal').style.display = 'none';
+        });
+        
+        document.querySelectorAll('.priority-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const priority = btn.dataset.priority;
+                const modal = document.getElementById('priority-modal');
+                modal.style.display = 'none';
+                if (currentModalTaskId) {
+                    const card = document.querySelector(`.task-card[data-task-id="${currentModalTaskId}"]`);
+                    updateTaskField(currentModalTaskId, { priority });
+                    updatePriorityUI(card, priority);
+                }
+            });
+        });
     }
 
     // Context Menu - Labels
     function openLabelsModal(taskId) {
-        const labels = prompt('Enter labels (comma-separated):');
-        if (labels !== null) {
-            const labelArray = labels.split(',').map(l => l.trim()).filter(Boolean);
-            updateTaskField(taskId, { labels: labelArray });
-        }
+        currentModalTaskId = taskId;
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        
+        // Get existing labels from card
+        const labelEls = card?.querySelectorAll('.task-label');
+        currentLabels = labelEls ? Array.from(labelEls).map(el => el.textContent) : [];
+        
+        renderCurrentLabels();
+        document.getElementById('labels-modal').style.display = 'flex';
+        document.getElementById('labels-input').value = '';
+        document.getElementById('labels-input').focus();
     }
+
+    function renderCurrentLabels() {
+        const container = document.getElementById('current-labels');
+        container.innerHTML = currentLabels.map(label => `
+            <span class="label-chip">
+                ${label}
+                <button data-label="${label}" aria-label="Remove ${label}">
+                    <svg viewBox="0 0 24 24" width="12" height="12"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </span>
+        `).join('');
+        
+        container.querySelectorAll('.label-chip button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentLabels = currentLabels.filter(l => l !== btn.dataset.label);
+                renderCurrentLabels();
+            });
+        });
+    }
+
+    function initLabelsModal() {
+        document.getElementById('labels-cancel')?.addEventListener('click', () => {
+            document.getElementById('labels-modal').style.display = 'none';
+        });
+        
+        document.getElementById('labels-save')?.addEventListener('click', () => {
+            document.getElementById('labels-modal').style.display = 'none';
+            if (currentModalTaskId) {
+                updateTaskField(currentModalTaskId, { labels: currentLabels });
+                updateLabelsUI(currentModalTaskId, currentLabels);
+            }
+        });
+        
+        document.getElementById('labels-input')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const input = e.target;
+                const label = input.value.trim();
+                if (label && !currentLabels.includes(label)) {
+                    currentLabels.push(label);
+                    renderCurrentLabels();
+                }
+                input.value = '';
+            }
+        });
+        
+        document.querySelectorAll('.label-suggestion').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const label = btn.dataset.label;
+                if (!currentLabels.includes(label)) {
+                    currentLabels.push(label);
+                    renderCurrentLabels();
+                }
+            });
+        });
+    }
+
+    function updateLabelsUI(taskId, labels) {
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        if (!card) return;
+        
+        const meta = card.querySelector('.task-meta');
+        if (!meta) return;
+        
+        // Remove existing labels
+        meta.querySelectorAll('.task-label').forEach(el => el.remove());
+        
+        // Add new labels (max 2 visible)
+        labels.slice(0, 2).forEach(label => {
+            const span = document.createElement('span');
+            span.className = 'task-label';
+            span.textContent = label;
+            meta.appendChild(span);
+        });
+        
+        showUndoToast('Labels updated');
+    }
+
+    // Assign modal cancel
+    function initAssignModal() {
+        document.getElementById('assign-cancel')?.addEventListener('click', () => {
+            document.getElementById('assign-modal').style.display = 'none';
+        });
+    }
+
+    // Close modals on backdrop click
+    document.querySelectorAll('.quick-modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.style.display = 'none';
+        });
+    });
 
     async function updateTaskField(taskId, fields) {
         try {

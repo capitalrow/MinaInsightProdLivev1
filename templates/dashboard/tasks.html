@@ -380,6 +380,79 @@
     </div>
 </div>
 
+<!-- Quick Action Modals -->
+<!-- Assign Modal -->
+<div class="quick-modal" id="assign-modal" style="display: none;" role="dialog">
+    <div class="quick-modal-content">
+        <h3>Assign to</h3>
+        <div class="user-list" id="user-list">Loading...</div>
+        <div class="quick-modal-actions">
+            <button class="btn-secondary" id="assign-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Due Date Modal -->
+<div class="quick-modal" id="due-date-modal" style="display: none;" role="dialog">
+    <div class="quick-modal-content">
+        <h3>Set due date</h3>
+        <input type="date" id="due-date-input" class="form-input">
+        <div class="quick-date-shortcuts">
+            <button class="date-shortcut" data-days="0">Today</button>
+            <button class="date-shortcut" data-days="1">Tomorrow</button>
+            <button class="date-shortcut" data-days="7">Next week</button>
+            <button class="date-shortcut" data-days="-1">Clear</button>
+        </div>
+        <div class="quick-modal-actions">
+            <button class="btn-secondary" id="due-date-cancel">Cancel</button>
+            <button class="btn-primary" id="due-date-save">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Priority Modal -->
+<div class="quick-modal" id="priority-modal" style="display: none;" role="dialog">
+    <div class="quick-modal-content">
+        <h3>Set priority</h3>
+        <div class="priority-options">
+            <button class="priority-option priority-urgent" data-priority="urgent">
+                <span class="priority-dot"></span> Urgent
+            </button>
+            <button class="priority-option priority-high" data-priority="high">
+                <span class="priority-dot"></span> High
+            </button>
+            <button class="priority-option priority-medium" data-priority="medium">
+                <span class="priority-dot"></span> Medium
+            </button>
+            <button class="priority-option priority-low" data-priority="low">
+                <span class="priority-dot"></span> Low
+            </button>
+        </div>
+        <div class="quick-modal-actions">
+            <button class="btn-secondary" id="priority-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Labels Modal -->
+<div class="quick-modal" id="labels-modal" style="display: none;" role="dialog">
+    <div class="quick-modal-content">
+        <h3>Labels</h3>
+        <input type="text" id="labels-input" class="form-input" placeholder="Add label and press Enter">
+        <div class="current-labels" id="current-labels"></div>
+        <div class="suggested-labels">
+            <button class="label-suggestion" data-label="follow-up">Follow-up</button>
+            <button class="label-suggestion" data-label="urgent">Urgent</button>
+            <button class="label-suggestion" data-label="review">Review</button>
+            <button class="label-suggestion" data-label="blocked">Blocked</button>
+        </div>
+        <div class="quick-modal-actions">
+            <button class="btn-secondary" id="labels-cancel">Cancel</button>
+            <button class="btn-primary" id="labels-save">Save</button>
+        </div>
+    </div>
+</div>
+
 <!-- Inject tasks JSON for JS hydration -->
 <script id="tasks-data" type="application/json">
 {{ tasks_json|tojson|safe }}

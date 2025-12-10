@@ -1376,6 +1376,222 @@
     }
 }
 
+/* Quick Action Modals */
+.quick-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    backdrop-filter: blur(4px);
+}
+
+.quick-modal-content {
+    background: var(--tasks-card-bg);
+    border: 1px solid var(--tasks-card-border);
+    border-radius: var(--tasks-radius-lg);
+    padding: 20px;
+    min-width: 280px;
+    max-width: 360px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.quick-modal-content h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--tasks-text-primary);
+}
+
+.quick-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+/* User List for Assign Modal */
+.user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.user-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-radius: var(--tasks-radius-md);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    width: 100%;
+    text-align: left;
+    color: var(--tasks-text-primary);
+}
+
+.user-item:hover {
+    background: var(--tasks-bg-tertiary);
+}
+
+.user-item.current {
+    background: var(--tasks-accent-glow);
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--tasks-accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.user-info {
+    flex: 1;
+}
+
+.user-name {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.user-email {
+    font-size: 12px;
+    color: var(--tasks-text-muted);
+}
+
+/* Date Shortcuts */
+.quick-date-shortcuts {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 12px 0;
+}
+
+.date-shortcut {
+    padding: 6px 12px;
+    background: var(--tasks-bg-tertiary);
+    border: 1px solid var(--tasks-card-border);
+    border-radius: var(--tasks-radius-md);
+    color: var(--tasks-text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.date-shortcut:hover {
+    background: var(--tasks-accent-glow);
+    border-color: var(--tasks-accent);
+    color: var(--tasks-text-primary);
+}
+
+/* Priority Options */
+.priority-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.priority-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    background: transparent;
+    border: 1px solid var(--tasks-card-border);
+    border-radius: var(--tasks-radius-md);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    color: var(--tasks-text-primary);
+    font-size: 14px;
+}
+
+.priority-option:hover {
+    background: var(--tasks-bg-tertiary);
+}
+
+.priority-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.priority-option.priority-urgent .priority-dot { background: var(--tasks-danger); }
+.priority-option.priority-high .priority-dot { background: #f97316; }
+.priority-option.priority-medium .priority-dot { background: var(--tasks-warning); }
+.priority-option.priority-low .priority-dot { background: var(--tasks-text-muted); }
+
+/* Labels Modal */
+.current-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 12px 0;
+    min-height: 24px;
+}
+
+.label-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--tasks-accent-glow);
+    border-radius: var(--tasks-radius-md);
+    font-size: 12px;
+    color: var(--tasks-accent);
+}
+
+.label-chip button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    opacity: 0.7;
+}
+
+.label-chip button:hover {
+    opacity: 1;
+}
+
+.suggested-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.label-suggestion {
+    padding: 4px 10px;
+    background: var(--tasks-bg-tertiary);
+    border: 1px dashed var(--tasks-card-border);
+    border-radius: var(--tasks-radius-md);
+    color: var(--tasks-text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.label-suggestion:hover {
+    background: var(--tasks-accent-glow);
+    border-color: var(--tasks-accent);
+    color: var(--tasks-text-primary);
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
