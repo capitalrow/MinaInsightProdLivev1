@@ -1,987 +1,491 @@
 {% extends "base.html" %}
-{% from 'dashboard/_task_card_macro.html' import task_card %}
 
 {% block title %}Tasks - Mina{% endblock %}
 
 {% block extra_css %}
-<style>
-/* CROWN⁴.6: Critical CSS for <200ms First Paint */
-.tasks-container{max-width:1200px;margin:0 auto;padding:1.5rem}
-.tasks-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
-.tasks-title{font-size:1.75rem;font-weight:700;color:var(--text-primary,#1a1a2e)}
-.task-filters{display:flex;gap:0.5rem;margin-bottom:1rem}
-.filter-tab{padding:0.5rem 1rem;border-radius:8px;border:none;background:var(--bg-secondary,#f5f5f7);cursor:pointer;transition:all 0.15s}
-.filter-tab.active{background:var(--primary,#6366f1);color:white}
-.tasks-list-container{min-height:200px}
-/* CROWN⁴.13: Hide completed/cancelled tasks by default for flicker-free SSR with Active filter */
-/* The "Active" tab shows todo, in_progress, pending, blocked. "Archived" = completed, cancelled */
-/* JS can override by adding/removing .is-hidden class - doesn't force display value */
-.task-card[data-status="completed"]:not(.is-visible),.task-card[data-status="cancelled"]:not(.is-visible){display:none}
-/* CROWN⁴.13: Class-based visibility control - hidden class hides, visible class overrides default hiding */
-.task-card.is-hidden{display:none!important}
-.task-card.is-visible{}
-.task-card{display:flex;align-items:flex-start;padding:1rem;background:var(--card-bg,#fff);border-radius:12px;margin-bottom:0.75rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);transition:transform 0.15s,box-shadow 0.15s}
-.task-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
-.task-checkbox{width:20px;height:20px;border-radius:50%;border:2px solid var(--border,#e0e0e0);margin-right:1rem;cursor:pointer;flex-shrink:0}
-.task-title{font-weight:500;color:var(--text-primary,#1a1a2e);margin-bottom:0.25rem}
-.task-meta{font-size:0.875rem;color:var(--text-secondary,#6b7280)}
-.skeleton-pulse{animation:skeleton-pulse 1.5s ease-in-out infinite}
-@keyframes skeleton-pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-.task-skeleton{display:flex;align-items:center;padding:1rem;background:#fff;border-radius:12px;margin-bottom:0.75rem}
-.skeleton-checkbox{width:20px;height:20px;border-radius:50%;background:#e5e7eb;margin-right:1rem}
-.skeleton-content{flex:1}
-.skeleton-title{height:18px;background:#e5e7eb;border-radius:4px;width:70%;margin-bottom:8px}
-.skeleton-meta{height:14px;background:#e5e7eb;border-radius:4px;width:40%}
-</style>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}?v=6">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/ai-proposals-modal.css') }}?v=4">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/linear-inspired-animations.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-provenance.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-heatmap.css') }}?v=2">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-context-preview.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting-intelligence-mode.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/semantic-search.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/stress-indicators.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/dev-performance-panel.css') }}?v=2">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-completion-ux.css') }}?v=3" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-confirmation-modal.css') }}?v=2">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-date-picker.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-priority-selector.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-sheets.css') }}?v=2">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-action-modals.css') }}?v=2">
-<!-- CROWN⁴.8: Progressive Disclosure & Mobile UX -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-progressive-disclosure.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-mobile-gestures.css') }}?v=1" media="print" data-async-css>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-empty-states.css') }}?v=1" media="print" data-async-css>
-<!-- REDESIGN: Clean design system - must load last to override -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task-redesign.css') }}?v=6">
-<script nonce="{{ csp_nonce }}">
-(function(){var a=document.querySelectorAll('link[data-async-css]');a.forEach(function(l){l.onload=function(){l.media='all'};if(l.sheet)l.media='all'})})();
-</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tasks-core.css') }}">
 {% endblock %}
 
 {% block content %}
-<!-- Skip to main content link for keyboard users -->
-<a href="#tasks-list-container" class="skip-to-content sr-only-focusable">Skip to task list</a>
+<div class="tasks-container">
+    <div class="tasks-wrapper">
+        <!-- Header -->
+        <header class="page-header">
+            <h1 class="page-title">Action Items</h1>
+            <p class="page-subtitle">Tasks from your meetings, ready to complete</p>
+        </header>
 
-<!-- ARIA Live Region for dynamic announcements -->
-<div id="task-list-live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+        <!-- Command Bar -->
+        <div class="command-bar">
+            <div class="filter-tabs" role="tablist" aria-label="Task filters">
+                <a href="{{ url_for('dashboard.tasks', filter='active') }}" 
+                   class="filter-tab {% if current_filter == 'active' %}active{% endif %}" 
+                   role="tab" 
+                   aria-selected="{{ 'true' if current_filter == 'active' else 'false' }}"
+                   data-filter="active">
+                    Active <span class="filter-count">{{ active_count }}</span>
+                </a>
+                <a href="{{ url_for('dashboard.tasks', filter='archived') }}" 
+                   class="filter-tab {% if current_filter == 'archived' %}active{% endif %}" 
+                   role="tab" 
+                   aria-selected="{{ 'true' if current_filter == 'archived' else 'false' }}"
+                   data-filter="archived">
+                    Archived <span class="filter-count">{{ archived_count }}</span>
+                </a>
+                <a href="{{ url_for('dashboard.tasks', filter='all') }}" 
+                   class="filter-tab {% if current_filter == 'all' %}active{% endif %}" 
+                   role="tab" 
+                   aria-selected="{{ 'true' if current_filter == 'all' else 'false' }}"
+                   data-filter="all">
+                    All <span class="filter-count">{{ total_count }}</span>
+                </a>
+            </div>
 
-<div class="container tasks-container" role="main" aria-label="Tasks page">
-    <!-- TRUE 2-ROW COMMAND BAR -->
-    <!-- ROW 1: Title + Filters -->
-    <div class="command-row-1" role="banner">
-        <h1 class="tasks-title-compact">Action Items</h1>
-        <!-- CROWN⁴.18: URL-based filter state - active tab matches current_filter from URL -->
-        <div class="task-filters-inline" role="tablist" aria-label="Task filters" data-current-filter="{{ current_filter }}">
-            <button class="filter-tab{% if current_filter == 'all' %} active{% endif %}" data-filter="all" role="tab" aria-selected="{{ 'true' if current_filter == 'all' else 'false' }}" aria-controls="tasks-list-container" id="filter-all-tab">
-                All
-                <span class="filter-counter filter-counter-all" data-counter="all" aria-label="{{ total_count }} total tasks">{{ total_count }}</span>
-            </button>
-            <button class="filter-tab{% if current_filter == 'active' %} active{% endif %}" data-filter="active" role="tab" aria-selected="{{ 'true' if current_filter == 'active' else 'false' }}" aria-controls="tasks-list-container" id="filter-active-tab">
-                Active
-                <span class="filter-counter filter-counter-active" data-counter="active" aria-label="{{ active_count }} active tasks">{{ active_count }}</span>
-            </button>
-            <button class="filter-tab{% if current_filter == 'archived' %} active{% endif %}" data-filter="archived" role="tab" aria-selected="{{ 'true' if current_filter == 'archived' else 'false' }}" aria-controls="tasks-list-container" id="filter-archived-tab">
-                Archived
-                <span class="filter-counter filter-counter-archived" data-counter="archived" aria-label="{{ archived_count }} archived tasks">{{ archived_count }}</span>
-            </button>
-        </div>
-    </div>
-    
-    <!-- ROW 2: Search + Sort + View + Actions (all controls) -->
-    <div class="command-row-2">
-        <div class="search-wrapper-compact">
-            <button id="search-toggle-btn" class="search-toggle-btn" title="Search tasks (/)">
-                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-            </button>
-            <div class="search-input-container collapsed">
+            <div class="search-box">
+                <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                 <input type="text" 
-                       id="task-search-input" 
                        class="search-input" 
-                       placeholder="Search tasks..."
-                       autocomplete="off"
+                       placeholder="Search tasks or meetings..." 
+                       id="task-search"
                        aria-label="Search tasks">
-                <button id="search-clear-btn" class="search-clear-btn hidden" aria-label="Clear search">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
+            </div>
+
+            <div class="view-controls">
+                <button class="view-btn" title="Group by Meeting" id="toggle-grouping" aria-label="Toggle grouping view">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                </button>
+                <button class="new-task-btn" id="new-task-btn" aria-label="Create new task">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    New
                 </button>
             </div>
         </div>
-        
-        <select id="task-sort-select" class="sort-select-compact" aria-label="Sort tasks">
-            <option value="default">Default</option>
-            <option value="priority">Priority ↓</option>
-            <option value="priority-reverse">Priority ↑</option>
-            <option value="due-date">Due Soon</option>
-            <option value="due-date-reverse">Due Later</option>
-            <option value="created">Newest</option>
-            <option value="created-reverse">Oldest</option>
-            <option value="title">A → Z</option>
-            <option value="title-reverse">Z → A</option>
-        </select>
-        
-        <button id="meeting-intelligence-toggle" class="meeting-toggle-btn" title="Group by meeting">
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
-        </button>
-        
-        <div class="view-toggle-group" role="group" aria-label="View options">
-            <button class="view-toggle-btn active" data-view="list" title="List view" aria-label="List view">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                </svg>
-            </button>
-            <button class="view-toggle-btn" data-view="grid" title="Grid view" aria-label="Grid view">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
-                </svg>
-            </button>
-            <button class="view-toggle-btn" data-view="bar" title="Compact view" aria-label="Compact view">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-                </svg>
-            </button>
+
+        <!-- Meeting Heatmap -->
+        <div class="meeting-heatmap" id="meeting-heatmap" role="region" aria-label="Meetings with tasks">
+            <span class="heatmap-label">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                From meetings:
+            </span>
+            <div class="heatmap-items" id="heatmap-items">
+                <!-- Populated by JS -->
+            </div>
         </div>
-        
-        <button class="btn btn-secondary btn-ai-compact" data-meeting-id="{{ meeting_id if meeting_id else '' }}" title="AI Proposals">
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-            </svg>
-        </button>
-        
-        <button id="new-task-btn" class="btn btn-primary btn-new-compact">
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            <span class="btn-text-desktop">New</span>
-        </button>
-    </div>
-    
-    <!-- CROWN⁴.6: Stress Indicator (hidden by default) -->
-    <div id="stress-indicator" class="stress-indicator hidden">
-        <div class="stress-dot"></div>
-        <div class="stress-tooltip">High workload</div>
-    </div>
 
-    <!-- Offline/Status Banner (CROWN⁴.9 Phase 9: Enhanced with retry) -->
-    <div id="connection-banner" class="connection-banner hidden" role="alert">
-        <span class="connection-status-icon" aria-hidden="true"></span>
-        <span class="connection-message">You're offline</span>
-        <button class="connection-retry-btn hidden" aria-label="Retry connection">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
-            Retry
-        </button>
-        <span class="pending-count" aria-live="polite"></span>
-    </div>
-
-    <!-- Legacy task-filters div for JS compatibility (hidden, data synced) -->
-    <!-- CROWN⁴.18: Updated to use server-computed counts -->
-    <div class="task-filters" style="display: none !important;">
-        <button class="filter-tab{% if current_filter == 'all' %} active{% endif %}" data-filter="all">All<span class="filter-counter filter-counter-all" data-counter="all">{{ total_count }}</span></button>
-        <button class="filter-tab{% if current_filter == 'active' %} active{% endif %}" data-filter="active">Active<span class="filter-counter filter-counter-active" data-counter="active">{{ active_count }}</span></button>
-        <button class="filter-tab{% if current_filter == 'archived' %} active{% endif %}" data-filter="archived">Archived<span class="filter-counter filter-counter-archived" data-counter="archived">{{ archived_count }}</span></button>
-    </div>
-
-    <!-- Bulk Action Toolbar (appears when tasks selected) -->
-    <div id="bulk-action-toolbar" class="bulk-action-toolbar hidden">
-        <div class="bulk-action-info">
-            <span id="bulk-selected-count">0</span> tasks selected
-        </div>
-        <div class="bulk-action-buttons">
-            <button class="bulk-action-btn" id="bulk-complete-btn">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
-                Complete
-            </button>
-            <button class="bulk-action-btn" id="bulk-delete-btn">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
-                Delete
-            </button>
-            <button class="bulk-action-btn" id="bulk-label-btn">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                </svg>
-                Add Label
-            </button>
-            <button class="bulk-action-btn bulk-action-btn-cancel" id="bulk-cancel-btn">
-                Cancel
-            </button>
-        </div>
-    </div>
-
-    <!-- AI Proposals Section (CROWN⁴.5 Task 10) -->
-    <div id="ai-proposals-container"></div>
-
-    <!-- CROWN⁴.6 Meeting Heatmap -->
-    <div id="meeting-filter-indicator"></div>
-    <div id="meeting-heatmap-container"></div>
-
-    <!-- Task List Container (CROWN⁴.5 Required Structure) -->
-    <!-- CROWN⁴.7 PERFORMANCE FIX: Show SSR content immediately for <200ms first paint -->
-    <!-- If tasks exist, display:flex immediately (no JS needed). Otherwise hidden until cache loads -->
-    <div id="tasks-list-container" class="tasks-list-container" style="{% if tasks and tasks|length > 0 %}display: flex;{% else %}display: none;{% endif %}">
-        {% if tasks and tasks|length > 0 %}
-            {% for task in tasks %}
-            {{ task_card(task) }}
-            {% endfor %}
-        {% endif %}
-    </div>
-
-    <!-- Empty State (CROWN⁴.8 Meeting-Native) -->
-    <div id="tasks-empty-state" class="task-empty-state empty-state-meeting-native{% if tasks and tasks|length > 0 %} hidden{% endif %}">
-        <div class="empty-state-illustration meeting-native"></div>
-        <h3 class="empty-state-title">Your next meeting will surface tasks here</h3>
-        <p class="empty-state-description">
-            Tasks are <span class="empty-state-highlight">automatically extracted</span> from your meetings 
-            and linked to the exact moment they were mentioned.
-        </p>
-        <div class="empty-state-actions">
-            <a href="{{ url_for('pages.index') }}" class="empty-state-primary-btn">
-                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
-                </svg>
-                Start a Meeting
-            </a>
-            <button class="empty-state-secondary-btn" id="empty-state-create-btn">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-                Create task manually
-            </button>
-        </div>
-        <!-- Workflow Hint: How Mina works -->
-        <div class="empty-state-workflow-hint">
-            <div class="workflow-hint-step">
-                <div class="workflow-hint-icon">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+        <!-- Task List Container -->
+        <div class="task-list-container" id="task-list-container" role="main" aria-label="Task list">
+            {% if tasks|length == 0 %}
+            <!-- Empty State -->
+            <div class="empty-state" id="empty-state">
+                <div class="empty-illustration">
+                    <svg viewBox="0 0 24 24" width="64" height="64" aria-hidden="true">
+                        <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" fill="none"/>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="2" fill="none"/>
                     </svg>
                 </div>
-                <span class="workflow-hint-label">Record</span>
+                <h2 class="empty-title">No tasks yet</h2>
+                <p class="empty-text">
+                    {% if current_filter == 'active' %}
+                    You're all caught up! Start a meeting to capture action items, or create a task manually.
+                    {% elif current_filter == 'archived' %}
+                    No archived tasks yet. Completed tasks will appear here.
+                    {% else %}
+                    Your tasks from meetings will appear here. Start recording to capture action items automatically.
+                    {% endif %}
+                </p>
+                <button class="new-task-btn" style="margin-top: 16px;" onclick="document.getElementById('new-task-btn').click()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Create your first task
+                </button>
             </div>
-            <div class="workflow-hint-arrow">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                </svg>
-            </div>
-            <div class="workflow-hint-step">
-                <div class="workflow-hint-icon">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                    </svg>
+            {% else %}
+            <!-- Task Groups (SSR) -->
+            <div class="task-groups" id="task-groups">
+                {% set today = [] %}
+                {% set this_week = [] %}
+                {% set later = [] %}
+                {% set no_date = [] %}
+                
+                {% for task in tasks %}
+                    {% if task.due_date %}
+                        {% set days_until = (task.due_date - today_date).days if today_date else 999 %}
+                        {% if days_until <= 0 %}
+                            {% set _ = today.append(task) %}
+                        {% elif days_until <= 7 %}
+                            {% set _ = this_week.append(task) %}
+                        {% else %}
+                            {% set _ = later.append(task) %}
+                        {% endif %}
+                    {% else %}
+                        {% set _ = no_date.append(task) %}
+                    {% endif %}
+                {% endfor %}
+                
+                <!-- All tasks in a single list (grouping done by JS) -->
+                <div class="task-list" id="task-list">
+                    {% for task in tasks %}
+                    <div class="task-card {% if task.status == 'completed' %}completed{% endif %} is-visible" 
+                         data-task-id="{{ task.id }}"
+                         data-status="{{ task.status }}"
+                         data-priority="{{ task.priority }}"
+                         data-due-date="{{ task.due_date.isoformat() if task.due_date else '' }}"
+                         data-meeting-id="{{ task.meeting_id or '' }}"
+                         data-position="{{ task.position }}"
+                         draggable="true"
+                         role="article"
+                         aria-label="Task: {{ task.title }}">
+                        
+                        <!-- Checkbox -->
+                        <button class="task-checkbox {% if task.priority == 'high' or task.priority == 'urgent' %}priority-high{% elif task.priority == 'medium' %}priority-medium{% endif %} {% if task.status == 'completed' %}completed{% endif %}"
+                                aria-label="{% if task.status == 'completed' %}Mark as incomplete{% else %}Mark as complete{% endif %}"
+                                data-task-id="{{ task.id }}">
+                            {% if task.status == 'completed' %}
+                            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                            {% endif %}
+                        </button>
+                        
+                        <div class="task-content">
+                            <!-- Spoken Provenance -->
+                            <div class="task-provenance">
+                                {% if task.meeting %}
+                                <a href="{{ url_for('dashboard.meetings') }}#meeting-{{ task.meeting.id }}" class="provenance-meeting" title="View meeting">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                                    {{ task.meeting.title|truncate(30) }}
+                                </a>
+                                {% endif %}
+                                
+                                {% if task.extraction_context and task.extraction_context.speaker %}
+                                <span class="provenance-speaker">
+                                    <span class="speaker-avatar">{{ task.extraction_context.speaker[:2]|upper }}</span>
+                                    {{ task.extraction_context.speaker }}
+                                </span>
+                                {% endif %}
+                                
+                                {% if task.transcript_span and task.transcript_span.start_ms %}
+                                <span class="provenance-timestamp">
+                                    {{ '%02d:%02d'|format(task.transcript_span.start_ms // 60000, (task.transcript_span.start_ms // 1000) % 60) }}
+                                </span>
+                                {% endif %}
+                                
+                                {% if task.extracted_by_ai and task.confidence_score %}
+                                <span class="provenance-confidence {% if task.confidence_score >= 0.8 %}confidence-high{% elif task.confidence_score >= 0.5 %}confidence-medium{% else %}confidence-low{% endif %}">
+                                    {% if task.confidence_score >= 0.8 %}High{% elif task.confidence_score >= 0.5 %}Medium{% else %}Low{% endif %} confidence
+                                </span>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Task Title with Priority Badge -->
+                            <div class="task-title-row">
+                                <h3 class="task-title" data-task-id="{{ task.id }}">{{ task.title }}</h3>
+                                {% if task.priority in ['high', 'urgent', 'medium'] %}
+                                <span class="priority-badge priority-{{ task.priority }}">{{ task.priority }}</span>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Task Meta -->
+                            <div class="task-meta">
+                                {% if task.due_date %}
+                                <span class="meta-item {% if task.is_overdue %}overdue{% elif task.is_due_soon %}due-soon{% endif %}">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                    {% if task.is_overdue %}
+                                    Overdue
+                                    {% elif task.days_until_due == 0 %}
+                                    Due today
+                                    {% elif task.days_until_due == 1 %}
+                                    Due tomorrow
+                                    {% elif task.days_until_due <= 7 %}
+                                    Due {{ task.due_date.strftime('%A') }}
+                                    {% else %}
+                                    Due {{ task.due_date.strftime('%b %d') }}
+                                    {% endif %}
+                                </span>
+                                {% endif %}
+                                
+                                {% if task.status == 'completed' %}
+                                <span class="meta-item completed-indicator">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                                    Completed
+                                </span>
+                                {% endif %}
+                                
+                                {% if task.assigned_to %}
+                                <span class="meta-item assignee">
+                                    <span class="assignee-avatar">{{ task.assigned_to.username[:2]|upper }}</span>
+                                    {{ task.assigned_to.display_name or task.assigned_to.username }}
+                                </span>
+                                {% endif %}
+                                
+                                {% if task.labels and task.labels|length > 0 %}
+                                {% for label in task.labels[:2] %}
+                                <span class="task-label">{{ label }}</span>
+                                {% endfor %}
+                                {% endif %}
+                                
+                                {% if task.category %}
+                                <span class="task-label">{{ task.category }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Task Actions -->
+                        <div class="task-actions">
+                            {% if task.meeting %}
+                            <button class="action-btn" title="Jump to transcript" data-action="transcript" data-task-id="{{ task.id }}">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            </button>
+                            {% endif %}
+                            <button class="action-btn" title="Snooze" data-action="snooze" data-task-id="{{ task.id }}">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </button>
+                            <button class="action-btn" title="More options" data-action="menu" data-task-id="{{ task.id }}">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                            </button>
+                        </div>
+                        
+                        <!-- Transcript Preview (shown on hover) -->
+                        {% if task.extraction_context and task.extraction_context.quote %}
+                        <div class="transcript-preview" data-task-id="{{ task.id }}">
+                            <div class="transcript-quote">
+                                "{{ task.extraction_context.quote|truncate(200) }}"
+                            </div>
+                            {% if task.meeting %}
+                            <a href="{{ url_for('dashboard.meetings') }}#meeting-{{ task.meeting.id }}{% if task.transcript_span and task.transcript_span.start_ms %}?t={{ task.transcript_span.start_ms // 1000 }}{% endif %}" class="transcript-link">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                Jump to this moment
+                            </a>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
                 </div>
-                <span class="workflow-hint-label">AI Extracts</span>
             </div>
-            <div class="workflow-hint-arrow">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                </svg>
-            </div>
-            <div class="workflow-hint-step">
-                <div class="workflow-hint-icon">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                    </svg>
+            {% endif %}
+        </div>
+
+        <!-- AI Suggestions Section (populated by JS) -->
+        <div class="ai-suggestions" id="ai-suggestions" style="display: none;">
+            <div class="ai-header">
+                <div class="ai-icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5 0 4 4 0 0 1-5 0 4 4 0 0 1-5 0A10 10 0 0 0 12 2z"/></svg>
                 </div>
-                <span class="workflow-hint-label">Tasks Appear</span>
+                <div>
+                    <div class="ai-title">Mina found potential tasks</div>
+                    <div class="ai-subtitle" id="ai-suggestions-subtitle">From your recent meetings</div>
+                </div>
             </div>
+            <div id="ai-suggestions-list"></div>
         </div>
-    </div>
-    
-    <!-- All Done State (CROWN⁴.8) -->
-    <div id="tasks-all-done-state" class="task-empty-state empty-state-all-done hidden">
-        <div class="empty-state-illustration all-done"></div>
-        <h3 class="empty-state-title">All done!</h3>
-        <p class="empty-state-description">
-            You've completed all your tasks. Great work!
-        </p>
-        <div class="empty-state-actions">
-            <button class="empty-state-secondary-btn filter-reset-btn" data-filter="all">
-                Show all tasks
-            </button>
-        </div>
-    </div>
-    
-    <!-- No Results State (CROWN⁴.8) -->
-    <div id="tasks-no-results-state" class="task-empty-state empty-state-no-results hidden">
-        <div class="empty-state-illustration no-results"></div>
-        <h3 class="empty-state-title">No tasks match "<span class="search-query"></span>"</h3>
-        <p class="empty-state-description">
-            Try adjusting your search or use AI semantic search for related concepts.
-        </p>
-        <div class="empty-state-actions">
-            <button class="empty-state-secondary-btn" id="search-clear-empty-btn">
-                Clear search
-            </button>
-        </div>
-    </div>
-    
-    <!-- Archived Empty State (CROWN⁴.8 Phase 7) -->
-    <div id="tasks-archived-empty-state" class="task-empty-state empty-state-archived hidden">
-        <div class="empty-state-illustration archived"></div>
-        <h3 class="empty-state-title">No archived tasks yet</h3>
-        <p class="empty-state-description">
-            Completed and cancelled tasks will appear here. Keep working on your active tasks!
-        </p>
-        <div class="empty-state-actions">
-            <button class="empty-state-secondary-btn filter-reset-btn" data-filter="active">
-                View active tasks
-            </button>
-        </div>
-    </div>
 
-    <!-- Loading State (CROWN⁴.5 Skeleton Loaders) -->
-    <!-- CROWN⁴.7 PERFORMANCE FIX: Hide skeleton when SSR content exists for instant first paint -->
-    <div id="tasks-loading-state" class="tasks-loading-state" {% if tasks and tasks|length > 0 %}style="display: none;"{% endif %}>
-        <div class="task-skeleton">
-            <div class="skeleton-checkbox"></div>
-            <div class="skeleton-content">
-                <div class="skeleton-title"></div>
-                <div class="skeleton-meta"></div>
-            </div>
-        </div>
-        <div class="task-skeleton">
-            <div class="skeleton-checkbox"></div>
-            <div class="skeleton-content">
-                <div class="skeleton-title skeleton-width-random"></div>
-                <div class="skeleton-meta skeleton-width-random"></div>
-            </div>
-        </div>
-        <div class="task-skeleton">
-            <div class="skeleton-checkbox"></div>
-            <div class="skeleton-content">
-                <div class="skeleton-title skeleton-width-random"></div>
-                <div class="skeleton-meta skeleton-width-random"></div>
-            </div>
-        </div>
-        <div class="task-skeleton">
-            <div class="skeleton-checkbox"></div>
-            <div class="skeleton-content">
-                <div class="skeleton-title skeleton-width-random"></div>
-                <div class="skeleton-meta skeleton-width-random"></div>
-            </div>
-        </div>
-        <div class="task-skeleton">
-            <div class="skeleton-checkbox"></div>
-            <div class="skeleton-content">
-                <div class="skeleton-title skeleton-width-random"></div>
-                <div class="skeleton-meta skeleton-width-random"></div>
-            </div>
+        <!-- AI Nudge (populated by JS) -->
+        <div class="ai-nudge" id="ai-nudge" style="display: none;">
+            <span class="nudge-icon">💡</span>
+            <span class="nudge-text" id="nudge-text"></span>
+            <button class="nudge-action" id="nudge-action">Take action</button>
+            <button class="nudge-dismiss" id="nudge-dismiss" aria-label="Dismiss">
+                <svg viewBox="0 0 24 24" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
         </div>
     </div>
+</div>
 
-    <!-- Error State (CROWN⁴.5) -->
-    <div id="tasks-error-state" class="tasks-error-state hidden">
-        <svg class="error-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-        </svg>
-        <h3 class="error-state-title">Unable to load tasks</h3>
-        <p class="error-state-message">We couldn't fetch your tasks. Please check your connection and try again.</p>
-        <div class="error-state-actions">
-            <button class="btn btn-primary" id="error-state-retry-btn">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
-                Retry
-            </button>
-            <button class="btn btn-secondary" id="error-state-clear-cache-btn">
-                Clear Cache
-            </button>
-        </div>
-    </div>
-    
-    <!-- PHASE 5: Mobile FAB (Floating Action Button) for new task -->
-    <button id="mobile-fab" class="mobile-fab" aria-label="Create new task">
-        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-        </svg>
+<!-- Undo Toast -->
+<div class="undo-toast" id="undo-toast" style="display: none;" role="status" aria-live="polite">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+    <span class="undo-text" id="undo-text">Task completed</span>
+    <button class="undo-btn" id="undo-btn">Undo</button>
+</div>
+
+<!-- Task Context Menu -->
+<div class="task-context-menu" id="task-context-menu" style="display: none;" role="menu">
+    <button class="context-menu-item" data-action="edit" role="menuitem">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Edit
+    </button>
+    <button class="context-menu-item" data-action="assign" role="menuitem">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Assign
+    </button>
+    <button class="context-menu-item" data-action="set-due" role="menuitem">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Set due date
+    </button>
+    <button class="context-menu-item" data-action="priority" role="menuitem">
+        <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        Set priority
+    </button>
+    <button class="context-menu-item" data-action="labels" role="menuitem">
+        <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        Labels
+    </button>
+    <div class="context-menu-divider"></div>
+    <button class="context-menu-item" data-action="duplicate" role="menuitem">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Duplicate
+    </button>
+    <button class="context-menu-item" data-action="archive" role="menuitem">
+        <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        Archive
+    </button>
+    <button class="context-menu-item danger" data-action="delete" role="menuitem">
+        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        Delete
     </button>
 </div>
 
-<!-- Task Creation Modal (CROWN Design System) -->
-<div id="task-modal-overlay" class="modal-overlay hidden">
-    <div class="modal">
+<!-- New Task Modal -->
+<div class="modal-overlay" id="new-task-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="new-task-modal-title">
+    <div class="modal-content">
         <div class="modal-header">
-            <h2 class="modal-title">Create New Task</h2>
-            <button class="modal-close" id="task-modal-close" type="button">
-                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
+            <h2 class="modal-title" id="new-task-modal-title">New Task</h2>
+            <button class="modal-close" id="new-task-modal-close" aria-label="Close">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
-        
-        <form id="task-create-form">
-            <div class="modal-body">
-                <!-- Title (Required) -->
+        <form id="new-task-form">
+            <div class="form-group">
+                <input type="text" 
+                       id="new-task-title" 
+                       class="form-input" 
+                       placeholder="What needs to be done?" 
+                       required
+                       autocomplete="off">
+            </div>
+            <div class="form-group">
+                <textarea id="new-task-description" 
+                          class="form-textarea" 
+                          placeholder="Add description (optional)"
+                          rows="3"></textarea>
+            </div>
+            <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label required" for="task-title">Task Title</label>
-                    <input 
-                        type="text" 
-                        id="task-title" 
-                        class="form-input" 
-                        placeholder="What needs to be done?"
-                        required
-                        autocomplete="off"
-                    >
+                    <label class="form-label">Due date</label>
+                    <input type="date" id="new-task-due-date" class="form-input">
                 </div>
-                
-                <!-- Description (Optional) -->
                 <div class="form-group">
-                    <label class="form-label" for="task-description">Description</label>
-                    <textarea 
-                        id="task-description" 
-                        class="form-input" 
-                        placeholder="Add more details..."
-                        rows="3"
-                    ></textarea>
-                </div>
-                
-                <!-- Priority -->
-                <div class="form-group">
-                    <label class="form-label" for="task-priority">Priority</label>
-                    <select id="task-priority" class="form-input" style="display: none;">
+                    <label class="form-label">Priority</label>
+                    <select id="new-task-priority" class="form-select">
                         <option value="low">Low</option>
                         <option value="medium" selected>Medium</option>
                         <option value="high">High</option>
                         <option value="urgent">Urgent</option>
                     </select>
-                    <!-- Visual priority selector will be injected here by JavaScript -->
-                </div>
-                
-                <!-- Due Date (Optional) -->
-                <div class="form-group">
-                    <label class="form-label" for="task-due-date">Due Date</label>
-                    <input 
-                        type="date" 
-                        id="task-due-date" 
-                        class="form-input"
-                    >
-                    <!-- Date shortcuts will be injected here by JavaScript -->
-                </div>
-                
-                <!-- Assignee (Optional) -->
-                <div class="form-group">
-                    <label class="form-label" for="task-assignee">Assignee</label>
-                    <input 
-                        type="text" 
-                        id="task-assignee" 
-                        class="form-input" 
-                        placeholder="Search users..."
-                        autocomplete="off"
-                    >
-                    <!-- Assignee dropdown will be injected here by JavaScript -->
                 </div>
             </div>
-            
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" id="task-form-cancel">
-                    Cancel
-                </button>
-                <button type="submit" class="btn btn-primary" id="task-form-submit">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline-block; margin-right: 8px;">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    Create Task
-                </button>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="new-task-cancel">Cancel</button>
+                <button type="submit" class="btn-primary">Create Task</button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Snooze Duration Picker Modal -->
-<div id="snooze-modal-overlay" class="task-modal-overlay hidden">
-    <div class="task-modal task-modal-small">
-        <div class="task-modal-header">
-            <h2 class="task-modal-title">Snooze Task</h2>
-            <button class="task-modal-close" id="snooze-modal-close">
-                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-        </div>
-        
-        <div class="modal-body">
-            <p class="text-secondary mb-4" id="snooze-task-title">Snooze this task until...</p>
-            
-            <div class="snooze-options">
-                <button class="snooze-option-btn" data-snooze-duration="later-today">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <span>Later Today</span>
-                </button>
-                <button class="snooze-option-btn" data-snooze-duration="tomorrow">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
-                    <span>Tomorrow</span>
-                </button>
-                <button class="snooze-option-btn" data-snooze-duration="next-week">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
-                    <span>Next Week</span>
-                </button>
-                <button class="snooze-option-btn" data-snooze-duration="next-month">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
-                    <span>Next Month</span>
-                </button>
-            </div>
-            
-            <div class="snooze-modal-footer">
-                <button class="btn-secondary snooze-cancel-btn">Cancel</button>
-            </div>
+<!-- Quick Action Modals -->
+<!-- Assign Modal -->
+<div class="quick-modal" id="assign-modal" style="display: none;" role="dialog">
+    <div class="quick-modal-content">
+        <h3>Assign to</h3>
+        <div class="user-list" id="user-list">Loading...</div>
+        <div class="quick-modal-actions">
+            <button class="btn-secondary" id="assign-cancel">Cancel</button>
         </div>
     </div>
 </div>
 
-<!-- Merge Task Selector Modal -->
-<div id="merge-modal-overlay" class="task-modal-overlay hidden">
-    <div class="task-modal task-modal-medium">
-        <div class="task-modal-header">
-            <h2 class="task-modal-title">Merge Tasks</h2>
-            <button class="task-modal-close merge-cancel-btn" id="merge-modal-close">
-                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
+<!-- Due Date Modal -->
+<div class="quick-modal" id="due-date-modal" style="display: none;" role="dialog">
+    <div class="quick-modal-content">
+        <h3>Set due date</h3>
+        <input type="date" id="due-date-input" class="form-input">
+        <div class="quick-date-shortcuts">
+            <button class="date-shortcut" data-days="0">Today</button>
+            <button class="date-shortcut" data-days="1">Tomorrow</button>
+            <button class="date-shortcut" data-days="7">Next week</button>
+            <button class="date-shortcut" data-days="-1">Clear</button>
         </div>
-        
-        <div class="modal-body">
-            <p class="text-secondary mb-4" id="merge-task-title">Combine selected tasks into one:</p>
-            
-            <!-- Preview of tasks to merge -->
-            <div class="merge-preview">
-                <!-- Will be populated by renderMergePreview() -->
-            </div>
-            
-            <div class="merge-info-box mt-4">
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-                </svg>
-                <span>The first task will be kept. Other tasks will be deleted and their labels merged.</span>
-            </div>
-        </div>
-        
-        <div class="task-modal-footer">
-            <button class="btn-secondary merge-cancel-btn">Cancel</button>
-            <button class="btn-primary merge-confirm-btn">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                </svg>
-                Merge Tasks
-            </button>
+        <div class="quick-modal-actions">
+            <button class="btn-secondary" id="due-date-cancel">Cancel</button>
+            <button class="btn-primary" id="due-date-save">Save</button>
         </div>
     </div>
 </div>
 
-<!-- Task Detail Modal (CROWN⁴.5 Task 7) -->
-<div id="task-detail-modal-overlay" class="task-modal-overlay hidden">
-    <div class="task-modal task-modal-large">
-        <div class="task-modal-header">
-            <h2 class="task-modal-title" id="task-detail-title">Task Details</h2>
-            <button class="task-modal-close" id="task-detail-close">
-                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
+<!-- Priority Modal -->
+<div class="quick-modal" id="priority-modal" style="display: none;" role="dialog">
+    <div class="quick-modal-content">
+        <h3>Set priority</h3>
+        <div class="priority-options">
+            <button class="priority-option priority-urgent" data-priority="urgent">
+                <span class="priority-dot"></span> Urgent
+            </button>
+            <button class="priority-option priority-high" data-priority="high">
+                <span class="priority-dot"></span> High
+            </button>
+            <button class="priority-option priority-medium" data-priority="medium">
+                <span class="priority-dot"></span> Medium
+            </button>
+            <button class="priority-option priority-low" data-priority="low">
+                <span class="priority-dot"></span> Low
             </button>
         </div>
-        
-        <!-- Tab Navigation -->
-        <div class="task-detail-tabs">
-            <button class="task-detail-tab active" data-tab="details">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-                Details
-            </button>
-            <button class="task-detail-tab" data-tab="comments">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                </svg>
-                Comments <span class="tab-badge" id="comments-count">0</span>
-            </button>
-            <button class="task-detail-tab" data-tab="history">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                History
-            </button>
-            <button class="task-detail-tab" data-tab="attachments">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-                </svg>
-                Attachments <span class="tab-badge" id="attachments-count">0</span>
-            </button>
-        </div>
-        
-        <div class="modal-body task-detail-body">
-            <!-- Details Tab -->
-            <div class="task-detail-panel active" data-panel="details">
-                <div class="task-detail-section">
-                    <label class="task-detail-label">Title</label>
-                    <div class="task-detail-value editable" id="detail-title" contenteditable="false">
-                        <!-- Title will be populated -->
-                    </div>
-                </div>
-                
-                <div class="task-detail-row">
-                    <div class="task-detail-section">
-                        <label class="task-detail-label">Status</label>
-                        <select class="task-detail-select" id="detail-status">
-                            <option value="pending">Pending</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="completed">Completed</option>
-                        </select>
-                    </div>
-                    
-                    <div class="task-detail-section">
-                        <label class="task-detail-label">Priority</label>
-                        <select class="task-detail-select" id="detail-priority">
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="task-detail-row">
-                    <div class="task-detail-section">
-                        <label class="task-detail-label">Due Date</label>
-                        <input type="date" class="task-detail-input" id="detail-due-date">
-                    </div>
-                    
-                    <div class="task-detail-section">
-                        <label class="task-detail-label">Created</label>
-                        <div class="task-detail-value" id="detail-created">
-                            <!-- Created date -->
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="task-detail-section">
-                    <label class="task-detail-label">Assigned To</label>
-                    <div class="task-assignees" id="detail-assignees">
-                        <!-- Assignees will be populated -->
-                    </div>
-                </div>
-                
-                <div class="task-detail-section">
-                    <label class="task-detail-label">Description</label>
-                    <textarea class="task-detail-textarea" id="detail-description" placeholder="Add a description..." rows="4"></textarea>
-                </div>
-                
-                <div class="task-detail-section">
-                    <label class="task-detail-label">Source</label>
-                    <div class="task-detail-value" id="detail-source">
-                        <!-- Source info (AI/Manual) -->
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Comments Tab -->
-            <div class="task-detail-panel" data-panel="comments">
-                <div class="comments-list" id="comments-list">
-                    <!-- Comments will be populated -->
-                </div>
-                
-                <div class="comment-composer">
-                    <textarea class="comment-input" id="comment-input" placeholder="Add a comment..." rows="3"></textarea>
-                    <div class="comment-actions">
-                        <button class="btn-secondary modal-btn" id="cancel-comment">Cancel</button>
-                        <button class="btn-primary modal-btn" id="add-comment">Comment</button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- History Tab -->
-            <div class="task-detail-panel" data-panel="history">
-                <div class="history-timeline" id="history-timeline">
-                    <!-- History events will be populated -->
-                </div>
-            </div>
-            
-            <!-- Attachments Tab -->
-            <div class="task-detail-panel" data-panel="attachments">
-                <div class="attachments-empty" id="attachments-empty">
-                    <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-                    </svg>
-                    <p>No attachments yet</p>
-                    <p class="text-secondary">Attachments feature coming soon</p>
-                </div>
-                <div class="attachments-list hidden" id="attachments-list">
-                    <!-- Attachments will be populated -->
-                </div>
-            </div>
-        </div>
-        
-        <div class="modal-footer">
-            <button class="btn-secondary modal-btn" id="task-detail-cancel">Close</button>
-            <button class="btn-primary modal-btn" id="task-detail-save">Save Changes</button>
+        <div class="quick-modal-actions">
+            <button class="btn-secondary" id="priority-cancel">Cancel</button>
         </div>
     </div>
 </div>
 
-<!-- Three Dots Task Actions Menu (Global Floating) - MUST BE BEFORE SCRIPTS -->
-<div id="task-menu" role="menu" data-state="closed">
-    <!-- Quick Actions -->
-    <button class="task-menu-item" data-action="view-details" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-        </svg>
-        <span>View details</span>
-    </button>
-    
-    <div class="task-menu-section-label" role="presentation" aria-hidden="true">Edit</div>
-    <button class="task-menu-item" data-action="edit" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-        </svg>
-        <span>Edit task</span>
-    </button>
-    <button class="task-menu-item" data-action="toggle-status" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-        </svg>
-        <span>Toggle complete</span>
-    </button>
-    <button class="task-menu-item" data-action="priority" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
-        </svg>
-        <span>Change priority</span>
-    </button>
-    <button class="task-menu-item" data-action="due-date" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-        </svg>
-        <span>Set due date</span>
-    </button>
-    <button class="task-menu-item" data-action="assign" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-        </svg>
-        <span>Assign to...</span>
-    </button>
-    <button class="task-menu-item" data-action="labels" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-        </svg>
-        <span>Edit labels</span>
-    </button>
-    
-    <div class="task-menu-section-label" role="presentation" aria-hidden="true">Navigate</div>
-    <button class="task-menu-item" data-action="jump-to-transcript" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-        </svg>
-        <span>Jump to transcript</span>
-    </button>
-    
-    <div class="task-menu-section-label" role="presentation" aria-hidden="true">Actions</div>
-    <button class="task-menu-item" data-action="duplicate" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-        </svg>
-        <span>Duplicate</span>
-    </button>
-    <button class="task-menu-item" data-action="snooze" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <span>Snooze...</span>
-    </button>
-    <button class="task-menu-item" data-action="merge" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-        </svg>
-        <span>Merge tasks...</span>
-    </button>
-    <button class="task-menu-item" data-action="archive" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-        </svg>
-        <span>Archive</span>
-    </button>
-    
-    <div class="task-menu-divider task-menu-divider-danger"></div>
-    <button class="task-menu-item task-menu-item-destructive" data-action="delete" role="menuitem">
-        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-        </svg>
-        <span>Delete</span>
-    </button>
+<!-- Labels Modal -->
+<div class="quick-modal" id="labels-modal" style="display: none;" role="dialog">
+    <div class="quick-modal-content">
+        <h3>Labels</h3>
+        <input type="text" id="labels-input" class="form-input" placeholder="Add label and press Enter">
+        <div class="current-labels" id="current-labels"></div>
+        <div class="suggested-labels">
+            <button class="label-suggestion" data-label="follow-up">Follow-up</button>
+            <button class="label-suggestion" data-label="urgent">Urgent</button>
+            <button class="label-suggestion" data-label="review">Review</button>
+            <button class="label-suggestion" data-label="blocked">Blocked</button>
+        </div>
+        <div class="quick-modal-actions">
+            <button class="btn-secondary" id="labels-cancel">Cancel</button>
+            <button class="btn-primary" id="labels-save">Save</button>
+        </div>
+    </div>
 </div>
 
-<!-- CROWN⁴.6: Populate task data for spoken provenance -->
-<script nonce="{{ g.csp_nonce }}">
-// Serialize tasks with all relationships for spoken provenance UI
-window.tasks = {{ tasks_json|tojson|safe if tasks_json else '[]' }};
-console.log('[CROWN⁴.6] Loaded', window.tasks.length, 'tasks for provenance UI');
+<!-- Inject tasks JSON for JS hydration -->
+<script id="tasks-data" type="application/json">
+{{ tasks_json|tojson|safe }}
 </script>
 
-<!-- CROWN⁴.6: Accurate First Paint measurement using PerformanceObserver -->
-<script nonce="{{ g.csp_nonce }}">
-window.__FIRST_PAINT_START = performance.now();
+<script>
+// CROWN⁴.13: FCP Budget Validation
 (function() {
-    // Use PerformanceObserver for accurate First Contentful Paint measurement
-    if ('PerformanceObserver' in window) {
-        try {
-            new PerformanceObserver(function(list) {
-                list.getEntries().forEach(function(entry) {
-                    if (entry.name === 'first-contentful-paint') {
-                        window.__FIRST_PAINT_TIME = entry.startTime;
-                        console.log('⚡ FCP (Browser):', Math.round(entry.startTime) + 'ms');
+    if (window.performance && window.performance.getEntriesByType) {
+        const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+                if (entry.name === 'first-contentful-paint') {
+                    const fcp = entry.startTime;
+                    if (fcp > 200) {
+                        console.warn(`[CROWN⁴.13] FCP budget exceeded: ${fcp.toFixed(0)}ms > 200ms`);
+                        window.dispatchEvent(new CustomEvent('performance:budget_exceeded', { 
+                            detail: { metric: 'FCP', value: fcp, budget: 200 } 
+                        }));
+                    } else {
+                        console.log(`[CROWN⁴.13] FCP within budget: ${fcp.toFixed(0)}ms`);
                     }
-                });
-            }).observe({ type: 'paint', buffered: true });
-        } catch (e) {
-            // Fallback for browsers that don't support this observer type
-            requestAnimationFrame(function(){requestAnimationFrame(function(){
-                window.__FIRST_PAINT_TIME = performance.now() - window.__FIRST_PAINT_START;
-                console.log('⚡ First Paint (rAF):', Math.round(window.__FIRST_PAINT_TIME) + 'ms');
-            })});
-        }
-    } else {
-        requestAnimationFrame(function(){requestAnimationFrame(function(){
-            window.__FIRST_PAINT_TIME = performance.now() - window.__FIRST_PAINT_START;
-            console.log('⚡ First Paint (rAF):', Math.round(window.__FIRST_PAINT_TIME) + 'ms');
-        })});
+                }
+            }
+        });
+        observer.observe({ type: 'paint', buffered: true });
     }
 })();
+
+// Current filter for JS reference
+window.TASKS_CURRENT_FILTER = '{{ current_filter }}';
 </script>
+{% endblock %}
 
-<!-- CSRF Protection - Deferred but ordered before other deferred scripts -->
-<script defer src="{{ url_for('static', filename='js/csrf.js') }}" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.6 TaskStateStore - MUST load first as single source of truth -->
-<script defer src="{{ url_for('static', filename='js/task-state-store.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.18 Shared Task Card Renderer - MUST load before other task scripts -->
-<script defer src="{{ url_for('static', filename='js/task-card-renderer.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.5 Frontend Modules - ALL deferred for <200ms First Paint -->
-<script defer src="{{ url_for('static', filename='js/quiet-state-manager.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/emotional-animations.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-animation-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-cache.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
-<!-- CROWN⁴.13 Task Action Lock - MUST load before sync modules to prevent overwrites -->
-<script defer src="{{ url_for('static', filename='js/task-action-lock.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-search-sort.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-command-bar.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-detail-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-grouping.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/performance-validator.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/prefetch-controller.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-prefetch-adapter.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-render-scheduler.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-bootstrap.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-merge-ui.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-optimistic-ui.js') }}?v=12" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-inline-editing.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-confirmation-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-date-picker.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-priority-selector.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-priority-sheet.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-date-sheet.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-assignee-selector.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-labels-editor.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-duplicate-confirmation.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-snooze-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-merge-modal.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-menu-controller.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-actions-menu.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-bulk-operations.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-drag-drop.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-proposal-ui.js') }}?v=10" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-offline-queue.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-multi-tab-sync.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-idle-sync.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/predictive-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/cognitive-synchronizer.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-websocket-handlers.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-virtual-list.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-clustering.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/haptic-feedback.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/reconciliation-cycle.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.5 Phase 2: Cache-First Architecture -->
-<script defer src="{{ url_for('static', filename='js/indexeddb-cache.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-store.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/temporal-recovery-engine.js') }}" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- Set user context variables (needs template rendering) -->
-<script nonce="{{ g.csp_nonce }}">
-// Set user context for WebSocket authentication and CROWN⁴.5 modules
-window.CURRENT_USER_ID = {{ current_user.id if current_user.is_authenticated else 'null' }};
-window.WORKSPACE_ID = {{ current_user.workspace_id if current_user.workspace_id else 'null' }};
-window.CURRENT_SESSION_ID = null;
-console.log('[DEBUG] User context set:', { userId: window.CURRENT_USER_ID, workspaceId: window.WORKSPACE_ID });
-</script>
-
-<!-- Global Modal Manager - Prevents modal stacking on mobile -->
-<script defer src="{{ url_for('static', filename='js/modal-manager.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- SmartSelectors - Reusable UI Components -->
-<script defer src="{{ url_for('static', filename='js/task-smart-selectors.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- TaskModalManager - Unified Create/Edit/View Modal -->
-<script defer src="{{ url_for('static', filename='js/task-modal-manager.js') }}?v=6" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- Task page initialization -->
-<script defer src="{{ url_for('static', filename='js/task-page-init.js') }}" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-page-master-init.js') }}?v=4" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.6: Linear-Inspired Performance & Animations -->
-<script defer src="{{ url_for('static', filename='js/tasks-linear-inspired.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/emotional-task-ui.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/spoken-provenance-ui.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.6: Meeting-Native Features -->
-<script defer src="{{ url_for('static', filename='js/task-transcript-navigation.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-spoken-provenance.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/meeting-heatmap.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/task-context-preview.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/meeting-intelligence-mode.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/semantic-search.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/stress-indicators.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-<script defer src="{{ url_for('static', filename='js/dev-performance-panel.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.6 Task 5: Perfect Completion UX -->
-<script defer src="{{ url_for('static', filename='js/task-completion-ux.js') }}?v=3" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.8 Phase 8: Undo System -->
-<script defer src="{{ url_for('static', filename='js/task-undo-manager.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.9 Phase 9: Error States & Retry -->
-<script defer src="{{ url_for('static', filename='js/task-error-handler.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.8: Progressive Disclosure & Mobile UX -->
-<script defer src="{{ url_for('static', filename='js/task-progressive-disclosure.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- REDESIGN: Clean task page interactions -->
-<script defer src="{{ url_for('static', filename='js/task-redesign.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.6: Mobile Gestures (swipe-to-complete/snooze, long-press context) -->
-<script defer src="{{ url_for('static', filename='js/task-mobile-gestures.js') }}?v=2" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.6: AI Partner Nudges (gentle PredictiveEngine suggestions) -->
-<script defer src="{{ url_for('static', filename='js/ai-partner-nudges.js') }}?v=1" nonce="{{ g.csp_nonce }}"></script>
-
-<!-- CROWN⁴.6: Task Page Orchestrator - MUST BE LAST to coordinate module initialization -->
-<script defer src="{{ url_for('static', filename='js/task-page-orchestrator.js') }}?v=5" nonce="{{ g.csp_nonce }}"></script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/tasks-core.js') }}" defer></script>
 {% endblock %}

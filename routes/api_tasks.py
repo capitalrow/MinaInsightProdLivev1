@@ -837,9 +837,12 @@ def update_task(task_id):
     try:
         logger.info(f"[API] 📥 PUT /api/tasks/{task_id} - User {current_user.id}")
         
-        task = db.session.query(Task).join(Meeting).filter(
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not task:
@@ -1193,14 +1196,68 @@ def update_task(task_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@api_tasks_bp.route('/<int:task_id>/duplicate', methods=['POST'])
+@login_required
+def duplicate_task(task_id):
+    """Create a copy of an existing task."""
+    try:
+        task = db.session.query(Task).outerjoin(Meeting).filter(
+            Task.id == task_id,
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
+        ).first()
+        
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+        
+        # Create duplicate task
+        new_task = Task(
+            title=f"{task.title} [Copy]",
+            description=task.description,
+            task_type=task.task_type,
+            priority=task.priority,
+            status='todo',
+            category=task.category,
+            due_date=task.due_date,
+            labels=task.labels.copy() if task.labels else [],
+            meeting_id=task.meeting_id,
+            workspace_id=task.workspace_id,
+            created_by_id=current_user.id,
+            extraction_context=task.extraction_context,
+            transcript_span=task.transcript_span,
+            confidence_score=task.confidence_score
+        )
+        
+        db.session.add(new_task)
+        db.session.commit()
+        
+        logger.info(f"[API] Task {task_id} duplicated as {new_task.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Task duplicated successfully',
+            'task': new_task.to_dict()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Failed to duplicate task {task_id}: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @api_tasks_bp.route('/<int:task_id>', methods=['DELETE'])
 @login_required
 def delete_task(task_id):
     """Soft delete a task (CROWN⁴.5 Phase 1: 15s undo window)."""
     try:
-        task = db.session.query(Task).join(Meeting).filter(
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not task:
@@ -1277,9 +1334,12 @@ def delete_task(task_id):
 def undo_delete_task(task_id):
     """Restore a soft-deleted task (CROWN⁴.5 Phase 1: undo within 15s window)."""
     try:
-        task = db.session.query(Task).join(Meeting).filter(
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not task:
@@ -1358,9 +1418,12 @@ def undo_delete_task(task_id):
 def accept_task_proposal(task_id):
     """Accept an AI-proposed task (change emotional_state from pending_suggest to accepted)."""
     try:
-        task = db.session.query(Task).join(Meeting).filter(
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not task:
@@ -1403,9 +1466,12 @@ def accept_task_proposal(task_id):
 def reject_task_proposal(task_id):
     """Reject an AI-proposed task (delete it)."""
     try:
-        task = db.session.query(Task).join(Meeting).filter(
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not task:
@@ -1448,9 +1514,12 @@ def merge_tasks(task_id):
     """Merge source task into target task."""
     try:
         # Get target task (the one being merged into)
-        target_task = db.session.query(Task).join(Meeting).filter(
+        target_task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not target_task:
@@ -1477,9 +1546,12 @@ def merge_tasks(task_id):
             return jsonify({'success': False, 'message': 'Cannot merge a task into itself'}), 400
         
         # Get source task (the one being merged from and deleted) - BEFORE any mutations
-        source_task = db.session.query(Task).join(Meeting).filter(
+        source_task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == source_task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not source_task:

@@ -25,6 +25,9 @@ class ConnectionStatusBanner {
     }
     
     createBanner() {
+        // Add styles FIRST to prevent flash of unstyled content
+        this.addStyles();
+        
         if (document.getElementById('connection-status-banner')) {
             this.banner = document.getElementById('connection-status-banner');
             return;
@@ -33,6 +36,9 @@ class ConnectionStatusBanner {
         this.banner = document.createElement('div');
         this.banner.id = 'connection-status-banner';
         this.banner.className = 'connection-banner connection-banner-hidden';
+        // Inline style ensures banner is hidden even before CSS parses
+        this.banner.style.transform = 'translateY(-100%)';
+        this.banner.style.visibility = 'hidden';
         this.banner.setAttribute('role', 'alert');
         this.banner.setAttribute('aria-live', 'polite');
         
@@ -74,8 +80,6 @@ class ConnectionStatusBanner {
         this.banner.querySelector('.connection-banner-dismiss').addEventListener('click', () => {
             this.dismiss();
         });
-        
-        this.addStyles();
     }
     
     addStyles() {
@@ -256,6 +260,9 @@ class ConnectionStatusBanner {
         this.updateCountdown();
         this.startCountdownTimer();
         
+        // Remove inline hiding styles when showing
+        this.banner.style.visibility = 'visible';
+        this.banner.style.transform = '';
         this.banner.classList.remove('connection-banner-hidden');
         this.banner.classList.add('connection-banner-visible');
         
