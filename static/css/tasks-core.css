@@ -369,10 +369,54 @@
 
 .task-checkbox.priority-high {
     border-color: var(--tasks-danger);
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
 }
 
 .task-checkbox.priority-medium {
     border-color: var(--tasks-warning);
+}
+
+/* Priority indicators on card level for better visibility */
+.task-card[data-priority="urgent"],
+.task-card[data-priority="high"] {
+    border-left: 3px solid var(--tasks-danger);
+}
+
+.task-card[data-priority="medium"] {
+    border-left: 3px solid var(--tasks-warning);
+}
+
+/* Priority badge */
+.priority-badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+}
+
+.priority-badge.priority-urgent,
+.priority-badge.priority-high {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--tasks-danger);
+}
+
+.priority-badge.priority-medium {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--tasks-warning);
+}
+
+.priority-badge.priority-low {
+    display: none; /* Don't show low priority badge */
+}
+
+/* Task title row for inline priority badge */
+.task-title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
 }
 
 .task-checkbox.completed {
