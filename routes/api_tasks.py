@@ -837,9 +837,12 @@ def update_task(task_id):
     try:
         logger.info(f"[API] 📥 PUT /api/tasks/{task_id} - User {current_user.id}")
         
-        task = db.session.query(Task).join(Meeting).filter(
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not task:
@@ -1198,9 +1201,12 @@ def update_task(task_id):
 def delete_task(task_id):
     """Soft delete a task (CROWN⁴.5 Phase 1: 15s undo window)."""
     try:
-        task = db.session.query(Task).join(Meeting).filter(
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not task:
@@ -1277,9 +1283,12 @@ def delete_task(task_id):
 def undo_delete_task(task_id):
     """Restore a soft-deleted task (CROWN⁴.5 Phase 1: undo within 15s window)."""
     try:
-        task = db.session.query(Task).join(Meeting).filter(
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not task:
@@ -1358,9 +1367,12 @@ def undo_delete_task(task_id):
 def accept_task_proposal(task_id):
     """Accept an AI-proposed task (change emotional_state from pending_suggest to accepted)."""
     try:
-        task = db.session.query(Task).join(Meeting).filter(
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not task:
@@ -1403,9 +1415,12 @@ def accept_task_proposal(task_id):
 def reject_task_proposal(task_id):
     """Reject an AI-proposed task (delete it)."""
     try:
-        task = db.session.query(Task).join(Meeting).filter(
+        task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not task:
@@ -1448,9 +1463,12 @@ def merge_tasks(task_id):
     """Merge source task into target task."""
     try:
         # Get target task (the one being merged into)
-        target_task = db.session.query(Task).join(Meeting).filter(
+        target_task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not target_task:
@@ -1477,9 +1495,12 @@ def merge_tasks(task_id):
             return jsonify({'success': False, 'message': 'Cannot merge a task into itself'}), 400
         
         # Get source task (the one being merged from and deleted) - BEFORE any mutations
-        source_task = db.session.query(Task).join(Meeting).filter(
+        source_task = db.session.query(Task).outerjoin(Meeting).filter(
             Task.id == source_task_id,
-            Meeting.workspace_id == current_user.workspace_id
+            db.or_(
+                Meeting.workspace_id == current_user.workspace_id,
+                db.and_(Task.meeting_id.is_(None), Task.workspace_id == current_user.workspace_id)
+            )
         ).first()
         
         if not source_task:
