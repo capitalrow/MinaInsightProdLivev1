@@ -804,6 +804,7 @@
         const checkbox = card.querySelector('.task-checkbox');
         if (!checkbox) return;
         
+        // Update checkbox styling
         checkbox.classList.remove('priority-high', 'priority-medium');
         if (priority === 'high' || priority === 'urgent') {
             checkbox.classList.add('priority-high');
@@ -811,6 +812,24 @@
             checkbox.classList.add('priority-medium');
         }
         card.dataset.priority = priority;
+        
+        // Update or create priority badge
+        const titleRow = card.querySelector('.task-title-row');
+        if (titleRow) {
+            let badge = titleRow.querySelector('.priority-badge');
+            if (priority === 'low') {
+                // Remove badge for low priority
+                if (badge) badge.remove();
+            } else {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'priority-badge';
+                    titleRow.appendChild(badge);
+                }
+                badge.className = `priority-badge priority-${priority}`;
+                badge.textContent = priority;
+            }
+        }
     }
 
     // Meeting Intelligence Mode - Group by Meeting Toggle

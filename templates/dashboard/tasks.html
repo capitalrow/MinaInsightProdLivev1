@@ -174,8 +174,13 @@
                                 {% endif %}
                             </div>
                             
-                            <!-- Task Title -->
-                            <h3 class="task-title" data-task-id="{{ task.id }}">{{ task.title }}</h3>
+                            <!-- Task Title with Priority Badge -->
+                            <div class="task-title-row">
+                                <h3 class="task-title" data-task-id="{{ task.id }}">{{ task.title }}</h3>
+                                {% if task.priority in ['high', 'urgent', 'medium'] %}
+                                <span class="priority-badge priority-{{ task.priority }}">{{ task.priority }}</span>
+                                {% endif %}
+                            </div>
                             
                             <!-- Task Meta -->
                             <div class="task-meta">
