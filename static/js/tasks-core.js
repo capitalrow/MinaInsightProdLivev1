@@ -76,6 +76,9 @@
         // Mobile long-press for transcript preview
         initTranscriptLongPress();
 
+        // Inline title editing
+        initInlineEditing();
+
         // New task button
         const newTaskBtn = document.getElementById('new-task-btn');
         if (newTaskBtn) {
@@ -279,6 +282,18 @@
         switch(action) {
             case 'edit':
                 openEditModal(contextMenuTaskId);
+                break;
+            case 'assign':
+                openAssignModal(contextMenuTaskId);
+                break;
+            case 'set-due':
+                openDueDateModal(contextMenuTaskId);
+                break;
+            case 'priority':
+                openPriorityModal(contextMenuTaskId);
+                break;
+            case 'labels':
+                openLabelsModal(contextMenuTaskId);
                 break;
             case 'delete':
                 await deleteTask(contextMenuTaskId);
@@ -652,14 +667,53 @@
         }
     }
 
-    // Open edit modal (placeholder)
-    function openEditModal(taskId) {
-        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
-        const title = card?.querySelector('.task-title')?.textContent || '';
-        const newTitle = prompt('Edit task title:', title);
-        if (newTitle && newTitle !== title) {
-            updateTaskTitle(taskId, newTitle);
-        }
+    // Inline Title Editing
+    function initInlineEditing() {
+        document.querySelectorAll('.task-title').forEach(titleEl => {
+            titleEl.classList.add('editable');
+            titleEl.addEventListener('click', (e) => {
+                if (e.target.closest('.task-title-input')) return;
+                startInlineEdit(titleEl);
+            });
+        });
+    }
+
+    function startInlineEdit(titleEl) {
+        if (titleEl.querySelector('.task-title-input')) return;
+        
+        const currentText = titleEl.textContent.trim();
+        const taskId = titleEl.closest('.task-card')?.dataset.taskId;
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'task-title-input';
+        input.value = currentText;
+        
+        titleEl.textContent = '';
+        titleEl.appendChild(input);
+        input.focus();
+        input.select();
+        
+        const finishEdit = async (save) => {
+            const newText = input.value.trim();
+            input.remove();
+            titleEl.textContent = save && newText ? newText : currentText;
+            
+            if (save && newText && newText !== currentText && taskId) {
+                await updateTaskTitle(taskId, newText);
+            }
+        };
+        
+        input.addEventListener('blur', () => finishEdit(true));
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                input.blur();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                finishEdit(false);
+            }
+        });
     }
 
     async function updateTaskTitle(taskId, newTitle) {
@@ -674,14 +728,89 @@
             });
 
             if (response.ok) {
-                const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
-                const titleEl = card?.querySelector('.task-title');
-                if (titleEl) titleEl.textContent = newTitle;
                 showUndoToast('Task updated');
             }
         } catch (err) {
             console.error('[Tasks] Update title failed:', err);
         }
+    }
+
+    // Context Menu - Edit (triggers inline edit)
+    function openEditModal(taskId) {
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        const titleEl = card?.querySelector('.task-title');
+        if (titleEl) startInlineEdit(titleEl);
+    }
+
+    // Context Menu - Assign
+    function openAssignModal(taskId) {
+        const assignee = prompt('Enter assignee name:');
+        if (assignee) {
+            updateTaskField(taskId, { assignee });
+        }
+    }
+
+    // Context Menu - Set Due Date
+    function openDueDateModal(taskId) {
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        const currentDue = card?.dataset.dueDate || '';
+        const dueDate = prompt('Enter due date (YYYY-MM-DD):', currentDue);
+        if (dueDate !== null) {
+            updateTaskField(taskId, { due_date: dueDate || null });
+        }
+    }
+
+    // Context Menu - Set Priority
+    function openPriorityModal(taskId) {
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        const currentPriority = card?.dataset.priority || 'medium';
+        const priority = prompt('Enter priority (low, medium, high, urgent):', currentPriority);
+        if (priority && ['low', 'medium', 'high', 'urgent'].includes(priority.toLowerCase())) {
+            updateTaskField(taskId, { priority: priority.toLowerCase() });
+            updatePriorityUI(card, priority.toLowerCase());
+        }
+    }
+
+    // Context Menu - Labels
+    function openLabelsModal(taskId) {
+        const labels = prompt('Enter labels (comma-separated):');
+        if (labels !== null) {
+            const labelArray = labels.split(',').map(l => l.trim()).filter(Boolean);
+            updateTaskField(taskId, { labels: labelArray });
+        }
+    }
+
+    async function updateTaskField(taskId, fields) {
+        try {
+            const response = await fetch(`${API_BASE}/${taskId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCSRFToken()
+                },
+                body: JSON.stringify(fields)
+            });
+
+            if (response.ok) {
+                showUndoToast('Task updated');
+            }
+        } catch (err) {
+            console.error('[Tasks] Update field failed:', err);
+        }
+    }
+
+    function updatePriorityUI(card, priority) {
+        if (!card) return;
+        const checkbox = card.querySelector('.task-checkbox');
+        if (!checkbox) return;
+        
+        checkbox.classList.remove('priority-high', 'priority-medium');
+        if (priority === 'high' || priority === 'urgent') {
+            checkbox.classList.add('priority-high');
+        } else if (priority === 'medium') {
+            checkbox.classList.add('priority-medium');
+        }
+        card.dataset.priority = priority;
     }
 
     // Meeting Intelligence Mode - Group by Meeting Toggle
