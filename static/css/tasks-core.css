@@ -1592,6 +1592,31 @@
     color: var(--tasks-text-primary);
 }
 
+/* Mobile Quick Modal Styles */
+@media (max-width: 480px) {
+    .quick-modal-content {
+        min-width: 0;
+        width: calc(100vw - 32px);
+        max-width: none;
+        margin: 16px;
+    }
+    
+    .quick-date-shortcuts {
+        justify-content: space-between;
+    }
+    
+    .date-shortcut {
+        flex: 1;
+        text-align: center;
+        min-width: 0;
+        padding: 8px 6px;
+    }
+    
+    .priority-option {
+        padding: 14px 12px;
+    }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
