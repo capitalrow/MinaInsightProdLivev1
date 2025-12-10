@@ -1224,7 +1224,7 @@ def duplicate_task(task_id):
             labels=task.labels.copy() if task.labels else [],
             meeting_id=task.meeting_id,
             workspace_id=task.workspace_id,
-            created_by_user_id=current_user.id,
+            created_by_id=current_user.id,
             extraction_context=task.extraction_context,
             transcript_span=task.transcript_span,
             confidence_score=task.confidence_score
