@@ -20,6 +20,7 @@
     function init() {
         loadTasksData();
         loadMeetingHeatmap();
+        applyMemoryHeatmap();  // CROWN⁴.6: Apply recency glow to task cards
         bindEventListeners();
         initializeKeyboardShortcuts();
         initGroupingToggle();
@@ -31,6 +32,54 @@
         initPriorityModal();
         initLabelsModal();
     }
+    
+    /**
+     * CROWN⁴.6: Memory Heatmap - Apply visual recency indicators to task cards
+     * Tasks from recent meetings get a warm glow to show they're "fresh"
+     */
+    function applyMemoryHeatmap() {
+        const now = Date.now();
+        const HOUR_MS = 60 * 60 * 1000;
+        const HOT_THRESHOLD = 24 * HOUR_MS;   // 0-24 hours = hot
+        const WARM_THRESHOLD = 48 * HOUR_MS;  // 24-48 hours = warm
+        
+        document.querySelectorAll('.task-card[data-meeting-created]').forEach(card => {
+            const meetingCreated = card.dataset.meetingCreated;
+            if (!meetingCreated) return;
+            
+            try {
+                const meetingTime = new Date(meetingCreated).getTime();
+                const age = now - meetingTime;
+                
+                // Remove existing heatmap classes
+                card.classList.remove('heatmap-hot', 'heatmap-warm');
+                
+                // Apply appropriate class based on age
+                if (age <= HOT_THRESHOLD) {
+                    card.classList.add('heatmap-hot');
+                    card.setAttribute('data-heatmap', 'hot');
+                    // Safe tooltip - fallback to task title if aria-label is null
+                    const label = card.getAttribute('aria-label') || card.querySelector('.task-title')?.textContent || 'Task';
+                    card.setAttribute('title', label + ' (from recent meeting)');
+                } else if (age <= WARM_THRESHOLD) {
+                    card.classList.add('heatmap-warm');
+                    card.setAttribute('data-heatmap', 'warm');
+                }
+            } catch (e) {
+                console.warn('[Heatmap] Invalid date for task:', card.dataset.taskId, e);
+            }
+        });
+        
+        // Log heatmap stats for debugging
+        const hotCount = document.querySelectorAll('.task-card.heatmap-hot').length;
+        const warmCount = document.querySelectorAll('.task-card.heatmap-warm').length;
+        if (hotCount > 0 || warmCount > 0) {
+            console.log(`[Memory Heatmap] Applied: ${hotCount} hot, ${warmCount} warm`);
+        }
+    }
+    
+    // Expose for re-application after regrouping
+    window.applyMemoryHeatmap = applyMemoryHeatmap;
 
     function loadTasksData() {
         const dataElement = document.getElementById('tasks-data');
@@ -226,6 +275,11 @@
 
                 // Show undo toast
                 showUndoToast(isCompleted ? 'Task reopened' : 'Task completed');
+                
+                // CROWN⁴.6: Show completion context for newly completed tasks
+                if (!isCompleted) {
+                    showCompletionContext(taskId, card);
+                }
             } else {
                 // Revert on failure
                 e.currentTarget.classList.toggle('completed');
@@ -552,6 +606,116 @@
         document.getElementById('undo-toast').style.display = 'none';
     }
 
+    // Track completion context timer to prevent overlap
+    let completionContextTimer = null;
+    
+    /**
+     * CROWN⁴.6: Show completion context modal with transcript snippet and related tasks
+     */
+    async function showCompletionContext(taskId, card) {
+        const modal = document.getElementById('completion-context');
+        if (!modal) return;
+        
+        // Clear any pending auto-dismiss timer
+        if (completionContextTimer) {
+            clearTimeout(completionContextTimer);
+            completionContextTimer = null;
+        }
+        
+        // Get provenance data from the card - try multiple sources
+        const provenanceEl = card.querySelector('.task-provenance');
+        const quoteEl = card.querySelector('.spoken-quote .quote-text');
+        const transcriptUrl = card.querySelector('.jump-to-transcript')?.href;
+        const meetingId = card.dataset.meetingId;
+        
+        // Fallback: try getting evidence from data attributes
+        const evidenceQuote = quoteEl?.textContent?.trim() || 
+                              provenanceEl?.dataset?.transcriptText || 
+                              '';
+        
+        // Show modal with animation
+        modal.style.display = 'flex';
+        modal.classList.remove('animate-out');
+        modal.classList.add('animate-in');
+        
+        // Populate transcript section if we have evidence quote
+        const transcriptSection = document.getElementById('completion-transcript');
+        const quoteSection = document.getElementById('completion-quote');
+        const transcriptLink = document.getElementById('completion-transcript-link');
+        
+        if (evidenceQuote) {
+            quoteSection.textContent = evidenceQuote;
+            transcriptSection.style.display = 'block';
+            
+            if (transcriptUrl) {
+                transcriptLink.href = transcriptUrl;
+                transcriptLink.style.display = 'inline-flex';
+            } else {
+                transcriptLink.style.display = 'none';
+            }
+        } else {
+            transcriptSection.style.display = 'none';
+        }
+        
+        // Fetch and show related tasks from same meeting
+        const relatedSection = document.getElementById('completion-related');
+        const relatedList = document.getElementById('related-tasks-list');
+        
+        if (meetingId) {
+            try {
+                const response = await fetch(`${API_BASE}/related?meeting_id=${meetingId}&exclude_task_id=${taskId}`);
+                const data = await response.json();
+                
+                if (data.success && data.tasks && data.tasks.length > 0) {
+                    relatedList.innerHTML = data.tasks.slice(0, 3).map(task => `
+                        <div class="related-task-item ${task.status === 'completed' ? 'completed' : ''}">
+                            <span class="related-task-status">${task.status === 'completed' ? '✓' : '○'}</span>
+                            <span class="related-task-title">${escapeHtml(task.title)}</span>
+                        </div>
+                    `).join('');
+                    relatedSection.style.display = 'block';
+                } else {
+                    relatedSection.style.display = 'none';
+                }
+            } catch (e) {
+                console.warn('[Completion Context] Failed to load related tasks:', e);
+                relatedSection.style.display = 'none';
+            }
+        } else {
+            relatedSection.style.display = 'none';
+        }
+        
+        // Bind close handlers
+        const closeBtn = document.getElementById('completion-context-close');
+        const dismissBtn = document.getElementById('completion-dismiss');
+        
+        const closeModal = () => {
+            if (completionContextTimer) {
+                clearTimeout(completionContextTimer);
+                completionContextTimer = null;
+            }
+            modal.classList.remove('animate-in');
+            modal.classList.add('animate-out');
+            setTimeout(() => {
+                modal.style.display = 'none';
+                modal.classList.remove('animate-out');
+            }, 200);
+        };
+        
+        closeBtn?.addEventListener('click', closeModal, { once: true });
+        dismissBtn?.addEventListener('click', closeModal, { once: true });
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        }, { once: true });
+        
+        // Auto-dismiss after 8 seconds (with timer tracking)
+        completionContextTimer = setTimeout(() => {
+            if (modal.style.display !== 'none') {
+                closeModal();
+            }
+        }, 8000);
+    }
+    
     async function snoozeTask(taskId) {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1362,6 +1526,9 @@
         });
 
         taskGroups.classList.add('grouped-view');
+        
+        // Re-apply heatmap after regrouping
+        applyMemoryHeatmap();
     }
 
     function groupTaskCards(cards, groupBy) {
@@ -1566,6 +1733,9 @@
         allCards.forEach(card => newList.appendChild(card));
         taskGroups.appendChild(newList);
         taskGroups.classList.remove('grouped-view');
+        
+        // Re-apply heatmap after flat list render
+        applyMemoryHeatmap();
     }
 
     // Listen for group collapse updates from other tabs
