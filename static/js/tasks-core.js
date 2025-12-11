@@ -26,6 +26,7 @@
         initGroupingToggle();
         initContextBubble();
         initFilterTabs();  // CROWN⁴.6: Client-side tab filtering
+        initSearch();      // CROWN⁴.6: Semantic search with spoken provenance
         
         // Initialize quick action modals
         initAssignModal();
@@ -193,6 +194,256 @@
     
     // Expose updateFilterCounts for use after task status changes
     window.updateFilterCounts = updateFilterCounts;
+    
+    /**
+     * CROWN⁴.6: Semantic Search - Instant fuzzy search with spoken provenance
+     */
+    let searchDebounceTimer = null;
+    let searchFocusIndex = -1;
+    
+    function initSearch() {
+        const searchInput = document.getElementById('task-search');
+        const searchResults = document.getElementById('search-results');
+        const searchBox = document.getElementById('search-box');
+        
+        if (!searchInput || !searchResults) return;
+        
+        // Input handler with debounce
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            
+            clearTimeout(searchDebounceTimer);
+            
+            if (query.length < 2) {
+                hideSearchResults();
+                return;
+            }
+            
+            // Instant client-side search (no debounce for basic fuzzy)
+            performClientSearch(query);
+        });
+        
+        // Focus/blur handlers
+        searchInput.addEventListener('focus', () => {
+            const shortcutHint = document.getElementById('search-shortcut-hint');
+            if (shortcutHint) shortcutHint.style.opacity = '0';
+            
+            if (searchInput.value.trim().length >= 2) {
+                performClientSearch(searchInput.value.trim());
+            }
+        });
+        
+        searchInput.addEventListener('blur', (e) => {
+            const shortcutHint = document.getElementById('search-shortcut-hint');
+            if (shortcutHint && !searchInput.value) shortcutHint.style.opacity = '1';
+            
+            // Delay hide to allow clicking results
+            setTimeout(() => {
+                if (!searchBox.contains(document.activeElement)) {
+                    hideSearchResults();
+                }
+            }, 200);
+        });
+        
+        // Keyboard navigation in search results
+        searchInput.addEventListener('keydown', (e) => {
+            const items = searchResults.querySelectorAll('.search-result-item');
+            
+            switch(e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    searchFocusIndex = Math.min(searchFocusIndex + 1, items.length - 1);
+                    updateSearchFocus(items);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    searchFocusIndex = Math.max(searchFocusIndex - 1, 0);
+                    updateSearchFocus(items);
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    if (searchFocusIndex >= 0 && items[searchFocusIndex]) {
+                        items[searchFocusIndex].click();
+                    }
+                    break;
+                case 'Escape':
+                    hideSearchResults();
+                    searchInput.blur();
+                    break;
+            }
+        });
+        
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!searchBox.contains(e.target)) {
+                hideSearchResults();
+            }
+        });
+    }
+    
+    function performClientSearch(query) {
+        const cards = document.querySelectorAll('.task-card');
+        const results = [];
+        const lowerQuery = query.toLowerCase();
+        const queryWords = lowerQuery.split(/\s+/);
+        
+        cards.forEach(card => {
+            const title = card.querySelector('.task-title')?.textContent || '';
+            const description = card.dataset.description || '';
+            const speaker = card.dataset.speaker || '';
+            const evidenceQuote = card.dataset.transcriptText || '';
+            const meetingTitle = card.dataset.meetingTitle || '';
+            const timestamp = card.dataset.transcriptStart || '';
+            
+            // Calculate match score
+            let score = 0;
+            const searchText = `${title} ${description} ${speaker} ${evidenceQuote} ${meetingTitle}`.toLowerCase();
+            
+            // Check each word
+            queryWords.forEach(word => {
+                if (title.toLowerCase().includes(word)) score += 10;
+                if (evidenceQuote.toLowerCase().includes(word)) score += 5;
+                if (speaker.toLowerCase().includes(word)) score += 3;
+                if (description.toLowerCase().includes(word)) score += 2;
+                if (meetingTitle.toLowerCase().includes(word)) score += 2;
+            });
+            
+            if (score > 0) {
+                results.push({
+                    taskId: card.dataset.taskId,
+                    title,
+                    speaker,
+                    evidenceQuote,
+                    meetingTitle,
+                    timestamp,
+                    score
+                });
+            }
+        });
+        
+        // Sort by score descending
+        results.sort((a, b) => b.score - a.score);
+        
+        // Display results (limit to top 8)
+        renderSearchResults(results.slice(0, 8), query);
+    }
+    
+    function renderSearchResults(results, query) {
+        const searchResults = document.getElementById('search-results');
+        searchFocusIndex = -1;
+        
+        if (results.length === 0) {
+            searchResults.innerHTML = `
+                <div class="search-results-empty">
+                    No tasks match "${escapeHtml(query)}"
+                </div>
+            `;
+            showSearchResults();
+            return;
+        }
+        
+        const html = results.map((result, index) => {
+            const highlightedTitle = highlightMatch(result.title, query);
+            const shortQuote = result.evidenceQuote 
+                ? (result.evidenceQuote.length > 60 
+                    ? result.evidenceQuote.substring(0, 60) + '...' 
+                    : result.evidenceQuote)
+                : '';
+            
+            return `
+                <div class="search-result-item" 
+                     data-task-id="${result.taskId}" 
+                     role="option"
+                     onclick="window.scrollToTask('${result.taskId}')">
+                    <div class="search-result-title">${highlightedTitle}</div>
+                    <div class="search-result-context">
+                        ${result.speaker ? `
+                            <span class="search-result-speaker">
+                                <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                ${escapeHtml(result.speaker)}
+                            </span>
+                        ` : ''}
+                        ${shortQuote ? `
+                            <span class="search-result-quote">"${escapeHtml(shortQuote)}"</span>
+                        ` : ''}
+                    </div>
+                    ${result.meetingTitle ? `
+                        <div class="search-result-meeting">
+                            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            ${escapeHtml(result.meetingTitle)}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+        
+        searchResults.innerHTML = html;
+        showSearchResults();
+    }
+    
+    function highlightMatch(text, query) {
+        const words = query.toLowerCase().split(/\s+/);
+        let result = escapeHtml(text);
+        
+        words.forEach(word => {
+            if (word.length < 2) return;
+            const regex = new RegExp(`(${escapeRegex(word)})`, 'gi');
+            result = result.replace(regex, '<mark>$1</mark>');
+        });
+        
+        return result;
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function escapeRegex(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
+    function showSearchResults() {
+        const searchResults = document.getElementById('search-results');
+        if (searchResults) searchResults.classList.add('active');
+    }
+    
+    function hideSearchResults() {
+        const searchResults = document.getElementById('search-results');
+        if (searchResults) searchResults.classList.remove('active');
+        searchFocusIndex = -1;
+    }
+    
+    function updateSearchFocus(items) {
+        items.forEach((item, i) => {
+            item.classList.toggle('focused', i === searchFocusIndex);
+        });
+        
+        if (searchFocusIndex >= 0 && items[searchFocusIndex]) {
+            items[searchFocusIndex].scrollIntoView({ block: 'nearest' });
+        }
+    }
+    
+    // Scroll to and highlight a task card
+    window.scrollToTask = function(taskId) {
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        if (!card) return;
+        
+        // Make card visible if filtered out
+        card.classList.add('is-visible');
+        
+        // Scroll to card
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Flash highlight
+        card.classList.add('search-highlight');
+        setTimeout(() => card.classList.remove('search-highlight'), 2000);
+        
+        // Hide search
+        hideSearchResults();
+        document.getElementById('task-search').value = '';
+    };
     
     /**
      * CROWN⁴.6: Memory Heatmap - Apply visual recency indicators to task cards
@@ -368,10 +619,22 @@
 
     function initializeKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
-            // Ignore if typing in input
+            // Cmd+K / Ctrl+K for search (global, even in inputs)
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                const searchInput = document.getElementById('task-search');
+                if (searchInput) {
+                    searchInput.focus();
+                    searchInput.select();
+                }
+                return;
+            }
+            
+            // Ignore if typing in input (except for Escape)
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
                 if (e.key === 'Escape') {
                     e.target.blur();
+                    hideSearchResults();
                     closeNewTaskModal();
                 }
                 return;
@@ -385,13 +648,18 @@
                 case '/':
                 case 's':
                     e.preventDefault();
-                    document.getElementById('task-search')?.focus();
+                    const searchInput = document.getElementById('task-search');
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.select();
+                    }
                     break;
                 case '?':
                     showKeyboardShortcuts();
                     break;
                 case 'escape':
                     closeNewTaskModal();
+                    hideSearchResults();
                     document.getElementById('task-context-menu').style.display = 'none';
                     break;
             }

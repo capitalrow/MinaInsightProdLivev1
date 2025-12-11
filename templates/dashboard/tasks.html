@@ -41,13 +41,20 @@
                 </button>
             </div>
 
-            <div class="search-box">
+            <div class="search-box" id="search-box">
                 <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                 <input type="text" 
                        class="search-input" 
                        placeholder="Search tasks or meetings..." 
                        id="task-search"
-                       aria-label="Search tasks">
+                       aria-label="Search tasks"
+                       autocomplete="off">
+                <div class="search-shortcut-hint" id="search-shortcut-hint">
+                    <span class="search-shortcut-key">⌘K</span>
+                </div>
+                <div class="search-results" id="search-results" role="listbox" aria-label="Search results">
+                    <!-- Populated by JavaScript -->
+                </div>
             </div>
 
             <div class="view-controls">
