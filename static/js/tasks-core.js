@@ -665,6 +665,24 @@
             });
         });
 
+        // Also bind to spoken-quote elements for tasks without transcript_span
+        document.querySelectorAll('.spoken-quote').forEach(quote => {
+            // Hover for desktop
+            quote.addEventListener('mouseenter', (e) => showContextBubble(e.currentTarget, true));
+            quote.addEventListener('mouseleave', () => scheduleHideBubble());
+            
+            // Long-press for mobile
+            let longPressTimer;
+            quote.addEventListener('touchstart', (e) => {
+                longPressTimer = setTimeout(() => {
+                    showContextBubble(e.currentTarget, true);
+                    navigator.vibrate?.(30);
+                }, 400);
+            }, { passive: true });
+            quote.addEventListener('touchend', () => clearTimeout(longPressTimer));
+            quote.addEventListener('touchmove', () => clearTimeout(longPressTimer), { passive: true });
+        });
+
         // Keep bubble visible when hovering over it
         contextBubble.addEventListener('mouseenter', () => clearTimeout(contextBubbleTimeout));
         contextBubble.addEventListener('mouseleave', () => hideBubble());
@@ -673,56 +691,74 @@
         document.addEventListener('click', (e) => {
             if (contextBubble.classList.contains('visible') && 
                 !contextBubble.contains(e.target) && 
-                !e.target.closest('.context-trigger')) {
+                !e.target.closest('.context-trigger') &&
+                !e.target.closest('.spoken-quote')) {
                 hideBubble();
             }
         });
     }
 
-    function showContextBubble(trigger) {
+    function showContextBubble(trigger, isFromQuote = false) {
         clearTimeout(contextBubbleTimeout);
         
         const card = trigger.closest('.task-card');
-        const provenance = trigger.closest('.task-provenance');
+        const provenance = card?.querySelector('.task-provenance');
         if (!card || !provenance) return;
 
-        // Get transcript data
+        // Get transcript data from provenance data attributes
         const taskId = card.dataset.taskId;
         const sessionId = provenance.dataset.sessionId;
         const startMs = parseInt(provenance.dataset.transcriptStart) || 0;
         const endMs = parseInt(provenance.dataset.transcriptEnd) || startMs + 10000;
         const transcriptText = provenance.dataset.transcriptText;
+        const aiIntent = provenance.dataset.aiIntent || '';
+        const meetingTitle = provenance.dataset.meetingTitle || '';
         
-        // Get speaker info
-        const speakerEl = provenance.querySelector('.provenance-speaker');
-        const speaker = speakerEl?.dataset.speaker || 'Speaker';
-        const speakerInitials = speaker.slice(0, 2).toUpperCase();
+        // Get speaker info from data attribute or element
+        let speaker = provenance.dataset.speaker || '';
+        if (!speaker) {
+            const speakerEl = provenance.querySelector('.provenance-speaker');
+            speaker = speakerEl?.dataset.speaker || '';
+        }
+        const speakerDisplay = speaker || 'From meeting';
+        const speakerInitials = speaker ? speaker.slice(0, 2).toUpperCase() : 'M';
 
         // Get meeting link
         const meetingLink = provenance.querySelector('.jump-to-transcript');
         const meetingUrl = meetingLink?.href || '#';
-        const meetingTitle = meetingLink?.textContent.trim() || '';
+        const meetingLinkTitle = meetingTitle || meetingLink?.textContent?.trim() || 'Meeting';
 
-        // Format timestamp
+        // Format timestamp (only show if we have one)
+        const hasTimestamp = startMs > 0;
         const mins = Math.floor(startMs / 60000);
         const secs = Math.floor((startMs / 1000) % 60);
-        const timestamp = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        const timestamp = hasTimestamp ? `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}` : '';
 
         // Build bubble content
         const displayText = transcriptText || 'View the full transcript for context around this task.';
+        
+        // Build AI intent section if available
+        const intentHtml = aiIntent && aiIntent !== displayText ? `
+            <div class="context-bubble-intent">
+                <svg viewBox="0 0 24 24" width="12" height="12"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5 0 4 4 0 0 1-5 0 4 4 0 0 1-5 0A10 10 0 0 0 12 2z"/></svg>
+                <span>Mina understood: ${escapeHtml(aiIntent)}</span>
+            </div>
+        ` : '';
         
         contextBubble.innerHTML = `
             <div class="context-bubble-header">
                 <div class="context-bubble-speaker">
                     <span class="speaker-avatar">${escapeHtml(speakerInitials)}</span>
-                    ${escapeHtml(speaker)}
+                    ${escapeHtml(speakerDisplay)}
                 </div>
-                <span class="context-bubble-time">${timestamp}</span>
+                ${hasTimestamp ? `<span class="context-bubble-time">${timestamp}</span>` : ''}
             </div>
             <div class="context-bubble-text">
                 "${escapeHtml(displayText)}"
             </div>
+            ${intentHtml}
             <div class="context-bubble-footer">
+                <span class="context-bubble-meeting">${escapeHtml(meetingLinkTitle)}</span>
                 <a href="${meetingUrl}" class="context-bubble-link">
                     <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                     Jump to transcript

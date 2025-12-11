@@ -713,12 +713,42 @@
     font-weight: 500;
 }
 
+.context-bubble-intent {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: var(--tasks-radius);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--tasks-accent);
+}
+
+.context-bubble-intent svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+    fill: currentColor;
+    opacity: 0.8;
+}
+
 .context-bubble-footer {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
     margin-top: 10px;
     padding-top: 8px;
     border-top: 1px solid var(--tasks-card-border);
+}
+
+.context-bubble-meeting {
+    font-size: 10px;
+    color: var(--tasks-text-muted);
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .context-bubble-link {
@@ -779,6 +809,7 @@
     position: relative;
     transition: var(--tasks-transition-fast);
     animation: spokenQuoteFadeIn 0.4s ease-out;
+    cursor: pointer;
 }
 
 @keyframes spokenQuoteFadeIn {

@@ -261,6 +261,9 @@ def get_session_refined(session_identifier):
     - Tasks tab (action items)
     - Replay tab (audio sync)
     
+    Query parameters:
+    - t: Timestamp in milliseconds to scroll to (for Jump to Transcript feature)
+    
     Automatically navigated to after post_transcription_reveal event.
     
     PROGRESSIVE LOADING STRATEGY:
@@ -269,6 +272,9 @@ def get_session_refined(session_identifier):
     3. Template will show loading indicator if insights still processing
     This ensures users see their transcript immediately after redirect.
     """
+    # Get optional timestamp parameter for Jump to Transcript feature
+    jump_to_timestamp = request.args.get('t', type=int)
+    
     # Try external_id first (since redirect uses external_id), then database ID as fallback
     # First try 'final' segments (processed transcript)
     session_detail = SessionService.get_session_detail_by_external(session_identifier, kind='final')
@@ -371,7 +377,8 @@ def get_session_refined(session_identifier):
         tasks=tasks_data,
         event_timeline=event_timeline,
         insights_pending=insights_pending,
-        segments_source=segments_source
+        segments_source=segments_source,
+        jump_to_timestamp=jump_to_timestamp
     )
 
 

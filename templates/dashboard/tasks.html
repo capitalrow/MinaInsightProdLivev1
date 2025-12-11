@@ -177,7 +177,10 @@
                                  data-session-id="{{ session_external_id or '' }}"
                                  data-transcript-start="{{ task.transcript_span.start_ms if task.transcript_span else '' }}"
                                  data-transcript-end="{{ task.transcript_span.end_ms if task.transcript_span else '' }}"
-                                 data-transcript-text="{{ task.extraction_context.source_text if task.extraction_context and task.extraction_context.source_text else '' }}">
+                                 data-transcript-text="{{ task.extraction_context.evidence_quote if task.extraction_context and task.extraction_context.evidence_quote else '' }}"
+                                 data-ai-intent="{{ task.extraction_context.refined_text if task.extraction_context and task.extraction_context.refined_text else task.title }}"
+                                 data-speaker="{{ task.extraction_context.speaker if task.extraction_context and task.extraction_context.speaker else '' }}"
+                                 data-meeting-title="{{ task.meeting.title if task.meeting else '' }}">
                                 {% if task.meeting %}
                                 {% set transcript_url = url_for('sessions.get_session_refined', session_identifier=session_external_id) if session_external_id else url_for('dashboard.meetings') ~ '#meeting-' ~ task.meeting.id %}
                                 <a href="{{ transcript_url }}{% if task.transcript_span and task.transcript_span.start_ms %}?t={{ task.transcript_span.start_ms }}{% endif %}" 
