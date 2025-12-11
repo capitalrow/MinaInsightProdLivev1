@@ -219,6 +219,23 @@
                                 {% endif %}
                             </div>
                             
+                            {% if task.extraction_context and task.extraction_context.quote %}
+                            <div class="spoken-quote" data-task-id="{{ task.id }}">
+                                <svg class="quote-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21z"/>
+                                    <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>
+                                </svg>
+                                <span class="quote-text">{{ task.extraction_context.quote|truncate(120) }}</span>
+                                {% if session_external_id and task.transcript_span and task.transcript_span.start_ms %}
+                                <a href="{{ url_for('sessions.get_session_refined', session_identifier=session_external_id) }}?t={{ task.transcript_span.start_ms }}" 
+                                   class="quote-jump" 
+                                   title="Jump to this moment in transcript">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                </a>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            
                             <!-- Task Title with Priority Badge -->
                             <div class="task-title-row">
                                 <h3 class="task-title" data-task-id="{{ task.id }}">{{ task.title }}</h3>

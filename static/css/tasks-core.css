@@ -766,6 +766,78 @@
     color: var(--tasks-danger);
 }
 
+/* Spoken Quote - CROWN⁴.6 Core Differentiator */
+.spoken-quote {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 8px 0;
+    padding: 10px 12px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.06) 100%);
+    border-left: 2px solid var(--tasks-accent);
+    border-radius: 0 var(--tasks-radius-sm) var(--tasks-radius-sm) 0;
+    position: relative;
+    transition: var(--tasks-transition-fast);
+}
+
+.spoken-quote:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.08) 100%);
+}
+
+.spoken-quote .quote-icon {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    fill: var(--tasks-accent);
+    opacity: 0.6;
+    margin-top: 2px;
+}
+
+.spoken-quote .quote-text {
+    flex: 1;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--tasks-text-secondary);
+    font-style: italic;
+    word-break: break-word;
+}
+
+.spoken-quote .quote-jump {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--tasks-radius-sm);
+    background: transparent;
+    color: var(--tasks-text-muted);
+    opacity: 0;
+    transition: var(--tasks-transition-fast);
+}
+
+.spoken-quote:hover .quote-jump {
+    opacity: 1;
+}
+
+.spoken-quote .quote-jump:hover {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--tasks-accent);
+}
+
+.spoken-quote .quote-jump svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+}
+
+/* Completed task spoken quote styling */
+.task-card.completed .spoken-quote {
+    opacity: 0.5;
+}
+
 /* Task Meta */
 .task-meta {
     display: flex;
