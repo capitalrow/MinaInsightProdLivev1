@@ -25,6 +25,7 @@
         initializeKeyboardShortcuts();
         initGroupingToggle();
         initContextBubble();
+        initFilterTabs();  // CROWN⁴.6: Client-side tab filtering
         
         // Initialize quick action modals
         initAssignModal();
@@ -32,6 +33,166 @@
         initPriorityModal();
         initLabelsModal();
     }
+    
+    /**
+     * CROWN⁴.6: Client-side filter tab switching
+     * Switches between Active/Archived/All views without page reload
+     */
+    function initFilterTabs() {
+        const filterTabs = document.querySelectorAll('.filter-tab[data-filter]');
+        
+        filterTabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                e.preventDefault();
+                const filter = tab.dataset.filter;
+                if (filter === currentFilter) return;
+                
+                applyFilter(filter);
+            });
+        });
+        
+        // Handle browser back/forward navigation
+        window.addEventListener('popstate', (e) => {
+            if (e.state && e.state.filter) {
+                applyFilter(e.state.filter, false);
+            }
+        });
+    }
+    
+    /**
+     * Apply filter to task cards (client-side, no page reload)
+     */
+    function applyFilter(filter, updateHistory = true) {
+        const ACTIVE_STATUSES = ['todo', 'in_progress', 'pending', 'blocked'];
+        
+        currentFilter = filter;
+        
+        // Update URL without page reload
+        if (updateHistory) {
+            const url = new URL(window.location);
+            url.searchParams.set('filter', filter);
+            history.pushState({ filter }, '', url);
+        }
+        
+        // Update tab active states
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            const isActive = tab.dataset.filter === filter;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', isActive);
+        });
+        
+        // Filter task cards
+        const cards = document.querySelectorAll('.task-card');
+        let visibleCount = 0;
+        
+        cards.forEach(card => {
+            const isActiveTask = card.dataset.isActive === 'true';
+            let shouldShow = false;
+            
+            if (filter === 'all') {
+                shouldShow = true;
+            } else if (filter === 'active') {
+                shouldShow = isActiveTask;
+            } else if (filter === 'archived') {
+                shouldShow = !isActiveTask;
+            }
+            
+            if (shouldShow) {
+                card.classList.add('is-visible');
+                visibleCount++;
+            } else {
+                card.classList.remove('is-visible');
+            }
+        });
+        
+        // Show empty state if no visible tasks
+        updateEmptyState(filter, visibleCount);
+        
+        // Re-apply heatmap and grouping
+        applyMemoryHeatmap();
+        
+        console.log(`[Filter] Applied filter: ${filter}, visible: ${visibleCount}`);
+    }
+    
+    /**
+     * Update empty state message based on current filter
+     */
+    function updateEmptyState(filter, visibleCount) {
+        const container = document.getElementById('task-list-container');
+        let emptyState = document.getElementById('filter-empty-state');
+        
+        if (visibleCount === 0) {
+            if (!emptyState) {
+                emptyState = document.createElement('div');
+                emptyState.id = 'filter-empty-state';
+                emptyState.className = 'empty-state';
+                emptyState.innerHTML = `
+                    <div class="empty-illustration">
+                        <svg viewBox="0 0 24 24" width="64" height="64" aria-hidden="true">
+                            <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="2" fill="none"/>
+                        </svg>
+                    </div>
+                    <h2 class="empty-title">No tasks here</h2>
+                    <p class="empty-text"></p>
+                `;
+                const taskGroups = document.getElementById('task-groups');
+                if (taskGroups) {
+                    taskGroups.parentNode.insertBefore(emptyState, taskGroups);
+                }
+            }
+            
+            const emptyText = emptyState.querySelector('.empty-text');
+            if (filter === 'active') {
+                emptyText.textContent = "You're all caught up! No active tasks to complete.";
+            } else if (filter === 'archived') {
+                emptyText.textContent = "No archived tasks yet. Completed tasks will appear here.";
+            } else {
+                emptyText.textContent = "No tasks found.";
+            }
+            
+            emptyState.style.display = 'block';
+            const taskGroups = document.getElementById('task-groups');
+            if (taskGroups) taskGroups.style.display = 'none';
+        } else {
+            if (emptyState) emptyState.style.display = 'none';
+            const taskGroups = document.getElementById('task-groups');
+            if (taskGroups) taskGroups.style.display = '';
+        }
+    }
+    
+    /**
+     * Update tab counts after task status changes
+     */
+    function updateFilterCounts() {
+        const ACTIVE_STATUSES = ['todo', 'in_progress', 'pending', 'blocked'];
+        const cards = document.querySelectorAll('.task-card');
+        
+        let activeCount = 0;
+        let archivedCount = 0;
+        let totalCount = cards.length;
+        
+        cards.forEach(card => {
+            const isActive = card.dataset.isActive === 'true';
+            if (isActive) {
+                activeCount++;
+            } else {
+                archivedCount++;
+            }
+        });
+        
+        // Update count badges
+        const activeCountEl = document.querySelector('[data-count="active"]');
+        const archivedCountEl = document.querySelector('[data-count="archived"]');
+        const allCountEl = document.querySelector('[data-count="all"]');
+        
+        if (activeCountEl) activeCountEl.textContent = activeCount;
+        if (archivedCountEl) archivedCountEl.textContent = archivedCount;
+        if (allCountEl) allCountEl.textContent = totalCount;
+    }
+    
+    // Expose updateFilterCounts for use after task status changes
+    window.updateFilterCounts = updateFilterCounts;
     
     /**
      * CROWN⁴.6: Memory Heatmap - Apply visual recency indicators to task cards
@@ -266,6 +427,20 @@
             });
 
             if (response.ok) {
+                // Update data-is-active attribute
+                card.dataset.isActive = isCompleted ? 'true' : 'false';
+                card.dataset.status = newStatus;
+                
+                // Update filter counts
+                updateFilterCounts();
+                
+                // Re-apply current filter visibility
+                const isActiveTask = card.dataset.isActive === 'true';
+                let shouldShow = currentFilter === 'all' || 
+                    (currentFilter === 'active' && isActiveTask) || 
+                    (currentFilter === 'archived' && !isActiveTask);
+                card.classList.toggle('is-visible', shouldShow);
+                
                 // Add to undo queue
                 undoQueue.push({
                     taskId,
