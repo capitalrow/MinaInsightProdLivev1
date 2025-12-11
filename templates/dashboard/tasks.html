@@ -18,27 +18,27 @@
         <!-- Command Bar -->
         <div class="command-bar">
             <div class="filter-tabs" role="tablist" aria-label="Task filters">
-                <a href="{{ url_for('dashboard.tasks', filter='active') }}" 
+                <button type="button"
                    class="filter-tab {% if current_filter == 'active' %}active{% endif %}" 
                    role="tab" 
                    aria-selected="{{ 'true' if current_filter == 'active' else 'false' }}"
                    data-filter="active">
-                    Active <span class="filter-count">{{ active_count }}</span>
-                </a>
-                <a href="{{ url_for('dashboard.tasks', filter='archived') }}" 
+                    Active <span class="filter-count" data-count="active">{{ active_count }}</span>
+                </button>
+                <button type="button"
                    class="filter-tab {% if current_filter == 'archived' %}active{% endif %}" 
                    role="tab" 
                    aria-selected="{{ 'true' if current_filter == 'archived' else 'false' }}"
                    data-filter="archived">
-                    Archived <span class="filter-count">{{ archived_count }}</span>
-                </a>
-                <a href="{{ url_for('dashboard.tasks', filter='all') }}" 
+                    Archived <span class="filter-count" data-count="archived">{{ archived_count }}</span>
+                </button>
+                <button type="button"
                    class="filter-tab {% if current_filter == 'all' %}active{% endif %}" 
                    role="tab" 
                    aria-selected="{{ 'true' if current_filter == 'all' else 'false' }}"
                    data-filter="all">
-                    All <span class="filter-count">{{ total_count }}</span>
-                </a>
+                    All <span class="filter-count" data-count="all">{{ total_count }}</span>
+                </button>
             </div>
 
             <div class="search-box">
@@ -99,8 +99,8 @@
         </div>
 
         <!-- Task List Container -->
-        <div class="task-list-container" id="task-list-container" role="main" aria-label="Task list">
-            {% if tasks|length == 0 %}
+        <div class="task-list-container" id="task-list-container" role="main" aria-label="Task list" data-current-filter="{{ current_filter }}">
+            {% if all_tasks|length == 0 %}
             <!-- Empty State -->
             <div class="empty-state" id="empty-state">
                 <div class="empty-illustration">
@@ -111,13 +111,7 @@
                 </div>
                 <h2 class="empty-title">No tasks yet</h2>
                 <p class="empty-text">
-                    {% if current_filter == 'active' %}
-                    You're all caught up! Start a meeting to capture action items, or create a task manually.
-                    {% elif current_filter == 'archived' %}
-                    No archived tasks yet. Completed tasks will appear here.
-                    {% else %}
                     Your tasks from meetings will appear here. Start recording to capture action items automatically.
-                    {% endif %}
                 </p>
                 <button class="new-task-btn" style="margin-top: 16px;" onclick="document.getElementById('new-task-btn').click()">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -125,35 +119,21 @@
                 </button>
             </div>
             {% else %}
-            <!-- Task Groups (SSR) -->
+            <!-- Task Groups (SSR) - Render ALL tasks, visibility controlled by JS -->
             <div class="task-groups" id="task-groups">
-                {% set today = [] %}
-                {% set this_week = [] %}
-                {% set later = [] %}
-                {% set no_date = [] %}
+                {% set active_statuses = ['todo', 'in_progress', 'pending', 'blocked'] %}
+                {% set archived_statuses = ['completed', 'cancelled', 'archived'] %}
                 
-                {% for task in tasks %}
-                    {% if task.due_date %}
-                        {% set days_until = (task.due_date - today_date).days if today_date else 999 %}
-                        {% if days_until <= 0 %}
-                            {% set _ = today.append(task) %}
-                        {% elif days_until <= 7 %}
-                            {% set _ = this_week.append(task) %}
-                        {% else %}
-                            {% set _ = later.append(task) %}
-                        {% endif %}
-                    {% else %}
-                        {% set _ = no_date.append(task) %}
-                    {% endif %}
-                {% endfor %}
-                
-                <!-- All tasks in a single list (grouping done by JS) -->
+                <!-- All tasks in a single list (filtering done by JS) -->
                 <div class="task-list" id="task-list">
-                    {% for task in tasks %}
+                    {% for task in all_tasks %}
+                    {% set is_active = task.status in active_statuses %}
+                    {% set should_show = (current_filter == 'all') or (current_filter == 'active' and is_active) or (current_filter == 'archived' and not is_active) %}
                     {% set meeting_created = task.meeting.created_at if task.meeting and task.meeting.created_at else None %}
-                    <div class="task-card {% if task.status == 'completed' %}completed{% endif %} is-visible" 
+                    <div class="task-card {% if task.status == 'completed' %}completed{% endif %}{% if should_show %} is-visible{% endif %}" 
                          data-task-id="{{ task.id }}"
                          data-status="{{ task.status }}"
+                         data-is-active="{{ 'true' if is_active else 'false' }}"
                          data-priority="{{ task.priority }}"
                          data-due-date="{{ task.due_date.isoformat() if task.due_date else '' }}"
                          data-meeting-id="{{ task.meeting_id or '' }}"
