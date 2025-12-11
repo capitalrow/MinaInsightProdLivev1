@@ -894,6 +894,214 @@
   margin-bottom: var(--space-2);
 }
 
+/* ========================================
+   CROWN⁺ ENHANCED TASKS LIST - Priority Groups
+   ======================================== */
+
+.task-list-enhanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.task-priority-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.priority-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
+  border-radius: var(--session-radius-md);
+  border: 1px solid var(--session-card-border);
+  margin-bottom: var(--space-2);
+}
+
+.priority-header.priority-high {
+  border-left: 4px solid #ef4444;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), transparent);
+}
+
+.priority-header.priority-medium {
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), transparent);
+}
+
+.priority-header.priority-low {
+  border-left: 4px solid #6b7280;
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.1), transparent);
+}
+
+.priority-icon {
+  font-size: 1rem;
+}
+
+.priority-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.priority-count {
+  background: var(--session-bg-tertiary);
+  color: var(--color-text-secondary);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  margin-left: auto;
+}
+
+/* Enhanced Task Items */
+.task-item-enhanced {
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
+  border: 1px solid var(--session-card-border);
+  border-radius: var(--session-radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  transition: var(--tab-transition);
+  box-shadow: var(--session-shadow-card);
+  animation: taskEnhancedSlideIn 0.4s ease-out backwards;
+}
+
+.task-item-enhanced:nth-child(2) { animation-delay: 0.05s; }
+.task-item-enhanced:nth-child(3) { animation-delay: 0.1s; }
+.task-item-enhanced:nth-child(4) { animation-delay: 0.15s; }
+.task-item-enhanced:nth-child(5) { animation-delay: 0.2s; }
+.task-item-enhanced:nth-child(n+6) { animation-delay: 0.25s; }
+
+@keyframes taskEnhancedSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.task-item-enhanced.task-priority-high {
+  border-left: 4px solid #ef4444;
+}
+
+.task-item-enhanced.task-priority-medium {
+  border-left: 4px solid #f59e0b;
+}
+
+.task-item-enhanced.task-priority-low {
+  border-left: 4px solid #6b7280;
+}
+
+.task-item-enhanced:hover {
+  background: var(--session-card-hover);
+  transform: translateX(6px);
+  box-shadow: var(--session-shadow-hover);
+}
+
+.task-checkbox-wrapper {
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.task-checkbox-wrapper .task-checkbox {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--session-accent);
+  cursor: pointer;
+}
+
+.task-content-enhanced {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.task-header-row .task-title {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.task-confidence {
+  flex-shrink: 0;
+}
+
+.confidence-indicator {
+  font-size: 0.9rem;
+}
+
+.task-metadata-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.task-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  color: var(--color-text-secondary);
+}
+
+.task-meta-item .meta-icon {
+  font-size: 0.75rem;
+}
+
+.task-meta-item .meta-text {
+  font-size: var(--font-size-xs);
+}
+
+.task-due-date.overdue {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.task-due-date.due-soon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.due-badge {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: var(--font-weight-semibold);
+  margin-left: var(--space-1);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.overdue-badge {
+  background: #ef4444;
+  color: white;
+}
+
+.soon-badge {
+  background: #f59e0b;
+  color: white;
+}
+
 /* Animations */
 @keyframes fadeInUp {
   from {
