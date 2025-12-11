@@ -536,6 +536,63 @@ def get_meeting_heatmap():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@api_tasks_bp.route('/related', methods=['GET'])
+@login_required
+def get_related_tasks():
+    """Get related tasks from the same meeting - CROWN⁴.6 Completion Context.
+    
+    Used when a task is completed to show other tasks from the same meeting,
+    providing context and reinforcing the meeting-native memory system.
+    """
+    try:
+        meeting_id = request.args.get('meeting_id', type=int)
+        exclude_task_id = request.args.get('exclude_task_id', type=int)
+        
+        if not meeting_id:
+            return jsonify({'success': False, 'message': 'meeting_id is required'}), 400
+        
+        # Verify meeting belongs to user's workspace and is not archived
+        meeting = db.session.query(Meeting).filter(
+            Meeting.id == meeting_id,
+            Meeting.workspace_id == current_user.workspace_id,
+            Meeting.archived == False  # Exclude archived meetings
+        ).first()
+        
+        if not meeting:
+            return jsonify({'success': False, 'message': 'Meeting not found'}), 404
+        
+        # Get active tasks from this meeting (exclude soft-deleted, cancelled, and completed)
+        query = db.session.query(Task).filter(
+            Task.meeting_id == meeting_id,
+            Task.deleted_at.is_(None),
+            Task.status.notin_(['cancelled', 'completed'])  # Show only active tasks
+        )
+        
+        if exclude_task_id:
+            query = query.filter(Task.id != exclude_task_id)
+        
+        tasks = query.order_by(Task.created_at.desc()).limit(5).all()
+        
+        return jsonify({
+            'success': True,
+            'meeting_id': meeting_id,
+            'meeting_title': meeting.title,
+            'tasks': [
+                {
+                    'id': task.id,
+                    'title': task.title[:100],
+                    'status': task.status,
+                    'priority': task.priority
+                }
+                for task in tasks
+            ]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching related tasks: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @api_tasks_bp.route('/', methods=['POST'])
 @login_required
 def create_task():

@@ -150,12 +150,14 @@
                 <!-- All tasks in a single list (grouping done by JS) -->
                 <div class="task-list" id="task-list">
                     {% for task in tasks %}
+                    {% set meeting_created = task.meeting.created_at if task.meeting and task.meeting.created_at else None %}
                     <div class="task-card {% if task.status == 'completed' %}completed{% endif %} is-visible" 
                          data-task-id="{{ task.id }}"
                          data-status="{{ task.status }}"
                          data-priority="{{ task.priority }}"
                          data-due-date="{{ task.due_date.isoformat() if task.due_date else '' }}"
                          data-meeting-id="{{ task.meeting_id or '' }}"
+                         data-meeting-created="{{ meeting_created.isoformat() if meeting_created else '' }}"
                          data-position="{{ task.position }}"
                          draggable="true"
                          role="article"
@@ -515,6 +517,37 @@
         <div class="quick-modal-actions">
             <button class="btn-secondary" id="labels-cancel">Cancel</button>
             <button class="btn-primary" id="labels-save">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Completion Context Modal - CROWN⁴.6 -->
+<div class="completion-context-overlay" id="completion-context" style="display: none;" role="dialog" aria-label="Task completion context">
+    <div class="completion-context-content">
+        <button class="completion-context-close" id="completion-context-close" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="completion-celebration">
+            <svg viewBox="0 0 24 24" class="check-animation"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <h3 class="completion-title">Nice work!</h3>
+        
+        <div class="completion-transcript" id="completion-transcript" style="display: none;">
+            <p class="transcript-label">What was said:</p>
+            <blockquote class="transcript-quote" id="completion-quote"></blockquote>
+            <a class="transcript-link" id="completion-transcript-link" href="#">
+                <svg viewBox="0 0 24 24" width="12" height="12"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                Jump to moment in transcript
+            </a>
+        </div>
+        
+        <div class="completion-related" id="completion-related" style="display: none;">
+            <p class="related-label">Related tasks from this meeting:</p>
+            <div class="related-tasks" id="related-tasks-list"></div>
+        </div>
+        
+        <div class="completion-actions">
+            <button class="btn-ghost" id="completion-dismiss">Dismiss</button>
         </div>
     </div>
 </div>
