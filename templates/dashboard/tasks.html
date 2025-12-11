@@ -51,9 +51,35 @@
             </div>
 
             <div class="view-controls">
-                <button class="view-btn" title="Group by Meeting" id="toggle-grouping" aria-label="Toggle grouping view">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                </button>
+                <div class="group-by-dropdown" id="group-by-dropdown">
+                    <button class="group-by-btn" id="group-by-btn" title="Group tasks" aria-label="Group tasks by" aria-haspopup="listbox" aria-expanded="false">
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        <span class="group-by-label">Group</span>
+                        <svg class="dropdown-arrow" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="group-by-menu" id="group-by-menu" role="listbox" aria-label="Grouping options">
+                        <button class="group-by-option active" data-group="none" role="option" aria-selected="true">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                            No grouping
+                        </button>
+                        <button class="group-by-option" data-group="meeting" role="option" aria-selected="false">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                            By Meeting
+                        </button>
+                        <button class="group-by-option" data-group="priority" role="option" aria-selected="false">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                            By Priority
+                        </button>
+                        <button class="group-by-option" data-group="status" role="option" aria-selected="false">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            By Status
+                        </button>
+                        <button class="group-by-option" data-group="due" role="option" aria-selected="false">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            By Due Date
+                        </button>
+                    </div>
+                </div>
                 <button class="new-task-btn" id="new-task-btn" aria-label="Create new task">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     New
@@ -146,33 +172,69 @@
                         
                         <div class="task-content">
                             <!-- Spoken Provenance -->
-                            <div class="task-provenance">
+                            {% set session_external_id = task.session_id or (task.meeting.session.external_id if task.meeting and task.meeting.session else None) %}
+                            <div class="task-provenance"
+                                 data-session-id="{{ session_external_id or '' }}"
+                                 data-transcript-start="{{ task.transcript_span.start_ms if task.transcript_span else '' }}"
+                                 data-transcript-end="{{ task.transcript_span.end_ms if task.transcript_span else '' }}"
+                                 data-transcript-text="{{ task.extraction_context.source_text if task.extraction_context and task.extraction_context.source_text else '' }}">
                                 {% if task.meeting %}
-                                <a href="{{ url_for('dashboard.meetings') }}#meeting-{{ task.meeting.id }}" class="provenance-meeting" title="View meeting">
+                                {% set transcript_url = url_for('sessions.get_session_refined', session_identifier=session_external_id) if session_external_id else url_for('dashboard.meetings') ~ '#meeting-' ~ task.meeting.id %}
+                                <a href="{{ transcript_url }}{% if task.transcript_span and task.transcript_span.start_ms %}?t={{ task.transcript_span.start_ms }}{% endif %}" 
+                                   class="provenance-meeting jump-to-transcript" 
+                                   title="Jump to transcript moment"
+                                   data-meeting-id="{{ task.meeting.id }}"
+                                   data-session-id="{{ session_external_id }}"
+                                   data-timestamp-ms="{{ task.transcript_span.start_ms if task.transcript_span else '' }}">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                                     {{ task.meeting.title|truncate(30) }}
                                 </a>
                                 {% endif %}
                                 
                                 {% if task.extraction_context and task.extraction_context.speaker %}
-                                <span class="provenance-speaker">
+                                <span class="provenance-speaker" 
+                                      title="{{ task.extraction_context.speaker }}"
+                                      data-speaker="{{ task.extraction_context.speaker }}">
                                     <span class="speaker-avatar">{{ task.extraction_context.speaker[:2]|upper }}</span>
                                     {{ task.extraction_context.speaker }}
                                 </span>
                                 {% endif %}
                                 
                                 {% if task.transcript_span and task.transcript_span.start_ms %}
-                                <span class="provenance-timestamp">
+                                <button class="provenance-timestamp context-trigger" 
+                                        title="View transcript context"
+                                        data-start-ms="{{ task.transcript_span.start_ms }}"
+                                        data-end-ms="{{ task.transcript_span.end_ms if task.transcript_span.end_ms else '' }}"
+                                        aria-label="Show transcript context">
+                                    <svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                                     {{ '%02d:%02d'|format(task.transcript_span.start_ms // 60000, (task.transcript_span.start_ms // 1000) % 60) }}
-                                </span>
+                                </button>
                                 {% endif %}
                                 
                                 {% if task.extracted_by_ai and task.confidence_score %}
-                                <span class="provenance-confidence {% if task.confidence_score >= 0.8 %}confidence-high{% elif task.confidence_score >= 0.5 %}confidence-medium{% else %}confidence-low{% endif %}">
+                                <span class="provenance-confidence {% if task.confidence_score >= 0.8 %}confidence-high{% elif task.confidence_score >= 0.5 %}confidence-medium{% else %}confidence-low{% endif %}"
+                                      title="AI extraction confidence: {{ (task.confidence_score * 100)|round }}%">
                                     {% if task.confidence_score >= 0.8 %}High{% elif task.confidence_score >= 0.5 %}Medium{% else %}Low{% endif %} confidence
                                 </span>
                                 {% endif %}
                             </div>
+                            
+                            {% if task.extraction_context and task.extraction_context.evidence_quote %}
+                            <div class="spoken-quote" data-task-id="{{ task.id }}">
+                                <svg class="quote-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21z"/>
+                                    <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>
+                                </svg>
+                                <span class="quote-text">{{ task.extraction_context.evidence_quote|truncate(120) }}</span>
+                                {% if session_external_id and task.transcript_span and task.transcript_span.start_ms %}
+                                <a href="{{ url_for('sessions.get_session_refined', session_identifier=session_external_id) }}?t={{ task.transcript_span.start_ms }}" 
+                                   class="quote-jump" 
+                                   title="Jump to this moment in transcript">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                </a>
+                                {% endif %}
+                            </div>
+                            {% endif %}
                             
                             <!-- Task Title with Priority Badge -->
                             <div class="task-title-row">
@@ -243,10 +305,10 @@
                         </div>
                         
                         <!-- Transcript Preview (shown on hover) -->
-                        {% if task.extraction_context and task.extraction_context.quote %}
+                        {% if task.extraction_context and task.extraction_context.evidence_quote %}
                         <div class="transcript-preview" data-task-id="{{ task.id }}">
                             <div class="transcript-quote">
-                                "{{ task.extraction_context.quote|truncate(200) }}"
+                                "{{ task.extraction_context.evidence_quote|truncate(200) }}"
                             </div>
                             {% if task.meeting %}
                             <a href="{{ url_for('dashboard.meetings') }}#meeting-{{ task.meeting.id }}{% if task.transcript_span and task.transcript_span.start_ms %}?t={{ task.transcript_span.start_ms // 1000 }}{% endif %}" class="transcript-link">

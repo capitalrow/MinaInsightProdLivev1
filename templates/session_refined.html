@@ -5,13 +5,30 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}">
 <style>
 /* ========================================
-   CROWN+ Session Refined View - Mobile-First Tabbed Interface
-   Implements CROWN+ Event Sequencing UI/UX principles
+   CROWN⁺ Session Refined View - Premium Glassmorphism Design
+   Aligned with Tasks/Meetings page quality standards
    ======================================== */
 
 :root {
+  /* Crown+ Session Design Tokens */
+  --session-bg-primary: #0a0a0f;
+  --session-bg-secondary: #12121a;
+  --session-bg-tertiary: #1a1a24;
+  --session-card-bg: rgba(26, 26, 36, 0.85);
+  --session-card-border: rgba(255, 255, 255, 0.08);
+  --session-card-hover: rgba(99, 102, 241, 0.12);
+  --session-accent: #6366f1;
+  --session-accent-secondary: #9333ea;
+  --session-accent-glow: rgba(99, 102, 241, 0.35);
+  --session-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --session-shadow-hover: 0 8px 32px rgba(99, 102, 241, 0.25);
+  --session-glass-blur: blur(16px);
+  --session-radius-md: 10px;
+  --session-radius-lg: 14px;
+  --session-radius-xl: 18px;
   --tab-transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
   --reveal-animation: fadeInUp 0.6s ease-out;
+  --crown-gradient: linear-gradient(135deg, #6366f1 0%, #9333ea 50%, #6366f1 100%);
 }
 
 /* Loading Spinner for Processing State */
@@ -19,7 +36,7 @@
   width: 24px;
   height: 24px;
   border: 3px solid rgba(99, 102, 241, 0.2);
-  border-top-color: var(--color-primary);
+  border-top-color: var(--session-accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -31,15 +48,16 @@
 /* Processing Banner Pulsing Effect */
 .smart-banner[data-insights-pending="true"] {
   animation: subtle-pulse 2s ease-in-out infinite;
-  border-left: 3px solid var(--color-primary);
+  border-left: 4px solid transparent;
+  border-image: var(--crown-gradient) 1;
 }
 
 @keyframes subtle-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.85; }
+  0%, 100% { opacity: 1; box-shadow: 0 0 20px rgba(99, 102, 241, 0.2); }
+  50% { opacity: 0.9; box-shadow: 0 0 30px rgba(99, 102, 241, 0.3); }
 }
 
-/* Main Container */
+/* Main Container - Multi-layer depth */
 .refined-workspace {
   width: 100%;
   max-width: 1600px;
@@ -47,6 +65,19 @@
   margin: 0 auto;
   padding: var(--space-4);
   animation: var(--reveal-animation);
+  background: linear-gradient(180deg, var(--session-bg-primary) 0%, var(--session-bg-secondary) 100%);
+  position: relative;
+}
+
+.refined-workspace::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 300px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 @media (min-width: 768px) {
@@ -164,22 +195,37 @@
   gap: var(--space-1);
 }
 
-/* Smart Banner */
+/* Smart Banner - Crown+ Glassmorphism */
 .smart-banner {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(147, 51, 234, 0.1));
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
+  border: 1px solid var(--session-card-border);
+  border-radius: var(--session-radius-xl);
+  padding: var(--space-5);
   margin-bottom: var(--space-6);
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
   animation: slideInFromTop 0.5s ease-out;
+  box-shadow: var(--session-shadow-card);
+  position: relative;
+  overflow: hidden;
+}
+
+.smart-banner::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--crown-gradient);
 }
 
 .smart-banner-icon {
   font-size: 2rem;
   flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.4));
 }
 
 .smart-banner-text {
@@ -191,33 +237,43 @@
   font-weight: var(--font-weight-semibold);
   margin-bottom: var(--space-1);
   font-size: var(--font-size-base);
+  background: var(--crown-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* ========================================
-   MOBILE-FIRST TAB NAVIGATION
+   CROWN⁺ TAB NAVIGATION - Premium Glassmorphism
    ======================================== */
 
 .tab-navigation {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin-bottom: var(--space-6);
+  position: relative;
 }
 
 @media (min-width: 768px) {
   .tab-navigation {
     flex-direction: row;
     gap: var(--space-2);
-    border-bottom: 2px solid var(--glass-border);
-    overflow-x: auto;
+    background: var(--session-card-bg);
+    backdrop-filter: var(--session-glass-blur);
+    border: 1px solid var(--session-card-border);
+    border-radius: var(--session-radius-lg);
+    padding: var(--space-2);
+    box-shadow: var(--session-shadow-card);
   }
 }
 
-/* Tab Buttons - Mobile First */
+/* Tab Buttons - Mobile: Premium Cards */
 .tab-button {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
+  border: 1px solid var(--session-card-border);
+  border-radius: var(--session-radius-lg);
   padding: var(--space-4);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-medium);
@@ -230,19 +286,37 @@
   justify-content: space-between;
   min-height: 56px;
   width: 100%;
+  box-shadow: var(--session-shadow-card);
+  overflow: hidden;
+}
+
+.tab-button::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: transparent;
+  transition: var(--tab-transition);
 }
 
 @media (min-width: 768px) {
   .tab-button {
     background: transparent;
     border: none;
-    border-radius: 0;
+    border-radius: var(--session-radius-md);
     padding: var(--space-3) var(--space-4);
     width: auto;
     min-height: auto;
     white-space: nowrap;
     justify-content: flex-start;
     gap: var(--space-2);
+    box-shadow: none;
+  }
+  
+  .tab-button::before {
+    display: none;
   }
 }
 
@@ -254,14 +328,109 @@
 }
 
 .tab-button-icon {
-  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
+.tab-button-icon svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  stroke: currentColor;
+}
+
 @media (min-width: 768px) {
-  .tab-button-icon {
-    font-size: 1.25rem;
+  .tab-button-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
   }
+}
+
+/* Premium SVG icon styles for session refined page */
+.meta-icon-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.meta-icon-inline svg {
+  width: 1rem;
+  height: 1rem;
+  stroke: currentColor;
+  opacity: 0.7;
+}
+
+.highlight-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.5rem;
+  stroke: var(--session-accent);
+}
+
+/* Priority dots for task sections */
+.priority-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.priority-dot-high {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
+.priority-dot-medium {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+}
+
+.priority-dot-low {
+  background: linear-gradient(135deg, #6b7280, #9ca3af);
+  box-shadow: 0 0 8px rgba(107, 114, 128, 0.3);
+}
+
+/* Confidence indicator SVG styling */
+.confidence-indicator svg {
+  width: 14px;
+  height: 14px;
+}
+
+.confidence-indicator.confidence-high svg {
+  stroke: #10b981;
+}
+
+.confidence-indicator.confidence-medium svg {
+  stroke: #f59e0b;
+}
+
+.confidence-indicator.confidence-low svg {
+  stroke: #6b7280;
+}
+
+/* Empty state SVG icon styling */
+.empty-state-icon svg {
+  width: 4rem;
+  height: 4rem;
+  stroke: var(--color-text-secondary);
+  opacity: 0.6;
+}
+
+/* Meta icon in task cards */
+.meta-icon svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+}
+
+/* Smart banner SVG icon */
+.smart-banner-icon svg {
+  width: 2rem;
+  height: 2rem;
+  stroke: var(--session-accent);
 }
 
 .tab-button-label {
@@ -269,91 +438,128 @@
   font-weight: var(--font-weight-semibold);
 }
 
-/* Hover State */
+/* Hover State - Crown+ Glow */
 .tab-button:hover {
-  color: var(--color-primary);
-  background: rgba(99, 102, 241, 0.08);
-  border-color: rgba(99, 102, 241, 0.3);
-  transform: translateX(2px);
+  color: var(--session-accent);
+  background: var(--session-card-hover);
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateX(4px);
+  box-shadow: var(--session-shadow-hover);
+}
+
+.tab-button:hover::before {
+  background: var(--crown-gradient);
 }
 
 @media (min-width: 768px) {
   .tab-button:hover {
     transform: none;
-    background: rgba(99, 102, 241, 0.05);
+    background: var(--session-card-hover);
+    box-shadow: 0 0 16px var(--session-accent-glow);
   }
 }
 
-/* Active State - Mobile */
+/* Active State - Mobile: Premium Glow */
 .tab-button.active {
-  color: var(--color-primary);
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(147, 51, 234, 0.1));
-  border-color: var(--color-primary);
-  transform: translateX(4px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+  color: white;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(147, 51, 234, 0.15));
+  border-color: var(--session-accent);
+  transform: translateX(6px);
+  box-shadow: var(--session-shadow-hover), 0 0 24px var(--session-accent-glow);
 }
 
-/* Active State - Desktop */
+.tab-button.active::before {
+  background: var(--crown-gradient);
+}
+
+/* Active State - Desktop: Gradient Pill */
 @media (min-width: 768px) {
   .tab-button.active {
-    background: transparent;
-    border-color: transparent;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(147, 51, 234, 0.15));
+    border: 1px solid rgba(99, 102, 241, 0.4);
     transform: none;
-    box-shadow: none;
+    box-shadow: 0 0 20px var(--session-accent-glow);
   }
 
   .tab-button.active::after {
     content: '';
     position: absolute;
-    bottom: -2px;
-    left: 0;
-    right: 0;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
     height: 3px;
-    background: var(--gradient-primary);
+    background: var(--crown-gradient);
+    border-radius: 2px;
     animation: slideInFromLeft 0.3s ease-out;
-    border-radius: 2px 2px 0 0;
   }
 }
 
-/* Badge */
+/* Badge - Crown+ Style */
 .tab-badge {
-  background: var(--color-primary);
+  background: var(--crown-gradient);
   color: white;
-  border-radius: 16px;
-  padding: 4px 10px;
+  border-radius: 20px;
+  padding: 4px 12px;
   font-size: 0.75rem;
   font-weight: var(--font-weight-bold);
-  min-width: 24px;
+  min-width: 26px;
   text-align: center;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
 .tab-button.active .tab-badge {
   background: white;
-  color: var(--color-primary);
+  color: var(--session-accent);
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
 }
 
 .tab-badge-secondary {
-  background: var(--color-text-secondary);
+  background: var(--session-bg-tertiary);
+  color: var(--color-text-secondary);
 }
 
 /* Tab Content */
 .tab-content {
   display: none;
-  animation: var(--reveal-animation);
+  animation: contentReveal 0.5s ease-out;
 }
 
 .tab-content.active {
   display: block;
 }
 
-/* Tab Panels */
+@keyframes contentReveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Tab Panels - Crown+ Glassmorphism */
 .tab-panel {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-xl);
-  padding: var(--space-4);
-  backdrop-filter: var(--backdrop-blur);
-  box-shadow: var(--shadow-md);
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
+  border: 1px solid var(--session-card-border);
+  border-radius: var(--session-radius-xl);
+  padding: var(--space-5);
+  box-shadow: var(--session-shadow-card);
+  position: relative;
+}
+
+.tab-panel::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--crown-gradient);
+  border-radius: var(--session-radius-xl) 0 0 var(--session-radius-xl);
 }
 
 @media (min-width: 768px) {
@@ -362,25 +568,85 @@
   }
 }
 
-/* Transcript Tab */
+/* Transcript Tab - Premium Segments */
 .segment-list {
   max-height: 70vh;
   overflow-y: auto;
   scroll-behavior: smooth;
+  padding-right: var(--space-2);
+}
+
+.segment-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.segment-list::-webkit-scrollbar-track {
+  background: var(--session-bg-tertiary);
+  border-radius: 3px;
+}
+
+.segment-list::-webkit-scrollbar-thumb {
+  background: var(--session-accent);
+  border-radius: 3px;
 }
 
 .segment-item {
+  background: rgba(255, 255, 255, 0.02);
   padding: var(--space-4);
-  border-radius: var(--radius-lg);
+  border-radius: var(--session-radius-lg);
   margin-bottom: var(--space-3);
   transition: var(--tab-transition);
-  border-left: 3px solid transparent;
+  border-left: 4px solid transparent;
+  position: relative;
+}
+
+.segment-item:nth-child(odd) {
+  animation: segmentSlideIn 0.4s ease-out backwards;
+}
+
+.segment-item:nth-child(even) {
+  animation: segmentSlideIn 0.4s ease-out 0.05s backwards;
+}
+
+@keyframes segmentSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .segment-item:hover {
-  background: rgba(99, 102, 241, 0.05);
+  background: var(--session-card-hover);
+  border-left-color: var(--session-accent);
+  transform: translateX(6px);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
+}
+
+/* CROWN⁴.6: Highlight pulse for jump-to-transcript */
+.segment-item.segment-highlight-pulse {
+  animation: segmentPulse 2s ease-out;
+  background: rgba(99, 102, 241, 0.15);
   border-left-color: var(--color-primary);
-  transform: translateX(4px);
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+@keyframes segmentPulse {
+  0% {
+    background: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.5);
+  }
+  50% {
+    background: rgba(99, 102, 241, 0.2);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+  }
+  100% {
+    background: rgba(99, 102, 241, 0.15);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  }
 }
 
 .segment-header {
@@ -393,33 +659,74 @@
 }
 
 .segment-speaker {
-  color: var(--color-primary);
+  background: var(--crown-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   font-weight: var(--font-weight-semibold);
 }
 
 .segment-text {
   color: var(--color-text-primary);
-  line-height: 1.6;
+  line-height: 1.7;
   font-size: var(--font-size-base);
 }
 
-/* Highlights Tab */
+/* ========================================
+   CROWN⁺ HIGHLIGHTS TAB - Premium Cards
+   ======================================== */
+
 .highlights-grid {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
 .highlight-section {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
+  border: 1px solid var(--session-card-border);
+  border-radius: var(--session-radius-xl);
+  padding: var(--space-5);
+  box-shadow: var(--session-shadow-card);
+  position: relative;
+  overflow: hidden;
+  animation: highlightReveal 0.5s ease-out backwards;
+}
+
+.highlight-section:nth-child(1) { animation-delay: 0.1s; }
+.highlight-section:nth-child(2) { animation-delay: 0.2s; }
+.highlight-section:nth-child(3) { animation-delay: 0.3s; }
+.highlight-section:nth-child(4) { animation-delay: 0.4s; }
+
+@keyframes highlightReveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.highlight-section::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--crown-gradient);
 }
 
 .highlight-title {
   font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-primary);
-  margin-bottom: var(--space-3);
+  font-weight: var(--font-weight-bold);
+  background: var(--crown-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: var(--space-4);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -433,71 +740,123 @@
 
 .highlight-item {
   background: rgba(255, 255, 255, 0.03);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-primary);
+  padding: var(--space-4);
+  border-radius: var(--session-radius-md);
+  border-left: 4px solid var(--session-accent);
+  transition: var(--tab-transition);
+}
+
+.highlight-item:hover {
+  background: var(--session-card-hover);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
 }
 
 .highlight-item-text {
   color: var(--color-text-primary);
   margin-bottom: var(--space-2);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .highlight-item-meta {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+  opacity: 0.8;
 }
 
-/* Analytics Tab */
+/* ========================================
+   CROWN⁺ ANALYTICS TAB - Premium Metric Cards
+   ======================================== */
+
 .analytics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-6);
 }
 
 @media (min-width: 768px) {
   .analytics-grid {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 }
 
 .metric-card {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(147, 51, 234, 0.05));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
+  border: 1px solid var(--session-card-border);
+  border-radius: var(--session-radius-lg);
+  padding: var(--space-5);
   transition: var(--tab-transition);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--session-shadow-card);
+  animation: metricPop 0.4s ease-out backwards;
+}
+
+.metric-card:nth-child(1) { animation-delay: 0.1s; }
+.metric-card:nth-child(2) { animation-delay: 0.15s; }
+.metric-card:nth-child(3) { animation-delay: 0.2s; }
+.metric-card:nth-child(4) { animation-delay: 0.25s; }
+.metric-card:nth-child(5) { animation-delay: 0.3s; }
+
+@keyframes metricPop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--crown-gradient);
 }
 
 .metric-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: var(--session-shadow-hover), 0 0 24px var(--session-accent-glow);
+  border-color: rgba(99, 102, 241, 0.4);
 }
 
 .metric-label {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   margin-bottom: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: var(--font-weight-medium);
 }
 
 .metric-value {
-  font-size: clamp(1.75rem, 5vw, var(--font-size-3xl));
+  font-size: clamp(2rem, 6vw, var(--font-size-4xl));
   font-weight: var(--font-weight-bold);
-  background: var(--gradient-primary);
+  background: var(--crown-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  line-height: 1.1;
 }
 
 .metric-unit {
   font-size: var(--font-size-base);
   color: var(--color-text-secondary);
   margin-left: var(--space-1);
+  -webkit-text-fill-color: var(--color-text-secondary);
 }
 
-/* Tasks Tab */
+/* ========================================
+   CROWN⁺ TASKS TAB - Premium Task Cards
+   ======================================== */
+
 .task-list {
   display: flex;
   flex-direction: column;
@@ -505,19 +864,41 @@
 }
 
 .task-item {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
   padding: var(--space-4);
-  border-radius: var(--radius-lg);
+  border-radius: var(--session-radius-lg);
   display: flex;
   align-items: start;
   gap: var(--space-3);
   transition: var(--tab-transition);
-  border-left: 3px solid var(--color-primary);
+  border-left: 4px solid var(--session-accent);
+  box-shadow: var(--session-shadow-card);
+  animation: taskSlideIn 0.4s ease-out backwards;
+}
+
+.task-item:nth-child(1) { animation-delay: 0.05s; }
+.task-item:nth-child(2) { animation-delay: 0.1s; }
+.task-item:nth-child(3) { animation-delay: 0.15s; }
+.task-item:nth-child(4) { animation-delay: 0.2s; }
+.task-item:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes taskSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .task-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-  transform: translateX(4px);
+  background: var(--session-card-hover);
+  transform: translateX(6px);
+  box-shadow: var(--session-shadow-hover);
+  border-left-color: var(--session-accent-secondary);
 }
 
 .task-checkbox {
@@ -526,6 +907,7 @@
   height: 20px;
   cursor: pointer;
   flex-shrink: 0;
+  accent-color: var(--session-accent);
 }
 
 .task-content {
@@ -535,7 +917,8 @@
 .task-text {
   color: var(--color-text-primary);
   margin-bottom: var(--space-2);
-  line-height: 1.5;
+  line-height: 1.6;
+  font-weight: var(--font-weight-medium);
 }
 
 .task-meta {
@@ -546,22 +929,272 @@
   color: var(--color-text-secondary);
 }
 
-/* Empty States */
+.task-meta span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* ========================================
+   CROWN⁺ EMPTY STATES - Animated & Premium
+   ======================================== */
+
 .empty-state {
   text-align: center;
-  padding: var(--space-8) var(--space-4);
+  padding: var(--space-10) var(--space-4);
   color: var(--color-text-secondary);
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
+  border-radius: var(--session-radius-xl);
+  border: 1px solid var(--session-card-border);
+  box-shadow: var(--session-shadow-card);
+  animation: emptyStateReveal 0.6s ease-out;
+}
+
+@keyframes emptyStateReveal {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .empty-state-icon {
-  font-size: 3rem;
-  margin-bottom: var(--space-3);
-  opacity: 0.5;
+  font-size: 4rem;
+  margin-bottom: var(--space-4);
+  animation: iconFloat 3s ease-in-out infinite;
+  filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.3));
+}
+
+@keyframes iconFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 .empty-state-text {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
   line-height: 1.5;
+  background: var(--crown-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-2);
+}
+
+/* ========================================
+   CROWN⁺ ENHANCED TASKS LIST - Priority Groups
+   ======================================== */
+
+.task-list-enhanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.task-priority-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.priority-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
+  border-radius: var(--session-radius-md);
+  border: 1px solid var(--session-card-border);
+  margin-bottom: var(--space-2);
+}
+
+.priority-header.priority-high {
+  border-left: 4px solid #ef4444;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), transparent);
+}
+
+.priority-header.priority-medium {
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), transparent);
+}
+
+.priority-header.priority-low {
+  border-left: 4px solid #6b7280;
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.1), transparent);
+}
+
+.priority-icon {
+  font-size: 1rem;
+}
+
+.priority-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.priority-count {
+  background: var(--session-bg-tertiary);
+  color: var(--color-text-secondary);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  margin-left: auto;
+}
+
+/* Enhanced Task Items */
+.task-item-enhanced {
+  background: var(--session-card-bg);
+  backdrop-filter: var(--session-glass-blur);
+  border: 1px solid var(--session-card-border);
+  border-radius: var(--session-radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  transition: var(--tab-transition);
+  box-shadow: var(--session-shadow-card);
+  animation: taskEnhancedSlideIn 0.4s ease-out backwards;
+}
+
+.task-item-enhanced:nth-child(2) { animation-delay: 0.05s; }
+.task-item-enhanced:nth-child(3) { animation-delay: 0.1s; }
+.task-item-enhanced:nth-child(4) { animation-delay: 0.15s; }
+.task-item-enhanced:nth-child(5) { animation-delay: 0.2s; }
+.task-item-enhanced:nth-child(n+6) { animation-delay: 0.25s; }
+
+@keyframes taskEnhancedSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.task-item-enhanced.task-priority-high {
+  border-left: 4px solid #ef4444;
+}
+
+.task-item-enhanced.task-priority-medium {
+  border-left: 4px solid #f59e0b;
+}
+
+.task-item-enhanced.task-priority-low {
+  border-left: 4px solid #6b7280;
+}
+
+.task-item-enhanced:hover {
+  background: var(--session-card-hover);
+  transform: translateX(6px);
+  box-shadow: var(--session-shadow-hover);
+}
+
+.task-checkbox-wrapper {
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.task-checkbox-wrapper .task-checkbox {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--session-accent);
+  cursor: pointer;
+}
+
+.task-content-enhanced {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.task-header-row .task-title {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.task-confidence {
+  flex-shrink: 0;
+}
+
+.confidence-indicator {
+  font-size: 0.9rem;
+}
+
+.task-metadata-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.task-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  color: var(--color-text-secondary);
+}
+
+.task-meta-item .meta-icon {
+  font-size: 0.75rem;
+}
+
+.task-meta-item .meta-text {
+  font-size: var(--font-size-xs);
+}
+
+.task-due-date.overdue {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.task-due-date.due-soon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.due-badge {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: var(--font-weight-semibold);
+  margin-left: var(--space-1);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.overdue-badge {
+  background: #ef4444;
+  color: white;
+}
+
+.soon-badge {
+  background: #f59e0b;
+  color: white;
 }
 
 /* Animations */
@@ -620,17 +1253,17 @@
       <h1 class="refined-title">{{ session.title or 'Live Transcription Session' }}</h1>
       <div class="refined-meta">
         <div class="refined-meta-item">
-          <span>📅</span>
+          <span class="meta-icon-inline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
           <span>{{ session.started_at }}</span>
         </div>
         {% if session.completed_at %}
         <div class="refined-meta-item">
-          <span>✅</span>
+          <span class="meta-icon-inline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
           <span>Completed {{ session.completed_at }}</span>
         </div>
         {% endif %}
         <div class="refined-meta-item">
-          <span>💬</span>
+          <span class="meta-icon-inline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
           <span>{{ segments|length }} segments</span>
         </div>
       </div>
@@ -656,7 +1289,7 @@
   </div>
   {% else %}
   <div class="smart-banner" id="smart-banner" data-insights-pending="false">
-    <div class="smart-banner-icon">🎯</div>
+    <div class="smart-banner-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
     <div class="smart-banner-text">
       <div class="smart-banner-title">Mina has generated your meeting insights</div>
       <div>Explore your transcript, highlights, analytics, and action items below.</div>
@@ -668,14 +1301,14 @@
   <nav class="tab-navigation" role="tablist">
     <button class="tab-button active" data-tab="transcript" role="tab" aria-selected="true" aria-controls="transcript-tab">
       <div class="tab-button-content">
-        <span class="tab-button-icon">📝</span>
+        <span class="tab-button-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
         <span class="tab-button-label">Transcript</span>
       </div>
       <span class="tab-badge">{{ segments|length }}</span>
     </button>
     <button class="tab-button" data-tab="highlights" role="tab" aria-selected="false" aria-controls="highlights-tab">
       <div class="tab-button-content">
-        <span class="tab-button-icon">⭐</span>
+        <span class="tab-button-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
         <span class="tab-button-label">Highlights</span>
       </div>
       {% if summary %}
@@ -684,13 +1317,13 @@
     </button>
     <button class="tab-button" data-tab="analytics" role="tab" aria-selected="false" aria-controls="analytics-tab">
       <div class="tab-button-content">
-        <span class="tab-button-icon">📊</span>
+        <span class="tab-button-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
         <span class="tab-button-label">Analytics</span>
       </div>
     </button>
     <button class="tab-button" data-tab="tasks" role="tab" aria-selected="false" aria-controls="tasks-tab">
       <div class="tab-button-content">
-        <span class="tab-button-icon">✅</span>
+        <span class="tab-button-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
         <span class="tab-button-label">Tasks</span>
       </div>
       {% if tasks and tasks|length > 0 %}
@@ -704,15 +1337,19 @@
     <div class="tab-panel">
       <h2 style="margin-bottom: var(--space-4); color: var(--color-primary);">Full Transcript</h2>
       {% if segments %}
-      <div class="segment-list">
+      <div class="segment-list" id="segment-list">
         {% for segment in segments %}
-        <div class="segment-item">
+        <div class="segment-item" 
+             id="segment-{{ segment.id if segment.id else loop.index }}"
+             data-segment-id="{{ segment.id if segment.id else loop.index }}"
+             data-start-ms="{{ segment.start_ms or 0 }}"
+             data-end-ms="{{ segment.end_ms or 0 }}">
           <div class="segment-header">
             {% if segment.speaker_id %}
             <span class="segment-speaker">{{ segment.speaker_id }}</span>
             {% endif %}
             {% if segment.start_ms %}
-            <span>{{ (segment.start_ms / 1000)|round(1) }}s</span>
+            <span class="segment-timestamp" data-ms="{{ segment.start_ms }}">{{ (segment.start_ms / 1000)|round(1) }}s</span>
             {% endif %}
             {% if segment.avg_confidence %}
             <span>Confidence: {{ (segment.avg_confidence * 100)|round }}%</span>
@@ -724,7 +1361,7 @@
       </div>
       {% else %}
       <div class="empty-state">
-        <div class="empty-state-icon">📝</div>
+        <div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
         <div class="empty-state-text">No transcript available yet</div>
       </div>
       {% endif %}
@@ -742,7 +1379,7 @@
         <!-- Summary -->
         {% if summary.summary_md %}
         <div class="highlight-section">
-          <h3 class="highlight-title">📋 Summary</h3>
+          <h3 class="highlight-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="highlight-icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Summary</h3>
           <div style="color: var(--color-text-primary); line-height: 1.6;">
             {{ summary.summary_md|safe }}
           </div>
@@ -752,7 +1389,7 @@
         <!-- Actions -->
         {% if summary.actions %}
         <div class="highlight-section">
-          <h3 class="highlight-title">🎯 Action Items</h3>
+          <h3 class="highlight-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="highlight-icon"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Action Items</h3>
           <div class="highlight-list">
             {% for action in summary.actions %}
             <div class="highlight-item">
@@ -770,7 +1407,7 @@
         <!-- Decisions -->
         {% if summary.decisions %}
         <div class="highlight-section">
-          <h3 class="highlight-title">✅ Decisions</h3>
+          <h3 class="highlight-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="highlight-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Decisions</h3>
           <div class="highlight-list">
             {% for decision in summary.decisions %}
             <div class="highlight-item">
@@ -787,7 +1424,7 @@
         <!-- Risks -->
         {% if summary.risks %}
         <div class="highlight-section">
-          <h3 class="highlight-title">⚠️ Risks</h3>
+          <h3 class="highlight-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="highlight-icon"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Risks</h3>
           <div class="highlight-list">
             {% for risk in summary.risks %}
             <div class="highlight-item">
@@ -804,7 +1441,7 @@
         {# Show message if AI succeeded but found no highlights #}
         {% if not (summary.summary_md or summary.actions or summary.decisions or summary.risks) %}
         <div class="empty-state">
-          <div class="empty-state-icon">⭐</div>
+          <div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
           <div class="empty-state-text">No highlights found</div>
           <p style="margin-top: var(--space-2); color: var(--color-text-secondary); max-width: 500px; margin-left: auto; margin-right: auto; font-size: var(--font-size-sm);">
             The AI analyzed your meeting but didn't identify any key highlights. This can happen with very short conversations or casual chats.
@@ -816,7 +1453,7 @@
       {# State 2: AI analysis failed #}
       {% elif session.post_transcription_status == 'failed' %}
       <div class="empty-state">
-        <div class="empty-state-icon">⚠️</div>
+        <div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
         <div class="empty-state-text">Insights temporarily unavailable</div>
         <p style="margin-top: var(--space-2); color: var(--color-text-secondary); max-width: 500px; margin-left: auto; margin-right: auto; font-size: var(--font-size-sm);">
           AI analysis encountered an error. Your transcript is safely stored and you can review it in the Transcript tab.
@@ -826,7 +1463,7 @@
       {# State 3: Processing or no status yet #}
       {% else %}
       <div class="empty-state">
-        <div class="empty-state-icon">⏳</div>
+        <div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
         <div class="empty-state-text">Analyzing meeting...</div>
         <p style="margin-top: var(--space-2); color: var(--color-text-secondary); max-width: 500px; margin-left: auto; margin-right: auto; font-size: var(--font-size-sm);">
           AI is generating highlights from your meeting. This usually takes just a few seconds.
@@ -866,7 +1503,7 @@
       </div>
       {% else %}
       <div class="empty-state">
-        <div class="empty-state-icon">📊</div>
+        <div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
         <div class="empty-state-text">Analytics are being calculated...</div>
       </div>
       {% endif %}
@@ -892,7 +1529,7 @@
         {% if high_priority_tasks|length > 0 %}
         <div class="task-priority-section">
           <div class="priority-header priority-high">
-            <span class="priority-icon">🔴</span>
+            <span class="priority-icon"><span class="priority-dot priority-dot-high"></span></span>
             <span class="priority-label">High Priority</span>
             <span class="priority-count">{{ high_priority_tasks|length }}</span>
           </div>
@@ -910,11 +1547,11 @@
                 {% if task.confidence_score %}
                 <div class="task-confidence" title="Quality score: {{ (task.confidence_score * 100)|round }}%">
                   {% if task.confidence_score >= 0.85 %}
-                  <span class="confidence-indicator confidence-high" title="High quality extraction ({{ (task.confidence_score * 100)|round }}%)">✅</span>
+                  <span class="confidence-indicator confidence-high" title="High quality extraction ({{ (task.confidence_score * 100)|round }}%)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
                   {% elif task.confidence_score >= 0.65 %}
-                  <span class="confidence-indicator confidence-medium" title="Medium quality extraction ({{ (task.confidence_score * 100)|round }}%)">⚠️</span>
+                  <span class="confidence-indicator confidence-medium" title="Medium quality extraction ({{ (task.confidence_score * 100)|round }}%)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
                   {% else %}
-                  <span class="confidence-indicator confidence-low" title="Lower quality extraction ({{ (task.confidence_score * 100)|round }}%)">ℹ️</span>
+                  <span class="confidence-indicator confidence-low" title="Lower quality extraction ({{ (task.confidence_score * 100)|round }}%)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
                   {% endif %}
                 </div>
                 {% endif %}
@@ -922,25 +1559,25 @@
               <div class="task-metadata-row">
                 {% if task.due_date %}
                 <span class="task-meta-item task-due-date {% if task.is_overdue %}overdue{% elif task.is_due_soon %}due-soon{% endif %}" title="Due date">
-                  <span class="meta-icon">📅</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
                   <span class="meta-text">{{ task.due_date }}</span>
                   {% if task.is_overdue %}<span class="due-badge overdue-badge">Overdue</span>{% elif task.is_due_soon %}<span class="due-badge soon-badge">Due Soon</span>{% endif %}
                 </span>
                 {% endif %}
                 {% if task.extraction_context and task.extraction_context.get('metadata_extraction', {}).get('owner_name') %}
                 <span class="task-meta-item task-assignee" title="Assigned to">
-                  <span class="meta-icon">👤</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                   <span class="meta-text">{{ task.extraction_context['metadata_extraction']['owner_name'] }}</span>
                 </span>
                 {% elif task.assigned_to %}
                 <span class="task-meta-item task-assignee" title="Assigned to">
-                  <span class="meta-icon">👤</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                   <span class="meta-text">{{ task.assigned_to.username if task.assigned_to.username else 'Assigned' }}</span>
                 </span>
                 {% endif %}
                 {% if task.category %}
                 <span class="task-meta-item task-category" title="Category">
-                  <span class="meta-icon">🏷️</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
                   <span class="meta-text">{{ task.category|capitalize }}</span>
                 </span>
                 {% endif %}
@@ -955,7 +1592,7 @@
         {% if medium_priority_tasks|length > 0 or no_priority_tasks|length > 0 %}
         <div class="task-priority-section">
           <div class="priority-header priority-medium">
-            <span class="priority-icon">🟡</span>
+            <span class="priority-icon"><span class="priority-dot priority-dot-medium"></span></span>
             <span class="priority-label">Medium Priority</span>
             <span class="priority-count">{{ (medium_priority_tasks|length) + (no_priority_tasks|length) }}</span>
           </div>
@@ -973,11 +1610,11 @@
                 {% if task.confidence_score %}
                 <div class="task-confidence" title="Quality score: {{ (task.confidence_score * 100)|round }}%">
                   {% if task.confidence_score >= 0.85 %}
-                  <span class="confidence-indicator confidence-high" title="High quality ({{ (task.confidence_score * 100)|round }}%)">✅</span>
+                  <span class="confidence-indicator confidence-high" title="High quality ({{ (task.confidence_score * 100)|round }}%)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
                   {% elif task.confidence_score >= 0.65 %}
-                  <span class="confidence-indicator confidence-medium" title="Medium quality ({{ (task.confidence_score * 100)|round }}%)">⚠️</span>
+                  <span class="confidence-indicator confidence-medium" title="Medium quality ({{ (task.confidence_score * 100)|round }}%)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
                   {% else %}
-                  <span class="confidence-indicator confidence-low" title="Lower quality ({{ (task.confidence_score * 100)|round }}%)">ℹ️</span>
+                  <span class="confidence-indicator confidence-low" title="Lower quality ({{ (task.confidence_score * 100)|round }}%)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
                   {% endif %}
                 </div>
                 {% endif %}
@@ -985,25 +1622,25 @@
               <div class="task-metadata-row">
                 {% if task.due_date %}
                 <span class="task-meta-item task-due-date {% if task.is_overdue %}overdue{% elif task.is_due_soon %}due-soon{% endif %}">
-                  <span class="meta-icon">📅</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
                   <span class="meta-text">{{ task.due_date }}</span>
                   {% if task.is_overdue %}<span class="due-badge overdue-badge">Overdue</span>{% elif task.is_due_soon %}<span class="due-badge soon-badge">Due Soon</span>{% endif %}
                 </span>
                 {% endif %}
                 {% if task.extraction_context and task.extraction_context.get('metadata_extraction', {}).get('owner_name') %}
                 <span class="task-meta-item task-assignee">
-                  <span class="meta-icon">👤</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                   <span class="meta-text">{{ task.extraction_context['metadata_extraction']['owner_name'] }}</span>
                 </span>
                 {% elif task.assigned_to %}
                 <span class="task-meta-item task-assignee">
-                  <span class="meta-icon">👤</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                   <span class="meta-text">{{ task.assigned_to.username if task.assigned_to.username else 'Assigned' }}</span>
                 </span>
                 {% endif %}
                 {% if task.category %}
                 <span class="task-meta-item task-category">
-                  <span class="meta-icon">🏷️</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
                   <span class="meta-text">{{ task.category|capitalize }}</span>
                 </span>
                 {% endif %}
@@ -1018,7 +1655,7 @@
         {% if low_priority_tasks|length > 0 %}
         <div class="task-priority-section">
           <div class="priority-header priority-low">
-            <span class="priority-icon">⚪</span>
+            <span class="priority-icon"><span class="priority-dot priority-dot-low"></span></span>
             <span class="priority-label">Low Priority</span>
             <span class="priority-count">{{ low_priority_tasks|length }}</span>
           </div>
@@ -1036,9 +1673,9 @@
                 {% if task.confidence_score %}
                 <div class="task-confidence" title="Quality score: {{ (task.confidence_score * 100)|round }}%">
                   {% if task.confidence_score >= 0.85 %}
-                  <span class="confidence-indicator confidence-high" title="High quality ({{ (task.confidence_score * 100)|round }}%)">✅</span>
+                  <span class="confidence-indicator confidence-high" title="High quality ({{ (task.confidence_score * 100)|round }}%)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
                   {% elif task.confidence_score >= 0.65 %}
-                  <span class="confidence-indicator confidence-medium" title="Medium quality ({{ (task.confidence_score * 100)|round }}%)">ℹ️</span>
+                  <span class="confidence-indicator confidence-medium" title="Medium quality ({{ (task.confidence_score * 100)|round }}%)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
                   {% endif %}
                 </div>
                 {% endif %}
@@ -1046,24 +1683,24 @@
               <div class="task-metadata-row">
                 {% if task.due_date %}
                 <span class="task-meta-item task-due-date {% if task.is_overdue %}overdue{% elif task.is_due_soon %}due-soon{% endif %}">
-                  <span class="meta-icon">📅</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
                   <span class="meta-text">{{ task.due_date }}</span>
                 </span>
                 {% endif %}
                 {% if task.extraction_context and task.extraction_context.get('metadata_extraction', {}).get('owner_name') %}
                 <span class="task-meta-item task-assignee">
-                  <span class="meta-icon">👤</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                   <span class="meta-text">{{ task.extraction_context['metadata_extraction']['owner_name'] }}</span>
                 </span>
                 {% elif task.assigned_to %}
                 <span class="task-meta-item task-assignee">
-                  <span class="meta-icon">👤</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                   <span class="meta-text">{{ task.assigned_to.username if task.assigned_to.username else 'Assigned' }}</span>
                 </span>
                 {% endif %}
                 {% if task.category %}
                 <span class="task-meta-item task-category">
-                  <span class="meta-icon">🏷️</span>
+                  <span class="meta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
                   <span class="meta-text">{{ task.category|capitalize }}</span>
                 </span>
                 {% endif %}
@@ -1078,7 +1715,7 @@
       {# State 2: No tasks found (with intelligent context) #}
       {% elif session.post_transcription_status == 'success' or session.post_transcription_status == 'failed' %}
       <div class="empty-state">
-        <div class="empty-state-icon">✓</div>
+        <div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
         <div class="empty-state-text">No action items found</div>
         <p style="margin-top: var(--space-2); color: var(--color-text-secondary); max-width: 500px; margin-left: auto; margin-right: auto; font-size: var(--font-size-sm);">
           This was an informal discussion with no specific action items mentioned.
@@ -1088,7 +1725,7 @@
       {# State 3: Processing #}
       {% else %}
       <div class="empty-state">
-        <div class="empty-state-icon">⏳</div>
+        <div class="empty-state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
         <div class="empty-state-text">Finding action items...</div>
         <p style="margin-top: var(--space-2); color: var(--color-text-secondary); max-width: 500px; margin-left: auto; margin-right: auto; font-size: var(--font-size-sm);">
           Extracting action items from your meeting. This usually takes just a few seconds.
@@ -1297,17 +1934,17 @@
     // Map of loading indicators (text match) to their graceful empty states
     const loadingStateReplacements = {
       'Analyzing meeting...': {
-        icon: '📋',
+        iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
         title: 'Meeting analysis not available',
         description: 'Insights for this meeting haven\'t been generated. You can still view the full transcript in the Transcript tab.'
       },
       'Analytics are being calculated...': {
-        icon: '📊',
+        iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
         title: 'Analytics not available',
         description: 'Analytics data for this meeting hasn\'t been calculated. Check the Transcript tab for meeting details.'
       },
       'Finding action items...': {
-        icon: '✓',
+        iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
         title: 'No action items available',
         description: 'Action items for this meeting haven\'t been extracted. Try reviewing the transcript for any mentioned tasks.'
       }
@@ -1334,7 +1971,7 @@
           setTimeout(function() {
             // Update content
             const iconEl = emptyState.querySelector('.empty-state-icon');
-            if (iconEl) iconEl.textContent = replacement.icon;
+            if (iconEl) iconEl.innerHTML = replacement.iconSvg;
             textEl.textContent = replacement.title;
             
             // Update description if exists
@@ -1349,6 +1986,63 @@
         }
       });
     }, LOADING_TIMEOUT_MS);
+  })();
+  
+  // CROWN⁴.6 Section 7: Jump to Transcript Segment
+  // Handles incoming timestamp parameter and scrolls to the relevant segment
+  (function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const timestampMs = parseInt(urlParams.get('t'));
+    
+    if (!timestampMs || isNaN(timestampMs)) return;
+    
+    // Wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', function() {
+      // Make sure we're on the transcript tab
+      const transcriptTab = document.getElementById('transcript-tab');
+      const transcriptButton = document.querySelector('[data-tab="transcript"]');
+      
+      if (transcriptTab && transcriptButton) {
+        // Activate transcript tab
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-button').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-selected', 'false');
+        });
+        transcriptTab.classList.add('active');
+        transcriptButton.classList.add('active');
+        transcriptButton.setAttribute('aria-selected', 'true');
+      }
+      
+      // Find the segment closest to the timestamp
+      const segments = document.querySelectorAll('.segment-item[data-start-ms]');
+      let targetSegment = null;
+      let closestDiff = Infinity;
+      
+      segments.forEach(function(segment) {
+        const segmentStart = parseInt(segment.dataset.startMs) || 0;
+        const diff = Math.abs(segmentStart - timestampMs);
+        if (diff < closestDiff) {
+          closestDiff = diff;
+          targetSegment = segment;
+        }
+      });
+      
+      if (targetSegment) {
+        // Scroll to segment with smooth animation
+        setTimeout(function() {
+          targetSegment.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // Add highlight pulse effect
+          targetSegment.classList.add('segment-highlight-pulse');
+          
+          // Remove highlight after animation
+          setTimeout(function() {
+            targetSegment.classList.remove('segment-highlight-pulse');
+          }, 3000);
+        }, 300);
+      }
+    });
   })();
 </script>
 <script src="{{ url_for('static', filename='js/tabs.js') }}"></script>
