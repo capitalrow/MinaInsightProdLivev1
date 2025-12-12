@@ -64,12 +64,21 @@ class TaskExtractionService:
         if not meeting or not meeting.session:
             return []
         
-        # Get meeting transcript
+        # Get meeting transcript - try 'final' segments first, fallback to all
         stmt = select(Segment).filter_by(
             session_id=meeting.session.id,
             kind='final'
         ).order_by(Segment.start_ms)
         segments = db.session.execute(stmt).scalars().all()
+        
+        # Fallback: if no 'final' segments, get all segments with text
+        if not segments:
+            stmt = select(Segment).filter(
+                Segment.session_id == meeting.session.id,
+                Segment.text.isnot(None),
+                Segment.text != ''
+            ).order_by(Segment.start_ms)
+            segments = db.session.execute(stmt).scalars().all()
         
         if not segments:
             return []

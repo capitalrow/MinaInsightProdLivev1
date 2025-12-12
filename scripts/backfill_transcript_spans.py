@@ -114,12 +114,15 @@ def find_matching_segment(quote: str, segments) -> tuple:
 def backfill_transcript_spans(dry_run: bool = True, limit: int = None):
     """Backfill transcript_span for tasks that have evidence_quote but no span."""
     
-    stmt = select(Task).where(
-        Task.extraction_context.isnot(None),
-        Task.transcript_span.is_(None),
-        Task.deleted_at.is_(None)
-    )
-    tasks = db.session.execute(stmt).scalars().all()
+    # Note: JSONB null checks can be tricky - get all tasks and filter in Python
+    stmt = select(Task).where(Task.deleted_at.is_(None))
+    all_tasks = db.session.execute(stmt).scalars().all()
+    
+    # Filter in Python to avoid JSONB null comparison issues
+    tasks = [
+        t for t in all_tasks 
+        if t.extraction_context is not None and t.transcript_span is None
+    ]
     
     if limit:
         tasks = tasks[:limit]
@@ -170,15 +173,29 @@ def backfill_transcript_spans(dry_run: bool = True, limit: int = None):
         
         transcript_span, speaker = find_matching_segment(evidence_quote, segments)
         
+        # Fallback: use first segment if no match found (still links to transcript start)
+        used_fallback = False
         if not transcript_span or transcript_span.get("start_ms") is None:
-            skipped_no_match += 1
-            if not dry_run:
-                print(f"  Task {task.id}: No match for '{evidence_quote[:60]}...'")
-            continue
+            first_seg = segments[0] if segments else None
+            if first_seg and first_seg.start_ms is not None:
+                transcript_span = {
+                    "start_ms": first_seg.start_ms,
+                    "end_ms": first_seg.end_ms,
+                    "segment_ids": [first_seg.id],
+                    "match_type": "fallback_first_segment"
+                }
+                speaker = getattr(first_seg, 'speaker', None) or getattr(first_seg, 'speaker_id', None)
+                used_fallback = True
+            else:
+                skipped_no_match += 1
+                if not dry_run:
+                    print(f"  Task {task.id}: No match for '{evidence_quote[:60]}...'")
+                continue
         
+        match_type = "(fallback to start)" if used_fallback else "(matched)"
         print(f"\nTask {task.id}: '{task.title[:50]}...'")
         print(f"  Quote: '{evidence_quote[:80]}...'")
-        print(f"  Span: {transcript_span['start_ms']}ms - {transcript_span['end_ms']}ms")
+        print(f"  Span: {transcript_span['start_ms']}ms - {transcript_span['end_ms']}ms {match_type}")
         if speaker:
             print(f"  Speaker: {speaker}")
         
