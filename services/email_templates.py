@@ -37,9 +37,6 @@ def _get_email_wrapper(content: str, preheader: str = "") -> str:
         </xml>
     </noscript>
     <![endif]-->
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-    </style>
 </head>
 <body style="margin: 0; padding: 0; {BASE_STYLES}">
     <!-- Preheader text (hidden) -->
