@@ -49,6 +49,9 @@ _LAST_AUTO_SAVE_AT: Dict[str, float] = {}  # Last auto-save timestamp per sessio
 _LAST_SAVED_TRANSCRIPT: Dict[str, str] = {}  # Last saved transcript content per session
 _AUTO_SAVE_INTERVAL_MS = 30000.0  # Auto-save every 30 seconds of recording
 
+# TIMESTAMP FIX: Track when each session started to calculate relative offsets (MM:SS format)
+_SESSION_START_MS: Dict[str, float] = {}  # Recording start time per session (ms epoch)
+
 # Tunables - OPTIMIZED FOR COST
 _MIN_MS_BETWEEN_INTERIM = 2000.0     # 2 second minimum between API calls (was 400ms!)
 _MIN_CHUNK_BYTES = 8000              # Minimum audio bytes before transcribing (~0.5s of audio)
@@ -271,10 +274,15 @@ def _auto_save_transcript(session_id: str, cumulative_text: str, force: bool = F
             kind="interim"
         ).first()
         
+        # Calculate relative timestamps from session start (for MM:SS display)
+        session_start = _SESSION_START_MS.get(session_id, now)
+        relative_now = int(now - session_start)
+        relative_last_save = int(_LAST_AUTO_SAVE_AT.get(session_id, now) - session_start)
+        
         if existing_interim:
             # Update existing interim segment
             existing_interim.text = cumulative_text
-            existing_interim.end_ms = int(now)
+            existing_interim.end_ms = relative_now
             existing_interim.avg_confidence = 0.75
             logger.info(f"💾 [auto-save] Updated interim segment for session {session_id} ({len(cumulative_text)} chars)")
         else:
@@ -283,8 +291,8 @@ def _auto_save_transcript(session_id: str, cumulative_text: str, force: bool = F
                 session_id=session.id,
                 text=cumulative_text,
                 kind="interim",
-                start_ms=int(_LAST_AUTO_SAVE_AT.get(session_id, now)),
-                end_ms=int(now),
+                start_ms=max(0, relative_last_save),  # Relative to session start
+                end_ms=relative_now,  # Relative to session start
                 avg_confidence=0.75
             )
             db.session.add(segment)
@@ -398,6 +406,9 @@ def on_join_session(data):
     
     # Initialize auto-save tracking
     _LAST_AUTO_SAVE_AT[session_id] = _now_ms()
+    
+    # TIMESTAMP FIX: Track session start for relative MM:SS timestamps
+    _SESSION_START_MS[session_id] = _now_ms()
     
     # Initialize speaker diarization for this session
     try:
@@ -710,13 +721,18 @@ def on_finalize(data):
             if deleted_count > 0:
                 logger.info(f"🗑️ [finalize] Deleted {deleted_count} interim segment(s) for session {session_id}")
             
+            # Calculate proper timestamps from session start
+            session_start = _SESSION_START_MS.get(session_id, _now_ms())
+            session_duration_ms = int(_now_ms() - session_start)
+            audio_duration_ms = int(len(full_audio) / 16000 * 1000)
+            
             segment = Segment(
                 session_id=session.id,
                 text=final_text,
                 kind="final",
-                start_ms=0,  # Could be calculated from audio duration
-                end_ms=int(len(full_audio) / 16000 * 1000),  # Convert to milliseconds
-                avg_confidence=0.9  # Correct field name
+                start_ms=max(0, session_duration_ms - audio_duration_ms),  # Start of final audio relative to session
+                end_ms=session_duration_ms,  # End relative to session start
+                avg_confidence=0.9
             )
             db.session.add(segment)
             
@@ -772,6 +788,9 @@ def on_finalize(data):
     _LAST_AUTO_SAVE_AT.pop(session_id, None)
     _LAST_SAVED_TRANSCRIPT.pop(session_id, None)
     _CUMULATIVE_TRANSCRIPT.pop(session_id, None)
+    
+    # Clear session start timestamp
+    _SESSION_START_MS.pop(session_id, None)
     
     logger.info(f"🎤 Cleared session state for: {session_id}")
 
