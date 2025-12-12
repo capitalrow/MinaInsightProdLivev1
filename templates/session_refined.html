@@ -1377,10 +1377,12 @@
              data-end-ms="{{ segment.end_ms or 0 }}">
           <div class="segment-header">
             {% set ts_ms = segment.start_ms if segment.start_ms is not none else 0 %}
+            {% if has_live_transcription %}
             <span class="segment-timestamp" data-ms="{{ ts_ms }}">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               {{ '%02d:%02d'|format(ts_ms // 60000, (ts_ms // 1000) % 60) }}
             </span>
+            {% endif %}
             {% if segment.speaker_id %}
             <span class="segment-speaker">{{ segment.speaker_id }}</span>
             {% endif %}

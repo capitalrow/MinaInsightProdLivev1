@@ -180,7 +180,9 @@
                                  data-meeting-title="{{ task.meeting.title if task.meeting else '' }}">
                                 {% if task.meeting %}
                                 {% set transcript_url = url_for('sessions.get_session_refined', session_identifier=session_external_id) if session_external_id else url_for('dashboard.meetings') ~ '#meeting-' ~ task.meeting.id %}
-                                <a href="{{ transcript_url }}{% if provenance_timestamp_ms is not none %}?t={{ provenance_timestamp_ms }}{% endif %}" 
+                                {# Only show Jump to Transcript for Business tier users with live transcription #}
+                                {% if has_live_transcription and provenance_timestamp_ms is not none %}
+                                <a href="{{ transcript_url }}?t={{ provenance_timestamp_ms }}" 
                                    class="provenance-meeting jump-to-transcript" 
                                    title="Jump to transcript moment"
                                    data-meeting-id="{{ task.meeting.id }}"
@@ -189,6 +191,16 @@
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                                     {{ task.meeting.title|truncate(30) }}
                                 </a>
+                                {% else %}
+                                {# Show meeting link without timestamp for non-Business users #}
+                                <a href="{{ transcript_url }}" 
+                                   class="provenance-meeting" 
+                                   title="View meeting"
+                                   data-meeting-id="{{ task.meeting.id }}">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                                    {{ task.meeting.title|truncate(30) }}
+                                </a>
+                                {% endif %}
                                 {% endif %}
                                 
                                 {% if task.extraction_context and task.extraction_context.speaker %}
@@ -200,7 +212,8 @@
                                 </span>
                                 {% endif %}
                                 
-                                {% if provenance_timestamp_ms is not none %}
+                                {# Only show timestamp badge for Business tier users #}
+                                {% if has_live_transcription and provenance_timestamp_ms is not none %}
                                 <button class="provenance-timestamp context-trigger" 
                                         title="View transcript context"
                                         data-start-ms="{{ provenance_timestamp_ms }}"
@@ -226,8 +239,9 @@
                                     <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>
                                 </svg>
                                 <span class="quote-text">{{ task.extraction_context.evidence_quote|truncate(120) }}</span>
-                                {% if session_external_id %}
-                                <a href="{{ url_for('sessions.get_session_refined', session_identifier=session_external_id) }}{% if provenance_timestamp_ms is not none %}?t={{ provenance_timestamp_ms }}{% endif %}" 
+                                {# Only show Jump to transcript link for Business tier users #}
+                                {% if has_live_transcription and session_external_id and provenance_timestamp_ms is not none %}
+                                <a href="{{ url_for('sessions.get_session_refined', session_identifier=session_external_id) }}?t={{ provenance_timestamp_ms }}" 
                                    class="quote-jump" 
                                    title="Jump to transcript">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -291,7 +305,8 @@
                         
                         <!-- Task Actions -->
                         <div class="task-actions">
-                            {% if task.meeting %}
+                            {# Only show Jump to transcript button for Business tier users #}
+                            {% if has_live_transcription and task.meeting and provenance_timestamp_ms is not none %}
                             <button class="action-btn" title="Jump to transcript" data-action="transcript" data-task-id="{{ task.id }}">
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                             </button>
@@ -310,8 +325,9 @@
                             <div class="transcript-quote">
                                 "{{ task.extraction_context.evidence_quote|truncate(200) }}"
                             </div>
-                            {% if task.meeting %}
-                            <a href="{{ url_for('dashboard.meetings') }}#meeting-{{ task.meeting.id }}{% if task.transcript_span and task.transcript_span.start_ms %}?t={{ task.transcript_span.start_ms // 1000 }}{% endif %}" class="transcript-link">
+                            {# Only show Jump to this moment link for Business tier users #}
+                            {% if has_live_transcription and task.meeting and task.transcript_span and task.transcript_span.start_ms is not none %}
+                            <a href="{{ url_for('dashboard.meetings') }}#meeting-{{ task.meeting.id }}?t={{ task.transcript_span.start_ms // 1000 }}" class="transcript-link">
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                                 Jump to this moment
                             </a>
