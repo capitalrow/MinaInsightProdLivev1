@@ -39,8 +39,9 @@ _WEBM_HEADERS: Dict[str, bytes] = {}  # First chunk contains WebM header
 _LAST_WINDOW_TRANSCRIPT: Dict[str, str] = {}  # Last transcription result for delta detection
 _DIFFERENTIAL_MODE: Dict[str, bool] = {}  # Track if session is using differential streaming
 
-# TIMESTAMP-BASED STREAMING: Track last emitted word timestamp to avoid duplicates
-_LAST_EMITTED_END_TIME: Dict[str, float] = {}  # Last word end time per session (seconds)
+# TIMESTAMP-BASED STREAMING: Track word end times and cumulative audio duration
+_LAST_EMITTED_END_TIME: Dict[str, float] = {}  # Last word end time per session (seconds, session-relative)
+_CUMULATIVE_AUDIO_DURATION: Dict[str, float] = {}  # Total audio duration transcribed (seconds)
 
 # Speaker diarization state (per session)
 _SPEAKER_ENGINES: Dict[str, SpeakerDiarizationEngine] = {}
@@ -239,55 +240,110 @@ def _extract_text_delta(previous_text: str, new_text: str) -> str:
 def _extract_text_delta_with_timestamps(
     session_id: str, 
     words: list, 
-    window_start_time: float = 0.0
+    cumulative_text: str
 ) -> tuple:
     """
-    Extract only NEW words using timestamp-based filtering.
+    Extract only NEW words using word-boundary overlap detection with timestamps.
     
-    This avoids the fragile text-matching approach by using Whisper's word timestamps.
-    Each word has {word: str, start: float, end: float} in seconds.
+    Since sliding windows send overlapping audio, Whisper timestamps are window-relative
+    (each window starts at 0.0 seconds). We use a hybrid approach:
+    1. Words late in the window (higher timestamps) are more likely to be new
+    2. Compare with the last words of cumulative text to find overlap boundary
+    3. Only emit words that appear after the overlap point
     
     Args:
-        session_id: Session ID for tracking last emitted timestamp
-        words: List of word dicts with timestamps from Whisper
-        window_start_time: The start time offset of this audio window (seconds)
+        session_id: Session ID for tracking
+        words: List of word dicts with timestamps from Whisper [{word, start, end}]
+        cumulative_text: The current cumulative transcript text
     
     Returns:
-        Tuple of (delta_text, new_last_end_time)
+        Tuple of (delta_text, max_word_end_time)
     """
     if not words:
-        return "", _LAST_EMITTED_END_TIME.get(session_id, 0.0)
+        return "", 0.0
     
-    last_end = _LAST_EMITTED_END_TIME.get(session_id, 0.0)
+    # Extract word texts and find max end time
+    word_texts = [w.get("word", "").strip() for w in words if w.get("word", "").strip()]
+    max_end = max((w.get("end", 0.0) for w in words), default=0.0)
     
-    # Filter words that start after the last emitted word ended
-    # Add window_start_time offset to align with session timeline
+    if not word_texts:
+        return "", max_end
+    
+    # If no cumulative text yet, emit all words
+    if not cumulative_text or not cumulative_text.strip():
+        delta = " ".join(word_texts)
+        logger.info(f"[ts-delta] First transcription, emitting all {len(word_texts)} words: '{delta[:50]}...'")
+        return delta, max_end
+    
+    # Get the last N words from cumulative text for overlap detection
+    cumulative_words = cumulative_text.split()
+    tail_words = cumulative_words[-20:] if len(cumulative_words) > 20 else cumulative_words
+    
+    # Normalize for comparison
+    def normalize(word: str) -> str:
+        import re
+        return re.sub(r'[^\w]', '', word.lower())
+    
+    tail_normalized = [normalize(w) for w in tail_words]
+    words_normalized = [normalize(w) for w in word_texts]
+    
+    # Find the longest suffix of tail that matches a prefix of new words
+    # This identifies where the overlap ends
+    best_overlap = 0
+    
+    for overlap_len in range(1, min(len(tail_normalized), len(words_normalized)) + 1):
+        tail_suffix = tail_normalized[-overlap_len:]
+        words_prefix = words_normalized[:overlap_len]
+        
+        if tail_suffix == words_prefix:
+            best_overlap = overlap_len
+    
+    if best_overlap > 0:
+        # Found overlap - emit words after the overlap
+        if best_overlap >= len(word_texts):
+            logger.debug(f"[ts-delta] Complete overlap ({best_overlap} words) - no new content")
+            return "", max_end
+        
+        delta_words = word_texts[best_overlap:]
+        delta = " ".join(delta_words)
+        logger.info(f"[ts-delta] Found {best_overlap}-word overlap, emitting {len(delta_words)} new words: '{delta[:50]}...'")
+        return delta, max_end
+    
+    # No exact overlap found - use timestamp to decide
+    # Words in the first ~2 seconds of the window are likely overlap
+    # Words after that are likely new
+    OVERLAP_THRESHOLD_SEC = 2.0
+    
     new_words = []
-    new_last_end = last_end
-    
-    for w in words:
+    for i, w in enumerate(words):
         word_text = w.get("word", "").strip()
-        word_start = w.get("start", 0.0) + window_start_time
-        word_end = w.get("end", 0.0) + window_start_time
+        word_start = w.get("start", 0.0)
         
         if not word_text:
             continue
         
-        # Word is new if it starts after our last emitted position
-        # Use small tolerance (0.1s) to handle timing edge cases
-        if word_start >= (last_end - 0.1):
-            new_words.append(word_text)
-            if word_end > new_last_end:
-                new_last_end = word_end
+        # Words starting after the threshold are considered new
+        if word_start >= OVERLAP_THRESHOLD_SEC:
+            new_words.extend(word_texts[i:])
+            break
     
-    delta_text = " ".join(new_words) if new_words else ""
+    if new_words:
+        delta = " ".join(new_words)
+        logger.info(f"[ts-delta] Using timestamp threshold, emitting {len(new_words)} words: '{delta[:50]}...'")
+        return delta, max_end
     
-    if delta_text:
-        logger.info(f"[ts-delta] Extracted {len(new_words)} new words (from {last_end:.2f}s to {new_last_end:.2f}s): '{delta_text[:50]}...'")
-    else:
-        logger.debug(f"[ts-delta] No new words (last_end={last_end:.2f}s, window has {len(words)} words)")
+    # Fallback: If similarity is low, this might be genuinely new content
+    from difflib import SequenceMatcher
+    matcher = SequenceMatcher(None, tail_normalized, words_normalized)
+    similarity = matcher.ratio()
     
-    return delta_text, new_last_end
+    if similarity < 0.3:
+        delta = " ".join(word_texts)
+        logger.info(f"[ts-delta] Low similarity ({similarity:.2f}), treating all as new: '{delta[:50]}...'")
+        return delta, max_end
+    
+    logger.debug(f"[ts-delta] No clear delta found (similarity={similarity:.2f}) - returning empty")
+    return "", max_end
 
 
 def _auto_save_transcript(session_id: str, cumulative_text: str, force: bool = False) -> bool:
@@ -468,9 +524,10 @@ def on_join_session(data):
     # TIMESTAMP FIX: Track session start for relative MM:SS timestamps
     _SESSION_START_MS[session_id] = _now_ms()
     
-    # TIMESTAMP-BASED STREAMING: Reset last emitted end time for new session
+    # TIMESTAMP-BASED STREAMING: Reset tracking for new session
     _LAST_EMITTED_END_TIME[session_id] = 0.0
     _LAST_WINDOW_TRANSCRIPT[session_id] = ""
+    _CUMULATIVE_AUDIO_DURATION[session_id] = 0.0
     
     # Initialize speaker diarization for this session
     try:
@@ -656,10 +713,12 @@ def on_audio_chunk(data):
     # DIFFERENTIAL MODE: Use timestamp-based word alignment for accurate delta extraction
     delta_text = text
     if is_differential and text:
+        cumulative = _CUMULATIVE_TRANSCRIPT.get(session_id, "")
+        
         if words:
-            # USE TIMESTAMP-BASED DELTA: Much more accurate than fuzzy text matching
-            delta_text, new_last_end = _extract_text_delta_with_timestamps(session_id, words, 0.0)
-            _LAST_EMITTED_END_TIME[session_id] = new_last_end
+            # USE TIMESTAMP + WORD BOUNDARY DELTA: More accurate than fuzzy text matching
+            delta_text, max_end = _extract_text_delta_with_timestamps(session_id, words, cumulative)
+            _LAST_EMITTED_END_TIME[session_id] = max_end
         else:
             # Fallback to fuzzy matching if no words (shouldn't happen with OpenAI)
             previous_text = _LAST_WINDOW_TRANSCRIPT.get(session_id, "")
