@@ -20,10 +20,13 @@
     function init() {
         loadTasksData();
         loadMeetingHeatmap();
+        applyMemoryHeatmap();  // CROWN⁴.6: Apply recency glow to task cards
         bindEventListeners();
         initializeKeyboardShortcuts();
         initGroupingToggle();
         initContextBubble();
+        initFilterTabs();  // CROWN⁴.6: Client-side tab filtering
+        initSearch();      // CROWN⁴.6: Semantic search with spoken provenance
         
         // Initialize quick action modals
         initAssignModal();
@@ -31,6 +34,467 @@
         initPriorityModal();
         initLabelsModal();
     }
+    
+    /**
+     * CROWN⁴.6: Client-side filter tab switching
+     * Switches between Active/Archived/All views without page reload
+     */
+    function initFilterTabs() {
+        const filterTabs = document.querySelectorAll('.filter-tab[data-filter]');
+        
+        filterTabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                e.preventDefault();
+                const filter = tab.dataset.filter;
+                if (filter === currentFilter) return;
+                
+                applyFilter(filter);
+            });
+        });
+        
+        // Handle browser back/forward navigation
+        window.addEventListener('popstate', (e) => {
+            if (e.state && e.state.filter) {
+                applyFilter(e.state.filter, false);
+            }
+        });
+    }
+    
+    /**
+     * Apply filter to task cards (client-side, no page reload)
+     */
+    function applyFilter(filter, updateHistory = true) {
+        const ACTIVE_STATUSES = ['todo', 'in_progress', 'pending', 'blocked'];
+        
+        currentFilter = filter;
+        
+        // Update URL without page reload
+        if (updateHistory) {
+            const url = new URL(window.location);
+            url.searchParams.set('filter', filter);
+            history.pushState({ filter }, '', url);
+        }
+        
+        // Update tab active states
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            const isActive = tab.dataset.filter === filter;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', isActive);
+        });
+        
+        // Filter task cards
+        const cards = document.querySelectorAll('.task-card');
+        let visibleCount = 0;
+        
+        cards.forEach(card => {
+            const isActiveTask = card.dataset.isActive === 'true';
+            let shouldShow = false;
+            
+            if (filter === 'all') {
+                shouldShow = true;
+            } else if (filter === 'active') {
+                shouldShow = isActiveTask;
+            } else if (filter === 'archived') {
+                shouldShow = !isActiveTask;
+            }
+            
+            if (shouldShow) {
+                card.classList.add('is-visible');
+                visibleCount++;
+            } else {
+                card.classList.remove('is-visible');
+            }
+        });
+        
+        // Show empty state if no visible tasks
+        updateEmptyState(filter, visibleCount);
+        
+        // Re-apply heatmap and grouping
+        applyMemoryHeatmap();
+        
+        console.log(`[Filter] Applied filter: ${filter}, visible: ${visibleCount}`);
+    }
+    
+    /**
+     * Update empty state message based on current filter
+     */
+    function updateEmptyState(filter, visibleCount) {
+        const container = document.getElementById('task-list-container');
+        let emptyState = document.getElementById('filter-empty-state');
+        
+        if (visibleCount === 0) {
+            if (!emptyState) {
+                emptyState = document.createElement('div');
+                emptyState.id = 'filter-empty-state';
+                emptyState.className = 'empty-state';
+                emptyState.innerHTML = `
+                    <div class="empty-illustration">
+                        <svg viewBox="0 0 24 24" width="64" height="64" aria-hidden="true">
+                            <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="2" fill="none"/>
+                        </svg>
+                    </div>
+                    <h2 class="empty-title">No tasks here</h2>
+                    <p class="empty-text"></p>
+                `;
+                const taskGroups = document.getElementById('task-groups');
+                if (taskGroups) {
+                    taskGroups.parentNode.insertBefore(emptyState, taskGroups);
+                }
+            }
+            
+            const emptyText = emptyState.querySelector('.empty-text');
+            if (filter === 'active') {
+                emptyText.textContent = "You're all caught up! No active tasks to complete.";
+            } else if (filter === 'archived') {
+                emptyText.textContent = "No archived tasks yet. Completed tasks will appear here.";
+            } else {
+                emptyText.textContent = "No tasks found.";
+            }
+            
+            emptyState.style.display = 'block';
+            const taskGroups = document.getElementById('task-groups');
+            if (taskGroups) taskGroups.style.display = 'none';
+        } else {
+            if (emptyState) emptyState.style.display = 'none';
+            const taskGroups = document.getElementById('task-groups');
+            if (taskGroups) taskGroups.style.display = '';
+        }
+    }
+    
+    /**
+     * Update tab counts after task status changes
+     */
+    function updateFilterCounts() {
+        const ACTIVE_STATUSES = ['todo', 'in_progress', 'pending', 'blocked'];
+        const cards = document.querySelectorAll('.task-card');
+        
+        let activeCount = 0;
+        let archivedCount = 0;
+        let totalCount = cards.length;
+        
+        cards.forEach(card => {
+            const isActive = card.dataset.isActive === 'true';
+            if (isActive) {
+                activeCount++;
+            } else {
+                archivedCount++;
+            }
+        });
+        
+        // Update count badges
+        const activeCountEl = document.querySelector('[data-count="active"]');
+        const archivedCountEl = document.querySelector('[data-count="archived"]');
+        const allCountEl = document.querySelector('[data-count="all"]');
+        
+        if (activeCountEl) activeCountEl.textContent = activeCount;
+        if (archivedCountEl) archivedCountEl.textContent = archivedCount;
+        if (allCountEl) allCountEl.textContent = totalCount;
+    }
+    
+    // Expose updateFilterCounts for use after task status changes
+    window.updateFilterCounts = updateFilterCounts;
+    
+    /**
+     * CROWN⁴.6: Semantic Search - Instant fuzzy search with spoken provenance
+     */
+    let searchDebounceTimer = null;
+    let searchFocusIndex = -1;
+    
+    function initSearch() {
+        const searchInput = document.getElementById('task-search');
+        const searchResults = document.getElementById('search-results');
+        const searchBox = document.getElementById('search-box');
+        
+        if (!searchInput || !searchResults) return;
+        
+        // Input handler with debounce
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            
+            clearTimeout(searchDebounceTimer);
+            
+            if (query.length < 2) {
+                hideSearchResults();
+                return;
+            }
+            
+            // Instant client-side search (no debounce for basic fuzzy)
+            performClientSearch(query);
+        });
+        
+        // Focus/blur handlers
+        searchInput.addEventListener('focus', () => {
+            const shortcutHint = document.getElementById('search-shortcut-hint');
+            if (shortcutHint) shortcutHint.style.opacity = '0';
+            
+            if (searchInput.value.trim().length >= 2) {
+                performClientSearch(searchInput.value.trim());
+            }
+        });
+        
+        searchInput.addEventListener('blur', (e) => {
+            const shortcutHint = document.getElementById('search-shortcut-hint');
+            if (shortcutHint && !searchInput.value) shortcutHint.style.opacity = '1';
+            
+            // Delay hide to allow clicking results
+            setTimeout(() => {
+                if (!searchBox.contains(document.activeElement)) {
+                    hideSearchResults();
+                }
+            }, 200);
+        });
+        
+        // Keyboard navigation in search results
+        searchInput.addEventListener('keydown', (e) => {
+            const items = searchResults.querySelectorAll('.search-result-item');
+            
+            switch(e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    searchFocusIndex = Math.min(searchFocusIndex + 1, items.length - 1);
+                    updateSearchFocus(items);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    searchFocusIndex = Math.max(searchFocusIndex - 1, 0);
+                    updateSearchFocus(items);
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    if (searchFocusIndex >= 0 && items[searchFocusIndex]) {
+                        items[searchFocusIndex].click();
+                    }
+                    break;
+                case 'Escape':
+                    hideSearchResults();
+                    searchInput.blur();
+                    break;
+            }
+        });
+        
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!searchBox.contains(e.target)) {
+                hideSearchResults();
+            }
+        });
+    }
+    
+    function performClientSearch(query) {
+        const cards = document.querySelectorAll('.task-card');
+        const results = [];
+        const lowerQuery = query.toLowerCase();
+        const queryWords = lowerQuery.split(/\s+/);
+        
+        cards.forEach(card => {
+            const title = card.querySelector('.task-title')?.textContent || '';
+            const description = card.dataset.description || '';
+            
+            // Provenance data is on the .task-provenance child element
+            const provenanceEl = card.querySelector('.task-provenance');
+            const speaker = provenanceEl?.dataset.speaker || '';
+            const evidenceQuote = provenanceEl?.dataset.transcriptText || '';
+            const meetingTitle = provenanceEl?.dataset.meetingTitle || '';
+            const timestamp = provenanceEl?.dataset.transcriptStart || '';
+            
+            // Calculate match score
+            let score = 0;
+            const searchText = `${title} ${description} ${speaker} ${evidenceQuote} ${meetingTitle}`.toLowerCase();
+            
+            // Check each word
+            queryWords.forEach(word => {
+                if (title.toLowerCase().includes(word)) score += 10;
+                if (evidenceQuote.toLowerCase().includes(word)) score += 5;
+                if (speaker.toLowerCase().includes(word)) score += 3;
+                if (description.toLowerCase().includes(word)) score += 2;
+                if (meetingTitle.toLowerCase().includes(word)) score += 2;
+            });
+            
+            if (score > 0) {
+                results.push({
+                    taskId: card.dataset.taskId,
+                    title,
+                    speaker,
+                    evidenceQuote,
+                    meetingTitle,
+                    timestamp,
+                    score
+                });
+            }
+        });
+        
+        // Sort by score descending
+        results.sort((a, b) => b.score - a.score);
+        
+        // Display results (limit to top 8)
+        renderSearchResults(results.slice(0, 8), query);
+    }
+    
+    function renderSearchResults(results, query) {
+        const searchResults = document.getElementById('search-results');
+        searchFocusIndex = -1;
+        
+        if (results.length === 0) {
+            searchResults.innerHTML = `
+                <div class="search-results-empty">
+                    No tasks match "${escapeHtml(query)}"
+                </div>
+            `;
+            showSearchResults();
+            return;
+        }
+        
+        const html = results.map((result, index) => {
+            const highlightedTitle = highlightMatch(result.title, query);
+            const shortQuote = result.evidenceQuote 
+                ? (result.evidenceQuote.length > 60 
+                    ? result.evidenceQuote.substring(0, 60) + '...' 
+                    : result.evidenceQuote)
+                : '';
+            
+            return `
+                <div class="search-result-item" 
+                     data-task-id="${result.taskId}" 
+                     role="option"
+                     onclick="window.scrollToTask('${result.taskId}')">
+                    <div class="search-result-title">${highlightedTitle}</div>
+                    <div class="search-result-context">
+                        ${result.speaker ? `
+                            <span class="search-result-speaker">
+                                <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                ${escapeHtml(result.speaker)}
+                            </span>
+                        ` : ''}
+                        ${shortQuote ? `
+                            <span class="search-result-quote">"${escapeHtml(shortQuote)}"</span>
+                        ` : ''}
+                    </div>
+                    ${result.meetingTitle ? `
+                        <div class="search-result-meeting">
+                            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            ${escapeHtml(result.meetingTitle)}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+        
+        searchResults.innerHTML = html;
+        showSearchResults();
+    }
+    
+    function highlightMatch(text, query) {
+        const words = query.toLowerCase().split(/\s+/);
+        let result = escapeHtml(text);
+        
+        words.forEach(word => {
+            if (word.length < 2) return;
+            const regex = new RegExp(`(${escapeRegex(word)})`, 'gi');
+            result = result.replace(regex, '<mark>$1</mark>');
+        });
+        
+        return result;
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function escapeRegex(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
+    function showSearchResults() {
+        const searchResults = document.getElementById('search-results');
+        if (searchResults) searchResults.classList.add('active');
+    }
+    
+    function hideSearchResults() {
+        const searchResults = document.getElementById('search-results');
+        if (searchResults) searchResults.classList.remove('active');
+        searchFocusIndex = -1;
+    }
+    
+    function updateSearchFocus(items) {
+        items.forEach((item, i) => {
+            item.classList.toggle('focused', i === searchFocusIndex);
+        });
+        
+        if (searchFocusIndex >= 0 && items[searchFocusIndex]) {
+            items[searchFocusIndex].scrollIntoView({ block: 'nearest' });
+        }
+    }
+    
+    // Scroll to and highlight a task card
+    window.scrollToTask = function(taskId) {
+        const card = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+        if (!card) return;
+        
+        // Make card visible if filtered out
+        card.classList.add('is-visible');
+        
+        // Scroll to card
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Flash highlight
+        card.classList.add('search-highlight');
+        setTimeout(() => card.classList.remove('search-highlight'), 2000);
+        
+        // Hide search
+        hideSearchResults();
+        document.getElementById('task-search').value = '';
+    };
+    
+    /**
+     * CROWN⁴.6: Memory Heatmap - Apply visual recency indicators to task cards
+     * Tasks from recent meetings get a warm glow to show they're "fresh"
+     */
+    function applyMemoryHeatmap() {
+        const now = Date.now();
+        const HOUR_MS = 60 * 60 * 1000;
+        const HOT_THRESHOLD = 24 * HOUR_MS;   // 0-24 hours = hot
+        const WARM_THRESHOLD = 48 * HOUR_MS;  // 24-48 hours = warm
+        
+        document.querySelectorAll('.task-card[data-meeting-created]').forEach(card => {
+            const meetingCreated = card.dataset.meetingCreated;
+            if (!meetingCreated) return;
+            
+            try {
+                const meetingTime = new Date(meetingCreated).getTime();
+                const age = now - meetingTime;
+                
+                // Remove existing heatmap classes
+                card.classList.remove('heatmap-hot', 'heatmap-warm');
+                
+                // Apply appropriate class based on age
+                if (age <= HOT_THRESHOLD) {
+                    card.classList.add('heatmap-hot');
+                    card.setAttribute('data-heatmap', 'hot');
+                    // Safe tooltip - fallback to task title if aria-label is null
+                    const label = card.getAttribute('aria-label') || card.querySelector('.task-title')?.textContent || 'Task';
+                    card.setAttribute('title', label + ' (from recent meeting)');
+                } else if (age <= WARM_THRESHOLD) {
+                    card.classList.add('heatmap-warm');
+                    card.setAttribute('data-heatmap', 'warm');
+                }
+            } catch (e) {
+                console.warn('[Heatmap] Invalid date for task:', card.dataset.taskId, e);
+            }
+        });
+        
+        // Log heatmap stats for debugging
+        const hotCount = document.querySelectorAll('.task-card.heatmap-hot').length;
+        const warmCount = document.querySelectorAll('.task-card.heatmap-warm').length;
+        if (hotCount > 0 || warmCount > 0) {
+            console.log(`[Memory Heatmap] Applied: ${hotCount} hot, ${warmCount} warm`);
+        }
+    }
+    
+    // Expose for re-application after regrouping
+    window.applyMemoryHeatmap = applyMemoryHeatmap;
 
     function loadTasksData() {
         const dataElement = document.getElementById('tasks-data');
@@ -158,10 +622,22 @@
 
     function initializeKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
-            // Ignore if typing in input
+            // Cmd+K / Ctrl+K for search (global, even in inputs)
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                const searchInput = document.getElementById('task-search');
+                if (searchInput) {
+                    searchInput.focus();
+                    searchInput.select();
+                }
+                return;
+            }
+            
+            // Ignore if typing in input (except for Escape)
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
                 if (e.key === 'Escape') {
                     e.target.blur();
+                    hideSearchResults();
                     closeNewTaskModal();
                 }
                 return;
@@ -175,13 +651,18 @@
                 case '/':
                 case 's':
                     e.preventDefault();
-                    document.getElementById('task-search')?.focus();
+                    const searchInput = document.getElementById('task-search');
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.select();
+                    }
                     break;
                 case '?':
                     showKeyboardShortcuts();
                     break;
                 case 'escape':
                     closeNewTaskModal();
+                    hideSearchResults();
                     document.getElementById('task-context-menu').style.display = 'none';
                     break;
             }
@@ -217,6 +698,20 @@
             });
 
             if (response.ok) {
+                // Update data-is-active attribute
+                card.dataset.isActive = isCompleted ? 'true' : 'false';
+                card.dataset.status = newStatus;
+                
+                // Update filter counts
+                updateFilterCounts();
+                
+                // Re-apply current filter visibility
+                const isActiveTask = card.dataset.isActive === 'true';
+                let shouldShow = currentFilter === 'all' || 
+                    (currentFilter === 'active' && isActiveTask) || 
+                    (currentFilter === 'archived' && !isActiveTask);
+                card.classList.toggle('is-visible', shouldShow);
+                
                 // Add to undo queue
                 undoQueue.push({
                     taskId,
@@ -226,6 +721,11 @@
 
                 // Show undo toast
                 showUndoToast(isCompleted ? 'Task reopened' : 'Task completed');
+                
+                // CROWN⁴.6: Show completion context for newly completed tasks
+                if (!isCompleted) {
+                    showCompletionContext(taskId, card);
+                }
             } else {
                 // Revert on failure
                 e.currentTarget.classList.toggle('completed');
@@ -552,6 +1052,116 @@
         document.getElementById('undo-toast').style.display = 'none';
     }
 
+    // Track completion context timer to prevent overlap
+    let completionContextTimer = null;
+    
+    /**
+     * CROWN⁴.6: Show completion context modal with transcript snippet and related tasks
+     */
+    async function showCompletionContext(taskId, card) {
+        const modal = document.getElementById('completion-context');
+        if (!modal) return;
+        
+        // Clear any pending auto-dismiss timer
+        if (completionContextTimer) {
+            clearTimeout(completionContextTimer);
+            completionContextTimer = null;
+        }
+        
+        // Get provenance data from the card - try multiple sources
+        const provenanceEl = card.querySelector('.task-provenance');
+        const quoteEl = card.querySelector('.spoken-quote .quote-text');
+        const transcriptUrl = card.querySelector('.jump-to-transcript')?.href;
+        const meetingId = card.dataset.meetingId;
+        
+        // Fallback: try getting evidence from data attributes
+        const evidenceQuote = quoteEl?.textContent?.trim() || 
+                              provenanceEl?.dataset?.transcriptText || 
+                              '';
+        
+        // Show modal with animation
+        modal.style.display = 'flex';
+        modal.classList.remove('animate-out');
+        modal.classList.add('animate-in');
+        
+        // Populate transcript section if we have evidence quote
+        const transcriptSection = document.getElementById('completion-transcript');
+        const quoteSection = document.getElementById('completion-quote');
+        const transcriptLink = document.getElementById('completion-transcript-link');
+        
+        if (evidenceQuote) {
+            quoteSection.textContent = evidenceQuote;
+            transcriptSection.style.display = 'block';
+            
+            if (transcriptUrl) {
+                transcriptLink.href = transcriptUrl;
+                transcriptLink.style.display = 'inline-flex';
+            } else {
+                transcriptLink.style.display = 'none';
+            }
+        } else {
+            transcriptSection.style.display = 'none';
+        }
+        
+        // Fetch and show related tasks from same meeting
+        const relatedSection = document.getElementById('completion-related');
+        const relatedList = document.getElementById('related-tasks-list');
+        
+        if (meetingId) {
+            try {
+                const response = await fetch(`${API_BASE}/related?meeting_id=${meetingId}&exclude_task_id=${taskId}`);
+                const data = await response.json();
+                
+                if (data.success && data.tasks && data.tasks.length > 0) {
+                    relatedList.innerHTML = data.tasks.slice(0, 3).map(task => `
+                        <div class="related-task-item ${task.status === 'completed' ? 'completed' : ''}">
+                            <span class="related-task-status">${task.status === 'completed' ? '✓' : '○'}</span>
+                            <span class="related-task-title">${escapeHtml(task.title)}</span>
+                        </div>
+                    `).join('');
+                    relatedSection.style.display = 'block';
+                } else {
+                    relatedSection.style.display = 'none';
+                }
+            } catch (e) {
+                console.warn('[Completion Context] Failed to load related tasks:', e);
+                relatedSection.style.display = 'none';
+            }
+        } else {
+            relatedSection.style.display = 'none';
+        }
+        
+        // Bind close handlers
+        const closeBtn = document.getElementById('completion-context-close');
+        const dismissBtn = document.getElementById('completion-dismiss');
+        
+        const closeModal = () => {
+            if (completionContextTimer) {
+                clearTimeout(completionContextTimer);
+                completionContextTimer = null;
+            }
+            modal.classList.remove('animate-in');
+            modal.classList.add('animate-out');
+            setTimeout(() => {
+                modal.style.display = 'none';
+                modal.classList.remove('animate-out');
+            }, 200);
+        };
+        
+        closeBtn?.addEventListener('click', closeModal, { once: true });
+        dismissBtn?.addEventListener('click', closeModal, { once: true });
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        }, { once: true });
+        
+        // Auto-dismiss after 8 seconds (with timer tracking)
+        completionContextTimer = setTimeout(() => {
+            if (modal.style.display !== 'none') {
+                closeModal();
+            }
+        }, 8000);
+    }
+    
     async function snoozeTask(taskId) {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -665,6 +1275,24 @@
             });
         });
 
+        // Also bind to spoken-quote elements for tasks without transcript_span
+        document.querySelectorAll('.spoken-quote').forEach(quote => {
+            // Hover for desktop
+            quote.addEventListener('mouseenter', (e) => showContextBubble(e.currentTarget, true));
+            quote.addEventListener('mouseleave', () => scheduleHideBubble());
+            
+            // Long-press for mobile
+            let longPressTimer;
+            quote.addEventListener('touchstart', (e) => {
+                longPressTimer = setTimeout(() => {
+                    showContextBubble(e.currentTarget, true);
+                    navigator.vibrate?.(30);
+                }, 400);
+            }, { passive: true });
+            quote.addEventListener('touchend', () => clearTimeout(longPressTimer));
+            quote.addEventListener('touchmove', () => clearTimeout(longPressTimer), { passive: true });
+        });
+
         // Keep bubble visible when hovering over it
         contextBubble.addEventListener('mouseenter', () => clearTimeout(contextBubbleTimeout));
         contextBubble.addEventListener('mouseleave', () => hideBubble());
@@ -673,56 +1301,74 @@
         document.addEventListener('click', (e) => {
             if (contextBubble.classList.contains('visible') && 
                 !contextBubble.contains(e.target) && 
-                !e.target.closest('.context-trigger')) {
+                !e.target.closest('.context-trigger') &&
+                !e.target.closest('.spoken-quote')) {
                 hideBubble();
             }
         });
     }
 
-    function showContextBubble(trigger) {
+    function showContextBubble(trigger, isFromQuote = false) {
         clearTimeout(contextBubbleTimeout);
         
         const card = trigger.closest('.task-card');
-        const provenance = trigger.closest('.task-provenance');
+        const provenance = card?.querySelector('.task-provenance');
         if (!card || !provenance) return;
 
-        // Get transcript data
+        // Get transcript data from provenance data attributes
         const taskId = card.dataset.taskId;
         const sessionId = provenance.dataset.sessionId;
         const startMs = parseInt(provenance.dataset.transcriptStart) || 0;
         const endMs = parseInt(provenance.dataset.transcriptEnd) || startMs + 10000;
         const transcriptText = provenance.dataset.transcriptText;
+        const aiIntent = provenance.dataset.aiIntent || '';
+        const meetingTitle = provenance.dataset.meetingTitle || '';
         
-        // Get speaker info
-        const speakerEl = provenance.querySelector('.provenance-speaker');
-        const speaker = speakerEl?.dataset.speaker || 'Speaker';
-        const speakerInitials = speaker.slice(0, 2).toUpperCase();
+        // Get speaker info from data attribute or element
+        let speaker = provenance.dataset.speaker || '';
+        if (!speaker) {
+            const speakerEl = provenance.querySelector('.provenance-speaker');
+            speaker = speakerEl?.dataset.speaker || '';
+        }
+        const speakerDisplay = speaker || 'From meeting';
+        const speakerInitials = speaker ? speaker.slice(0, 2).toUpperCase() : 'M';
 
         // Get meeting link
         const meetingLink = provenance.querySelector('.jump-to-transcript');
         const meetingUrl = meetingLink?.href || '#';
-        const meetingTitle = meetingLink?.textContent.trim() || '';
+        const meetingLinkTitle = meetingTitle || meetingLink?.textContent?.trim() || 'Meeting';
 
-        // Format timestamp
+        // Format timestamp (only show if we have one)
+        const hasTimestamp = startMs > 0;
         const mins = Math.floor(startMs / 60000);
         const secs = Math.floor((startMs / 1000) % 60);
-        const timestamp = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        const timestamp = hasTimestamp ? `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}` : '';
 
         // Build bubble content
         const displayText = transcriptText || 'View the full transcript for context around this task.';
+        
+        // Build AI intent section if available
+        const intentHtml = aiIntent && aiIntent !== displayText ? `
+            <div class="context-bubble-intent">
+                <svg viewBox="0 0 24 24" width="12" height="12"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5 0 4 4 0 0 1-5 0 4 4 0 0 1-5 0A10 10 0 0 0 12 2z"/></svg>
+                <span>Mina understood: ${escapeHtml(aiIntent)}</span>
+            </div>
+        ` : '';
         
         contextBubble.innerHTML = `
             <div class="context-bubble-header">
                 <div class="context-bubble-speaker">
                     <span class="speaker-avatar">${escapeHtml(speakerInitials)}</span>
-                    ${escapeHtml(speaker)}
+                    ${escapeHtml(speakerDisplay)}
                 </div>
-                <span class="context-bubble-time">${timestamp}</span>
+                ${hasTimestamp ? `<span class="context-bubble-time">${timestamp}</span>` : ''}
             </div>
             <div class="context-bubble-text">
                 "${escapeHtml(displayText)}"
             </div>
+            ${intentHtml}
             <div class="context-bubble-footer">
+                <span class="context-bubble-meeting">${escapeHtml(meetingLinkTitle)}</span>
                 <a href="${meetingUrl}" class="context-bubble-link">
                     <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                     Jump to transcript
@@ -1326,6 +1972,9 @@
         });
 
         taskGroups.classList.add('grouped-view');
+        
+        // Re-apply heatmap after regrouping
+        applyMemoryHeatmap();
     }
 
     function groupTaskCards(cards, groupBy) {
@@ -1530,6 +2179,9 @@
         allCards.forEach(card => newList.appendChild(card));
         taskGroups.appendChild(newList);
         taskGroups.classList.remove('grouped-view');
+        
+        // Re-apply heatmap after flat list render
+        applyMemoryHeatmap();
     }
 
     // Listen for group collapse updates from other tabs

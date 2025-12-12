@@ -805,12 +805,62 @@ class PostTranscriptionOrchestrator:
                 rejected_count = 0
                 quality_scores = []
                 
+                # Helper function to find segment containing evidence quote
+                def find_source_segment(evidence_quote: str, segments: list):
+                    """Find the segment that contains the evidence quote and return its timestamp info."""
+                    if not evidence_quote or not segments:
+                        return None
+                    
+                    evidence_lower = evidence_quote.lower().strip()
+                    best_match = None
+                    best_ratio = 0.0
+                    
+                    for seg in segments:
+                        seg_text = (seg.text or '').lower()
+                        if not seg_text:
+                            continue
+                        
+                        # Check for exact substring match first
+                        if evidence_lower in seg_text:
+                            return {
+                                'segment_id': seg.id,
+                                'start_ms': seg.start_ms,
+                                'end_ms': seg.end_ms,
+                                'speaker': getattr(seg, 'speaker', None),
+                                'match_type': 'exact'
+                            }
+                        
+                        # Fuzzy match: check for significant word overlap
+                        evidence_words = set(evidence_lower.split())
+                        seg_words = set(seg_text.split())
+                        if not evidence_words:
+                            continue
+                        
+                        overlap = len(evidence_words & seg_words) / len(evidence_words)
+                        if overlap > best_ratio and overlap >= 0.6:  # 60% word overlap threshold
+                            best_ratio = overlap
+                            best_match = {
+                                'segment_id': seg.id,
+                                'start_ms': seg.start_ms,
+                                'end_ms': seg.end_ms,
+                                'speaker': getattr(seg, 'speaker', None),
+                                'match_type': 'fuzzy',
+                                'match_ratio': round(overlap, 2)
+                            }
+                    
+                    return best_match
+                
                 if summary and summary.actions:
                     for idx, action in enumerate(summary.actions):
                         try:
                             # Step 1: Store original raw text from AI
                             raw_task_text = action.get('text', '').strip()
                             evidence_quote = action.get('evidence_quote', '')
+                            
+                            # Step 1b: Find source segment for timestamp (CROWN⁴.6 spoken provenance)
+                            source_segment = find_source_segment(evidence_quote, segments)
+                            if source_segment:
+                                logger.info(f"[Provenance] Matched evidence to segment at {source_segment['start_ms']}ms ({source_segment['match_type']})")
                             
                             # Step 2: REFINE FIRST (conversational → professional)
                             from services.task_refinement_service import get_task_refinement_service
@@ -959,7 +1009,10 @@ class PostTranscriptionOrchestrator:
                                         'owner_matched_id': assigned_to_id,
                                         'owner_name': assigned_to_name
                                     },
-                                    'evidence_quote': evidence_quote
+                                    'evidence_quote': evidence_quote,
+                                    # CROWN⁴.6: Spoken provenance - source segment for Jump to Transcript
+                                    'source_segment': source_segment,
+                                    'speaker': source_segment.get('speaker') if source_segment else None
                                 }
                             )
                             db.session.add(task)
