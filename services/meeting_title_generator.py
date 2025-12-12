@@ -8,6 +8,7 @@ import logging
 import re
 from typing import Optional
 from services.ai_model_manager import AIModelManager
+from services.openai_client_manager import get_openai_client
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class MeetingTitleGenerator:
     ]
     
     def __init__(self):
-        self.ai_manager = AIModelManager()
+        pass
     
     def is_placeholder_title(self, title: str) -> bool:
         """Check if a title is a generic placeholder that should be replaced."""
@@ -81,28 +82,40 @@ BAD EXAMPLES:
 
 Respond with ONLY the meeting title (3-8 words, title case):"""
 
-        try:
-            response = await self.ai_manager.complete(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                task_name="meeting title generation",
+        async def make_api_call(model: str):
+            client = get_openai_client()
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
                 max_tokens=50,
                 temperature=0.3
             )
+            return response
+        
+        try:
+            result = await AIModelManager.call_with_fallback_async(
+                api_call=make_api_call,
+                operation_name="meeting title generation"
+            )
             
-            if response and response.content:
-                title = response.content.strip().strip('"\'')
-                title = re.sub(r'^(Title:|Meeting:|Topic:)\s*', '', title, flags=re.IGNORECASE)
-                
-                if len(title) > max_length:
-                    title = title[:max_length-3].rsplit(' ', 1)[0] + "..."
-                
-                if len(title) < 5 or self.is_placeholder_title(title):
-                    logger.warning(f"AI generated invalid title: {title}")
-                    return self._fallback_title_extraction(transcript)
-                
-                logger.info(f"✅ Generated meeting title: {title}")
-                return title
+            if result.success and result.response:
+                content = result.response.choices[0].message.content
+                if content:
+                    title = content.strip().strip('"\'')
+                    title = re.sub(r'^(Title:|Meeting:|Topic:)\s*', '', title, flags=re.IGNORECASE)
+                    
+                    if len(title) > max_length:
+                        title = title[:max_length-3].rsplit(' ', 1)[0] + "..."
+                    
+                    if len(title) < 5 or self.is_placeholder_title(title):
+                        logger.warning(f"AI generated invalid title: {title}")
+                        return self._fallback_title_extraction(transcript)
+                    
+                    logger.info(f"✅ Generated meeting title: {title}")
+                    return title
                 
         except Exception as e:
             logger.error(f"AI title generation failed: {e}")
