@@ -2192,10 +2192,12 @@ recordButton.addEventListener('click', async () => {
             const source = audioContext.createMediaStreamSource(stream);
             source.connect(analyser);
             
-            // VAD configuration
-            const VAD_THRESHOLD = 0.015;  // RMS threshold for voice activity
-            const VAD_HYSTERESIS_MS = 1000;  // Continue sending for 1s after last voice
+            // VAD configuration - LOWERED threshold for mobile mic compatibility
+            const VAD_THRESHOLD = 0.003;  // RMS threshold for voice activity (lowered from 0.015 for mobile)
+            const VAD_HYSTERESIS_MS = 2000;  // Continue sending for 2s after last voice
+            const MAX_SILENT_CHUNKS = 4;  // Force send after this many silent chunks (fallback)
             let silentChunksSkipped = 0;
+            let consecutiveSilentChunks = 0;  // Track consecutive silent chunks for fallback
             let voiceChunksProcessed = 0;
             let voiceDetectedInChunk = false;  // Track if voice was detected in current chunk
             let lastVoiceTime = 0;  // Time of last voice detection
@@ -2217,18 +2219,32 @@ recordButton.addEventListener('click', async () => {
                     if (rms > VAD_THRESHOLD) {
                         voiceDetectedInChunk = true;
                         lastVoiceTime = Date.now();
+                        consecutiveSilentChunks = 0;  // Reset silent streak
                     }
                 }, 100);  // Check every 100ms
             }
             
-            // Check if we should send this chunk (voice detected OR within hysteresis window)
+            // Check if we should send this chunk (voice detected OR within hysteresis window OR fallback)
             function shouldSendChunk() {
                 const now = Date.now();
                 const inHysteresisWindow = (now - lastVoiceTime) < VAD_HYSTERESIS_MS;
-                const shouldSend = voiceDetectedInChunk || inHysteresisWindow;
+                
+                // MOBILE FIX: Force send periodically even if VAD doesn't detect voice
+                // This handles cases where mobile mic sensitivity causes false negatives
+                const forcePeriodicSend = consecutiveSilentChunks >= MAX_SILENT_CHUNKS;
+                
+                const shouldSend = voiceDetectedInChunk || inHysteresisWindow || forcePeriodicSend;
                 
                 // Reset for next chunk
+                if (!voiceDetectedInChunk && !inHysteresisWindow) {
+                    consecutiveSilentChunks++;
+                }
                 voiceDetectedInChunk = false;
+                
+                if (forcePeriodicSend) {
+                    consecutiveSilentChunks = 0;  // Reset after forced send
+                    console.log('📤 Force-sending chunk (VAD fallback for mobile compatibility)');
+                }
                 
                 return shouldSend;
             }
