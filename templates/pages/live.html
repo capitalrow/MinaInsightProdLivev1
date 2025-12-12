@@ -454,9 +454,17 @@
 }
 
 .transcript-timestamp {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
     font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
+    font-weight: var(--font-weight-medium);
+    font-variant-numeric: tabular-nums;
+    padding: 2px 8px;
     margin-top: var(--space-2);
+    background: rgba(99, 102, 241, 0.12);
+    border-radius: var(--radius-full);
+    color: var(--color-primary);
 }
 
 .transcript-segment.interim {
@@ -1922,13 +1930,51 @@ function isTextAlreadyDisplayed(newText) {
     return false;
 }
 
+// Helper: format elapsed time as MM:SS
+function formatElapsedTime(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+// Track segment onset times for accurate timestamps
+const segmentOnsetTimes = new Map();
+
 socket.on('transcription_result', (data) => {
     if (transcriptContent.querySelector('.transcript-empty')) {
         transcriptContent.innerHTML = '';
     }
     
     const speakerName = data.speaker_name || data.speaker_id || 'Speaker 1';
-    const timestamp = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+    
+    // Use server's start_ms if available, otherwise track onset time
+    let segmentStartMs;
+    const interimKey = `${speakerName}-interim`;
+    
+    if (data.start_ms !== undefined && data.start_ms !== null) {
+        // Server provides actual segment timing - use it directly
+        segmentStartMs = data.start_ms;
+    } else {
+        // Fallback: use onset time when segment first appeared
+        // For interim segments, capture the onset time only once
+        if (!data.is_final) {
+            if (!segmentOnsetTimes.has(interimKey)) {
+                segmentOnsetTimes.set(interimKey, startTime ? (Date.now() - startTime) : 0);
+            }
+            segmentStartMs = segmentOnsetTimes.get(interimKey);
+        } else {
+            // Final segment: use the interim onset time if available, otherwise current time
+            segmentStartMs = segmentOnsetTimes.get(interimKey) || (startTime ? (Date.now() - startTime) : 0);
+        }
+    }
+    
+    // Clear interim onset time when segment is finalized (regardless of whether server provided start_ms)
+    if (data.is_final) {
+        segmentOnsetTimes.delete(interimKey);
+    }
+    
+    const timestamp = formatElapsedTime(segmentStartMs);
     
     if (data.is_final) {
         if (currentInterimSegment) {
@@ -1945,15 +1991,24 @@ socket.on('transcription_result', (data) => {
         if (lastSegment && !lastSegment.classList.contains('interim') && lastSegmentSpeaker === speakerName) {
             const textEl = lastSegment.querySelector('.transcript-text');
             textEl.textContent += ' ' + data.text;
-            lastSegment.querySelector('.transcript-timestamp').textContent = timestamp;
+            // Keep original segment's start time for Jump to Transcript (don't update data-start-ms)
+            // Update display timestamp to show segment end time
+            lastSegment.querySelector('.transcript-timestamp').innerHTML = `
+                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                ${timestamp}
+            `;
         } else {
             const segment = document.createElement('div');
             segment.className = 'transcript-segment';
             segment.style.animation = 'cardFadeIn 0.3s var(--calm-ease-out)';
+            segment.dataset.startMs = String(segmentStartMs);
             segment.innerHTML = `
                 <div class="transcript-speaker">${speakerName}</div>
                 <div class="transcript-text">${data.text}</div>
-                <div class="transcript-timestamp">${timestamp}</div>
+                <div class="transcript-timestamp">
+                    <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    ${timestamp}
+                </div>
             `;
             transcriptContent.appendChild(segment);
         }
@@ -1997,10 +2052,14 @@ socket.on('transcription_result', (data) => {
             
             currentInterimSegment = document.createElement('div');
             currentInterimSegment.className = 'transcript-segment interim';
+            currentInterimSegment.dataset.startMs = String(segmentStartMs);
             currentInterimSegment.innerHTML = `
                 <div class="transcript-speaker">${speakerName}</div>
                 <div class="transcript-text">${textToDisplay}</div>
-                <div class="transcript-timestamp">${timestamp} <span class="interim-indicator">●</span></div>
+                <div class="transcript-timestamp">
+                    <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    ${timestamp} <span class="interim-indicator">●</span>
+                </div>
             `;
             transcriptContent.appendChild(currentInterimSegment);
             lastSpeaker = speakerName;
