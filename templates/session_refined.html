@@ -1992,9 +1992,11 @@
   // Handles incoming timestamp parameter and scrolls to the relevant segment
   (function() {
     const urlParams = new URLSearchParams(window.location.search);
-    const timestampMs = parseInt(urlParams.get('t'));
+    const tParam = urlParams.get('t');
+    if (tParam === null) return;
     
-    if (!timestampMs || isNaN(timestampMs)) return;
+    const timestampMs = parseInt(tParam, 10);
+    if (isNaN(timestampMs) || timestampMs < 0) return;
     
     // Wait for DOM to be ready
     document.addEventListener('DOMContentLoaded', function() {
