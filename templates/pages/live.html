@@ -2192,9 +2192,9 @@ recordButton.addEventListener('click', async () => {
             const source = audioContext.createMediaStreamSource(stream);
             source.connect(analyser);
             
-            // VAD configuration
-            const VAD_THRESHOLD = 0.015;  // RMS threshold for voice activity
-            const VAD_HYSTERESIS_MS = 1000;  // Continue sending for 1s after last voice
+            // VAD configuration - TUNED for better sensitivity
+            const VAD_THRESHOLD = 0.003;  // RMS threshold for voice activity - LOWERED from 0.015 for better detection
+            const VAD_HYSTERESIS_MS = 2000;  // Continue sending for 2s after last voice - INCREASED for natural pauses
             let silentChunksSkipped = 0;
             let voiceChunksProcessed = 0;
             let voiceDetectedInChunk = false;  // Track if voice was detected in current chunk
