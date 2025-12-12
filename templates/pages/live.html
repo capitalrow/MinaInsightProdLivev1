@@ -1880,8 +1880,8 @@ function showTierBanner() {
 // Check tier on page load
 checkTierStatus();
 
-let currentInterimSegment = null;
-let lastSpeaker = null;
+// Per-speaker tracking is now in currentInterimPerSpeaker Map (declared later)
+let lastSpeaker = null;  // Still used for UI purposes
 let displayedTranscript = '';  // Track what's been shown to avoid duplication
 let lastNewText = '';  // Track last delta received
 
@@ -1938,8 +1938,14 @@ function formatElapsedTime(ms) {
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-// Track segment onset times for accurate timestamps
+// Track segment onset times for accurate timestamps (key: speakerName-interim)
 const segmentOnsetTimes = new Map();
+// Track the current interim segment DOM element for each speaker (key: speakerName)
+const currentInterimPerSpeaker = new Map();
+// Turn counter for unique turn identification
+let turnCounter = 0;
+// Track which turn token each speaker's current interim belongs to (key: speakerName)
+const speakerTurnToken = new Map();
 
 socket.on('transcription_result', (data) => {
     if (transcriptContent.querySelector('.transcript-empty')) {
@@ -1947,61 +1953,76 @@ socket.on('transcription_result', (data) => {
     }
     
     const speakerName = data.speaker_name || data.speaker_id || 'Speaker 1';
+    const onsetKey = `${speakerName}-onset`;
     
     // Use server's start_ms if available, otherwise track onset time
     let segmentStartMs;
-    const interimKey = `${speakerName}-interim`;
+    let currentTurnToken;
     
-    if (data.start_ms !== undefined && data.start_ms !== null) {
-        // Server provides actual segment timing - use it directly
-        segmentStartMs = data.start_ms;
-    } else {
-        // Fallback: use onset time when segment first appeared
-        // For interim segments, capture the onset time only once
-        if (!data.is_final) {
-            if (!segmentOnsetTimes.has(interimKey)) {
-                segmentOnsetTimes.set(interimKey, startTime ? (Date.now() - startTime) : 0);
-            }
-            segmentStartMs = segmentOnsetTimes.get(interimKey);
+    if (!data.is_final) {
+        // INTERIM handling
+        if (!segmentOnsetTimes.has(onsetKey)) {
+            // First interim for a new turn - capture onset and assign token
+            segmentStartMs = (data.start_ms !== undefined && data.start_ms !== null) 
+                ? data.start_ms 
+                : (startTime ? (Date.now() - startTime) : 0);
+            segmentOnsetTimes.set(onsetKey, segmentStartMs);
+            currentTurnToken = ++turnCounter;
+            speakerTurnToken.set(speakerName, currentTurnToken);
         } else {
-            // Final segment: use the interim onset time if available, otherwise current time
-            segmentStartMs = segmentOnsetTimes.get(interimKey) || (startTime ? (Date.now() - startTime) : 0);
+            // Continuing interim for same turn
+            segmentStartMs = segmentOnsetTimes.get(onsetKey);
+            currentTurnToken = speakerTurnToken.get(speakerName);
         }
-    }
-    
-    // Clear interim onset time when segment is finalized (regardless of whether server provided start_ms)
-    if (data.is_final) {
-        segmentOnsetTimes.delete(interimKey);
+    } else {
+        // FINAL handling
+        if (segmentOnsetTimes.has(onsetKey)) {
+            // Final that follows interims - use stored onset and token
+            segmentStartMs = segmentOnsetTimes.get(onsetKey);
+            currentTurnToken = speakerTurnToken.get(speakerName);
+        } else {
+            // Direct final without interim - always a new turn
+            segmentStartMs = (data.start_ms !== undefined && data.start_ms !== null) 
+                ? data.start_ms 
+                : (startTime ? (Date.now() - startTime) : 0);
+            currentTurnToken = ++turnCounter;
+        }
+        
+        // Clear onset tracking when finalized (turn token stays for potential multi-final same turn)
+        segmentOnsetTimes.delete(onsetKey);
     }
     
     const timestamp = formatElapsedTime(segmentStartMs);
     
     if (data.is_final) {
-        if (currentInterimSegment) {
-            currentInterimSegment.remove();
-            currentInterimSegment = null;
-        }
-        
         // For final transcripts, replace the displayed transcript entirely
         displayedTranscript = data.text || '';
         
-        const lastSegment = transcriptContent.querySelector('.transcript-segment:last-child');
-        const lastSegmentSpeaker = lastSegment?.querySelector('.transcript-speaker')?.textContent;
+        // Look up the interim segment for THIS speaker
+        const speakerInterim = currentInterimPerSpeaker.get(speakerName);
+        const interimTurnTokenValue = speakerInterim?.dataset.turnToken ? parseInt(speakerInterim.dataset.turnToken) : null;
+        const interimMatchesTurn = speakerInterim && interimTurnTokenValue === currentTurnToken;
         
-        if (lastSegment && !lastSegment.classList.contains('interim') && lastSegmentSpeaker === speakerName) {
-            const textEl = lastSegment.querySelector('.transcript-text');
-            textEl.textContent += ' ' + data.text;
-            // Keep original segment's start time for Jump to Transcript (don't update data-start-ms)
-            // Update display timestamp to show segment end time
-            lastSegment.querySelector('.transcript-timestamp').innerHTML = `
+        if (interimMatchesTurn) {
+            // Convert interim to final - keep the same segment, just update content
+            speakerInterim.classList.remove('interim');
+            speakerInterim.querySelector('.transcript-text').textContent = data.text;
+            speakerInterim.querySelector('.transcript-timestamp').innerHTML = `
                 <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 ${timestamp}
             `;
+            // data-start-ms and data-turn-token are already set correctly
+            currentInterimPerSpeaker.delete(speakerName);
+            // Clear turn token so next turn gets new token
+            speakerTurnToken.delete(speakerName);
         } else {
+            // No matching interim - create new segment
+            // (don't remove other speakers' interims)
             const segment = document.createElement('div');
             segment.className = 'transcript-segment';
             segment.style.animation = 'cardFadeIn 0.3s var(--calm-ease-out)';
             segment.dataset.startMs = String(segmentStartMs);
+            segment.dataset.turnToken = String(currentTurnToken);
             segment.innerHTML = `
                 <div class="transcript-speaker">${speakerName}</div>
                 <div class="transcript-text">${data.text}</div>
@@ -2011,6 +2032,8 @@ socket.on('transcription_result', (data) => {
                 </div>
             `;
             transcriptContent.appendChild(segment);
+            // Clear turn token so next turn gets new token
+            speakerTurnToken.delete(speakerName);
         }
         
         lastSpeaker = speakerName;
@@ -2045,15 +2068,18 @@ socket.on('transcription_result', (data) => {
             displayedTranscript = textToDisplay;
         }
         
-        if (!currentInterimSegment || lastSpeaker !== speakerName) {
-            if (currentInterimSegment) {
-                currentInterimSegment.remove();
-            }
-            
-            currentInterimSegment = document.createElement('div');
-            currentInterimSegment.className = 'transcript-segment interim';
-            currentInterimSegment.dataset.startMs = String(segmentStartMs);
-            currentInterimSegment.innerHTML = `
+        // Look up or create interim segment for this speaker
+        let speakerInterim = currentInterimPerSpeaker.get(speakerName);
+        const speakerInterimToken = speakerInterim?.dataset.turnToken ? parseInt(speakerInterim.dataset.turnToken) : null;
+        
+        if (!speakerInterim || speakerInterimToken !== currentTurnToken) {
+            // Need to create new interim for this turn
+            // (old interim for different turn will be orphaned and removed when finalized)
+            const newInterim = document.createElement('div');
+            newInterim.className = 'transcript-segment interim';
+            newInterim.dataset.startMs = String(segmentStartMs);
+            newInterim.dataset.turnToken = String(currentTurnToken);
+            newInterim.innerHTML = `
                 <div class="transcript-speaker">${speakerName}</div>
                 <div class="transcript-text">${textToDisplay}</div>
                 <div class="transcript-timestamp">
@@ -2061,12 +2087,16 @@ socket.on('transcription_result', (data) => {
                     ${timestamp} <span class="interim-indicator">●</span>
                 </div>
             `;
-            transcriptContent.appendChild(currentInterimSegment);
+            transcriptContent.appendChild(newInterim);
+            currentInterimPerSpeaker.set(speakerName, newInterim);
             lastSpeaker = speakerName;
         } else {
-            const textEl = currentInterimSegment.querySelector('.transcript-text');
-            textEl.textContent = textToDisplay;
-            currentInterimSegment.querySelector('.transcript-timestamp').innerHTML = `${timestamp} <span class="interim-indicator">●</span>`;
+            // Update existing interim for same turn
+            speakerInterim.querySelector('.transcript-text').textContent = textToDisplay;
+            speakerInterim.querySelector('.transcript-timestamp').innerHTML = `
+                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                ${timestamp} <span class="interim-indicator">●</span>
+            `;
         }
     }
     
@@ -2075,11 +2105,7 @@ socket.on('transcription_result', (data) => {
 
 socket.on('final_transcript', (data) => {
     console.log('Final transcript received:', data.text);
-    
-    if (currentInterimSegment) {
-        currentInterimSegment.remove();
-        currentInterimSegment = null;
-    }
+    // Note: We no longer remove interim here since transcription_result handles the conversion
 });
 
 // GRACEFUL DEGRADATION: Handle quota exhaustion with user-friendly message
