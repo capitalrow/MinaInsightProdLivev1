@@ -32,7 +32,6 @@ from services.analysis_service import AnalysisService
 from services.analytics_service import AnalyticsService
 from services.background_tasks import background_task_manager
 from services.event_monitoring import log_dashboard_refresh_event
-from services.ai_insights_service import ai_insights_service
 from app import socketio
 
 logger = logging.getLogger(__name__)
@@ -283,15 +282,6 @@ class PostTranscriptionOrchestrator:
             else:
                 results['events_failed'].append('transcript_refined')
             
-            # Stage 2.5: Generate AI meeting title
-            title_data = self._generate_meeting_title(session, transcript_data)
-            if title_data and title_data.get('title'):
-                results['events_completed'].append('title_generation')
-                results['meeting_title'] = title_data['title']
-            else:
-                # Title generation failure is non-critical - don't mark as failed
-                logger.info(f"Meeting title not generated (non-critical): {title_data}")
-            
             # Stage 3: Generate insights (parallel-capable, but sequential for reliability)
             insights_data = self._generate_insights(session)
             if insights_data:
@@ -494,56 +484,6 @@ class PostTranscriptionOrchestrator:
                     self.event_service.fail_event(event, str(e))
                 except:
                     pass
-            return None
-    
-    def _generate_meeting_title(self, session: Session, transcript_data: Optional[Dict]) -> Optional[Dict[str, Any]]:
-        """
-        Stage 2.5: Generate AI-powered contextual meeting title from transcript.
-        Updates session.title with the generated name.
-        
-        This is a non-critical stage - failures don't block the pipeline.
-        """
-        try:
-            # Get transcript text
-            if not transcript_data or not transcript_data.get('full_text'):
-                logger.info("No transcript data for title generation")
-                return None
-            
-            full_text = transcript_data['full_text']
-            
-            # Generate title using AI
-            title_result = ai_insights_service.generate_meeting_title(full_text)
-            
-            if title_result and title_result.get('title'):
-                new_title = title_result['title'].strip()
-                old_title = session.title
-                
-                # Validate title is substantive (not empty, whitespace, or too short)
-                if not new_title or len(new_title) < 5 or new_title.lower() in ['meeting', 'discussion', 'conversation', 'untitled']:
-                    logger.warning(f"Generated title rejected (not substantive): '{new_title}'")
-                    return None
-                
-                # Update session title in database
-                session.title = new_title
-                db.session.commit()
-                
-                logger.info(f"✅ Meeting title updated: '{old_title}' → '{new_title}'")
-                
-                # Emit WebSocket event for real-time UI update
-                socketio.emit('meeting_title_updated', {
-                    'session_id': session.external_id,
-                    'title': new_title,
-                    'previous_title': old_title,
-                    'timestamp': datetime.utcnow().isoformat()
-                })
-                
-                return title_result
-            else:
-                logger.info(f"Title generation returned no title: {title_result}")
-                return title_result
-                
-        except Exception as e:
-            logger.warning(f"Failed to generate meeting title (non-critical): {e}")
             return None
     
     def _generate_insights(self, session: Session) -> Optional[Dict[str, Any]]:
@@ -1034,15 +974,6 @@ class PostTranscriptionOrchestrator:
                                 final_confidence = base_confidence
                             
                             # Create task only if quality is acceptable
-                            # CROWN⁴.6: Build transcript_span for "Jump to Transcript" and timestamp display
-                            transcript_span = None
-                            if source_segment:
-                                transcript_span = {
-                                    'start_ms': source_segment.get('start_ms', 0),
-                                    'end_ms': source_segment.get('end_ms', 0),
-                                    'segment_ids': [source_segment.get('segment_id')] if source_segment.get('segment_id') else []
-                                }
-                            
                             task = Task(
                                 session_id=session.id,
                                 workspace_id=session.workspace_id,  # CRITICAL: Copy workspace_id from session
@@ -1054,7 +985,6 @@ class PostTranscriptionOrchestrator:
                                 assigned_to_id=assigned_to_id,  # Matched user ID
                                 extracted_by_ai=True,
                                 confidence_score=final_confidence,
-                                transcript_span=transcript_span,  # CROWN⁴.6: Timestamp for task display
                                 extraction_context={
                                     'source': 'ai_insights',
                                     'raw_text': raw_task_text,  # PRESERVE ORIGINAL for validation
@@ -1503,13 +1433,6 @@ class PostTranscriptionOrchestrator:
                     
                     # Create task in database with refinement metadata
                     try:
-                        # CROWN⁴.6: Build transcript_span for timestamp display
-                        transcript_span = {
-                            'start_ms': seg_data.get('start_ms', 0),
-                            'end_ms': seg_data.get('end_ms', 0),
-                            'segment_ids': [segment_id] if segment_id else []
-                        }
-                        
                         task = Task(
                             session_id=session_id,
                             workspace_id=workspace_id,  # CRITICAL: Copy workspace_id from session
@@ -1520,7 +1443,6 @@ class PostTranscriptionOrchestrator:
                             due_date=due_date,  # Parsed due date
                             extracted_by_ai=False,  # Pattern-based extraction
                             confidence_score=pattern_confidence,  # Intelligent confidence scoring
-                            transcript_span=transcript_span,  # CROWN⁴.6: Timestamp for task display
                             extraction_context={
                                 'source': 'pattern',
                                 'raw_text': raw_task_text,  # CRITICAL: Store original for transparency
