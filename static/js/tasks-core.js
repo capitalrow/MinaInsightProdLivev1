@@ -290,10 +290,13 @@
         cards.forEach(card => {
             const title = card.querySelector('.task-title')?.textContent || '';
             const description = card.dataset.description || '';
-            const speaker = card.dataset.speaker || '';
-            const evidenceQuote = card.dataset.transcriptText || '';
-            const meetingTitle = card.dataset.meetingTitle || '';
-            const timestamp = card.dataset.transcriptStart || '';
+            
+            // Provenance data is on the .task-provenance child element
+            const provenanceEl = card.querySelector('.task-provenance');
+            const speaker = provenanceEl?.dataset.speaker || '';
+            const evidenceQuote = provenanceEl?.dataset.transcriptText || '';
+            const meetingTitle = provenanceEl?.dataset.meetingTitle || '';
+            const timestamp = provenanceEl?.dataset.transcriptStart || '';
             
             // Calculate match score
             let score = 0;

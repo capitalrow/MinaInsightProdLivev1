@@ -237,10 +237,16 @@
 
 .search-result-context {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 6px 8px;
+    margin-top: 4px;
     font-size: 12px;
     color: var(--tasks-text-muted);
+}
+
+.search-result-context:empty {
+    display: none;
 }
 
 .search-result-speaker {
@@ -271,7 +277,10 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    margin-top: 2px;
+    font-size: 11px;
     color: var(--tasks-text-muted);
+    opacity: 0.8;
 }
 
 .search-result-meeting svg {
