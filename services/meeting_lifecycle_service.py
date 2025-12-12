@@ -206,6 +206,7 @@ class MeetingLifecycleService:
                 # Build transcript for title generation
                 transcript_text = _build_transcript_for_title(segments)
                 meeting_id_for_bg = meeting.id
+                session_id_for_bg = session_id  # Capture session_id for background task
                 session_title = session.title
                 workspace_id_for_bg = workspace_id
                 
@@ -224,22 +225,28 @@ class MeetingLifecycleService:
                             )
                             if generated_title:
                                 with app.app_context():
+                                    # Update BOTH Meeting and Session titles for consistency
                                     bg_meeting = bg_db.session.get(Meeting, meeting_id_for_bg)
+                                    bg_session = bg_db.session.get(Session, session_id_for_bg)
+                                    
                                     if bg_meeting:
                                         bg_meeting.title = generated_title
-                                        bg_db.session.commit()
-                                        logger.info(f"✅ AI-generated title for meeting {meeting_id_for_bg}: {generated_title}")
+                                    if bg_session:
+                                        bg_session.title = generated_title
+                                    
+                                    bg_db.session.commit()
+                                    logger.info(f"✅ AI-generated title synced to meeting {meeting_id_for_bg} and session {session_id_for_bg}: {generated_title}")
                                         
-                                        # Broadcast title update
-                                        try:
-                                            from services.event_broadcaster import event_broadcaster
-                                            event_broadcaster.broadcast_meeting_updated(
-                                                meeting_id=meeting_id_for_bg,
-                                                changes={'title': generated_title},
-                                                workspace_id=workspace_id_for_bg
-                                            )
-                                        except Exception as be:
-                                            logger.warning(f"Failed to broadcast title update: {be}")
+                                    # Broadcast title update
+                                    try:
+                                        from services.event_broadcaster import event_broadcaster
+                                        event_broadcaster.broadcast_meeting_updated(
+                                            meeting_id=meeting_id_for_bg,
+                                            changes={'title': generated_title},
+                                            workspace_id=workspace_id_for_bg
+                                        )
+                                    except Exception as be:
+                                        logger.warning(f"Failed to broadcast title update: {be}")
                         
                         # Extract tasks
                         result = loop.run_until_complete(
