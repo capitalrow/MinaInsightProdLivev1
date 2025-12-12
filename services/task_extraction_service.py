@@ -24,6 +24,7 @@ class ExtractedTask:
     context: Optional[Dict] = None  # Context from transcript
     assigned_to: Optional[str] = None  # Mentioned assignee
     due_date_text: Optional[str] = None  # Natural language due date
+    task_type: str = "action_item"  # decision, action_item, follow_up, research
 
 
 class TaskExtractionService:
@@ -96,7 +97,7 @@ class TaskExtractionService:
         
         system_prompt = """You are an AI assistant specialized in extracting actionable tasks from meeting transcripts.
         
-        Extract all action items, tasks, and follow-ups mentioned in the meeting. For each task, provide:
+        Extract all action items, tasks, decisions, and follow-ups mentioned in the meeting. For each item, provide:
         1. A clear, concise title
         2. A brief description if available
         3. Priority level (low, medium, high, urgent)
@@ -104,10 +105,15 @@ class TaskExtractionService:
         5. Confidence score (0.0 to 1.0) in your extraction
         6. Any mentioned assignee
         7. Any mentioned due date or timeline
-        8. The exact quote from the transcript where this task was mentioned
+        8. The exact quote from the transcript where this was mentioned
         9. If known, who said it (speaker name)
+        10. Task type classification - IMPORTANT: Classify each item as one of:
+            - "decision": Final conclusions or choices made ("We decided to...", "Let's go with...", "The plan is...")
+            - "action_item": Specific tasks assigned to someone ("You need to...", "Can you...", "I'll handle...")
+            - "follow_up": Items to revisit or continue later ("Let's circle back...", "We'll revisit...", "Next meeting we should...")
+            - "research": Questions to investigate or explore ("We need to find out...", "Look into...", "Research whether...")
         
-        Focus on explicit action items, commitments, and next steps. Avoid including general discussion points.
+        Focus on explicit action items, commitments, decisions, and next steps. Avoid including general discussion points.
         
         Return a JSON array of tasks with this structure:
         {
@@ -118,6 +124,7 @@ class TaskExtractionService:
               "priority": "medium",
               "category": "optional category",
               "confidence": 0.85,
+              "task_type": "action_item",
               "assigned_to": "person name if mentioned",
               "due_date_text": "timeline if mentioned",
               "context": "relevant quote from transcript",
@@ -166,6 +173,11 @@ class TaskExtractionService:
             tasks = []
             
             for task_data in result.get("tasks", []):
+                # Validate task_type
+                raw_task_type = task_data.get("task_type", "action_item").strip().lower()
+                valid_types = ["decision", "action_item", "follow_up", "research"]
+                task_type = raw_task_type if raw_task_type in valid_types else "action_item"
+                
                 task = ExtractedTask(
                     title=task_data.get("title", "").strip(),
                     description=task_data.get("description", "").strip() or None,
@@ -174,6 +186,7 @@ class TaskExtractionService:
                     confidence=float(task_data.get("confidence", 0.5)),
                     assigned_to=task_data.get("assigned_to", "").strip() or None,
                     due_date_text=task_data.get("due_date_text", "").strip() or None,
+                    task_type=task_type,
                     context={
                         "source": "ai",
                         "quote": task_data.get("context", ""),
@@ -210,11 +223,15 @@ class TaskExtractionService:
                         priority = self._determine_priority(line)
                         assignee = self._extract_assignee(line)
                         
+                        # Infer task_type from pattern/keywords
+                        task_type = self._infer_task_type(line)
+                        
                         task = ExtractedTask(
                             title=task_text[:100],  # Limit title length
                             priority=priority,
                             confidence=0.6,  # Lower confidence for pattern matching
                             assigned_to=assignee,
+                            task_type=task_type,
                             context={"source": "pattern", "line": line}
                         )
                         tasks.append(task)
@@ -238,6 +255,40 @@ class TaskExtractionService:
             if match:
                 return match.group(1).strip()
         return None
+
+    def _infer_task_type(self, text: str) -> str:
+        """Infer task type from text using keyword patterns."""
+        text_lower = text.lower()
+        
+        # Decision patterns
+        decision_keywords = [
+            "decided", "agreed", "confirmed", "approved", "finalized",
+            "conclusion", "let's go with", "we'll use", "the plan is",
+            "we're going to", "settled on"
+        ]
+        
+        # Follow-up patterns
+        followup_keywords = [
+            "follow up", "circle back", "revisit", "next meeting",
+            "touch base", "check in", "later", "schedule", "follow-up",
+            "get back to", "reconnect"
+        ]
+        
+        # Research patterns
+        research_keywords = [
+            "research", "investigate", "find out", "look into",
+            "explore", "analyze", "study", "discover", "learn about",
+            "figure out", "understand", "evaluate", "assess"
+        ]
+        
+        if any(kw in text_lower for kw in decision_keywords):
+            return "decision"
+        elif any(kw in text_lower for kw in followup_keywords):
+            return "follow_up"
+        elif any(kw in text_lower for kw in research_keywords):
+            return "research"
+        else:
+            return "action_item"
 
     def _build_transcript(self, segments) -> str:
         """Build a readable transcript from segments."""
@@ -403,6 +454,7 @@ class TaskExtractionService:
                     description=extracted_task.description,
                     priority=extracted_task.priority,
                     category=extracted_task.category,
+                    task_type=extracted_task.task_type,
                     due_date=due_date,
                     assigned_to_id=assigned_to_id,
                     extracted_by_ai=True,
