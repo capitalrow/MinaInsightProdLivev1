@@ -169,7 +169,7 @@
                         <div class="task-content">
                             <!-- Spoken Provenance -->
                             {% set session_external_id = task.session_id or (task.meeting.session.external_id if task.meeting and task.meeting.session else None) %}
-                            {% set provenance_timestamp_ms = task.transcript_span.start_ms if task.transcript_span and task.transcript_span.start_ms else (task.extraction_context.source_segment.start_ms if task.extraction_context and task.extraction_context.source_segment and task.extraction_context.source_segment.start_ms else None) %}
+                            {% set provenance_timestamp_ms = task.transcript_span.start_ms if task.transcript_span and task.transcript_span.start_ms is not none else (task.extraction_context.source_segment.start_ms if task.extraction_context and task.extraction_context.source_segment and task.extraction_context.source_segment.start_ms is not none else None) %}
                             <div class="task-provenance"
                                  data-session-id="{{ session_external_id or '' }}"
                                  data-transcript-start="{{ provenance_timestamp_ms or '' }}"
@@ -180,7 +180,7 @@
                                  data-meeting-title="{{ task.meeting.title if task.meeting else '' }}">
                                 {% if task.meeting %}
                                 {% set transcript_url = url_for('sessions.get_session_refined', session_identifier=session_external_id) if session_external_id else url_for('dashboard.meetings') ~ '#meeting-' ~ task.meeting.id %}
-                                <a href="{{ transcript_url }}{% if provenance_timestamp_ms %}?t={{ provenance_timestamp_ms }}{% endif %}" 
+                                <a href="{{ transcript_url }}{% if provenance_timestamp_ms is not none %}?t={{ provenance_timestamp_ms }}{% endif %}" 
                                    class="provenance-meeting jump-to-transcript" 
                                    title="Jump to transcript moment"
                                    data-meeting-id="{{ task.meeting.id }}"
@@ -200,7 +200,7 @@
                                 </span>
                                 {% endif %}
                                 
-                                {% if provenance_timestamp_ms %}
+                                {% if provenance_timestamp_ms is not none %}
                                 <button class="provenance-timestamp context-trigger" 
                                         title="View transcript context"
                                         data-start-ms="{{ provenance_timestamp_ms }}"
@@ -227,7 +227,7 @@
                                 </svg>
                                 <span class="quote-text">{{ task.extraction_context.evidence_quote|truncate(120) }}</span>
                                 {% if session_external_id %}
-                                <a href="{{ url_for('sessions.get_session_refined', session_identifier=session_external_id) }}{% if provenance_timestamp_ms %}?t={{ provenance_timestamp_ms }}{% endif %}" 
+                                <a href="{{ url_for('sessions.get_session_refined', session_identifier=session_external_id) }}{% if provenance_timestamp_ms is not none %}?t={{ provenance_timestamp_ms }}{% endif %}" 
                                    class="quote-jump" 
                                    title="Jump to transcript">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>

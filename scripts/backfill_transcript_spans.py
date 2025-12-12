@@ -57,41 +57,56 @@ def get_evidence_quote(task: Task) -> str:
 
 
 def find_matching_segment(quote: str, segments) -> tuple:
-    """Find segment(s) matching the quote and return span info."""
+    """Find the BEST matching segment for the quote and return span info.
+    
+    Uses a scoring system to find the most specific match, not just the first match.
+    """
     if not quote or len(quote) < 10:
         return None, None
     
     quote_lower = quote.lower()
-    matched_segments = []
+    quote_words = set(word.lower() for word in quote.split() if len(word) > 3)
+    
+    best_segment = None
+    best_score = 0
     
     for segment in segments:
         if not segment.text:
             continue
         segment_text = segment.text.lower()
         
+        score = 0
+        
+        # Exact substring match - highest score
         if quote_lower in segment_text:
-            matched_segments.append(segment)
-        elif fuzzy_match_quote(quote_lower, segment_text):
-            matched_segments.append(segment)
+            score = 100
+        elif segment_text in quote_lower:
+            score = 90
+        else:
+            # Calculate word overlap score
+            segment_words = set(word.lower() for word in segment_text.split() if len(word) > 3)
+            if quote_words and segment_words:
+                intersection = quote_words.intersection(segment_words)
+                overlap_ratio = len(intersection) / len(quote_words)
+                # Scale 0-1 overlap to 0-80 score
+                score = int(overlap_ratio * 80)
+        
+        # Update best match if this is better
+        if score > best_score:
+            best_score = score
+            best_segment = segment
     
-    if not matched_segments:
+    # Require minimum 50% match (score >= 40)
+    if not best_segment or best_score < 40:
         return None, None
     
-    first_seg = matched_segments[0]
-    last_seg = matched_segments[-1] if len(matched_segments) > 1 else first_seg
-    
-    if last_seg.start_ms and first_seg.start_ms:
-        if (last_seg.start_ms - first_seg.start_ms) > 10000:
-            last_seg = first_seg
-            matched_segments = [first_seg]
-    
     transcript_span = {
-        "start_ms": first_seg.start_ms,
-        "end_ms": last_seg.end_ms,
-        "segment_ids": [seg.id for seg in matched_segments]
+        "start_ms": best_segment.start_ms,
+        "end_ms": best_segment.end_ms,
+        "segment_ids": [best_segment.id]
     }
     
-    speaker = getattr(first_seg, 'speaker', None) or getattr(first_seg, 'speaker_id', None)
+    speaker = getattr(best_segment, 'speaker', None) or getattr(best_segment, 'speaker_id', None)
     
     return transcript_span, speaker
 
