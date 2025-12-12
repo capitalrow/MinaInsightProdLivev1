@@ -2007,6 +2007,9 @@
                 case 'due':
                     key = getDueDateGroup(card.dataset.dueDate);
                     break;
+                case 'type':
+                    key = card.dataset.taskType || 'action_item';
+                    break;
                 default:
                     key = 'all';
             }
@@ -2043,6 +2046,8 @@
                 return ['overdue', 'today', 'this_week', 'later', 'no_date'];
             case 'meeting':
                 return []; // Dynamic based on meetings
+            case 'type':
+                return ['decision', 'action_item', 'follow_up', 'research'];
             default:
                 return [];
         }
@@ -2058,6 +2063,13 @@
                 return { overdue: 'Overdue', today: 'Today', this_week: 'This Week', later: 'Later', no_date: 'No Due Date' };
             case 'meeting':
                 return { manual: 'Manual Tasks' };
+            case 'type':
+                return { 
+                    decision: 'Decisions', 
+                    action_item: 'Action Items', 
+                    follow_up: 'Follow-ups', 
+                    research: 'Research & Questions' 
+                };
             default:
                 return {};
         }
@@ -2090,6 +2102,13 @@
             meeting: {
                 manual: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
                 default: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'
+            },
+            type: {
+                decision: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+                action_item: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+                follow_up: '<svg viewBox="0 0 24 24" width="16" height="16"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
+                research: '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>',
+                default: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>'
             }
         };
         return icons[groupBy] || { default: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' };

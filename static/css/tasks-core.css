@@ -1895,6 +1895,23 @@
     transform: translateY(0);
 }
 
+.group-by-divider {
+    height: 1px;
+    background: var(--tasks-card-border);
+    margin: 6px 0;
+}
+
+.group-by-section-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--tasks-accent);
+    padding: 6px 12px 4px;
+    opacity: 0.8;
+}
+
 .group-by-option {
     display: flex;
     align-items: center;
