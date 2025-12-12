@@ -17,7 +17,7 @@ from app import socketio
 # Import database models for persistence
 from models import db, Session, Segment, Participant
 
-from services.openai_whisper_client import transcribe_bytes, QuotaExhaustedError, is_quota_available, get_api_stats
+from services.openai_whisper_client import transcribe_bytes, transcribe_bytes_with_words, QuotaExhaustedError, is_quota_available, get_api_stats
 from services.speaker_diarization import SpeakerDiarizationEngine, DiarizationConfig
 from services.multi_speaker_diarization import MultiSpeakerDiarization
 
@@ -38,6 +38,9 @@ _CUMULATIVE_TRANSCRIPT: Dict[str, str] = defaultdict(str)  # running transcript 
 _WEBM_HEADERS: Dict[str, bytes] = {}  # First chunk contains WebM header
 _LAST_WINDOW_TRANSCRIPT: Dict[str, str] = {}  # Last transcription result for delta detection
 _DIFFERENTIAL_MODE: Dict[str, bool] = {}  # Track if session is using differential streaming
+
+# TIMESTAMP-BASED STREAMING: Track last emitted word timestamp to avoid duplicates
+_LAST_EMITTED_END_TIME: Dict[str, float] = {}  # Last word end time per session (seconds)
 
 # Speaker diarization state (per session)
 _SPEAKER_ENGINES: Dict[str, SpeakerDiarizationEngine] = {}
@@ -233,6 +236,60 @@ def _extract_text_delta(previous_text: str, new_text: str) -> str:
     return ""
 
 
+def _extract_text_delta_with_timestamps(
+    session_id: str, 
+    words: list, 
+    window_start_time: float = 0.0
+) -> tuple:
+    """
+    Extract only NEW words using timestamp-based filtering.
+    
+    This avoids the fragile text-matching approach by using Whisper's word timestamps.
+    Each word has {word: str, start: float, end: float} in seconds.
+    
+    Args:
+        session_id: Session ID for tracking last emitted timestamp
+        words: List of word dicts with timestamps from Whisper
+        window_start_time: The start time offset of this audio window (seconds)
+    
+    Returns:
+        Tuple of (delta_text, new_last_end_time)
+    """
+    if not words:
+        return "", _LAST_EMITTED_END_TIME.get(session_id, 0.0)
+    
+    last_end = _LAST_EMITTED_END_TIME.get(session_id, 0.0)
+    
+    # Filter words that start after the last emitted word ended
+    # Add window_start_time offset to align with session timeline
+    new_words = []
+    new_last_end = last_end
+    
+    for w in words:
+        word_text = w.get("word", "").strip()
+        word_start = w.get("start", 0.0) + window_start_time
+        word_end = w.get("end", 0.0) + window_start_time
+        
+        if not word_text:
+            continue
+        
+        # Word is new if it starts after our last emitted position
+        # Use small tolerance (0.1s) to handle timing edge cases
+        if word_start >= (last_end - 0.1):
+            new_words.append(word_text)
+            if word_end > new_last_end:
+                new_last_end = word_end
+    
+    delta_text = " ".join(new_words) if new_words else ""
+    
+    if delta_text:
+        logger.info(f"[ts-delta] Extracted {len(new_words)} new words (from {last_end:.2f}s to {new_last_end:.2f}s): '{delta_text[:50]}...'")
+    else:
+        logger.debug(f"[ts-delta] No new words (last_end={last_end:.2f}s, window has {len(words)} words)")
+    
+    return delta_text, new_last_end
+
+
 def _auto_save_transcript(session_id: str, cumulative_text: str, force: bool = False) -> bool:
     """
     Periodically save transcript segments to database to prevent data loss on disconnect.
@@ -411,6 +468,10 @@ def on_join_session(data):
     # TIMESTAMP FIX: Track session start for relative MM:SS timestamps
     _SESSION_START_MS[session_id] = _now_ms()
     
+    # TIMESTAMP-BASED STREAMING: Reset last emitted end time for new session
+    _LAST_EMITTED_END_TIME[session_id] = 0.0
+    _LAST_WINDOW_TRANSCRIPT[session_id] = ""
+    
     # Initialize speaker diarization for this session
     try:
         # Initialize speaker diarization engine
@@ -546,38 +607,64 @@ def on_audio_chunk(data):
         
         logger.info(f"[ws] 💰 Cost-optimized: transcribing {len(audio_to_transcribe)} new bytes (not {len(_BUFFERS[session_id])} total)")
     
-    try:
-        text = transcribe_bytes(audio_to_transcribe, mime_hint=mime_type)
-    except QuotaExhaustedError as e:
-        # GRACEFUL DEGRADATION: Quota exhausted - notify user with friendly message
-        logger.warning(f"[ws] 🚫 Quota exhausted: {e}")
-        stats = get_api_stats()
-        emit("quota_warning", {
-            "message": "Transcription is temporarily paused. Your recording is still being saved.",
-            "retry_in_seconds": int(stats["seconds_until_retry"]),
-            "action": "Your transcript will update when the service resumes.",
-            "session_id": session_id
-        })
-        # Store pending audio for later processing (only for non-accumulated mode)
-        if not is_accumulated:
-            _PENDING_CHUNKS[session_id].extend(audio_to_transcribe)
-        emit("ack", {"ok": True, "quota_paused": True})
-        return
-    except Exception as e:
-        logger.warning(f"[ws] interim transcription error: {e}")
-        emit("socket_error", {"message": "Transcription temporarily unavailable. Recording continues."})
-        # Keep the audio for retry (only for non-accumulated mode)
-        if not is_accumulated:
-            _PENDING_CHUNKS[session_id].extend(audio_to_transcribe)
-        return
+    # TIMESTAMP-BASED DIFFERENTIAL MODE: Use word timestamps for accurate deduplication
+    words = []
+    if is_differential:
+        try:
+            text, words = transcribe_bytes_with_words(audio_to_transcribe, mime_hint=mime_type)
+            logger.info(f"[ws] ⚡ Got {len(words)} words with timestamps for differential mode")
+        except QuotaExhaustedError as e:
+            logger.warning(f"[ws] 🚫 Quota exhausted: {e}")
+            stats = get_api_stats()
+            emit("quota_warning", {
+                "message": "Transcription is temporarily paused. Your recording is still being saved.",
+                "retry_in_seconds": int(stats["seconds_until_retry"]),
+                "action": "Your transcript will update when the service resumes.",
+                "session_id": session_id
+            })
+            emit("ack", {"ok": True, "quota_paused": True})
+            return
+        except Exception as e:
+            logger.warning(f"[ws] interim transcription error: {e}")
+            emit("socket_error", {"message": "Transcription temporarily unavailable. Recording continues."})
+            return
+    else:
+        try:
+            text = transcribe_bytes(audio_to_transcribe, mime_hint=mime_type)
+        except QuotaExhaustedError as e:
+            logger.warning(f"[ws] 🚫 Quota exhausted: {e}")
+            stats = get_api_stats()
+            emit("quota_warning", {
+                "message": "Transcription is temporarily paused. Your recording is still being saved.",
+                "retry_in_seconds": int(stats["seconds_until_retry"]),
+                "action": "Your transcript will update when the service resumes.",
+                "session_id": session_id
+            })
+            if not is_accumulated:
+                _PENDING_CHUNKS[session_id].extend(audio_to_transcribe)
+            emit("ack", {"ok": True, "quota_paused": True})
+            return
+        except Exception as e:
+            logger.warning(f"[ws] interim transcription error: {e}")
+            emit("socket_error", {"message": "Transcription temporarily unavailable. Recording continues."})
+            if not is_accumulated:
+                _PENDING_CHUNKS[session_id].extend(audio_to_transcribe)
+            return
 
     text = (text or "").strip()
     
-    # DIFFERENTIAL MODE: Extract only NEW text using delta detection
+    # DIFFERENTIAL MODE: Use timestamp-based word alignment for accurate delta extraction
     delta_text = text
     if is_differential and text:
-        previous_text = _LAST_WINDOW_TRANSCRIPT.get(session_id, "")
-        delta_text = _extract_text_delta(previous_text, text)
+        if words:
+            # USE TIMESTAMP-BASED DELTA: Much more accurate than fuzzy text matching
+            delta_text, new_last_end = _extract_text_delta_with_timestamps(session_id, words, 0.0)
+            _LAST_EMITTED_END_TIME[session_id] = new_last_end
+        else:
+            # Fallback to fuzzy matching if no words (shouldn't happen with OpenAI)
+            previous_text = _LAST_WINDOW_TRANSCRIPT.get(session_id, "")
+            delta_text = _extract_text_delta(previous_text, text)
+        
         _LAST_WINDOW_TRANSCRIPT[session_id] = text
         
         if delta_text:

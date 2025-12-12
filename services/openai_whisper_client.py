@@ -255,3 +255,80 @@ def transcribe_bytes(
             wait_time = retry_backoff * (2 ** (attempt - 1))
             logger.warning(f"⚠️ API error, waiting {wait_time:.1f}s before retry {attempt}/{max_retries}: {error_msg}")
             time.sleep(wait_time)
+
+
+def transcribe_bytes_with_words(
+    audio_bytes: bytes,
+    mime_hint: Optional[str] = None,
+    language: Optional[str] = None,
+    model: Optional[str] = None,
+) -> Tuple[str, list]:
+    """
+    Transcribe audio and return text with word-level timestamps.
+    
+    Uses Whisper's verbose_json response format with word timestamp granularity
+    to get precise timing for each word. This enables timestamp-based deduplication
+    instead of fragile text matching.
+    
+    Returns:
+        Tuple of (text, words) where words is a list of dicts:
+        [{"word": str, "start": float, "end": float}, ...]
+    """
+    global _API_CALL_COUNT, _LAST_QUOTA_ERROR_TIME
+    
+    if not audio_bytes:
+        return "", []
+    
+    if not is_quota_available():
+        logger.warning("⏸️ Skipping transcription - quota exhausted, backing off")
+        raise QuotaExhaustedError("API quota temporarily exhausted. Retrying in 60 seconds.")
+    
+    client = _client()
+    model = model or os.getenv("WHISPER_MODEL", "whisper-1")
+    filename, mime = _filename_and_mime(mime_hint)
+    
+    try:
+        _API_CALL_COUNT += 1
+        logger.debug(f"📤 API call #{_API_CALL_COUNT}: transcribing {len(audio_bytes)} bytes with word timestamps")
+        
+        create_kwargs = {
+            "file": (filename, io.BytesIO(audio_bytes), mime),
+            "model": model,
+            "response_format": "verbose_json",
+            "timestamp_granularities": ["word"],
+        }
+        lang = language or os.getenv("LANGUAGE_HINT")
+        if lang:
+            create_kwargs["language"] = lang
+        
+        resp = client.audio.transcriptions.create(**create_kwargs)
+        
+        text = (getattr(resp, "text", "") or "").strip()
+        raw_words = getattr(resp, "words", []) or []
+        
+        words = []
+        for w in raw_words:
+            words.append({
+                "word": getattr(w, "word", "") or "",
+                "start": getattr(w, "start", 0.0) or 0.0,
+                "end": getattr(w, "end", 0.0) or 0.0
+            })
+        
+        logger.debug(f"✅ Got {len(words)} words with timestamps from Whisper")
+        return text, words
+        
+    except RateLimitError as e:
+        _LAST_QUOTA_ERROR_TIME = time.time()
+        error_msg = str(e)
+        if "quota" in error_msg.lower() or "rate" in error_msg.lower():
+            logger.error(f"🚫 Quota exhausted: {error_msg}")
+            raise QuotaExhaustedError(f"API quota exhausted. Will retry in {_QUOTA_BACKOFF_SECONDS} seconds.")
+        raise
+        
+    except OpenAIError as e:
+        error_msg = str(e)
+        if "insufficient_quota" in error_msg.lower() or "quota" in error_msg.lower():
+            _LAST_QUOTA_ERROR_TIME = time.time()
+            raise QuotaExhaustedError("API quota exhausted. Please check your OpenAI billing.")
+        logger.error(f"❌ Whisper API error: {error_msg}")
+        raise
