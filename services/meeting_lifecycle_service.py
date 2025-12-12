@@ -240,9 +240,9 @@ class MeetingLifecycleService:
                                     # Broadcast title update
                                     try:
                                         from services.event_broadcaster import event_broadcaster
-                                        event_broadcaster.broadcast_meeting_updated(
+                                        event_broadcaster.broadcast_meeting_update(
                                             meeting_id=meeting_id_for_bg,
-                                            changes={'title': generated_title},
+                                            meeting_data={'title': generated_title},
                                             workspace_id=workspace_id_for_bg
                                         )
                                     except Exception as be:
