@@ -96,9 +96,14 @@ async def backfill_meeting_titles(dry_run: bool = True, limit: int = None):
                 print(f"  ✅ New title: {new_title}")
                 
                 if not dry_run:
+                    # Update BOTH Meeting and Session titles for consistency
                     meeting.title = new_title
+                    if meeting.session:
+                        meeting.session.title = new_title
+                        print(f"  💾 Saved to Meeting and Session")
+                    else:
+                        print(f"  💾 Saved to Meeting (no linked session)")
                     db.session.commit()
-                    print(f"  💾 Saved to database")
                 else:
                     print(f"  (dry run - not saved)")
                 
