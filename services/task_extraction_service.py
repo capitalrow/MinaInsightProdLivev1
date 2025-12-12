@@ -178,6 +178,10 @@ class TaskExtractionService:
                 valid_types = ["decision", "action_item", "follow_up", "research"]
                 task_type = raw_task_type if raw_task_type in valid_types else "action_item"
                 
+                # Extract speaker and quote from AI response
+                speaker = task_data.get("speaker", "").strip() or None
+                evidence_quote = task_data.get("context", "").strip() or None
+                
                 task = ExtractedTask(
                     title=task_data.get("title", "").strip(),
                     description=task_data.get("description", "").strip() or None,
@@ -189,8 +193,10 @@ class TaskExtractionService:
                     task_type=task_type,
                     context={
                         "source": "ai",
-                        "quote": task_data.get("context", ""),
-                        "speaker": task_data.get("speaker", "").strip() or None
+                        "quote": evidence_quote,  # For segment matching
+                        "evidence_quote": evidence_quote,  # For template display
+                        "speaker": speaker,
+                        "refined_text": task_data.get("title", "").strip()  # AI-refined version
                     }
                 )
                 
