@@ -8,12 +8,12 @@ class VADProcessorAdvanced {
     constructor(options = {}) {
         this.config = {
             sampleRate: options.sampleRate || 16000,
-            vadSensitivity: options.vadSensitivity || 0.5,
-            minSpeechDuration: options.minSpeechDuration || 200, // ms - 🔥 OPTIMIZED: Faster speech detection
-            minSilenceDuration: options.minSilenceDuration || 300, // ms - 🔥 OPTIMIZED: Quicker silence detection
-            energyThreshold: options.energyThreshold || 0.01,
+            vadSensitivity: options.vadSensitivity || 0.3, // LOWERED from 0.5 for better sensitivity
+            minSpeechDuration: options.minSpeechDuration || 150, // ms - REDUCED for faster speech detection
+            minSilenceDuration: options.minSilenceDuration || 500, // ms - INCREASED for natural pauses
+            energyThreshold: options.energyThreshold || 0.003, // LOWERED from 0.01 for better sensitivity
             zeroCrossingThreshold: options.zeroCrossingThreshold || 10,
-            noiseGateThreshold: options.noiseGateThreshold || 0.005,
+            noiseGateThreshold: options.noiseGateThreshold || 0.001, // LOWERED from 0.005 for softer speech
             bufferSize: options.bufferSize || 4096,
             chunkDuration: options.chunkDuration || 500, // ms - 🔥 OPTIMIZED: Reduced for Google Recorder responsiveness
             enableNoiseReduction: options.enableNoiseReduction !== false,
