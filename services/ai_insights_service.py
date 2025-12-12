@@ -460,6 +460,72 @@ Return as JSON array with ALL tasks found:
         }
     
     # ============================================
+    # Meeting Title Generation
+    # ============================================
+    
+    def generate_meeting_title(self, transcript: str, max_length: int = 60) -> Dict[str, Any]:
+        """
+        Generate a contextual, descriptive meeting title from transcript content.
+        
+        Args:
+            transcript: The meeting transcript text
+            max_length: Maximum length for the title (default 60 chars)
+            
+        Returns:
+            Dict with 'title' and metadata
+        """
+        if not self.is_available():
+            return {"title": None, "fallback": True, "error": "AI not available"}
+        
+        if not transcript or len(transcript.strip()) < 20:
+            return {"title": None, "fallback": True, "error": "Transcript too short"}
+        
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """You are an expert at creating concise, descriptive meeting titles.
+Generate a short, contextual title that captures the main topic or purpose of the meeting.
+
+RULES:
+- Maximum 60 characters
+- Be specific and descriptive (e.g., "Q4 Budget Review with Finance Team")
+- Include key topics, people mentioned, or action focus
+- Avoid generic titles like "Meeting" or "Discussion"
+- Use title case
+- No quotes or special characters"""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Generate a concise meeting title for this transcript:\n\n{transcript[:3000]}\n\nRespond with ONLY the title, nothing else."
+                    }
+                ],
+                temperature=0.3,
+                max_tokens=30
+            )
+            
+            title = response.choices[0].message.content.strip()
+            # Clean up: remove quotes if AI added them
+            title = title.strip('"\'')
+            # Enforce max length
+            if len(title) > max_length:
+                title = title[:max_length-3] + "..."
+            
+            logger.info(f"✅ Generated meeting title: '{title}'")
+            return {
+                "title": title,
+                "fallback": False,
+                "model": "gpt-4o-mini",
+                "generated_at": datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to generate meeting title: {e}")
+            return {"title": None, "fallback": True, "error": str(e)}
+    
+    # ============================================
     # Cost Optimization (T2.20)
     # ============================================
     
