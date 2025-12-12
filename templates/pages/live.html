@@ -2343,13 +2343,15 @@ recordButton.addEventListener('click', async () => {
                     // Send any remaining audio and finalize
                     fullBlob.arrayBuffer().then((buf) => {
                         const audioArray = Array.from(new Uint8Array(buf));
+                        const recordingDurationMs = Date.now() - startTime;
                         socket.emit('finalize_session', {
                             session_id: String(sessionId),
                             audio_data: audioArray,
                             settings: { mimeType: mimeType },
-                            streaming_mode: true
+                            streaming_mode: true,
+                            recording_duration_ms: recordingDurationMs
                         });
-                        console.log('📤 Session finalized');
+                        console.log(`📤 Session finalized (${recordingDurationMs}ms)`);
                     });
                 } else {
                     // FINAL-ONLY MODE: Send full audio now
@@ -2369,12 +2371,14 @@ recordButton.addEventListener('click', async () => {
                     
                     fullBlob.arrayBuffer().then((buf) => {
                         const audioArray = Array.from(new Uint8Array(buf));
+                        const recordingDurationMs = Date.now() - startTime;
                         socket.emit('finalize_session', {
                             session_id: String(sessionId),
                             audio_data: audioArray,
-                            settings: { mimeType: mimeType }
+                            settings: { mimeType: mimeType },
+                            recording_duration_ms: recordingDurationMs
                         });
-                        console.log('📤 Full audio sent for transcription');
+                        console.log(`📤 Full audio sent for transcription (${recordingDurationMs}ms)`);
                     });
                 }
             };

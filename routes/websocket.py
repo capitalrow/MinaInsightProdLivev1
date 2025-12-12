@@ -667,6 +667,87 @@ def on_audio_chunk(data):
 
     emit("ack", {"ok": True})
 
+def _split_text_with_timestamps(final_text: str, interim_segments: list, total_duration_ms: int) -> list:
+    """
+    Split final transcript text into segments with timestamps based on interim segment data.
+    
+    Uses word-level alignment to map the refined final text back to the original
+    interim segment timestamps.
+    
+    Args:
+        final_text: The refined final transcript text
+        interim_segments: List of interim segments with text, start_ms, end_ms
+        total_duration_ms: Total recording duration in milliseconds
+    
+    Returns:
+        List of dicts with {text, start_ms, end_ms} for each segment
+    """
+    if not interim_segments or not final_text:
+        return [{"text": final_text, "start_ms": 0, "end_ms": total_duration_ms}]
+    
+    # Sort interim segments by end_ms (they accumulate text)
+    sorted_interims = sorted(interim_segments, key=lambda s: s.get("end_ms", 0))
+    
+    if len(sorted_interims) == 1:
+        # Only one interim segment - use its timestamps
+        return [{
+            "text": final_text,
+            "start_ms": 0,
+            "end_ms": sorted_interims[0].get("end_ms", total_duration_ms)
+        }]
+    
+    # For multiple interims, calculate text growth between segments
+    # Each interim has cumulative text, so we need to find the delta
+    result_segments = []
+    final_words = final_text.split()
+    total_final_words = len(final_words)
+    
+    if total_final_words == 0:
+        return [{"text": final_text, "start_ms": 0, "end_ms": total_duration_ms}]
+    
+    # Calculate word counts per interim segment
+    interim_word_counts = []
+    for seg in sorted_interims:
+        word_count = len((seg.get("text") or "").split())
+        interim_word_counts.append({
+            "word_count": word_count,
+            "end_ms": seg.get("end_ms", 0)
+        })
+    
+    # Map final words to timestamps based on interim word distribution
+    prev_word_idx = 0
+    prev_end_ms = 0
+    
+    for i, interim in enumerate(interim_word_counts):
+        # Calculate proportional word allocation for this segment
+        if i == len(interim_word_counts) - 1:
+            # Last segment gets remaining words
+            segment_words = final_words[prev_word_idx:]
+            end_ms = total_duration_ms
+        else:
+            # Proportional allocation based on interim word count growth
+            interim_ratio = interim["word_count"] / max(1, interim_word_counts[-1]["word_count"])
+            target_word_idx = int(interim_ratio * total_final_words)
+            target_word_idx = max(prev_word_idx + 1, min(target_word_idx, total_final_words))
+            segment_words = final_words[prev_word_idx:target_word_idx]
+            end_ms = interim["end_ms"]
+        
+        if segment_words:
+            result_segments.append({
+                "text": " ".join(segment_words),
+                "start_ms": prev_end_ms,
+                "end_ms": end_ms
+            })
+            prev_word_idx += len(segment_words)
+            prev_end_ms = end_ms
+    
+    # If no segments created, return single segment
+    if not result_segments:
+        return [{"text": final_text, "start_ms": 0, "end_ms": total_duration_ms}]
+    
+    return result_segments
+
+
 @socketio.on("finalize_session")
 def on_finalize(data):
     session_id = (data or {}).get("session_id")
@@ -677,6 +758,9 @@ def on_finalize(data):
     # Get settings from frontend
     settings = (data or {}).get("settings", {})
     mime_type = settings.get("mimeType", "audio/webm")
+    
+    # Get actual recording duration from frontend (accurate, not estimated from bytes)
+    recording_duration_ms = (data or {}).get("recording_duration_ms")
     
     # FINAL-ONLY MODE: Get audio from the finalize event (sent as complete blob)
     audio_data = (data or {}).get("audio_data")
@@ -710,11 +794,25 @@ def on_finalize(data):
 
     final_text = (final_text or "").strip()
     
-    # Save final segment to database
+    # Save final segment(s) to database
     try:
         session = db.session.query(Session).filter_by(external_id=session_id).first()
         if session and final_text:
-            # AUTO-SAVE CLEANUP: Delete any interim segments now that we have final
+            # TIMESTAMP PRESERVATION: Extract interim segment timestamps before deletion
+            interim_segments = db.session.query(Segment).filter_by(
+                session_id=session.id,
+                kind="interim"
+            ).order_by(Segment.end_ms.asc()).all()
+            
+            # Convert to list of dicts for processing
+            interim_data = [
+                {"text": seg.text, "start_ms": seg.start_ms or 0, "end_ms": seg.end_ms or 0}
+                for seg in interim_segments
+            ]
+            
+            logger.info(f"📊 [finalize] Extracted {len(interim_data)} interim segment timestamps for preservation")
+            
+            # Now delete the interim segments
             deleted_count = db.session.query(Segment).filter_by(
                 session_id=session.id,
                 kind="interim"
@@ -722,29 +820,39 @@ def on_finalize(data):
             if deleted_count > 0:
                 logger.info(f"🗑️ [finalize] Deleted {deleted_count} interim segment(s) for session {session_id}")
             
-            # Calculate proper timestamps from session start
+            # Calculate session duration - prefer frontend-provided duration (accurate)
             session_start = _SESSION_START_MS.get(session_id, _now_ms())
-            session_duration_ms = int(_now_ms() - session_start)
-            audio_duration_ms = int(len(full_audio) / 16000 * 1000)
+            server_duration_ms = int(_now_ms() - session_start)
             
-            segment = Segment(
-                session_id=session.id,
-                text=final_text,
-                kind="final",
-                start_ms=max(0, session_duration_ms - audio_duration_ms),  # Start of final audio relative to session
-                end_ms=session_duration_ms,  # End relative to session start
-                avg_confidence=0.9
+            # Use frontend duration if provided, otherwise use server-calculated
+            total_duration_ms = recording_duration_ms if recording_duration_ms else server_duration_ms
+            logger.info(f"⏱️ [finalize] Duration: {total_duration_ms}ms (frontend: {recording_duration_ms}, server: {server_duration_ms})")
+            
+            # Split final text into multiple segments with preserved timestamps
+            timestamped_segments = _split_text_with_timestamps(
+                final_text, interim_data, total_duration_ms
             )
-            db.session.add(segment)
+            
+            # Create final segments with proper timestamps
+            for seg_data in timestamped_segments:
+                segment = Segment(
+                    session_id=session.id,
+                    text=seg_data["text"],
+                    kind="final",
+                    start_ms=seg_data["start_ms"],
+                    end_ms=seg_data["end_ms"],
+                    avg_confidence=0.9
+                )
+                db.session.add(segment)
             
             # Update session status
             session.status = "completed"
             session.completed_at = datetime.utcnow()
-            session.total_segments = 1
-            session.total_duration = len(full_audio) / 16000
+            session.total_segments = len(timestamped_segments)
+            session.total_duration = total_duration_ms / 1000.0  # Convert to seconds
             
             db.session.commit()
-            logger.info(f"[ws] Saved final segment to DB for session: {session_id}")
+            logger.info(f"[ws] Saved {len(timestamped_segments)} final segment(s) to DB for session: {session_id}")
             
             # 🚀 CROWN+ Event Sequencing: Trigger post-transcription pipeline
             try:
