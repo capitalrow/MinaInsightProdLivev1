@@ -10,6 +10,7 @@ from sqlalchemy import desc, func, and_, or_
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta, date
 from services.event_broadcaster import event_broadcaster
+from services.subscription_service import SubscriptionService
 import logging
 
 try:
@@ -380,6 +381,9 @@ def tasks():
     
     logging.info(f"[CROWN⁴.13] SSR filter={current_filter}, rendering {len(filtered_tasks)}/{len(all_tasks)} tasks (minimal JSON)")
     
+    # Check if user has live transcription (Business tier) for timestamp display
+    has_live_transcription = SubscriptionService.has_live_transcription(current_user.id)
+    
     from datetime import date as date_class
     return render_template('dashboard/tasks.html',
                          tasks=filtered_tasks,  # CROWN⁴.18: Only filtered tasks for SSR
@@ -392,7 +396,8 @@ def tasks():
                          active_count=active_count,
                          archived_count=archived_count,
                          total_count=total_count,
-                         today_date=date_class.today())
+                         today_date=date_class.today(),
+                         has_live_transcription=has_live_transcription)
 
 
 @dashboard_bp.route('/tasks/<int:task_id>')
