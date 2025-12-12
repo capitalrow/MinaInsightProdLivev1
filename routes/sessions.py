@@ -9,6 +9,7 @@ from flask_login import current_user, login_required
 from app import db
 from services.session_service import SessionService
 from services.export_service import ExportService
+from services.subscription_service import SubscriptionService
 
 logger = logging.getLogger(__name__)
 
@@ -367,6 +368,11 @@ def get_session_refined(session_identifier):
     except Exception as e:
         logger.warning(f"Failed to get event timeline: {e}")
     
+    # Check if user has live transcription (Business tier) for timestamp display
+    has_live_transcription = False
+    if current_user.is_authenticated:
+        has_live_transcription = SubscriptionService.has_live_transcription(current_user.id)
+    
     # Render refined template with all data
     return render_template(
         'session_refined.html',
@@ -378,7 +384,8 @@ def get_session_refined(session_identifier):
         event_timeline=event_timeline,
         insights_pending=insights_pending,
         segments_source=segments_source,
-        jump_to_timestamp=jump_to_timestamp
+        jump_to_timestamp=jump_to_timestamp,
+        has_live_transcription=has_live_transcription
     )
 
 
