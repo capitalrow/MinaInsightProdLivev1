@@ -11,7 +11,7 @@ class StreamingAudioClient {
             channels: 1,
             chunkDurationMs: 300,  // 300ms chunks for optimal latency
             overlapMs: 50,         // 50ms overlap for better transcription
-            vadThreshold: 0.01,    // Voice Activity Detection threshold
+            vadThreshold: 0.003,   // Voice Activity Detection threshold - LOWERED for better sensitivity
             maxRetries: 3,
             retryDelayMs: 1000,
             ...options

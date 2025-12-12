@@ -6,10 +6,10 @@
 class VADOptimization {
     constructor() {
         this.isEnabled = true;
-        this.silenceThreshold = 0.01; // RMS threshold for silence
-        this.speechThreshold = 0.03;  // RMS threshold for speech
-        this.minSpeechDuration = 300; // Minimum speech duration (ms)
-        this.maxSilenceDuration = 1500; // Maximum silence before chunk ends (ms)
+        this.silenceThreshold = 0.002; // RMS threshold for silence - LOWERED for better sensitivity
+        this.speechThreshold = 0.005;  // RMS threshold for speech - LOWERED for better sensitivity
+        this.minSpeechDuration = 200; // Minimum speech duration (ms) - REDUCED for faster detection
+        this.maxSilenceDuration = 2000; // Maximum silence before chunk ends (ms) - INCREASED for natural pauses
         
         this.speechStartTime = null;
         this.lastSpeechTime = null;
