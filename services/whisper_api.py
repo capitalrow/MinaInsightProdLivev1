@@ -53,6 +53,93 @@ def _transcribe_openai(audio_bytes: bytes, mime_type: str) -> str:
     )
     return (getattr(resp, "text", "") or "").strip()
 
+
+def _transcribe_openai_with_words(audio_bytes: bytes, mime_type: str) -> Tuple[str, list]:
+    """
+    Internal OpenAI transcription call with word-level timestamps.
+    
+    Returns:
+        Tuple of (text, words) where words is a list of dicts:
+        [{"word": str, "start": float, "end": float}, ...]
+    """
+    client = _client_ok()
+    if not client:
+        return "", []
+    ext = _ext_from_mime(mime_type)
+    fname = f"chunk.{ext}"
+    fileobj = io.BytesIO(audio_bytes)
+    fileobj.name = fname
+    
+    try:
+        resp = client.audio.transcriptions.create(
+            model=_MODEL,
+            file=(fname, fileobj, mime_type or "application/octet-stream"),
+            response_format="verbose_json",
+            timestamp_granularities=["word"]
+        )
+        
+        text = (getattr(resp, "text", "") or "").strip()
+        words = getattr(resp, "words", []) or []
+        
+        # Convert to list of dicts with word, start, end
+        word_list = []
+        for w in words:
+            word_list.append({
+                "word": getattr(w, "word", "") or "",
+                "start": getattr(w, "start", 0.0) or 0.0,
+                "end": getattr(w, "end", 0.0) or 0.0
+            })
+        
+        logger.debug(f"Whisper returned {len(word_list)} words with timestamps")
+        return text, word_list
+        
+    except Exception as e:
+        logger.error(f"Error getting word timestamps: {e}")
+        # Fallback to regular transcription without timestamps
+        text = _transcribe_openai(audio_bytes, mime_type)
+        return text, []
+
+
+def transcribe_bytes_with_words(audio_bytes: bytes, mime_type: str) -> Tuple[str, list]:
+    """
+    Returns text and word-level timestamps from OpenAI Whisper.
+    Falls back to local Whisper if OpenAI fails (without word timestamps).
+    
+    Returns:
+        Tuple of (text, words) where words is a list of dicts:
+        [{"word": str, "start": float, "end": float}, ...]
+    """
+    global _fallback_stats
+    
+    client = _client_ok()
+    
+    if client:
+        _fallback_stats['openai_calls'] += 1
+        try:
+            text, words = _transcribe_openai_with_words(audio_bytes, mime_type)
+            if text:
+                _fallback_stats['openai_successes'] += 1
+                return text, words
+            else:
+                logger.warning("OpenAI returned empty transcription with words, trying fallback")
+        except (APIError, RateLimitError, APIConnectionError) as e:
+            logger.warning(f"OpenAI Whisper API error: {e}")
+            _fallback_stats['openai_failures'] += 1
+        except Exception as e:
+            logger.error(f"Unexpected OpenAI error: {e}")
+            _fallback_stats['openai_failures'] += 1
+    
+    # Fallback to local (without word timestamps)
+    if _USE_LOCAL_FALLBACK:
+        _fallback_stats['fallback_calls'] += 1
+        text, success = _transcribe_local(audio_bytes, mime_type)
+        if success:
+            _fallback_stats['fallback_successes'] += 1
+            logger.info("Used local Whisper fallback (no word timestamps)")
+            return text, []
+    
+    return "", []
+
 def _transcribe_local(audio_bytes: bytes, mime_type: str) -> Tuple[str, bool]:
     """
     Fallback to local Whisper transcription.
