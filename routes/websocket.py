@@ -280,23 +280,24 @@ def _auto_save_transcript(session_id: str, cumulative_text: str, force: bool = F
         relative_last_save = int(_LAST_AUTO_SAVE_AT.get(session_id, now) - session_start)
         
         if existing_interim:
-            # Update existing interim segment
+            # Update existing interim segment with consistent relative timestamps
             existing_interim.text = cumulative_text
-            existing_interim.end_ms = relative_now
+            existing_interim.start_ms = 0  # Interim always starts from beginning
+            existing_interim.end_ms = relative_now  # Relative to session start
             existing_interim.avg_confidence = 0.75
-            logger.info(f"💾 [auto-save] Updated interim segment for session {session_id} ({len(cumulative_text)} chars)")
+            logger.info(f"💾 [auto-save] Updated interim segment for session {session_id} ({len(cumulative_text)} chars, 0-{relative_now}ms)")
         else:
-            # Create new interim segment
+            # Create new interim segment - always starts from 0 (beginning of recording)
             segment = Segment(
                 session_id=session.id,
                 text=cumulative_text,
                 kind="interim",
-                start_ms=max(0, relative_last_save),  # Relative to session start
+                start_ms=0,  # Interim always starts from beginning
                 end_ms=relative_now,  # Relative to session start
                 avg_confidence=0.75
             )
             db.session.add(segment)
-            logger.info(f"💾 [auto-save] Created interim segment for session {session_id} ({len(cumulative_text)} chars)")
+            logger.info(f"💾 [auto-save] Created interim segment for session {session_id} ({len(cumulative_text)} chars, 0-{relative_now}ms)")
         
         db.session.commit()
         
