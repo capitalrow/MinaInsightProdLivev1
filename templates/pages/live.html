@@ -2192,12 +2192,10 @@ recordButton.addEventListener('click', async () => {
             const source = audioContext.createMediaStreamSource(stream);
             source.connect(analyser);
             
-            // VAD configuration - LOWERED threshold for mobile mic compatibility
-            const VAD_THRESHOLD = 0.003;  // RMS threshold for voice activity (lowered from 0.015 for mobile)
-            const VAD_HYSTERESIS_MS = 2000;  // Continue sending for 2s after last voice
-            const MAX_SILENT_CHUNKS = 4;  // Force send after this many silent chunks (fallback)
+            // VAD configuration
+            const VAD_THRESHOLD = 0.015;  // RMS threshold for voice activity
+            const VAD_HYSTERESIS_MS = 1000;  // Continue sending for 1s after last voice
             let silentChunksSkipped = 0;
-            let consecutiveSilentChunks = 0;  // Track consecutive silent chunks for fallback
             let voiceChunksProcessed = 0;
             let voiceDetectedInChunk = false;  // Track if voice was detected in current chunk
             let lastVoiceTime = 0;  // Time of last voice detection
@@ -2219,32 +2217,18 @@ recordButton.addEventListener('click', async () => {
                     if (rms > VAD_THRESHOLD) {
                         voiceDetectedInChunk = true;
                         lastVoiceTime = Date.now();
-                        consecutiveSilentChunks = 0;  // Reset silent streak
                     }
                 }, 100);  // Check every 100ms
             }
             
-            // Check if we should send this chunk (voice detected OR within hysteresis window OR fallback)
+            // Check if we should send this chunk (voice detected OR within hysteresis window)
             function shouldSendChunk() {
                 const now = Date.now();
                 const inHysteresisWindow = (now - lastVoiceTime) < VAD_HYSTERESIS_MS;
-                
-                // MOBILE FIX: Force send periodically even if VAD doesn't detect voice
-                // This handles cases where mobile mic sensitivity causes false negatives
-                const forcePeriodicSend = consecutiveSilentChunks >= MAX_SILENT_CHUNKS;
-                
-                const shouldSend = voiceDetectedInChunk || inHysteresisWindow || forcePeriodicSend;
+                const shouldSend = voiceDetectedInChunk || inHysteresisWindow;
                 
                 // Reset for next chunk
-                if (!voiceDetectedInChunk && !inHysteresisWindow) {
-                    consecutiveSilentChunks++;
-                }
                 voiceDetectedInChunk = false;
-                
-                if (forcePeriodicSend) {
-                    consecutiveSilentChunks = 0;  // Reset after forced send
-                    console.log('📤 Force-sending chunk (VAD fallback for mobile compatibility)');
-                }
                 
                 return shouldSend;
             }
@@ -2290,24 +2274,34 @@ recordButton.addEventListener('click', async () => {
                 voiceChunksProcessed++;
                 
                 if (useStreamingMode) {
-                    // ACCUMULATED STREAMING MODE: Send all audio each time for accurate transcription
+                    // DIFFERENTIAL STREAMING MODE: Use sliding window for consistent <2s latency
                     if (shouldSendChunk()) {
                         showListeningIndicator(false);
                         
-                        // Send ALL accumulated chunks - this produces coherent audio for Whisper
-                        const fullBlob = new Blob(chunks, { type: mimeType });
-                        fullBlob.arrayBuffer().then((buf) => {
+                        // Create sliding window: first chunk (header) + last N chunks
+                        let windowChunks;
+                        if (chunks.length <= SLIDING_WINDOW_CHUNKS) {
+                            // Not enough chunks yet, use all
+                            windowChunks = chunks;
+                        } else {
+                            // Sliding window: always include first chunk (WebM header) + last N-1 chunks
+                            windowChunks = [chunks[0], ...chunks.slice(-(SLIDING_WINDOW_CHUNKS - 1))];
+                        }
+                        
+                        const windowBlob = new Blob(windowChunks, { type: mimeType });
+                        windowBlob.arrayBuffer().then((buf) => {
                             const audioArray = Array.from(new Uint8Array(buf));
                             socket.emit('audio_chunk', {
                                 session_id: String(sessionId),
                                 audio_data: audioArray,
                                 chunk_index: voiceChunksProcessed,
                                 total_chunks: chunks.length,
+                                window_size: windowChunks.length,
                                 timestamp: Date.now(),
-                                is_accumulated: true,  // Full accumulated audio mode
+                                is_differential: true,  // Flag for differential streaming
                                 settings: { mimeType: mimeType }
                             });
-                            console.log(`📤 Streaming: ${fullBlob.size/1024|0}KB (${chunks.length} chunks total)`);
+                            console.log(`⚡ Differential: window ${windowBlob.size/1024|0}KB (${windowChunks.length}/${chunks.length} chunks)`);
                         });
                     } else {
                         showListeningIndicator(true);

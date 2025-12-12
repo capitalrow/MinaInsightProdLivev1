@@ -47,7 +47,7 @@ _SESSION_SPEAKERS: Dict[str, Dict[str, Dict]] = defaultdict(dict)  # session_id 
 # AUTO-SAVE: Track last save timestamps and saved content to prevent data loss on disconnect
 _LAST_AUTO_SAVE_AT: Dict[str, float] = {}  # Last auto-save timestamp per session (ms)
 _LAST_SAVED_TRANSCRIPT: Dict[str, str] = {}  # Last saved transcript content per session
-_AUTO_SAVE_INTERVAL_MS = 10000.0  # Auto-save every 10 seconds for better segment granularity
+_AUTO_SAVE_INTERVAL_MS = 30000.0  # Auto-save every 30 seconds of recording
 
 # TIMESTAMP FIX: Track when each session started to calculate relative offsets (MM:SS format)
 _SESSION_START_MS: Dict[str, float] = {}  # Recording start time per session (ms epoch)
