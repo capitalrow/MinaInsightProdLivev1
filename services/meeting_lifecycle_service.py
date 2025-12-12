@@ -20,6 +20,16 @@ from models.participant import Participant
 
 logger = logging.getLogger(__name__)
 
+def _build_transcript_for_title(segments) -> str:
+    """Build transcript text from segments for title generation."""
+    if not segments:
+        return ""
+    final_segments = [s for s in segments if s.kind == 'final' and s.text]
+    if not final_segments:
+        final_segments = [s for s in segments if s.text]
+    sorted_segments = sorted(final_segments, key=lambda s: s.start_ms or 0)
+    return " ".join(s.text.strip() for s in sorted_segments[:50] if s.text)
+
 
 @dataclass
 class ParticipantMetrics:
@@ -187,28 +197,62 @@ class MeetingLifecycleService:
             except Exception as e:
                 logger.warning(f"Failed to broadcast session_created event: {e}")
             
-            # Trigger async task extraction using existing service
+            # Trigger async title generation + task extraction using existing services
             try:
                 from app import socketio
                 from services.task_extraction_service import task_extraction_service
+                from services.meeting_title_generator import get_title_generator
+                
+                # Build transcript for title generation
+                transcript_text = _build_transcript_for_title(segments)
+                meeting_id_for_bg = meeting.id
+                session_title = session.title
+                workspace_id_for_bg = workspace_id
                 
                 # Schedule background task using SocketIO
-                def extract_tasks_background():
+                def enrich_meeting_background():
                     import asyncio
+                    from app import app, db as bg_db
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     try:
+                        # Generate AI title if current title is placeholder
+                        title_generator = get_title_generator()
+                        if title_generator.is_placeholder_title(session_title):
+                            generated_title = loop.run_until_complete(
+                                title_generator.generate_title(transcript_text)
+                            )
+                            if generated_title:
+                                with app.app_context():
+                                    bg_meeting = bg_db.session.get(Meeting, meeting_id_for_bg)
+                                    if bg_meeting:
+                                        bg_meeting.title = generated_title
+                                        bg_db.session.commit()
+                                        logger.info(f"✅ AI-generated title for meeting {meeting_id_for_bg}: {generated_title}")
+                                        
+                                        # Broadcast title update
+                                        try:
+                                            from services.event_broadcaster import event_broadcaster
+                                            event_broadcaster.broadcast_meeting_updated(
+                                                meeting_id=meeting_id_for_bg,
+                                                changes={'title': generated_title},
+                                                workspace_id=workspace_id_for_bg
+                                            )
+                                        except Exception as be:
+                                            logger.warning(f"Failed to broadcast title update: {be}")
+                        
+                        # Extract tasks
                         result = loop.run_until_complete(
-                            task_extraction_service.process_meeting_for_tasks(meeting.id)
+                            task_extraction_service.process_meeting_for_tasks(meeting_id_for_bg)
                         )
                         logger.info(f"Task extraction result: {result}")
                     finally:
                         loop.close()
                 
-                socketio.start_background_task(extract_tasks_background)
-                logger.info(f"Scheduled task extraction for meeting {meeting.id}")
+                socketio.start_background_task(enrich_meeting_background)
+                logger.info(f"Scheduled title generation + task extraction for meeting {meeting.id}")
             except Exception as e:
-                logger.warning(f"Failed to trigger task extraction: {e}")
+                logger.warning(f"Failed to trigger meeting enrichment: {e}")
             
             return meeting
             
